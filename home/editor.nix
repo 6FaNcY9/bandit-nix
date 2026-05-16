@@ -190,7 +190,9 @@
       # File tree
       neo-tree = {
         enable = true;
-        closeIfLastWindow = true;
+        settings = {
+          close_if_last_window = true;
+        };
       };
 
       # Oil — edit filesystem as a buffer

@@ -3,10 +3,10 @@
   services.greetd = {
     enable = true;
     settings.default_session.command = ''
-      ${pkgs.greetd.tuigreet}/bin/tuigreet \
+      ${pkgs.tuigreet}/bin/tuigreet \
       --time \
       --remember \
-      --cmd "${pkgs.xorg.xinit}/bin/startx ${pkgs.xfce.xfce4-session}/bin/xfce4-session"
+      --cmd "${pkgs.xinit}/bin/startx ${pkgs.xfce4-session}/bin/xfce4-session"
     '';
   };
 
@@ -33,13 +33,13 @@
 
   # Tell XFCE session to use i3 as WM
   environment.systemPackages = with pkgs; [
-    xfce.xfce4-panel
-    xfce.xfce4-settings
-    xfce.xfce4-session
-    xfce.thunar
-    xfce.xfce4-terminal
-    xfce.xfce4-power-manager
-    xfce.xfce4-notifyd
+    xfce4-panel
+    xfce4-settings
+    xfce4-session
+    thunar
+    xfce4-terminal
+    xfce4-power-manager
+    xfce4-notifyd
   ];
 
   # Needed for XFCE settings daemon and GTK apps
