@@ -1,7 +1,7 @@
 { ... }:
 {
   i18n.defaultLocale = "en_US.UTF-8";
-  time.timeZone = "UTC";
+  time.timeZone = "Europe/Vienna";
 
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
