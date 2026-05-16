@@ -79,9 +79,12 @@
         virtualisation.cores = 2;
         networking.hostName = "bandit";
         system.stateVersion = "25.11";
-        users.users.vino.password = "test"; # test-only credential
-        users.users.root.password = "test"; # test-only credential
-        users.mutableUsers = true;
+        # Clear the hashedPassword from nixos/users.nix so initialPassword takes effect
+        users.users.vino.hashedPassword = lib.mkForce null;
+        users.users.vino.initialPassword = "test"; # test-only credential
+        users.users.root.initialPassword = "test"; # test-only credential
+        # Override nixos/users.nix which sets mutableUsers = false
+        users.mutableUsers = lib.mkForce true;
       };
       testScript = builtins.readFile ./tests/bandit.py;
     };
