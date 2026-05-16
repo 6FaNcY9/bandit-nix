@@ -37,26 +37,53 @@
     stylix,
     nixos-hardware,
     ...
-  } @ inputs: {
+  } @ inputs: let
+    system = "x86_64-linux";
+    pkgs = nixpkgs.legacyPackages.${system};
+
+    sharedModules = [
+      stylix.nixosModules.stylix
+      sops-nix.nixosModules.sops
+      ./nixos
+      home-manager.nixosModules.home-manager
+      {
+        home-manager = {
+          useGlobalPkgs = true;
+          useUserPackages = true;
+          extraSpecialArgs = {inherit inputs;};
+          users.vino = import ./home;
+        };
+      }
+    ];
+  in {
     nixosConfigurations.bandit = nixpkgs.lib.nixosSystem {
       specialArgs = {inherit inputs;};
-      modules = [
-        {nixpkgs.hostPlatform = "x86_64-linux";}
-        stylix.nixosModules.stylix
-        nixos-hardware.nixosModules.framework-13-7040-amd
-        sops-nix.nixosModules.sops
-        ./hosts/bandit
-        ./nixos
-        home-manager.nixosModules.home-manager
-        {
-          home-manager = {
-            useGlobalPkgs = true;
-            useUserPackages = true;
-            extraSpecialArgs = {inherit inputs;};
-            users.vino = import ./home;
-          };
-        }
-      ];
+      modules =
+        sharedModules
+        ++ [
+          {nixpkgs.hostPlatform = system;}
+          nixos-hardware.nixosModules.framework-13-7040-amd
+          ./hosts/bandit
+        ];
+    };
+
+    checks.${system}.bandit-test = pkgs.testers.runNixOSTest {
+      name = "bandit-test";
+      nodes.bandit = {lib, ...}: {
+        imports = sharedModules;
+        nixpkgs.hostPlatform = system;
+        # Avoid duplicate overlay definitions from runNixOSTest read-only nixpkgs + Stylix modules.
+        nixpkgs.overlays = lib.mkForce [];
+        virtualisation.graphics = false;
+        virtualisation.memorySize = 2048;
+        virtualisation.cores = 2;
+        networking.hostName = "bandit";
+        system.stateVersion = "25.11";
+        users.users.vino.password = "test"; # test-only credential
+        users.users.root.password = "test"; # test-only credential
+        users.mutableUsers = true;
+      };
+      testScript = builtins.readFile ./tests/bandit.nix;
     };
   };
 }
