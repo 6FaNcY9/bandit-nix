@@ -83,7 +83,7 @@
         users.users.root.password = "test"; # test-only credential
         users.mutableUsers = true;
       };
-      testScript = builtins.readFile ./tests/bandit.nix;
+      testScript = builtins.readFile ./tests/bandit.py;
     };
   };
 }
