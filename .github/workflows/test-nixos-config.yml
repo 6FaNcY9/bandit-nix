@@ -144,22 +144,12 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Build VM
+      - name: Run NixOS VM test
         run: |
-          nix build .#nixosConfigurations.bandit.config.system.build.vm \
+          nix build .#checks.x86_64-linux.bandit-test \
             --print-build-logs \
             --no-update-lock-file \
             --fallback
-
-      - name: Test VM boots
-        timeout-minutes: 5
-        run: |
-          QEMU_OPTS="-m 1024 -nographic -serial mon:stdio" \
-          timeout 60s result/bin/run-bandit-vm &
-          VM_PID=$!
-          sleep 30
-          kill $VM_PID 2>/dev/null || true
-          echo "✅ VM boot test completed"
 
   update-flake:
     name: Update flake.lock
