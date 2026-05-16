@@ -1,36 +1,38 @@
 {
-  description = "Bandit NixOS configuration";
+  description = "bandit nixos config";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+
     home-manager = {
       url = "github:nix-community/home-manager/master";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
     sops-nix = {
       url = "github:Mic92/sops-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    nixos-hardware = {
-      url = "github:NixOS/nixos-hardware";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+
+    nixos-hardware.url = "github:NixOS/nixos-hardware";
   };
 
-  outputs = inputs@{ nixpkgs, home-manager, sops-nix, nixos-hardware, ... }: {
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, ... } @ inputs:
+  {
     nixosConfigurations.bandit = nixpkgs.lib.nixosSystem {
       specialArgs = { inherit inputs; };
       modules = [
-        ./hosts/bandit/default.nix
-        ./nixos
+        { nixpkgs.hostPlatform = "x86_64-linux"; }
         nixos-hardware.nixosModules.framework-13-7040-amd
         sops-nix.nixosModules.sops
+        ./hosts/bandit
+        ./nixos
         home-manager.nixosModules.home-manager
         {
-          nixpkgs.hostPlatform = "x86_64-linux";
           home-manager.useGlobalPkgs = true;
           home-manager.useUserPackages = true;
-          home-manager.users.vino = import ./home/default.nix;
+          home-manager.extraSpecialArgs = { inherit inputs; };
+          home-manager.users.vino = import ./home;
         }
       ];
     };
