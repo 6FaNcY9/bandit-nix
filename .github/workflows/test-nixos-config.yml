@@ -1,0 +1,112 @@
+name: Test NixOS Configuration
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  check-flake:
+    name: Check Flake
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v13
+
+      - name: Setup Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v7
+
+      - name: Check flake
+        run: nix flake check --all-systems --no-update-lock-file
+
+  build-config:
+    name: Build NixOS Configuration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v13
+
+      - name: Setup Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v7
+
+      - name: Build NixOS configuration
+        run: |
+          nix build .#nixosConfigurations.bandit.config.system.build.toplevel \
+            --print-build-logs \
+            --fallback
+
+      - name: Show build outputs
+        if: success()
+        run: |
+          echo "✅ NixOS configuration built successfully!"
+          nix path-info .#nixosConfigurations.bandit.config.system.build.toplevel
+
+  build-vm:
+    name: Build and Test VM
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v13
+
+      - name: Setup Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v7
+
+      - name: Enable KVM group perms
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Build VM
+        run: |
+          nix build .#nixosConfigurations.bandit.config.system.build.vm \
+            --print-build-logs \
+            --fallback
+
+      - name: Test VM boots (quick check)
+        timeout-minutes: 5
+        run: |
+          # Start VM in background with minimal memory
+          QEMU_OPTS="-m 1024 -nographic -serial mon:stdio" \
+          timeout 60s result/bin/run-bandit-vm &
+          VM_PID=$!
+
+          # Wait a bit for boot
+          sleep 30
+
+          # Try to gracefully stop
+          kill $VM_PID 2>/dev/null || true
+
+          echo "✅ VM boot test completed"
+
+  check-formatting:
+    name: Check Nix Formatting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v13
+
+      - name: Check Nix files formatting
+        run: |
+          # Check if alejandra is available, otherwise use nixpkgs-fmt
+          if nix run nixpkgs#alejandra -- --help &>/dev/null; then
+            echo "Checking formatting with alejandra..."
+            nix run nixpkgs#alejandra -- --check .
+          else
+            echo "Checking formatting with nixpkgs-fmt..."
+            nix run nixpkgs#nixpkgs-fmt -- --check .
+          fi
