@@ -7,19 +7,19 @@ _: {
       '';
       shellAbbrs = {
         # nix
-        ns  = "nixos-rebuild switch --flake .#bandit";
-        nt  = "nixos-rebuild test --flake .#bandit";
+        ns = "nixos-rebuild switch --flake .#bandit";
+        nt = "nixos-rebuild test --flake .#bandit";
         nfu = "nix flake update";
         ngc = "nix-collect-garbage -d";
         # navigation
-        ll  = "eza -la";
+        ll = "eza -la";
         cat = "bat";
-        cd  = "z";
+        cd = "z";
       };
     };
-    eza.enable    = true;
-    bat.enable    = true;
+    eza.enable = true;
+    bat.enable = true;
     zoxide.enable = true;
-    fzf.enable    = true;
+    fzf.enable = true;
   };
 }
