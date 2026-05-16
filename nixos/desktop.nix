@@ -3,11 +3,15 @@
   # X server
   services.greetd = {
     enable = true;
-    ${pkgs.greetd.tuigreet}/bin/tuigreet \
+    settings.default_session.command = ''
+      ${pkgs.greetd.tuigreet}/bin/tuigreet \
       --time \
       --cmd "${pkgs.xorg.xinit}/bin/startx ${pkgs.xfce.xfce4-session}/bin/xfce4-session"
     '';
   };
+
+  services.xserver = {
+    enable = true;
 
     # XFCE provides the session/panel/daemons
     # but i3 replaces its window manager
@@ -34,5 +38,10 @@
     xfce.xfce4-session
     xfce.thunar
     xfce.xfce4-terminal
+    xfce.xfce4-power-manager
+    xfce.xfce4-notifyd
   ];
+
+  # Needed for XFCE settings daemon and GTK apps
+  programs.dconf.enable = true;
 }
