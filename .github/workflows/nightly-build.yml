@@ -1,0 +1,41 @@
+name: Nightly Build Test
+
+on:
+  schedule:
+    # Run every day at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  update-and-build:
+    name: Update Flake Inputs and Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v13
+
+      - name: Setup Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v7
+
+      - name: Update flake inputs
+        run: |
+          nix flake update --commit-lock-file || true
+
+      - name: Build with updated inputs
+        run: |
+          nix build .#nixosConfigurations.bandit.config.system.build.toplevel \
+            --print-build-logs \
+            --fallback
+
+      - name: Report build status
+        if: always()
+        run: |
+          if [ ${{ job.status }} == 'success' ]; then
+            echo "✅ Nightly build succeeded with latest inputs"
+          else
+            echo "❌ Nightly build failed with latest inputs"
+            exit 1
+          fi
