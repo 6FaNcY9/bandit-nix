@@ -208,9 +208,9 @@ in {
     flameshot
     dunst
     copyq
-    playerctl
-    brightnessctl
-    pulseaudio # for pactl
+    pkgs.playerctl
+    pkgs.brightnessctl
+    pkgs.pulseaudio # for pactl
     networkmanagerapplet
   ];
 }
