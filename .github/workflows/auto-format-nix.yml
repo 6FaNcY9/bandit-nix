@@ -1,6 +1,9 @@
 name: Auto Format Nix Files
 
 on:
+  push:
+    paths:
+      - '**/*.nix'
   workflow_dispatch:
 
 permissions:

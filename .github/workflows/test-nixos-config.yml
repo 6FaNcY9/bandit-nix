@@ -89,24 +89,3 @@ jobs:
           kill $VM_PID 2>/dev/null || true
 
           echo "✅ VM boot test completed"
-
-  check-formatting:
-    name: Check Nix Formatting
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v13
-
-      - name: Check Nix files formatting
-        run: |
-          # Check if alejandra is available, otherwise use nixpkgs-fmt
-          if nix run nixpkgs#alejandra -- --help &>/dev/null; then
-            echo "Checking formatting with alejandra..."
-            nix run nixpkgs#alejandra -- --check .
-          else
-            echo "Checking formatting with nixpkgs-fmt..."
-            nix run nixpkgs#nixpkgs-fmt -- --check .
-          fi
