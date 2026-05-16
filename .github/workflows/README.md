@@ -6,39 +6,103 @@ This directory contains automated workflows for testing and validating the NixOS
 
 ### 1. Test NixOS Configuration (`test-nixos-config.yml`)
 
-**Triggers:** Push to main/master, Pull Requests, Manual dispatch
+**Triggers:** Push to main/master, Pull Requests, Manual dispatch, Weekly schedule (Monday 6am UTC)
 
-This workflow performs comprehensive testing of the NixOS configuration with four parallel jobs:
+This workflow performs comprehensive testing of the NixOS configuration:
 
-#### Jobs:
+#### Jobs
 
-- **check-flake**: Validates the flake structure and checks for errors
-  - Runs `nix flake check` to ensure the flake is properly formatted and all outputs are valid
-
-- **build-config**: Builds the complete NixOS system configuration
-  - Builds the full system closure using `nix build`
-  - Verifies all packages and configurations can be built successfully
-  - Uses Nix caching to speed up subsequent builds
-
-- **build-vm**: Creates and tests a VM image
-  - Builds a QEMU VM of the NixOS configuration
-  - Performs a quick boot test to ensure the VM can start
-  - Useful for catching boot-time issues without needing physical hardware
-
-- **check-formatting**: Validates Nix code formatting
-  - Checks if Nix files follow standard formatting conventions
-  - Uses `alejandra` or `nixpkgs-fmt` formatter
+- **lint-commits**: Enforces conventional commit messages on PRs
+- **label-pr**: Auto-labels PRs by changed files
+- **build**: Validates flake structure, checks formatting, dead code, antipatterns, and builds the full system closure
+- **security-scan**: Scans built packages for known CVEs using vulnix
+- **build-vm**: Builds a QEMU VM and runs a 60-second boot smoke test
+- **update-flake**: Manually triggered — updates `flake.lock` and opens a PR
 
 ### 2. Nightly Build Test (`nightly-build.yml`)
 
 **Triggers:** Daily at 2 AM UTC, Manual dispatch
 
-This workflow tests the configuration with the latest upstream updates:
-
 - Updates all flake inputs to their latest versions
 - Rebuilds the configuration with updated dependencies
 - Helps catch breaking changes from upstream early
-- Runs automatically to ensure the config stays up-to-date
+- Commits updated `flake.lock` back to the repository
+
+### 3. Auto Format Nix Files (`auto-format-nix.yml`)
+
+**Triggers:** Push touching any `.nix` file, Manual dispatch
+
+- Formats all Nix files using `alejandra`
+- Commits formatting changes automatically if any are detected
+- Runs after push so formatting is always consistent in the repository
+
+## Performance Optimizations
+
+All workflows use:
+- **DeterminateSystems/nix-installer-action**: Fast, reliable Nix installation with flakes enabled
+- **Official NixOS binary cache**: Pre-built nixpkgs paths via `cache.nixos.org`
+
+## Expected Behavior
+
+✅ **Success**: All jobs complete successfully, indicating:
+- Flake evaluates correctly with no errors
+- System configuration builds without errors
+- No dead code or antipatterns detected
+- Code follows alejandra formatting standards
+- VM can be created and boots successfully
+
+❌ **Failure**: One or more jobs fail, indicating:
+- Syntax errors in Nix files
+- Invalid package references or broken dependencies
+- Configuration errors preventing system build
+- Dead code or formatting inconsistencies
+
+## Troubleshooting
+
+If a workflow fails:
+
+1. Check the job logs in the Actions tab
+2. For flake check failures: Review recent changes to `flake.nix`
+3. For build failures: Check package availability and version compatibility
+4. For VM failures: Review boot configuration and system services
+5. For formatting failures: Run `nix run nixpkgs#alejandra -- .` locally to fix
+6. For dead code failures: Run `nix run nixpkgs#deadnix -- --fail .` locally
+7. For antipattern failures: Run `nix run nixpkgs#statix -- check .` locally
+
+## Local Testing
+
+Run these from the repository root in a Nix-enabled environment:
+
+```bash
+# Check flake evaluation
+nix flake check --no-update-lock-file
+
+# Build full system configuration
+nix build .#nixosConfigurations.bandit.config.system.build.toplevel \
+  --print-build-logs \
+  --no-update-lock-file \
+  --fallback
+
+# Build VM
+nix build .#nixosConfigurations.bandit.config.system.build.vm \
+  --print-build-logs \
+  --no-update-lock-file \
+  --fallback
+
+# Run VM locally
+./result/bin/run-bandit-vm
+
+# Format all nix files (fixes in place)
+nix run nixpkgs#alejandra -- .
+
+# Check formatting without fixing
+nix run nixpkgs#alejandra -- --check .
+
+# Check for dead code
+nix run nixpkgs#deadnix -- --fail .
+
+# Check for antipatterns
+nix run nixpkgs#statix -- check .- Runs automatically to ensure the config stays up-to-date
 
 ## Performance Optimizations
 
