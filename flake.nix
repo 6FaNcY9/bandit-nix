@@ -71,7 +71,6 @@
       name = "bandit-test";
       nodes.bandit = {lib, ...}: {
         imports = sharedModules;
-        nixpkgs.hostPlatform = system;
         # Avoid duplicate overlay definitions from runNixOSTest read-only nixpkgs + Stylix modules.
         nixpkgs.overlays = lib.mkForce [];
         virtualisation.graphics = false;
