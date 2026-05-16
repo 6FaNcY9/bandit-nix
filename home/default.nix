@@ -6,7 +6,6 @@
     ./git.nix
     ./theme.nix
     ./desktop/i3.nix
-    ./desktop/xfce-panel.nix
     inputs.nixvim.homeModules.nixvim
   ];
 
