@@ -2,7 +2,7 @@ start_all()
 
 # System initialisation
 bandit.wait_for_unit("multi-user.target")
-bandit.succeed("systemctl --failed --no-pager")
+bandit.succeed("test \"$(systemctl --failed --no-legend | wc -l)\" -eq 0")
 
 # Network services
 bandit.wait_for_unit("NetworkManager.service")
@@ -11,8 +11,8 @@ bandit.wait_for_unit("systemd-resolved.service")
 
 # User configuration
 bandit.succeed("id vino")
-bandit.succeed("groups vino | grep -q wheel")
-bandit.succeed("groups vino | grep -q networkmanager")
+bandit.succeed("id -nG vino | grep -wq wheel")
+bandit.succeed("id -nG vino | grep -wq networkmanager")
 
 # Shell and user-facing tools
 bandit.succeed("which fish")
