@@ -6,6 +6,7 @@
     settings.default_session.command = ''
       ${pkgs.greetd.tuigreet}/bin/tuigreet \
       --time \
+      --remember \
       --cmd "${pkgs.xorg.xinit}/bin/startx ${pkgs.xfce.xfce4-session}/bin/xfce4-session"
     '';
   };
