@@ -79,7 +79,7 @@
 
     targets = {
       gtk.enable = true;
-      grub.enable = ture;
+      grub.enable = true;
     };
   };
 }
