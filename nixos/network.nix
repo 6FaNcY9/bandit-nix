@@ -1,5 +1,4 @@
-{ ... }:
-{
+{...}: {
   networking = {
     networkmanager.enable = true;
     useDHCP = false; # NetworkManager handles this
@@ -16,7 +15,7 @@
     settings = {
       Resolve = {
         DNSSEC = "allow-downgrade";
-        Domains = [ "~." ];
+        Domains = ["~."];
         FallbackDNS = [
           "1.1.1.1" # Cloudflare
           "9.9.9.9" # Quad9 — filters malicious domains

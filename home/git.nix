@@ -1,5 +1,4 @@
-{ pkgs, ... }:
-{
+{pkgs, ...}: {
   programs.delta = {
     enable = true;
     enableGitIntegration = true;
@@ -21,10 +20,10 @@
       };
 
       alias = {
-        st   = "status -sb";
-        lg   = "log --oneline --graph --decorate";
+        st = "status -sb";
+        lg = "log --oneline --graph --decorate";
         undo = "reset --soft HEAD~1";
-        wip  = "commit -am 'wip'";
+        wip = "commit -am 'wip'";
       };
 
       init.defaultBranch = "main";
