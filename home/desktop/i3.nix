@@ -1,7 +1,7 @@
 { config, pkgs, ... }:
 {
   xsession.windowManager.i3 = {
-    enable = ture;
+    enable = true;
     config = null;
   };
 }
