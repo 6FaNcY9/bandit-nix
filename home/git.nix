@@ -1,5 +1,4 @@
-{ pkgs, ... }:
-{
+{pkgs, ...}: {
   programs.git = {
     enable = true;
     userName = "6FaNcY9";
@@ -21,10 +20,10 @@
     };
 
     aliases = {
-      st   = "status -sb";
-      lg   = "log --oneline --graph --decorate";
+      st = "status -sb";
+      lg = "log --oneline --graph --decorate";
       undo = "reset --soft HEAD~1";
-      wip  = "commit -am 'wip'";
+      wip = "commit -am 'wip'";
     };
 
     extraConfig = {
@@ -43,8 +42,8 @@
   # gpg-agent — handles passphrase prompts for commit signing
   services.gpg-agent = {
     enable = true;
-    pinentryPackage = pkgs.pinentry-gtk2;  # GTK prompt fits your XFCE stack
-    defaultCacheTtl = 3600;   # remember passphrase for 1 hour
-    maxCacheTtl = 86400;      # maximum 24 hours
+    pinentryPackage = pkgs.pinentry-gtk2; # GTK prompt fits your XFCE stack
+    defaultCacheTtl = 3600; # remember passphrase for 1 hour
+    maxCacheTtl = 86400; # maximum 24 hours
   };
 }

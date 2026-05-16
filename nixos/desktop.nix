@@ -1,5 +1,4 @@
-{ pkgs, ... }:
-{
+{pkgs, ...}: {
   # X server
   services.greetd = {
     enable = true;
@@ -18,8 +17,8 @@
     # but i3 replaces its window manager
     desktopManager.xfce = {
       enable = true;
-      noDesktop = true;    # no xfdesktop (wallpaper/icons daemon)
-      enableXfwm = false;  # disable XFCE's own WM — i3 takes over
+      noDesktop = true; # no xfdesktop (wallpaper/icons daemon)
+      enableXfwm = false; # disable XFCE's own WM — i3 takes over
     };
 
     windowManager.i3 = {

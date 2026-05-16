@@ -30,12 +30,20 @@
     };
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nixvim, stylix, nixos-hardware, ... } @ inputs:
-  {
+  outputs = {
+    self,
+    nixpkgs,
+    home-manager,
+    sops-nix,
+    nixvim,
+    stylix,
+    nixos-hardware,
+    ...
+  } @ inputs: {
     nixosConfigurations.bandit = nixpkgs.lib.nixosSystem {
-      specialArgs = { inherit inputs; };
+      specialArgs = {inherit inputs;};
       modules = [
-        { nixpkgs.hostPlatform = "x86_64-linux"; }
+        {nixpkgs.hostPlatform = "x86_64-linux";}
         stylix.nixosModules.stylix
         nixos-hardware.nixosModules.framework-13-7040-amd
         sops-nix.nixosModules.sops
@@ -45,7 +53,7 @@
         {
           home-manager.useGlobalPkgs = true;
           home-manager.useUserPackages = true;
-          home-manager.extraSpecialArgs = { inherit inputs; };
+          home-manager.extraSpecialArgs = {inherit inputs;};
           home-manager.users.vino = import ./home;
         }
       ];

@@ -1,5 +1,4 @@
-{ ... }:
-{
+{...}: {
   programs.fish = {
     enable = true;
     interactiveShellInit = ''
@@ -7,19 +6,19 @@
     '';
     shellAbbrs = {
       # nix
-      ns  = "nixos-rebuild switch --flake .#bandit";
-      nt  = "nixos-rebuild test --flake .#bandit";
+      ns = "nixos-rebuild switch --flake .#bandit";
+      nt = "nixos-rebuild test --flake .#bandit";
       nfu = "nix flake update";
       ngc = "nix-collect-garbage -d";
       # navigation
-      ll  = "eza -la";
+      ll = "eza -la";
       cat = "bat";
-      cd  = "z";
+      cd = "z";
     };
   };
 
-  programs.eza.enable    = true;
-  programs.bat.enable    = true;
+  programs.eza.enable = true;
+  programs.bat.enable = true;
   programs.zoxide.enable = true;
-  programs.fzf.enable    = true;
+  programs.fzf.enable = true;
 }

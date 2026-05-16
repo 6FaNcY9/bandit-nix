@@ -1,5 +1,4 @@
-{ pkgs, ... }:
-{
+{pkgs, ...}: {
   programs.nixvim = {
     enable = true;
     defaultEditor = true;
@@ -44,7 +43,6 @@
 
     # ─── Plugins ──────────────────────────────────────────
     plugins = {
-
       # Treesitter — syntax highlighting and structure
       treesitter = {
         enable = true;
@@ -73,17 +71,17 @@
         keymaps = {
           silent = true;
           lspBuf = {
-            "K"          = "hover";
-            "gd"         = "definition";
-            "gD"         = "declaration";
-            "gi"         = "implementation";
-            "gr"         = "references";
+            "K" = "hover";
+            "gd" = "definition";
+            "gD" = "declaration";
+            "gi" = "implementation";
+            "gr" = "references";
             "<leader>ca" = "code_action";
             "<leader>rn" = "rename";
           };
           diagnostic = {
-            "[d"         = "goto_prev";
-            "]d"         = "goto_next";
+            "[d" = "goto_prev";
+            "]d" = "goto_next";
             "<leader>cd" = "open_float";
           };
         };
@@ -95,24 +93,24 @@
         autoEnableSources = true;
         settings = {
           sources = [
-            { name = "nvim_lsp"; }
-            { name = "luasnip"; }
-            { name = "copilot"; }
-            { name = "path"; }
-            { name = "buffer"; }
+            {name = "nvim_lsp";}
+            {name = "luasnip";}
+            {name = "copilot";}
+            {name = "path";}
+            {name = "buffer";}
           ];
           mapping = {
             "<C-Space>" = "cmp.mapping.complete()";
-            "<C-d>"     = "cmp.mapping.scroll_docs(-4)";
-            "<C-f>"     = "cmp.mapping.scroll_docs(4)";
-            "<CR>"      = "cmp.mapping.confirm({ select = true })";
-            "<Tab>"     = ''
+            "<C-d>" = "cmp.mapping.scroll_docs(-4)";
+            "<C-f>" = "cmp.mapping.scroll_docs(4)";
+            "<CR>" = "cmp.mapping.confirm({ select = true })";
+            "<Tab>" = ''
               cmp.mapping(function(fallback)
                 if cmp.visible() then cmp.select_next_item()
                 else fallback() end
               end, { "i", "s" })
             '';
-            "<S-Tab>"   = ''
+            "<S-Tab>" = ''
               cmp.mapping(function(fallback)
                 if cmp.visible() then cmp.select_prev_item()
                 else fallback() end
@@ -147,12 +145,30 @@
           preset = "modern";
           delay = 300;
           spec = [
-            { __unkeyed-1 = "<leader>f"; group = "Find"; }
-            { __unkeyed-1 = "<leader>c"; group = "Code"; }
-            { __unkeyed-1 = "<leader>g"; group = "Git"; }
-            { __unkeyed-1 = "<leader>r"; group = "Rename/Refactor"; }
-            { __unkeyed-1 = "<leader>t"; group = "Toggle"; }
-            { __unkeyed-1 = "<leader>d"; group = "Debug"; }
+            {
+              __unkeyed-1 = "<leader>f";
+              group = "Find";
+            }
+            {
+              __unkeyed-1 = "<leader>c";
+              group = "Code";
+            }
+            {
+              __unkeyed-1 = "<leader>g";
+              group = "Git";
+            }
+            {
+              __unkeyed-1 = "<leader>r";
+              group = "Rename/Refactor";
+            }
+            {
+              __unkeyed-1 = "<leader>t";
+              group = "Toggle";
+            }
+            {
+              __unkeyed-1 = "<leader>d";
+              group = "Debug";
+            }
           ];
         };
       };
@@ -235,18 +251,36 @@
           layouts = [
             {
               elements = [
-                { id = "scopes";      size = 0.25; }
-                { id = "breakpoints"; size = 0.25; }
-                { id = "stacks";      size = 0.25; }
-                { id = "watches";     size = 0.25; }
+                {
+                  id = "scopes";
+                  size = 0.25;
+                }
+                {
+                  id = "breakpoints";
+                  size = 0.25;
+                }
+                {
+                  id = "stacks";
+                  size = 0.25;
+                }
+                {
+                  id = "watches";
+                  size = 0.25;
+                }
               ];
               position = "left";
               size = 40;
             }
             {
               elements = [
-                { id = "repl";    size = 0.5; }
-                { id = "console"; size = 0.5; }
+                {
+                  id = "repl";
+                  size = 0.5;
+                }
+                {
+                  id = "console";
+                  size = 0.5;
+                }
               ];
               position = "bottom";
               size = 10;
@@ -300,61 +334,122 @@
     # ─── Keymaps ──────────────────────────────────────────
     keymaps = [
       # General
-      { mode = "n"; key = "<leader>e"; action = "<cmd>Neotree toggle<CR>";
-        options.desc = "Toggle file tree"; }
-      { mode = "n"; key = "<leader>w"; action = "<cmd>w<CR>";
-        options.desc = "Save"; }
-      { mode = "n"; key = "<leader>q"; action = "<cmd>q<CR>";
-        options.desc = "Quit"; }
-      { mode = "n"; key = "<Esc>"; action = "<cmd>nohlsearch<CR>";
-        options.desc = "Clear search highlight"; }
+      {
+        mode = "n";
+        key = "<leader>e";
+        action = "<cmd>Neotree toggle<CR>";
+        options.desc = "Toggle file tree";
+      }
+      {
+        mode = "n";
+        key = "<leader>w";
+        action = "<cmd>w<CR>";
+        options.desc = "Save";
+      }
+      {
+        mode = "n";
+        key = "<leader>q";
+        action = "<cmd>q<CR>";
+        options.desc = "Quit";
+      }
+      {
+        mode = "n";
+        key = "<Esc>";
+        action = "<cmd>nohlsearch<CR>";
+        options.desc = "Clear search highlight";
+      }
 
       # Trouble
-      { mode = "n"; key = "<leader>tt"; action = "<cmd>TroubleToggle<CR>";
-        options.desc = "Toggle Trouble"; }
+      {
+        mode = "n";
+        key = "<leader>tt";
+        action = "<cmd>TroubleToggle<CR>";
+        options.desc = "Toggle Trouble";
+      }
 
       # Oil
-      { mode = "n"; key = "-"; action = "<cmd>Oil<CR>";
-        options.desc = "Open parent directory"; }
-      { mode = "n"; key = "<leader>o"; action = "<cmd>Oil --float<CR>";
-        options.desc = "Open Oil float"; }
+      {
+        mode = "n";
+        key = "-";
+        action = "<cmd>Oil<CR>";
+        options.desc = "Open parent directory";
+      }
+      {
+        mode = "n";
+        key = "<leader>o";
+        action = "<cmd>Oil --float<CR>";
+        options.desc = "Open Oil float";
+      }
 
       # Flash
-      { mode = [ "n" "x" "o" ]; key = "s";
+      {
+        mode = ["n" "x" "o"];
+        key = "s";
         action.__raw = "function() require('flash').jump() end";
-        options.desc = "Flash jump"; }
-      { mode = [ "n" "x" "o" ]; key = "S";
+        options.desc = "Flash jump";
+      }
+      {
+        mode = ["n" "x" "o"];
+        key = "S";
         action.__raw = "function() require('flash').treesitter() end";
-        options.desc = "Flash treesitter"; }
-      { mode = "o"; key = "r";
+        options.desc = "Flash treesitter";
+      }
+      {
+        mode = "o";
+        key = "r";
         action.__raw = "function() require('flash').remote() end";
-        options.desc = "Flash remote"; }
+        options.desc = "Flash remote";
+      }
 
       # DAP
-      { mode = "n"; key = "<leader>db";
+      {
+        mode = "n";
+        key = "<leader>db";
         action.__raw = "function() require('dap').toggle_breakpoint() end";
-        options.desc = "Toggle breakpoint"; }
-      { mode = "n"; key = "<leader>dc";
+        options.desc = "Toggle breakpoint";
+      }
+      {
+        mode = "n";
+        key = "<leader>dc";
         action.__raw = "function() require('dap').continue() end";
-        options.desc = "Continue / start"; }
-      { mode = "n"; key = "<leader>di";
+        options.desc = "Continue / start";
+      }
+      {
+        mode = "n";
+        key = "<leader>di";
         action.__raw = "function() require('dap').step_into() end";
-        options.desc = "Step into"; }
-      { mode = "n"; key = "<leader>do";
+        options.desc = "Step into";
+      }
+      {
+        mode = "n";
+        key = "<leader>do";
         action.__raw = "function() require('dap').step_over() end";
-        options.desc = "Step over"; }
-      { mode = "n"; key = "<leader>dO";
+        options.desc = "Step over";
+      }
+      {
+        mode = "n";
+        key = "<leader>dO";
         action.__raw = "function() require('dap').step_out() end";
-        options.desc = "Step out"; }
-      { mode = "n"; key = "<leader>dr";
+        options.desc = "Step out";
+      }
+      {
+        mode = "n";
+        key = "<leader>dr";
         action.__raw = "function() require('dap').repl.open() end";
-        options.desc = "Open REPL"; }
-      { mode = "n"; key = "<leader>du";
+        options.desc = "Open REPL";
+      }
+      {
+        mode = "n";
+        key = "<leader>du";
         action.__raw = "function() require('dapui').toggle() end";
-        options.desc = "Toggle DAP UI"; }
-      { mode = "n"; key = "<leader>dt";
+        options.desc = "Toggle DAP UI";
+      }
+      {
+        mode = "n";
+        key = "<leader>dt";
         action.__raw = "function() require('dap').terminate() end";
-        options.desc = "Terminate session"; }
+        options.desc = "Terminate session";
+      }
     ];
   };
 }
