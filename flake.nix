@@ -69,9 +69,10 @@
 
     checks.${system}.bandit-test = pkgs.testers.runNixOSTest {
       name = "bandit-test";
-      nodes.bandit = {
+      nodes.bandit = {lib, ...}: {
         imports = sharedModules;
         nixpkgs.hostPlatform = system;
+        nixpkgs.overlays = lib.mkForce [];
         virtualisation.graphics = false;
         virtualisation.memorySize = 2048;
         virtualisation.cores = 2;
