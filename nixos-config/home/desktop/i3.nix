@@ -1,4 +1,4 @@
-{ ... }:
+{ pkgs, ... }:
 {
-  xsession.windowManager.i3.enable = true;
+  home.packages = [ pkgs.i3status ];
 }
