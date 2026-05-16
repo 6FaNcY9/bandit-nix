@@ -19,9 +19,9 @@
       "1.1.1.1"   # Cloudflare
       "9.9.9.9"   # Quad9 — filters malicious domains
     ];
-    extraConfig = ''
-      DNSOverTLS=opportunistic
-    '';
+    settings = {
+      Resolve.DNSOverTLS = "opportunistic";
+    };
   };
 
   # Bluetooth
