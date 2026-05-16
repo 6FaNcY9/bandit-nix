@@ -31,11 +31,9 @@
   };
 
   outputs = {
-    self,
     nixpkgs,
     home-manager,
     sops-nix,
-    nixvim,
     stylix,
     nixos-hardware,
     ...
