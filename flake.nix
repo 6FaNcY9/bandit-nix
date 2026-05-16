@@ -19,15 +19,21 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    stylix = {
+      url = "github:danth/stylix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     nixos-hardware.url = "github:NixOS/nixos-hardware";
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nixvim, nixos-hardware, ... } @ inputs:
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixvim, stylix, nixos-hardware, ... } @ inputs:
   {
     nixosConfigurations.bandit = nixpkgs.lib.nixosSystem {
       specialArgs = { inherit inputs; };
       modules = [
         { nixpkgs.hostPlatform = "x86_64-linux"; }
+        stylix.nixosModules.stylix
         nixos-hardware.nixosModules.framework-13-7040-amd
         sops-nix.nixosModules.sops
         ./hosts/bandit
