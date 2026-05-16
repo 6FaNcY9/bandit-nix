@@ -1,1 +1,3 @@
+# Required so actions/labeler has a valid configuration file on pull requests.
+# Add path-to-label mappings here once repository labels are standardized.
 {}
