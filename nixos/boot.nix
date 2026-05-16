@@ -2,10 +2,12 @@
 {
   boot = {
     loader = {
-      systemd-boot = {
+      grub = {
         enable = true;
+        device = "nodev";        # for EFI systems
+        efiSupport = true;
+        useOSProber = true;      # detects Windows/other OS on dual boot
         configurationLimit = 10;
-        consoleMode = "auto";
       };
       efi.canTouchEfiVariables = true;
     };
