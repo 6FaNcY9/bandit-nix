@@ -6,9 +6,9 @@
   mod = "Mod4";
 
   # ─── Helpers ──────────────────────────────────────────
-  pactl = "${pkgs.pulseaudio}/bin/pactl";
-  brightnessctl = "${pkgs.brightnessctl}/bin/brightnessctl";
-  playerctl = "${pkgs.playerctl}/bin/playerctl";
+  pactlBin = "${pkgs.pulseaudio}/bin/pactl";
+  brightnessctlBin = "${pkgs.brightnessctl}/bin/brightnessctl";
+  playerctlBin = "${pkgs.playerctl}/bin/playerctl";
 
   # ─── Directional focus (vim + arrows) ─────────────────
   directionalFocus = {
@@ -79,15 +79,15 @@
 
   # ─── Media keys ───────────────────────────────────────
   mediaKeys = {
-    "XF86AudioRaiseVolume" = "exec --no-startup-id ${pactl} set-sink-volume @DEFAULT_SINK@ +5%";
-    "XF86AudioLowerVolume" = "exec --no-startup-id ${pactl} set-sink-volume @DEFAULT_SINK@ -5%";
-    "XF86AudioMute" = "exec --no-startup-id ${pactl} set-sink-mute @DEFAULT_SINK@ toggle";
-    "XF86AudioMicMute" = "exec --no-startup-id ${pactl} set-source-mute @DEFAULT_SOURCE@ toggle";
-    "XF86MonBrightnessUp" = "exec --no-startup-id ${brightnessctl} set +10%";
-    "XF86MonBrightnessDown" = "exec --no-startup-id ${brightnessctl} set 10%-";
-    "XF86AudioPlay" = "exec --no-startup-id ${playerctl} play-pause";
-    "XF86AudioNext" = "exec --no-startup-id ${playerctl} next";
-    "XF86AudioPrev" = "exec --no-startup-id ${playerctl} previous";
+    "XF86AudioRaiseVolume" = "exec --no-startup-id ${pactlBin} set-sink-volume @DEFAULT_SINK@ +5%";
+    "XF86AudioLowerVolume" = "exec --no-startup-id ${pactlBin} set-sink-volume @DEFAULT_SINK@ -5%";
+    "XF86AudioMute" = "exec --no-startup-id ${pactlBin} set-sink-mute @DEFAULT_SINK@ toggle";
+    "XF86AudioMicMute" = "exec --no-startup-id ${pactlBin} set-source-mute @DEFAULT_SOURCE@ toggle";
+    "XF86MonBrightnessUp" = "exec --no-startup-id ${brightnessctlBin} set +10%";
+    "XF86MonBrightnessDown" = "exec --no-startup-id ${brightnessctlBin} set 10%-";
+    "XF86AudioPlay" = "exec --no-startup-id ${playerctlBin} play-pause";
+    "XF86AudioNext" = "exec --no-startup-id ${playerctlBin} next";
+    "XF86AudioPrev" = "exec --no-startup-id ${playerctlBin} previous";
   };
 
   # ─── Workspaces (explicit, no helper) ─────────────────
@@ -208,9 +208,9 @@ in {
     flameshot
     dunst
     copyq
-    pkgs.playerctl
-    pkgs.brightnessctl
-    pkgs.pulseaudio # for pactl
+    playerctl
+    brightnessctl
+    pulseaudio # for pactl
     networkmanagerapplet
   ];
 }
