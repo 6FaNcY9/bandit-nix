@@ -6,6 +6,4 @@
     alsa.enable = true;
     alsa.support32Bit = true;
   };
-
-  hardware.pulseaudio.enable = false;
 }
