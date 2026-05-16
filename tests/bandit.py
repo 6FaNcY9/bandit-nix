@@ -25,5 +25,7 @@ bandit.succeed("grep 'flakes' /etc/nix/nix.conf")
 bandit.succeed("grep 'auto-optimise-store' /etc/nix/nix.conf")
 
 # Audio and hardware services
-bandit.succeed("systemctl is-enabled pipewire.socket")
+# pipewire runs as a systemd --user unit on NixOS, so query it via the
+# user manager files rather than the system manager.
+bandit.succeed("test -e /etc/systemd/user/pipewire.socket")
 bandit.succeed("systemctl is-enabled bluetooth.service")
