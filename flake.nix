@@ -80,7 +80,6 @@
         system.stateVersion = "25.11";
         users.users.vino.password = "test"; # test-only credential
         users.users.root.password = "test"; # test-only credential
-        users.mutableUsers = true;
       };
       testScript = builtins.readFile ./tests/bandit.nix;
     };
