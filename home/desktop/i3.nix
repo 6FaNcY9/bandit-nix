@@ -1,5 +1,8 @@
-{ pkgs, lib, ... }:
-let
+{
+  pkgs,
+  lib,
+  ...
+}: let
   mod = "Mod4";
 
   # ─── Helpers ──────────────────────────────────────────
@@ -52,39 +55,39 @@ let
     "${mod}+Shift+m" = "scratchpad show";
 
     # App launchers
-    "${mod}+Return"   = "exec ${pkgs.xfce.xfce4-terminal}/bin/xfce4-terminal";
-    "${mod}+Shift+w"  = "exec ${pkgs.firefox}/bin/firefox";
-    "${mod}+d"        = "exec ${pkgs.rofi}/bin/rofi -show drun";
-    "${mod}+Shift+v"  = "exec --no-startup-id ${pkgs.copyq}/bin/copyq toggle";
+    "${mod}+Return" = "exec ${pkgs.xfce.xfce4-terminal}/bin/xfce4-terminal";
+    "${mod}+Shift+w" = "exec ${pkgs.firefox}/bin/firefox";
+    "${mod}+d" = "exec ${pkgs.rofi}/bin/rofi -show drun";
+    "${mod}+Shift+v" = "exec --no-startup-id ${pkgs.copyq}/bin/copyq toggle";
 
     # Window management
     "${mod}+Shift+q" = "kill";
     "${mod}+Shift+c" = "reload";
     "${mod}+Shift+r" = "restart";
-    "${mod}+r"       = ''mode "resize"'';
+    "${mod}+r" = ''mode "resize"'';
     "${mod}+Shift+x" = "exec ${pkgs.i3lock}/bin/i3lock -c 262626";
 
     # Screenshots — flameshot needs the env vars on i3
     "Print" = "exec --no-startup-id env XDG_CURRENT_DESKTOP=i3 XDG_SESSION_TYPE=x11 QT_QPA_PLATFORM=xcb ${pkgs.flameshot}/bin/flameshot gui";
-    "F11"   = "exec --no-startup-id env XDG_CURRENT_DESKTOP=i3 XDG_SESSION_TYPE=x11 QT_QPA_PLATFORM=xcb ${pkgs.flameshot}/bin/flameshot gui";
+    "F11" = "exec --no-startup-id env XDG_CURRENT_DESKTOP=i3 XDG_SESSION_TYPE=x11 QT_QPA_PLATFORM=xcb ${pkgs.flameshot}/bin/flameshot gui";
 
     # Dunst notification controls
-    "${mod}+grave"        = "exec ${pkgs.dunst}/bin/dunstctl history-pop";
-    "${mod}+Shift+d"      = "exec ${pkgs.dunst}/bin/dunstctl set-paused toggle";
+    "${mod}+grave" = "exec ${pkgs.dunst}/bin/dunstctl history-pop";
+    "${mod}+Shift+d" = "exec ${pkgs.dunst}/bin/dunstctl set-paused toggle";
     "${mod}+Shift+period" = "exec ${pkgs.dunst}/bin/dunstctl close-all";
   };
 
   # ─── Media keys ───────────────────────────────────────
   mediaKeys = {
-    "XF86AudioRaiseVolume"  = "exec --no-startup-id ${pactl} set-sink-volume @DEFAULT_SINK@ +5%";
-    "XF86AudioLowerVolume"  = "exec --no-startup-id ${pactl} set-sink-volume @DEFAULT_SINK@ -5%";
-    "XF86AudioMute"         = "exec --no-startup-id ${pactl} set-sink-mute @DEFAULT_SINK@ toggle";
-    "XF86AudioMicMute"      = "exec --no-startup-id ${pactl} set-source-mute @DEFAULT_SOURCE@ toggle";
-    "XF86MonBrightnessUp"   = "exec --no-startup-id ${brightnessctl} set +10%";
+    "XF86AudioRaiseVolume" = "exec --no-startup-id ${pactl} set-sink-volume @DEFAULT_SINK@ +5%";
+    "XF86AudioLowerVolume" = "exec --no-startup-id ${pactl} set-sink-volume @DEFAULT_SINK@ -5%";
+    "XF86AudioMute" = "exec --no-startup-id ${pactl} set-sink-mute @DEFAULT_SINK@ toggle";
+    "XF86AudioMicMute" = "exec --no-startup-id ${pactl} set-source-mute @DEFAULT_SOURCE@ toggle";
+    "XF86MonBrightnessUp" = "exec --no-startup-id ${brightnessctl} set +10%";
     "XF86MonBrightnessDown" = "exec --no-startup-id ${brightnessctl} set 10%-";
-    "XF86AudioPlay"         = "exec --no-startup-id ${playerctl} play-pause";
-    "XF86AudioNext"         = "exec --no-startup-id ${playerctl} next";
-    "XF86AudioPrev"         = "exec --no-startup-id ${playerctl} previous";
+    "XF86AudioPlay" = "exec --no-startup-id ${playerctl} play-pause";
+    "XF86AudioNext" = "exec --no-startup-id ${playerctl} next";
+    "XF86AudioPrev" = "exec --no-startup-id ${playerctl} previous";
   };
 
   # ─── Workspaces (explicit, no helper) ─────────────────
@@ -113,8 +116,7 @@ let
     "${mod}+Shift+9" = "move container to workspace number 9";
     "${mod}+Shift+0" = "move container to workspace number 10";
   };
-in
-{
+in {
   xsession.windowManager.i3 = {
     enable = true;
     config = {
@@ -133,16 +135,16 @@ in
 
       # ─── Resize mode ────────────────────────────────────
       modes.resize = {
-        "j"        = "resize shrink width 10 px or 10 ppt";
-        "k"        = "resize grow height 10 px or 10 ppt";
-        "l"        = "resize shrink height 10 px or 10 ppt";
+        "j" = "resize shrink width 10 px or 10 ppt";
+        "k" = "resize grow height 10 px or 10 ppt";
+        "l" = "resize shrink height 10 px or 10 ppt";
         "semicolon" = "resize grow width 10 px or 10 ppt";
-        "Left"     = "resize shrink width 10 px or 10 ppt";
-        "Down"     = "resize grow height 10 px or 10 ppt";
-        "Up"       = "resize shrink height 10 px or 10 ppt";
-        "Right"    = "resize grow width 10 px or 10 ppt";
-        "Return"   = "mode default";
-        "Escape"   = "mode default";
+        "Left" = "resize shrink width 10 px or 10 ppt";
+        "Down" = "resize grow height 10 px or 10 ppt";
+        "Up" = "resize shrink height 10 px or 10 ppt";
+        "Right" = "resize grow width 10 px or 10 ppt";
+        "Return" = "mode default";
+        "Escape" = "mode default";
         "${mod}+r" = "mode default";
       };
 
@@ -150,10 +152,10 @@ in
       floating = {
         modifier = mod;
         criteria = [
-          { class = "Pavucontrol"; }
-          { class = "Blueman-manager"; }
-          { class = "flameshot"; }
-          { title = "Picture-in-Picture"; }
+          {class = "Pavucontrol";}
+          {class = "Blueman-manager";}
+          {class = "flameshot";}
+          {title = "Picture-in-Picture";}
         ];
       };
 
@@ -172,16 +174,31 @@ in
 
       # ─── Startup applications ───────────────────────────
       startup = [
-        { command = "${pkgs.dunst}/bin/dunst"; notification = false; }
-        { command = "${pkgs.networkmanagerapplet}/bin/nm-applet"; notification = false; }
-        { command = "${pkgs.blueman}/bin/blueman-applet"; notification = false; }
-        { command = "${pkgs.copyq}/bin/copyq"; notification = false; }
+        {
+          command = "${pkgs.dunst}/bin/dunst";
+          notification = false;
+        }
+        {
+          command = "${pkgs.networkmanagerapplet}/bin/nm-applet";
+          notification = false;
+        }
+        {
+          command = "${pkgs.blueman}/bin/blueman-applet";
+          notification = false;
+        }
+        {
+          command = "${pkgs.copyq}/bin/copyq";
+          notification = false;
+        }
         # XFCE panel — provides system tray since you're running XFCE+i3
-        { command = "${pkgs.xfce.xfce4-panel}/bin/xfce4-panel --disable-wm-check"; notification = false; }
+        {
+          command = "${pkgs.xfce.xfce4-panel}/bin/xfce4-panel --disable-wm-check";
+          notification = false;
+        }
       ];
 
       # No default i3bar since XFCE panel handles that
-      bars = [ ];
+      bars = [];
     };
   };
 
@@ -193,7 +210,7 @@ in
     copyq
     playerctl
     brightnessctl
-    pulseaudio        # for pactl
+    pulseaudio # for pactl
     networkmanagerapplet
   ];
 }
