@@ -9,7 +9,6 @@ _: {
     jack.enable = true;
     wireplumber.enable = true;
 
-    # Low latency config
     extraConfig.pipewire."92-low-latency" = {
       context.properties = {
         default = {
@@ -23,6 +22,7 @@ _: {
       };
     };
   };
+
   # Framework 13 AMD speaker fix
   boot.extraModprobeConfig = ''
     options snd-hda-intel model=auto
