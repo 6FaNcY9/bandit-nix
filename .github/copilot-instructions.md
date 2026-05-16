@@ -2,11 +2,11 @@
 
 ## What this repository is
 - Flake-based NixOS configuration for one host: `bandit`.
-- Main entrypoint: `/home/runner/work/bandit-nix/bandit-nix/flake.nix`.
-- System modules: `/home/runner/work/bandit-nix/bandit-nix/nixos/`.
-- Host-specific config: `/home/runner/work/bandit-nix/bandit-nix/hosts/bandit/`.
-- Home Manager config: `/home/runner/work/bandit-nix/bandit-nix/home/`.
-- Secrets policy: `/home/runner/work/bandit-nix/bandit-nix/.sops.yaml` and encrypted data in `/home/runner/work/bandit-nix/bandit-nix/secrets/secrets.yaml`.
+- Main entrypoint: `./flake.nix`.
+- System modules: `./nixos/`.
+- Host-specific config: `./hosts/bandit/`.
+- Home Manager config: `./home/`.
+- Secrets policy: `./.sops.yaml` and encrypted data in `./secrets/secrets.yaml`.
 
 ## Critical architecture facts
 - `flake.nix` defines only `nixosConfigurations.bandit`.
