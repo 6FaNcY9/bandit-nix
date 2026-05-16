@@ -7,6 +7,5 @@
     gtk.enable = true; # user GTK config
     xfce.enable = true; # XFCE panel and window decorations
     # add this to silence the warning
-    gtk.gtk4.theme = null; # adopt new default behavior
   };
 }
