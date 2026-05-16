@@ -14,10 +14,15 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    nixvim = {
+      url = "github:nix-community/nixvim";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     nixos-hardware.url = "github:NixOS/nixos-hardware";
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, ... } @ inputs:
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixvim, nixos-hardware, ... } @ inputs:
   {
     nixosConfigurations.bandit = nixpkgs.lib.nixosSystem {
       specialArgs = { inherit inputs; };
