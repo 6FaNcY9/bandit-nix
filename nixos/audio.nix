@@ -1,4 +1,4 @@
-{...}: {
+_: {
   services.pipewire = {
     enable = true;
     pulse.enable = true;
@@ -12,10 +12,13 @@
     # Low latency config
     extraConfig.pipewire."92-low-latency" = {
       context.properties = {
-        default.clock.rate = 48000;
-        default.clock.quantum = 1024;
-        default.clock.min-quantum = 32;
-        default.clock.max-quantum = 8192;
+        default = {
+          clock = {
+          rate = 48000;
+          quantum = 1024;
+          min-quantum = 32;
+          max-quantum = 8192;
+        };
       };
     };
   };

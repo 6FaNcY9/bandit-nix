@@ -1,4 +1,4 @@
-{...}: {
+_: {
   stylix.targets = {
     # these are home-manager level targets
     fish.enable = true; # themes fish shell colors
