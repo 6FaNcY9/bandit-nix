@@ -78,10 +78,15 @@
         virtualisation.cores = 2;
         networking.hostName = "bandit";
         system.stateVersion = "25.11";
-        users.users.vino.password = "test"; # test-only credential
-        users.users.root.password = "test"; # test-only credential
+        # VM-test-only NixOS module options.
+        users.users.vino = {
+          hashedPassword = lib.mkForce null;
+          initialPassword = "test"; # test-only credential
+        };
+        users.users.root.initialPassword = "test"; # test-only credential
+        users.mutableUsers = lib.mkForce true;
       };
-      testScript = builtins.readFile ./tests/bandit.nix;
+      testScript = builtins.readFile ./tests/bandit.py;
     };
   };
 }
