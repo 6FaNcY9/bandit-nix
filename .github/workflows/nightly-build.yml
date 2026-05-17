@@ -55,6 +55,7 @@ jobs:
 
           git commit -m "chore: update flake.lock"
           git pull --rebase origin "${GITHUB_REF_NAME}"
+          nix flake check --no-build --no-update-lock-file
           git push
 
       - name: Report build status
