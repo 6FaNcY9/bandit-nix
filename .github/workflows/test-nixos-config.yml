@@ -64,11 +64,12 @@ jobs:
           # without documenting the specific false positive being addressed.
           find . \
             \( -path './.git' -o -path './.direnv' -o -path './result*' \) -prune -o \
-            \( -type f -name '*.nix' \
-              # Temporary narrow workflow-level exclusion for NixOS module-option
-              # false positives in ./nixos/users.nix.
+            \( \
+              -type f \
+              -name '*.nix' \
               ! -path './nixos/users.nix' \
-              -print0 \) | xargs -0 nix run nixpkgs#deadnix -- --fail
+              -print0 \
+            \) | xargs -0 nix run nixpkgs#deadnix -- --fail
 
       - name: Check for antipatterns
         run: nix run nixpkgs#statix -- check .
