@@ -16,6 +16,7 @@ concurrency:
 jobs:
   format-nix:
     name: Format Nix files
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
