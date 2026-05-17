@@ -9,13 +9,20 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: auto-format-nix-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   format-nix:
     name: Format Nix files
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v13
@@ -29,13 +36,15 @@ jobs:
 
       - name: Commit formatted files
         run: |
-          if git diff --quiet; then
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -u -- '*.nix'
+
+          if git diff --cached --quiet; then
             echo "No formatting changes detected"
             exit 0
           fi
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .
           git commit -m "style: auto-format nix files"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
           git push
