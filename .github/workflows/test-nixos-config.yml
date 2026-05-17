@@ -58,8 +58,14 @@ jobs:
 
       - name: Check for dead code
         run: |
+          # Keep deadnix enabled for the repository broadly; only exclude
+          # ./nixos/users.nix because deadnix can report false positives for
+          # NixOS module option paths in that file. Do not widen this exclusion
+          # without documenting the specific false positive being addressed.
           find . \
             -name '*.nix' \
+            # Temporary narrow workflow-level exclusion for NixOS module-option
+            # false positives in ./nixos/users.nix.
             ! -path './nixos/users.nix' \
             -print0 | xargs -0 nix run nixpkgs#deadnix -- --fail
 
