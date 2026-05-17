@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: nightly-build-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   update-and-build:
     name: Update Flake Inputs and Build
@@ -26,16 +30,8 @@ jobs:
       - name: Update flake inputs
         run: nix flake update
 
-      - name: Commit updated flake.lock
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add flake.lock
-          git commit -m "chore: update flake.lock" || echo "No changes to commit"
-          git push || echo "Nothing to push"
-
       - name: Check flake
-        run: nix flake check --no-update-lock-file
+        run: nix flake check --no-update-lock-file --no-build
 
       - name: Build with updated inputs
         run: |
@@ -43,6 +39,23 @@ jobs:
             --print-build-logs \
             --no-update-lock-file \
             --fallback
+
+      # Only push the new flake.lock if the checks and build above succeeded.
+      # This prevents publishing a known-broken lock file to the default branch.
+      - name: Commit and push updated flake.lock
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- flake.lock; then
+            echo "No changes to flake.lock"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add flake.lock
+          git commit -m "chore: update flake.lock"
+          # Rebase in case main moved while we were building, then push.
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - name: Report build status
         if: always()

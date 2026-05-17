@@ -51,7 +51,10 @@ jobs:
             trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
 
       - name: Check flake
-        run: nix flake check --no-update-lock-file
+        # --no-build keeps this job fast and prevents it from trying to build
+        # the VM test (checks.x86_64-linux.bandit-test), which requires KVM
+        # and is exercised by the dedicated build-vm job below.
+        run: nix flake check --no-update-lock-file --no-build
 
       - name: Check formatting
         run: nix run nixpkgs#alejandra -- --check .
@@ -101,18 +104,30 @@ jobs:
             --fallback
 
       - name: Scan for vulnerabilities
+        # vulnix exits 0 = no CVEs, 1 = CVEs found, 2 = error. We want to
+        # tolerate "CVEs found" (so the job still uploads the report and
+        # surfaces a summary) but fail on real errors (e.g. vulnix crashed
+        # or the result symlink is missing).
         run: |
-          nix run nixpkgs#vulnix -- \
-            --json \
-            ./result > vulnix-report.json || true
+          set -o pipefail
+          status=0
+          nix run nixpkgs#vulnix -- --json ./result > vulnix-report.json || status=$?
+          if [ "$status" -ge 2 ]; then
+            echo "::error::vulnix exited with status $status (scan error)"
+            exit "$status"
+          fi
           if [ ! -s vulnix-report.json ]; then
             echo "[]" > vulnix-report.json
           fi
 
       - name: Show vulnerability summary
         run: |
-          COUNT=$(cat vulnix-report.json | python3 -c "import sys,json; data=json.load(sys.stdin); print(len(data))" 2>/dev/null || echo "unknown")
+          set -euo pipefail
+          COUNT=$(python3 -c "import json,sys; print(len(json.load(open('vulnix-report.json'))))")
           echo "Vulnerabilities found: $COUNT"
+          if [ "$COUNT" -gt 0 ]; then
+            echo "::warning::vulnix reported $COUNT vulnerable package(s); see uploaded vulnix-report artifact"
+          fi
 
       - name: Upload vulnerability report
         uses: actions/upload-artifact@v4

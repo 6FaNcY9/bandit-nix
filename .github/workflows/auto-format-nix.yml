@@ -9,13 +9,26 @@ on:
 permissions:
   contents: write
 
+# Serialise pushes on the same ref so two pushes in quick succession
+# don't race each other on `git push`.
+concurrency:
+  group: auto-format-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   format-nix:
     name: Format Nix files
     runs-on: ubuntu-latest
+    # Skip runs that originate from this workflow itself to avoid loops
+    # (GITHUB_TOKEN-driven pushes don't normally retrigger workflows, but
+    # this is belt-and-braces in case the token is ever swapped for a PAT).
+    if: github.actor != 'github-actions[bot]'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # Needed so we can rebase against the latest remote tip before pushing.
+          fetch-depth: 0
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v13
@@ -29,13 +42,16 @@ jobs:
 
       - name: Commit formatted files
         run: |
-          if git diff --quiet; then
+          set -euo pipefail
+          git add -A
+          if git diff --cached --quiet; then
             echo "No formatting changes detected"
             exit 0
           fi
-
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .
           git commit -m "style: auto-format nix files"
-          git push
+          # Rebase onto the latest remote tip in case the branch advanced
+          # while alejandra was running, then push.
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

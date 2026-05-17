@@ -2,7 +2,10 @@ start_all()
 
 # System initialisation
 bandit.wait_for_unit("multi-user.target")
-bandit.succeed("systemctl --failed --no-pager")
+# `systemctl --failed` returns 0 even when units are listed, so assert that
+# no units are in the failed state by inverting `--quiet` (which exits 0
+# only when there *are* failed units).
+bandit.fail("systemctl --failed --quiet")
 
 # Network services
 bandit.wait_for_unit("NetworkManager.service")
@@ -11,8 +14,10 @@ bandit.wait_for_unit("systemd-resolved.service")
 
 # User configuration
 bandit.succeed("id vino")
-bandit.succeed("groups vino | grep -q wheel")
-bandit.succeed("groups vino | grep -q networkmanager")
+# Use `id -nG` and word-grep so a real failure of `id` isn't masked by the
+# exit code of `grep` in a pipeline.
+bandit.succeed("id -nG vino | grep -wq wheel")
+bandit.succeed("id -nG vino | grep -wq networkmanager")
 
 # Shell and user-facing tools
 bandit.succeed("which fish")
