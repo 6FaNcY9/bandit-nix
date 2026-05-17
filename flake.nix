@@ -78,11 +78,15 @@
         virtualisation.cores = 2;
         networking.hostName = "bandit";
         system.stateVersion = "25.11";
-        # Clear the hashedPassword from nixos/users.nix so initialPassword takes effect
+        # VM-test-only NixOS module options. deadnix does not understand
+        # that these option paths are consumed by the module system.
+        # deadnix: skip
         users.users.vino.hashedPassword = lib.mkForce null;
+        # deadnix: skip
         users.users.vino.initialPassword = "test"; # test-only credential
+        # deadnix: skip
         users.users.root.initialPassword = "test"; # test-only credential
-        # Override nixos/users.nix which sets mutableUsers = false
+        # deadnix: skip
         users.mutableUsers = lib.mkForce true;
       };
       testScript = builtins.readFile ./tests/bandit.py;
