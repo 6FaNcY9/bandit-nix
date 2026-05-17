@@ -63,7 +63,8 @@ jobs:
           # NixOS module option paths in that file. Do not widen this exclusion
           # without documenting the specific false positive being addressed.
           find . \
-            -name '*.nix' \
+            \( -path './.git' -o -path './.direnv' -o -path './result*' \) -prune -o \
+            -type f -name '*.nix' \
             # Temporary narrow workflow-level exclusion for NixOS module-option
             # false positives in ./nixos/users.nix.
             ! -path './nixos/users.nix' \

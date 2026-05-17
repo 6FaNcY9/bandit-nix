@@ -62,7 +62,8 @@ nix run nixpkgs#alejandra -- --check .
 
 # Check for dead code (excluding NixOS module false positives in nixos/users.nix)
 find . \
-  -name '*.nix' \
+  \( -path './.git' -o -path './.direnv' -o -path './result*' \) -prune -o \
+  -type f -name '*.nix' \
   ! -path './nixos/users.nix' \
   -print0 | xargs -0 nix run nixpkgs#deadnix -- --fail
 
