@@ -44,7 +44,7 @@
 
   # Needed for XFCE settings daemon and GTK apps
   programs.dconf.enable = true;
-  programs.light.enable = true;
+  hardware.acpilight.enable = true;
 
   services = {
     libinput = {

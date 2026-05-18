@@ -16,11 +16,11 @@ _: {
     logind = {
       lidSwitch = "suspend";
       lidSwitchExternalPower = "ignore";
-      extraConfig = ''
-        HandlePowerKey=suspend
-        IdleAction=suspend
-        IdleActionSec=15min
-      '';
+      settings.Login = {
+        HandlePowerKey = "suspend";
+        IdleAction = "suspend";
+        IdleActionSec = "15min";
+      };
     };
   };
 
