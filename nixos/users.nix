@@ -1,4 +1,8 @@
-{config, pkgs, ...}: {
+{
+  config,
+  pkgs,
+  ...
+}: {
   programs.fish.enable = true;
 
   sops.secrets."users/vino/password" = {
