@@ -1,0 +1,178 @@
+# GitLab CI/CD pipeline for bandit-nix
+# Ported from .github/workflows/ with GitLab-native features.
+#
+# Prerequisites:
+#   - $CACHIX_CACHE_NAME  — name of your Cachix cache (plain variable)
+#   - $CACHIX_AUTH_TOKEN  — Cachix auth token (masked variable)
+#   - $GITLAB_PUSH_TOKEN  — Project Access Token with write_repository scope (masked variable)
+#     See: https://docs.gitlab.com/user/project/settings/project_access_tokens/
+#
+# Note on build-system: Building the full NixOS closure (~10GB+) exceeds the
+# disk limit of GitLab shared runners. The build-system job uses
+# --dry-run to validate the derivation graph without downloading/building
+# everything. For a full build, use a self-hosted runner with more disk space,
+# or populate your Cachix cache locally first with:
+#   nix build .#nixosConfigurations.bandit.config.system.build.toplevel | cachix push <cache>
+
+# ---------------------------------------------------------------------------
+# Workflow rules — prevent duplicate pipelines on push + open MR.
+# Only one pipeline runs per commit: MR pipeline takes priority over branch.
+# Scheduled pipelines always run (for the nightly flake update).
+# ---------------------------------------------------------------------------
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+
+# ---------------------------------------------------------------------------
+# Global defaults
+# ---------------------------------------------------------------------------
+default:
+  # nixos/nix is the standard image for running Nix commands in CI.
+  image: nixos/nix:latest
+  before_script:
+    # Enable flakes and configure the binary cache substituters.
+    # cachix use adds the cache's substituter + trusted public key automatically.
+    - echo "experimental-features = nix-command flakes" >> /etc/nix/nix.conf
+    - echo "substituters = https://cache.nixos.org" >> /etc/nix/nix.conf
+    - echo "trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=" >> /etc/nix/nix.conf
+    - nix --version
+    # Install cachix and configure the project cache as a substituter.
+    # `cachix use` adds the cache's public key automatically.
+    - nix profile install nixpkgs#cachix
+    - cachix use "${CACHIX_CACHE_NAME}"
+    - cachix authtoken "${CACHIX_AUTH_TOKEN}"
+
+# ---------------------------------------------------------------------------
+# Stages
+# ---------------------------------------------------------------------------
+stages:
+  - lint      # Static analysis: formatting, dead code, antipatterns
+  - build     # Flake validation + dry-run derivation check
+  - test      # Security scan (informational, allow_failure)
+  - update    # Nightly flake.lock update (scheduled pipelines only)
+
+# ---------------------------------------------------------------------------
+# Reusable rule sets
+# ---------------------------------------------------------------------------
+
+# Runs on every push/MR pipeline (not on scheduled pipelines).
+.rules-push-and-mr:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - when: on_success
+
+# Runs only on scheduled pipelines (nightly flake update).
+.rules-scheduled-only:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: on_success
+    - when: never
+
+# ---------------------------------------------------------------------------
+# STAGE: lint
+# ---------------------------------------------------------------------------
+
+# Checks that all .nix files are formatted with alejandra.
+check-formatting:
+  extends: .rules-push-and-mr
+  stage: lint
+  script:
+    - nix run nixpkgs#alejandra -- --check .
+
+# Finds unused bindings and imports in Nix files.
+check-dead-code:
+  extends: .rules-push-and-mr
+  stage: lint
+  script:
+    - nix run nixpkgs#deadnix -- --fail .
+
+# Detects common Nix antipatterns with statix.
+check-antipatterns:
+  extends: .rules-push-and-mr
+  stage: lint
+  script:
+    - nix run nixpkgs#statix -- check .
+
+# ---------------------------------------------------------------------------
+# STAGE: build
+# ---------------------------------------------------------------------------
+
+# Validates the flake structure (checks all outputs are well-formed).
+flake-check:
+  extends: .rules-push-and-mr
+  stage: build
+  script:
+    - nix flake check --no-update-lock-file
+
+# Validates the full NixOS derivation graph without building or downloading
+# the closure. This catches Nix evaluation errors (bad module options,
+# missing references, type errors) without hitting disk space limits.
+# For a full build, run locally and push to Cachix:
+#   nix build .#nixosConfigurations.bandit.config.system.build.toplevel \
+#     | cachix push $CACHIX_CACHE_NAME
+build-system:
+  extends: .rules-push-and-mr
+  stage: build
+  script:
+    - |
+      nix build .#nixosConfigurations.bandit.config.system.build.toplevel \
+        --dry-run \
+        --no-update-lock-file
+
+# ---------------------------------------------------------------------------
+# STAGE: test
+# ---------------------------------------------------------------------------
+
+# Scans for known CVEs using vulnix on the nix store paths referenced by
+# the flake. allow_failure: true — findings are informational only.
+security-scan:
+  extends: .rules-push-and-mr
+  stage: test
+  # Vulnerability findings are reported but do not fail the pipeline.
+  allow_failure: true
+  script:
+    - |
+      nix run nixpkgs#vulnix -- \
+        --json \
+        --flake .#nixosConfigurations.bandit > vulnix-report.json || true
+    - |
+      COUNT=$(python3 -c "import sys,json; data=json.load(open('vulnix-report.json')); print(len(data))" 2>/dev/null || echo "unknown")
+      echo "Vulnerabilities found: $COUNT"
+  artifacts:
+    name: vulnix-report
+    paths:
+      - vulnix-report.json
+    expire_in: 1 week
+    # Upload the report even when the job is allowed to fail.
+    when: always
+
+# ---------------------------------------------------------------------------
+# STAGE: update
+# ---------------------------------------------------------------------------
+
+# Updates all flake inputs and commits the new flake.lock back to the repo.
+# Runs only on scheduled pipelines (configure a daily schedule in
+# CI/CD > Schedules in the GitLab project settings).
+#
+# Requires the CI/CD variable $GITLAB_PUSH_TOKEN to be set to a Project
+# Access Token with `write_repository` scope.
+# See: https://docs.gitlab.com/user/project/settings/project_access_tokens/
+update-flake:
+  extends: .rules-scheduled-only
+  stage: update
+  script:
+    - nix flake update
+    - |
+      git config user.name "gitlab-ci[bot]"
+      git config user.email "gitlab-ci[bot]@users.noreply.gitlab.com"
+      git add flake.lock
+      git diff --cached --quiet && echo "No changes to flake.lock" && exit 0
+      git commit -m "chore: update flake.lock [skip ci]"
+      # Push using the project access token stored in $GITLAB_PUSH_TOKEN.
+      # Never hardcode tokens — store them as a masked CI/CD variable.
+      git push "https://gitlab-ci-token:${GITLAB_PUSH_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" HEAD:${CI_DEFAULT_BRANCH}
