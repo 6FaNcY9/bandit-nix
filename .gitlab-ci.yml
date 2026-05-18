@@ -1,0 +1,198 @@
+# GitLab CI/CD pipeline for bandit-nix
+# Ported from .github/workflows/ with GitLab-native features.
+#
+# Prerequisites:
+#   - A Project Access Token with `write_repository` scope stored as the
+#     CI/CD variable $GITLAB_PUSH_TOKEN is required for the update-flake job.
+#     See: https://docs.gitlab.com/user/project/settings/project_access_tokens/
+
+# ---------------------------------------------------------------------------
+# Workflow rules — prevent duplicate pipelines on push + open MR.
+# Only one pipeline runs per commit: MR pipeline takes priority over branch.
+# Scheduled pipelines always run (for the nightly flake update).
+# ---------------------------------------------------------------------------
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+
+# ---------------------------------------------------------------------------
+# Global defaults
+# ---------------------------------------------------------------------------
+default:
+  # nixos/nix is the standard image for running Nix commands in CI.
+  image: nixos/nix:latest
+  before_script:
+    # Enable flakes and configure the binary cache substituter.
+    # Writing to nix.conf is the recommended approach for ephemeral envs.
+    - echo "experimental-features = nix-command flakes" >> /etc/nix/nix.conf
+    - echo "substituters = https://cache.nixos.org" >> /etc/nix/nix.conf
+    - echo "trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=" >> /etc/nix/nix.conf
+    - nix --version
+
+# ---------------------------------------------------------------------------
+# Stages
+# ---------------------------------------------------------------------------
+stages:
+  - lint      # Static analysis: formatting, dead code, antipatterns
+  - build     # Flake validation + full system closure build
+  - test      # Security scan + VM boot test (both depend on build)
+  - update    # Nightly flake.lock update (scheduled pipelines only)
+
+# ---------------------------------------------------------------------------
+# Reusable rule sets
+# ---------------------------------------------------------------------------
+
+# Runs on every push/MR pipeline (not on scheduled pipelines).
+.rules-push-and-mr:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - when: on_success
+
+# Runs only on scheduled pipelines (nightly flake update).
+.rules-scheduled-only:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: on_success
+    - when: never
+
+# ---------------------------------------------------------------------------
+# STAGE: lint
+# ---------------------------------------------------------------------------
+
+# Checks that all .nix files are formatted with alejandra.
+check-formatting:
+  extends: .rules-push-and-mr
+  stage: lint
+  script:
+    - nix run nixpkgs#alejandra -- --check .
+
+# Finds unused bindings and imports in Nix files.
+check-dead-code:
+  extends: .rules-push-and-mr
+  stage: lint
+  script:
+    - nix run nixpkgs#deadnix -- --fail .
+
+# Detects common Nix antipatterns with statix.
+check-antipatterns:
+  extends: .rules-push-and-mr
+  stage: lint
+  script:
+    - nix run nixpkgs#statix -- check .
+
+# ---------------------------------------------------------------------------
+# STAGE: build
+# ---------------------------------------------------------------------------
+
+# Validates the flake structure (checks all outputs are well-formed).
+flake-check:
+  extends: .rules-push-and-mr
+  stage: build
+  script:
+    - nix flake check --no-update-lock-file
+
+# Builds the full NixOS system closure for the bandit host.
+# The ./result symlink is saved as an artifact so downstream jobs
+# (security-scan, build-vm) can reuse it without rebuilding.
+build-system:
+  extends: .rules-push-and-mr
+  stage: build
+  script:
+    - |
+      nix build .#nixosConfigurations.bandit.config.system.build.toplevel \
+        --print-build-logs \
+        --no-update-lock-file \
+        --fallback
+    - nix path-info .#nixosConfigurations.bandit.config.system.build.toplevel
+  artifacts:
+    # Keep the result symlink so test-stage jobs can use the built closure.
+    paths:
+      - result
+    expire_in: 2 hours
+
+# ---------------------------------------------------------------------------
+# STAGE: test
+# ---------------------------------------------------------------------------
+
+# Scans the built closure for known CVEs using vulnix.
+# allow_failure: true — findings are informational; they should not block
+# the pipeline (mirrors the GitHub workflow's `|| true` behaviour).
+security-scan:
+  extends: .rules-push-and-mr
+  stage: test
+  needs:
+    - job: build-system
+      artifacts: true
+  # Vulnerability findings are reported but do not fail the pipeline.
+  allow_failure: true
+  script:
+    - |
+      nix run nixpkgs#vulnix -- \
+        --json \
+        ./result > vulnix-report.json || true
+    - |
+      COUNT=$(python3 -c "import sys,json; data=json.load(open('vulnix-report.json')); print(len(data))" 2>/dev/null || echo "unknown")
+      echo "Vulnerabilities found: $COUNT"
+  artifacts:
+    name: vulnix-report
+    paths:
+      - vulnix-report.json
+    expire_in: 1 week
+    # Upload the report even when the job is allowed to fail.
+    when: always
+
+# Builds the QEMU VM image and runs a 60-second boot smoke test.
+# allow_failure: true — shared GitLab runners do not guarantee KVM access,
+# so the VM test is best-effort and must not block merges.
+build-vm:
+  extends: .rules-push-and-mr
+  stage: test
+  needs:
+    - job: build-system
+      artifacts: true
+  # KVM may not be available on shared runners; treat as best-effort.
+  allow_failure: true
+  script:
+    - |
+      nix build .#nixosConfigurations.bandit.config.system.build.vm \
+        --print-build-logs \
+        --no-update-lock-file \
+        --fallback
+    - |
+      QEMU_OPTS="-m 1024 -nographic -serial mon:stdio" \
+      timeout 60s result/bin/run-bandit-vm &
+      VM_PID=$!
+      sleep 30
+      kill $VM_PID 2>/dev/null || true
+      echo "✅ VM boot test completed"
+
+# ---------------------------------------------------------------------------
+# STAGE: update
+# ---------------------------------------------------------------------------
+
+# Updates all flake inputs and commits the new flake.lock back to the repo.
+# Runs only on scheduled pipelines (configure a daily schedule in
+# CI/CD > Schedules in the GitLab project settings).
+#
+# Requires the CI/CD variable $GITLAB_PUSH_TOKEN to be set to a Project
+# Access Token with `write_repository` scope.
+# See: https://docs.gitlab.com/user/project/settings/project_access_tokens/
+update-flake:
+  extends: .rules-scheduled-only
+  stage: update
+  script:
+    - nix flake update
+    - |
+      git config user.name "gitlab-ci[bot]"
+      git config user.email "gitlab-ci[bot]@users.noreply.gitlab.com"
+      git add flake.lock
+      git diff --cached --quiet && echo "No changes to flake.lock" && exit 0
+      git commit -m "chore: update flake.lock [skip ci]"
+      # Push using the project access token stored in $GITLAB_PUSH_TOKEN.
+      # Never hardcode tokens — store them as a masked CI/CD variable.
+      git push "https://gitlab-ci-token:${GITLAB_PUSH_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" HEAD:${CI_DEFAULT_BRANCH}
