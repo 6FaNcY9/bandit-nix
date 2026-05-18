@@ -7,8 +7,8 @@ _: {
       '';
       shellAbbrs = {
         # nix
-        ns = "nixos-rebuild switch --flake .#bandit";
-        nt = "nixos-rebuild test --flake .#bandit";
+        ns = "nh os switch";
+        nt = "nh os test";
         nfu = "nix flake update";
         ngc = "nix-collect-garbage -d";
         # navigation
