@@ -15,9 +15,11 @@ A personal NixOS configuration for the "bandit" host, built from scratch with mi
 - **Home Manager Integration**: User environment management with declarative home configurations
 - **Secrets Management**: Secure secrets handling with sops-nix and age encryption
 - **Hardware Optimization**: Framework 13 AMD-specific optimizations via nixos-hardware
+- **Firmware + Security Maintenance**: fwupd, fprintd, fstrim, and btrfs auto-scrub enabled
 - **Neovim Configuration**: Declarative Neovim setup with nixvim
 - **Theme Management**: System-wide theming with Stylix
 - **Desktop Environment**: i3 window manager with XFCE panel integration
+- **Developer Tooling**: OpenSSH, podman, libvirt, direnv, and local CI linters available system-wide
 - **Modular Structure**: Clean separation of system and user configurations
 
 ## 📁 Project Structure
@@ -36,6 +38,10 @@ A personal NixOS configuration for the "bandit" host, built from scratch with mi
 │   ├── core.nix           # Core system packages and settings
 │   ├── boot.nix           # Bootloader configuration
 │   ├── network.nix        # Network settings
+│   ├── graphics.nix       # AMD graphics/Vulkan/OpenCL stack
+│   ├── firmware.nix       # Framework firmware + fingerprint support
+│   ├── power.nix          # Power profile, suspend, trim, and scrub
+│   ├── dev.nix            # Dev tooling, SSH, containers, virtualization
 │   ├── audio.nix          # Audio configuration
 │   ├── desktop.nix        # Desktop environment setup
 │   └── users.nix          # User account definitions

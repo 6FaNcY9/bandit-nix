@@ -55,7 +55,7 @@
     "${mod}+Shift+m" = "scratchpad show";
 
     # App launchers
-    "${mod}+Return" = "exec ${pkgs.xfce.xfce4-terminal}/bin/xfce4-terminal";
+    "${mod}+Return" = "exec ${pkgs.xfce4-terminal}/bin/xfce4-terminal";
     "${mod}+Shift+w" = "exec ${pkgs.firefox}/bin/firefox";
     "${mod}+d" = "exec ${pkgs.rofi}/bin/rofi -show drun";
     "${mod}+Shift+v" = "exec --no-startup-id ${pkgs.copyq}/bin/copyq toggle";
@@ -192,7 +192,7 @@ in {
         }
         # XFCE panel — provides system tray since you're running XFCE+i3
         {
-          command = "${pkgs.xfce.xfce4-panel}/bin/xfce4-panel --disable-wm-check";
+          command = "${pkgs.xfce4-panel}/bin/xfce4-panel --disable-wm-check";
           notification = false;
         }
       ];
