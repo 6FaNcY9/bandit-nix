@@ -46,9 +46,6 @@
     # For mounting/unmounting drives in file managers (e.g. Thunar)
     udisks2.enable = true;
     gvfs.enable = true;
-
-    # Polkit for privilege escalation in GUI apps (e.g. software updater)
-    polkit.enable = true;
   };
 
   # Tell XFCE session to use i3 as WM
@@ -62,6 +59,9 @@
     xfce4-notifyd
     brightnessctl
   ];
+
+  # Polkit for privilege escalation in GUI apps (e.g. software updater)
+  security.polkit.enable = true;
 
   # Needed for XFCE settings daemon and GTK apps
   programs.dconf.enable = true;
