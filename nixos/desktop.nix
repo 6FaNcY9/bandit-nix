@@ -40,6 +40,7 @@
     xfce4-terminal
     xfce4-power-manager
     xfce4-notifyd
+    brightnessctl
   ];
 
   # Needed for XFCE settings daemon and GTK apps

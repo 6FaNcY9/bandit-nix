@@ -38,7 +38,7 @@
       };
 
       commit.gpgsign = true;
-      user.signingkey = "B872E229ADE55151";
+      user.signingkey = "4D8770567A65FE1369E2BCC1611871842A8C1619";
     };
   };
 
