@@ -61,6 +61,7 @@ All inputs use `inputs.nixpkgs.follows = "nixpkgs"` to avoid duplicate nixpkgs v
 - Nix formatting is done with `alejandra`.
 - Use 2-space indentation.
 - Group related options under a single attrset rather than repeating the key prefix.
+- Avoid repeated top-level keys in the same attrset (for example `services`, `users`, `programs`, `virtualisation`) to keep `statix` antipattern checks passing.
 
 ### 4. Preserve secrets workflow
 - Never commit plaintext secrets.
@@ -72,3 +73,4 @@ All inputs use `inputs.nixpkgs.follows = "nixpkgs"` to avoid duplicate nixpkgs v
 ```nix
 system.stateVersion = "25.11"   # hosts/bandit/default.nix
 home.stateVersion   = "25.11"   # home/default.nix
+```
