@@ -16,5 +16,4 @@
   };
 
   security.rtkit.enable = true;
-  time.hardwareClockInLocalTime = false;
 }

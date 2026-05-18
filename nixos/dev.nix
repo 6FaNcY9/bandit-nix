@@ -9,7 +9,6 @@
   };
 
   programs = {
-    ssh.startAgent = true;
     direnv = {
       enable = true;
       nix-direnv.enable = true;
