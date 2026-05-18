@@ -2,8 +2,9 @@
 # Ported from .github/workflows/ with GitLab-native features.
 #
 # Prerequisites:
-#   - A Project Access Token with `write_repository` scope stored as the
-#     CI/CD variable $GITLAB_PUSH_TOKEN is required for the update-flake job.
+#   - $CACHIX_CACHE_NAME  — name of your Cachix cache (plain variable)
+#   - $CACHIX_AUTH_TOKEN  — Cachix auth token (masked variable)
+#   - $GITLAB_PUSH_TOKEN  — Project Access Token with write_repository scope (masked variable)
 #     See: https://docs.gitlab.com/user/project/settings/project_access_tokens/
 
 # ---------------------------------------------------------------------------
@@ -29,9 +30,14 @@ default:
     # Enable flakes and configure the binary cache substituter.
     # Writing to nix.conf is the recommended approach for ephemeral envs.
     - echo "experimental-features = nix-command flakes" >> /etc/nix/nix.conf
-    - echo "substituters = https://cache.nixos.org" >> /etc/nix/nix.conf
+    - echo "substituters = https://cache.nixos.org https://${CACHIX_CACHE_NAME}.cachix.org" >> /etc/nix/nix.conf
     - echo "trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=" >> /etc/nix/nix.conf
     - nix --version
+    # Install cachix and authenticate so builds are pushed to the cache.
+    # This dramatically reduces disk usage and build times on subsequent runs.
+    - nix profile install nixpkgs#cachix
+    - cachix use "${CACHIX_CACHE_NAME}"
+    - cachix authtoken "${CACHIX_AUTH_TOKEN}"
 
 # ---------------------------------------------------------------------------
 # Stages
@@ -97,6 +103,7 @@ flake-check:
     - nix flake check --no-update-lock-file
 
 # Builds the full NixOS system closure for the bandit host.
+# Outputs are pushed to Cachix so subsequent runs download instead of rebuild.
 # The ./result symlink is saved as an artifact so downstream jobs
 # (security-scan, build-vm) can reuse it without rebuilding.
 build-system:
@@ -107,7 +114,7 @@ build-system:
       nix build .#nixosConfigurations.bandit.config.system.build.toplevel \
         --print-build-logs \
         --no-update-lock-file \
-        --fallback
+        --fallback | cachix push "${CACHIX_CACHE_NAME}"
     - nix path-info .#nixosConfigurations.bandit.config.system.build.toplevel
   artifacts:
     # Keep the result symlink so test-stage jobs can use the built closure.
