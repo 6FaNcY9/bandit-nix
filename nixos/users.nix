@@ -1,14 +1,8 @@
 {
-  config,
   pkgs,
   ...
 }: {
   programs.fish.enable = true;
-
-  sops.secrets."users/vino/password" = {
-    sopsFile = ../secrets/secrets.yaml;
-    neededForUsers = true;
-  };
 
   users = {
     mutableUsers = false;
@@ -26,7 +20,7 @@
       ];
 
       shell = pkgs.fish;
-      hashedPasswordFile = config.sops.secrets."users/vino/password".path;
+      hashedPassword = "$6$w/id8WONcOVFgaLH$Y92T1W3/n6pNy5bXYv7M8pyAqa6f1kpskszGXort4pjy3nDJW3ZN.1cdZpHwHab3huKNWNWLWPw9ZxkaAO4fK";
     };
   };
 
