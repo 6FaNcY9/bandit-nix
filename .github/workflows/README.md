@@ -25,6 +25,7 @@ This workflow performs comprehensive testing of the NixOS configuration.
 
 - Updates all flake inputs to latest versions
 - Rebuilds the configuration with updated dependencies
+- Commits and pushes updated `flake.lock` changes back to the repository when changes are detected
 - Helps catch upstream breaking changes early
 
 ### 3. Auto Format Nix Files (`auto-format-nix.yml`)
