@@ -11,8 +11,10 @@
       efi.canTouchEfiVariables = true;
     };
     kernelPackages = pkgs.linuxPackages_latest;
+    kernelParams = ["mem_sleep_default=s2idle"];
     tmp.useTmpfs = true;
   };
 
   security.rtkit.enable = true;
+  time.hardwareClockInLocalTime = false;
 }

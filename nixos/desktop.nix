@@ -44,4 +44,28 @@
 
   # Needed for XFCE settings daemon and GTK apps
   programs.dconf.enable = true;
+  programs.light.enable = true;
+
+  services = {
+    libinput = {
+      enable = true;
+      touchpad = {
+        tapping = true;
+        naturalScrolling = true;
+        disableWhileTyping = true;
+        accelProfile = "adaptive";
+      };
+    };
+    udisks2.enable = true;
+    gvfs.enable = true;
+  };
+
+  security.polkit.enable = true;
+
+  xdg.portal = {
+    enable = true;
+    wlr.enable = false;
+    extraPortals = [pkgs.xdg-desktop-portal-gtk];
+    config.common.default = "gtk";
+  };
 }

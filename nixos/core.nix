@@ -1,6 +1,7 @@
 {pkgs, ...}: {
   i18n.defaultLocale = "en_US.UTF-8";
   time.timeZone = "Europe/Vienna";
+  console.keyMap = "us";
 
   nix = {
     settings = {
@@ -14,6 +15,10 @@
       dates = "weekly";
       options = "--delete-older-than 30d";
     };
+    optimise = {
+      automatic = true;
+      dates = ["weekly"];
+    };
   };
 
   # ─── Fonts ────────────────────────────────────────────
@@ -21,6 +26,9 @@
     fontconfig.enable = true;
     packages = with pkgs; [
       nerd-fonts.jetbrains-mono
+      noto-fonts
+      noto-fonts-cjk-sans
+      noto-fonts-emoji
     ];
   };
 
@@ -79,6 +87,9 @@
     targets = {
       gtk.enable = true;
       grub.enable = true;
+      console.enable = true;
     };
   };
+
+  services.journald.extraConfig = "SystemMaxUse=500M";
 }

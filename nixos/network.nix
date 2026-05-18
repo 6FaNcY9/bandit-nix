@@ -1,6 +1,8 @@
 _: {
   networking = {
     networkmanager.enable = true;
+    networkmanager.wifi.backend = "iwd";
+    wireless.iwd.enable = true;
     useDHCP = false; # NetworkManager handles this
     firewall = {
       enable = true;
