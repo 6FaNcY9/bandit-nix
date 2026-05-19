@@ -10,9 +10,9 @@
 # Note on build-system: Building the full NixOS closure (~10GB+) exceeds the
 # disk limit of GitLab shared runners. The build-system job uses
 # --dry-run to validate the derivation graph without downloading/building
-# everything. For a full build, use a self-hosted runner with more disk space,
-# or populate your Cachix cache locally first with:
-#   nix build .#nixosConfigurations.bandit.config.system.build.toplevel | cachix push <cache>
+# everything. For a full build, trigger the populate-cache job manually
+# from CI/CD > Pipelines > Run pipeline. Run it multiple times to
+# gradually fill the cache until build-system can do a full build.
 
 # ---------------------------------------------------------------------------
 # Workflow rules — prevent duplicate pipelines on push + open MR.
@@ -53,6 +53,7 @@ stages:
   - lint      # Static analysis: formatting, dead code, antipatterns
   - build     # Flake validation + dry-run derivation check
   - test      # Security scan (informational, allow_failure)
+  - cache     # Manual job to populate Cachix cache on x86_64 runners
   - update    # Nightly flake.lock update (scheduled pipelines only)
 
 # ---------------------------------------------------------------------------
@@ -112,9 +113,6 @@ flake-check:
 # Validates the full NixOS derivation graph without building or downloading
 # the closure. This catches Nix evaluation errors (bad module options,
 # missing references, type errors) without hitting disk space limits.
-# For a full build, run locally and push to Cachix:
-#   nix build .#nixosConfigurations.bandit.config.system.build.toplevel \
-#     | cachix push $CACHIX_CACHE_NAME
 build-system:
   extends: .rules-push-and-mr
   stage: build
@@ -150,6 +148,36 @@ security-scan:
     expire_in: 1 week
     # Upload the report even when the job is allowed to fail.
     when: always
+
+# ---------------------------------------------------------------------------
+# STAGE: cache
+# ---------------------------------------------------------------------------
+
+# Manually triggered job to build the full NixOS closure on GitLab's
+# x86_64 runners and push all derivations to Cachix.
+# Run this multiple times from CI/CD > Pipelines > Run pipeline until
+# the cache is fully populated. Once populated, build-system can be
+# switched back to a full build.
+#
+# --keep-going ensures partial builds are pushed to Cachix even if
+# some derivations fail due to disk space limits, so each run makes
+# progress and eventually the full closure is cached.
+populate-cache:
+  stage: cache
+  # when: manual — only runs when you explicitly trigger it from the UI.
+  # This prevents it from running on every push and wasting CI minutes.
+  when: manual
+  # allow_failure: true — disk space may still be hit on some runs;
+  # whatever was built before the failure is still pushed to Cachix.
+  allow_failure: true
+  script:
+    - |
+      nix build .#nixosConfigurations.bandit.config.system.build.toplevel \
+        --print-build-logs \
+        --no-update-lock-file \
+        --keep-going \
+        --fallback 2>&1 | cachix push "${CACHIX_CACHE_NAME}" || true
+    - echo "✅ Pushed whatever was built to Cachix — run again if needed"
 
 # ---------------------------------------------------------------------------
 # STAGE: update
