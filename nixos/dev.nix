@@ -14,6 +14,10 @@
       nix-direnv.enable = true;
     };
     virt-manager.enable = true;
+    nh = {
+      enable = true;
+      flake = "/home/vino/bandit-nix"; # adjust if repo is cloned elsewhere
+    };
   };
 
   virtualisation = {
@@ -42,5 +46,8 @@
     alejandra
     deadnix
     statix
+    nix-output-monitor
+    nvd
+    nix-index
   ];
 }
