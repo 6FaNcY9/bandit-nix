@@ -176,7 +176,7 @@ populate-cache:
         --print-build-logs \
         --no-update-lock-file \
         --keep-going \
-        --fallback 2>&1 | cachix push "${CACHIX_CACHE_NAME}" || true
+        --fallback | cachix push "${CACHIX_CACHE_NAME}" || true
     - echo "✅ Pushed whatever was built to Cachix — run again if needed"
 
 # ---------------------------------------------------------------------------
