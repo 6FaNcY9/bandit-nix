@@ -17,7 +17,9 @@
       efi.canTouchEfiVariables = true;
     };
     kernelPackages = pkgs.linuxPackages_latest;
-    kernelParams = ["mem_sleep_default=s2idle"];
+    kernelParams = [
+      "mem_sleep_default=s2idle"
+    ];
     tmp.useTmpfs = true;
   };
 
