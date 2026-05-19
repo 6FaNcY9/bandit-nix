@@ -99,6 +99,31 @@ check-antipatterns:
   script:
     - nix run nixpkgs#statix -- check .
 
+# Automatically fixes formatting (alejandra), dead code (deadnix), and
+# antipatterns (statix) and commits the result back to the MR branch.
+# Runs after the lint checks so it only triggers when there's something to fix.
+# Requires $GITLAB_PUSH_TOKEN with write_repository scope.
+auto-fix-nix:
+  extends: .rules-push-and-mr
+  stage: lint
+  # allow_failure: true — if the push fails (e.g. protected branch), the
+  # pipeline still reports the lint errors from the check-* jobs above.
+  allow_failure: true
+  script:
+    - nix run nixpkgs#alejandra -- .
+    - nix run nixpkgs#deadnix -- --edit .
+    - nix run nixpkgs#statix -- fix .
+    - |
+      git config user.name "gitlab-ci[bot]"
+      git config user.email "gitlab-ci[bot]@users.noreply.gitlab.com"
+      git add -A
+      git diff --cached --quiet && echo "Nothing to fix." && exit 0
+      git commit -m "style: auto-fix formatting, dead code, and antipatterns [skip ci]"
+      # Use $GITLAB_PUSH_TOKEN (Project Access Token with write_repository scope).
+      # CI_JOB_TOKEN is read-only and cannot push — use oauth2 with the PAT instead.
+      # This matches the same pattern used by the update-flake job.
+      git push "https://oauth2:${GITLAB_PUSH_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" HEAD:${CI_COMMIT_REF_NAME}
+
 # ---------------------------------------------------------------------------
 # STAGE: build
 # ---------------------------------------------------------------------------
