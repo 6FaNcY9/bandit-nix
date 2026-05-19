@@ -5,6 +5,7 @@ _: {
   sops.validateSopsFiles = false;
 
   imports = [
+    ./sops.nix
     ./core.nix
     ./boot.nix
     ./network.nix

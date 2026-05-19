@@ -1,4 +1,4 @@
-{pkgs, ...}: {
+{pkgs, config, ...}: {
   programs.fish.enable = true;
 
   users = {
@@ -17,7 +17,7 @@
       ];
 
       shell = pkgs.fish;
-      hashedPassword = "$6$w/id8WONcOVFgaLH$Y92T1W3/n6pNy5bXYv7M8pyAqa6f1kpskszGXort4pjy3nDJW3ZN.1cdZpHwHab3huKNWNWLWPw9ZxkaAO4fK";
+      hashedPasswordFile = config.sops.secrets."user-password".path;
     };
   };
 

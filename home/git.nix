@@ -1,4 +1,14 @@
 {pkgs, ...}: {
+  programs.ssh = {
+    enable = true;
+    matchBlocks."github.com" = {
+      hostname = "github.com";
+      user = "git";
+      identityFile = "~/.ssh/github";
+      identitiesOnly = true;
+    };
+  };
+
   programs.delta = {
     enable = true;
     enableGitIntegration = true;
