@@ -1,7 +1,15 @@
+# Encryption keys for sops-nix
+# Age keys: Generated with age-keygen -o ~/.config/sops/age/keys.txt
+# GPG keys: Existing GPG keys from keyring
 keys:
-  - &vino age1qvta8jguep7wrg0rmz7m6dp69g9vdvyy9ahxjy6733wtesqga0qszvax0a
+  - &user  age134u5vtdts98pnept0k9v0uy4m6guthggfguw0ycvzn0evjeqgemsgl0krt
+  - &host_bandit age1r6cncetmt3xx9mv2hedvwm8dwc2nhy9rmekhah747kxeguzygplq6a875l
+  - &gpg_user 4D8770567A65FE1369E2BCC1611871842A8C1619  
 creation_rules:
-  - path_regex: secrets\\.yaml$
+  - path_regex: secrets/.*\.ya?ml
     key_groups:
       - age:
-          - *vino
+          - *user
+          - *host_bandit
+        pgp:
+          - *gpg_user 
