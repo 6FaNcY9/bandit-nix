@@ -96,7 +96,6 @@ _: {
             {name = "nvim_lsp";}
             {name = "luasnip";}
             {name = "copilot";}
-            {name = "path";}
             {name = "buffer";}
           ];
           mapping = {
