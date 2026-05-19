@@ -19,6 +19,10 @@
         path = "/home/vino/.ssh/github";
         mode = "0600";
       };
+      "cachix-secret" = {
+        owner = "vino";
+        mode = "0400";
+      };
     };
   };
 }

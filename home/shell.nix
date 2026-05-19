@@ -4,6 +4,9 @@ _: {
       enable = true;
       interactiveShellInit = ''
         set fish_greeting ""
+        if test -r /run/secrets/cachix-secret
+          set -gx CACHIX_AUTH_TOKEN (cat /run/secrets/cachix-secret)
+        end
       '';
       shellAbbrs = {
         # nix

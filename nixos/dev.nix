@@ -29,6 +29,7 @@
   };
 
   environment.systemPackages = with pkgs; [
+    cachix
     git
     curl
     wget
