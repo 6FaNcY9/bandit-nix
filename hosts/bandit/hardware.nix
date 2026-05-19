@@ -28,37 +28,37 @@
     "/" = {
       device = "/dev/disk/by-uuid/0629aaee-1698-49d1-b3e1-e7bb6b957cda";
       fsType = "btrfs";
-      options = ["subvol=@" "compress=zstd" "noatime"];
+      options = ["subvol=@" "compress=zstd" "noatime" "discard=async"];
     };
     "/home" = {
       device = "/dev/disk/by-uuid/0629aaee-1698-49d1-b3e1-e7bb6b957cda";
       fsType = "btrfs";
-      options = ["subvol=@home" "compress=zstd" "noatime"];
+      options = ["subvol=@home" "compress=zstd" "noatime" "discard=async"];
     };
     "/nix" = {
       device = "/dev/disk/by-uuid/0629aaee-1698-49d1-b3e1-e7bb6b957cda";
       fsType = "btrfs";
-      options = ["subvol=@nix" "compress=zstd" "noatime"];
+      options = ["subvol=@nix" "compress=zstd" "noatime" "discard=async"];
     };
     "/var" = {
       device = "/dev/disk/by-uuid/0629aaee-1698-49d1-b3e1-e7bb6b957cda";
       fsType = "btrfs";
-      options = ["subvol=@var" "compress=zstd" "noatime"];
+      options = ["subvol=@var" "compress=zstd" "noatime" "discard=async"];
     };
     "/swap" = {
       device = "/dev/disk/by-uuid/0629aaee-1698-49d1-b3e1-e7bb6b957cda";
       fsType = "btrfs";
-      options = ["subvol=@swap" "noatime"];
+      options = ["subvol=@swap" "noatime" "discard=async"];
     };
     "/.snapshots" = {
       device = "/dev/disk/by-uuid/0629aaee-1698-49d1-b3e1-e7bb6b957cda";
       fsType = "btrfs";
-      options = ["subvol=@/.snapshots" "compress=zstd" "noatime"];
+      options = ["subvol=@/.snapshots" "compress=zstd" "noatime" "discard=async"];
     };
     "/home/.snapshots" = {
       device = "/dev/disk/by-uuid/0629aaee-1698-49d1-b3e1-e7bb6b957cda";
       fsType = "btrfs";
-      options = ["subvol=@home/.snapshots" "compress=zstd" "noatime"];
+      options = ["subvol=@home/.snapshots" "compress=zstd" "noatime" "discard=async"];
     };
     "/boot" = {
       device = "/dev/disk/by-uuid/CC4A-AF6B";
