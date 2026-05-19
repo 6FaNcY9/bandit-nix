@@ -1,4 +1,4 @@
-{pkgs, ...}: {
+{pkgs, lib, ...}: {
   boot = {
     loader = {
       grub = {
@@ -9,7 +9,10 @@
         configurationLimit = 10;
         # Disable splash image to avoid pulling in nixos-icons (~500MB
         # of historical NixOS artwork) which causes CI disk space failures.
-        splashImage = null;
+        # lib.mkForce is required because Stylix also sets splashImage to a
+        # themed image via its grub module. Without mkForce, Nix raises a
+        # conflict error when both modules define this option differently.
+        splashImage = lib.mkForce null;
       };
       efi.canTouchEfiVariables = true;
     };
