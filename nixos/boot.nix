@@ -1,4 +1,4 @@
-{pkgs, lib, ...}: {
+{lib, pkgs, ...}: {
   boot = {
     loader = {
       grub = {
