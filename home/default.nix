@@ -7,6 +7,7 @@
     ./theme.nix
     ./desktop/i3.nix
     ./editor.nix
+    ./terminal.nix
   ];
 
   home = {

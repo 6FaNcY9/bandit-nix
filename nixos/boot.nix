@@ -9,7 +9,7 @@
         enable = true;
         device = "nodev"; # for EFI systems
         efiSupport = true;
-        useOSProber = true; # detects Windows/other OS on dual boot
+        useOSProber = false; # single-boot machine — os-prober causes lsblk noise
         configurationLimit = 10;
         # Disable splash image to avoid pulling in nixos-icons (~500MB
         # of historical NixOS artwork) which causes CI disk space failures.
