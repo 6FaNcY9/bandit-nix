@@ -5,7 +5,7 @@ _: {
     # install -m 0600 -D <host-age-privkey> /var/lib/sops-nix/key.txt
     age = {
       keyFile = "/var/lib/sops-nix/key.txt";
-      generateKey = true;
+      generateKey = false; # fail loudly if key not provisioned rather than silently creating a wrong one
       sshKeyPaths = [];
     };
 

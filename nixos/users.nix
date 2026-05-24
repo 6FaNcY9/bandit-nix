@@ -14,10 +14,10 @@
         "networkmanager"
         "audio"
         "video"
-        "input"
-        "storage"
         "libvirtd"
-        "podman"
+        # "input" removed — raw /dev/input/* access is a keylogging risk; acpilight uses video group
+        # "storage" removed — raw block device r/w; udisks2 handles mount/unmount correctly
+        # "podman" removed — not needed for rootless podman
       ];
 
       shell = pkgs.fish;

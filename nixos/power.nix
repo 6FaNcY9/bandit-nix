@@ -15,7 +15,7 @@ _: {
     };
     logind.settings.Login = {
       HandleLidSwitch = "suspend";
-      HandleLidSwitchExternalPower = "ignore";
+      HandleLidSwitchExternalPower = "suspend";
       HandlePowerKey = "suspend";
       IdleAction = "suspend";
       IdleActionSec = "15min";

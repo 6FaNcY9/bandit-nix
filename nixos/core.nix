@@ -15,7 +15,7 @@
       experimental-features = ["nix-command" "flakes"];
       auto-optimise-store = true;
       allowed-users = ["vino"];
-      trusted-users = ["root" "vino"];
+      trusted-users = ["root"];
     };
     gc = {
       automatic = true;

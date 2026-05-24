@@ -16,7 +16,7 @@ _: {
     enable = true;
     settings = {
       Resolve = {
-        DNSSEC = "allow-downgrade";
+        DNSSEC = "true";
         Domains = ["~."];
         FallbackDNS = [
           "1.1.1.1" # Cloudflare

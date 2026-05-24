@@ -1,12 +1,6 @@
 {pkgs, ...}: {
-  services.openssh = {
-    enable = true;
-    settings = {
-      PasswordAuthentication = false;
-      PermitRootLogin = "no";
-      KbdInteractiveAuthentication = false;
-    };
-  };
+  # SSH server disabled — this machine only connects out, never accepts incoming.
+  services.openssh.enable = false;
 
   programs = {
     direnv = {
@@ -23,7 +17,7 @@
   virtualisation = {
     podman = {
       enable = true;
-      dockerCompat = true;
+      dockerCompat = false; # use rootless podman directly; system socket is a container-escape vector
     };
     libvirtd.enable = true;
   };
