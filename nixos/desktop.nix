@@ -8,7 +8,7 @@
       enable = true;
 
       xkb = {
-        layout = "de";
+        layout = "at"; # Austrian keyboard, matching the previous nixos-config repo
         variant = "";
       };
 

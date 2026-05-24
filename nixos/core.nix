@@ -5,7 +5,7 @@
   time.timeZone = "Europe/Vienna";
 
   console = {
-    keyMap = "de";
+    keyMap = "de-latin1-nodeadkeys";
     font = "Lat2-Terminus16";
     earlySetup = true;
   };
