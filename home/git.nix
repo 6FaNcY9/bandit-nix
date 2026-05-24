@@ -2,18 +2,19 @@
   programs = {
     ssh = {
       enable = true;
-      matchBlocks = {
+      enableDefaultConfig = false;
+      settings = {
         "github.com" = {
-          hostname = "github.com";
-          user = "git";
-          identityFile = "~/.ssh/github";
-          identitiesOnly = true;
+          Hostname = "github.com";
+          User = "git";
+          IdentityFile = "~/.ssh/github";
+          IdentitiesOnly = true;
         };
         "github-banditstudent" = {
-          hostname = "github.com";
-          user = "git";
-          identityFile = "~/.ssh/github-banditstudent";
-          identitiesOnly = true;
+          Hostname = "github.com";
+          User = "git";
+          IdentityFile = "~/.ssh/github-banditstudent";
+          IdentitiesOnly = true;
         };
       };
     };

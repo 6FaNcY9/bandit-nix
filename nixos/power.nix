@@ -13,14 +13,12 @@ _: {
       interval = "monthly";
       fileSystems = ["/"];
     };
-    logind = {
-      lidSwitch = "suspend";
-      lidSwitchExternalPower = "ignore";
-      settings.Login = {
-        HandlePowerKey = "suspend";
-        IdleAction = "suspend";
-        IdleActionSec = "15min";
-      };
+    logind.settings.Login = {
+      HandleLidSwitch = "suspend";
+      HandleLidSwitchExternalPower = "ignore";
+      HandlePowerKey = "suspend";
+      IdleAction = "suspend";
+      IdleActionSec = "15min";
     };
   };
 

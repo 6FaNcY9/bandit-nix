@@ -14,20 +14,14 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    nixvim = {
-      url = "github:nix-community/nixvim";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    nixvim.url = "github:nix-community/nixvim";
 
     stylix = {
       url = "github:danth/stylix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    nixos-hardware = {
-      url = "github:NixOS/nixos-hardware";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    nixos-hardware.url = "github:NixOS/nixos-hardware";
   };
 
   outputs = {
