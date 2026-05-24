@@ -174,6 +174,11 @@ in {
 
       # ─── Startup applications ───────────────────────────
       startup = [
+        # Lock screen automatically before suspend.
+        {
+          command = "${pkgs.xss-lock}/bin/xss-lock --transfer-sleep-lock -- ${pkgs.i3lock}/bin/i3lock -c 262626 -n";
+          notification = false;
+        }
         {
           command = "${pkgs.dunst}/bin/dunst";
           notification = false;
@@ -206,6 +211,7 @@ in {
   home.packages = with pkgs; [
     rofi
     flameshot
+    xss-lock
     dunst
     copyq
     playerctl

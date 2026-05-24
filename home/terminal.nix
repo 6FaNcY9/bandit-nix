@@ -53,7 +53,7 @@ _: {
       strip_trailing_spaces = "smart";
       # enable remote control (kitty @ ...) for scripting
       allow_remote_control = "socket-only";
-      listen_on = "unix:/tmp/kitty-{kitty_pid}";
+      listen_on = "unix:\${XDG_RUNTIME_DIR}/kitty-{kitty_pid}";
     };
 
     keybindings = {

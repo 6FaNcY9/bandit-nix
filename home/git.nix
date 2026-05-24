@@ -4,6 +4,11 @@
       enable = true;
       enableDefaultConfig = false;
       settings = {
+        "*" = {
+          HashKnownHosts = "yes";
+          ServerAliveInterval = 60;
+          ServerAliveCountMax = 3;
+        };
         "github.com" = {
           Hostname = "github.com";
           User = "git";
@@ -43,7 +48,7 @@
           st = "status -sb";
           lg = "log --oneline --graph --decorate";
           undo = "reset --soft HEAD~1";
-          wip = "commit -am 'wip'";
+          wip = "commit -m 'wip'";
         };
 
         init.defaultBranch = "main";
@@ -68,6 +73,6 @@
     enableSshSupport = true;
     pinentry.package = pkgs.pinentry-gtk2;
     defaultCacheTtl = 3600;
-    maxCacheTtl = 86400;
+    maxCacheTtl = 14400; # 4 h — was 24 h
   };
 }

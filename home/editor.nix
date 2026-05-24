@@ -93,7 +93,6 @@ _: {
           sources = [
             {name = "nvim_lsp";}
             {name = "luasnip";}
-            {name = "copilot";}
             {name = "path";}
             {name = "buffer";}
           ];
@@ -125,16 +124,6 @@ _: {
       # Snippets
       luasnip.enable = true;
       friendly-snippets.enable = true;
-
-      # GitHub Copilot — integrated into cmp
-      copilot-lua = {
-        enable = true;
-        settings = {
-          suggestion.enabled = false;
-          panel.enabled = false;
-        };
-      };
-      copilot-cmp.enable = true;
 
       # Which-key — shows keybindings as you type
       which-key = {
