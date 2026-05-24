@@ -86,6 +86,8 @@
       size = 24;
     };
 
+    homeManagerIntegration.autoImport = false;
+
     targets = {
       gtk.enable = true;
       grub.enable = true;
