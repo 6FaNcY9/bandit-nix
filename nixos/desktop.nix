@@ -1,28 +1,18 @@
 {pkgs, ...}: {
   # X server
   services = {
-    greetd = {
-      enable = true;
-      settings.default_session.command = ''
-        ${pkgs.tuigreet}/bin/tuigreet \
-        --time \
-        --remember \
-        --cmd "${pkgs.xinit}/bin/startx ${pkgs.xfce4-session}/bin/xfce4-session"
-      '';
-    };
+    displayManager.defaultSession = "xfce+i3";
 
     xserver = {
+      displayManager.lightdm.enable = true;
       enable = true;
 
-      # XFCE provides the session/panel/daemons
-      # but i3 replaces its window manager
       desktopManager.xfce = {
         enable = true;
-        noDesktop = true; # no xfdesktop (wallpaper/icons daemon)
-        enableXfwm = false; # disable XFCE's own WM — i3 takes over
+        noDesktop = true;
+        enableXfwm = false;
       };
 
-      # i3 window manager with some extra tools
       windowManager.i3 = {
         enable = true;
         extraPackages = with pkgs; [
