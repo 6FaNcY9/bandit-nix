@@ -1,4 +1,4 @@
-{...}: {
+_: {
   sops = {
     defaultSopsFile = ../secrets/secrets.yaml;
     # Age private key for this host — must be provisioned at first boot:

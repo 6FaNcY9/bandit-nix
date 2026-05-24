@@ -24,8 +24,5 @@ _: {
     };
   };
 
-  powerManagement = {
-    enable = true;
-    cpuFreqGovernor = "schedutil";
-  };
+  powerManagement.enable = true;
 }

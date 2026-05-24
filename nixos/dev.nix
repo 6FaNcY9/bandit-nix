@@ -16,7 +16,7 @@
     virt-manager.enable = true;
     nh = {
       enable = true;
-      flake = "/home/vino/bandit-nix"; # adjust if repo is cloned elsewhere
+      flake = "/home/vino/src/bandit-nix";
     };
   };
 

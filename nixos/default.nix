@@ -16,5 +16,6 @@ _: {
     ./audio.nix
     ./desktop.nix
     ./users.nix
+    ./editor.nix
   ];
 }
