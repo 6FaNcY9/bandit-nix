@@ -2,11 +2,19 @@
   programs = {
     ssh = {
       enable = true;
-      matchBlocks."github.com" = {
-        hostname = "github.com";
-        user = "git";
-        identityFile = "~/.ssh/github";
-        identitiesOnly = true;
+      matchBlocks = {
+        "github.com" = {
+          hostname = "github.com";
+          user = "git";
+          identityFile = "~/.ssh/github";
+          identitiesOnly = true;
+        };
+        "github-banditstudent" = {
+          hostname = "github.com";
+          user = "git";
+          identityFile = "~/.ssh/github-banditstudent";
+          identitiesOnly = true;
+        };
       };
     };
 

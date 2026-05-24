@@ -19,6 +19,12 @@ _: {
         path = "/home/vino/.ssh/github";
         mode = "0600";
       };
+      "github_ssh_key_banditstudent" = {
+        sopsFile = ../secrets/github.yaml;
+        owner = "vino";
+        path = "/home/vino/.ssh/github-banditstudent";
+        mode = "0600";
+      };
       "cachix-secret" = {
         owner = "vino";
         mode = "0400";

@@ -7,6 +7,11 @@
       displayManager.lightdm.enable = true;
       enable = true;
 
+      xkb = {
+        layout = "de";
+        variant = "";
+      };
+
       desktopManager.xfce = {
         enable = true;
         noDesktop = true;

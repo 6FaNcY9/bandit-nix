@@ -5,13 +5,11 @@ _: {
     viAlias = true;
     vimAlias = true;
 
-    # Gruvbox material matches gruvbox-dark-pale aesthetic
-    colorschemes.gruvbox-material = {
+    colorschemes.gruvbox = {
       enable = true;
       settings = {
-        background = "hard";
-        foreground = "material";
-        transparent_background = 0;
+        contrast_dark = "hard";
+        transparent_bg = false;
       };
     };
 
@@ -297,7 +295,7 @@ _: {
       # Statusline
       lualine = {
         enable = true;
-        settings.options.theme = "gruvbox-material";
+        settings.options.theme = "gruvbox";
       };
 
       # Git signs in gutter
