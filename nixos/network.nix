@@ -1,8 +1,11 @@
 _: {
   networking = {
-    networkmanager.enable = true;
-    networkmanager.wifi.backend = "iwd";
-    wireless.iwd.enable = true;
+    networkmanager = {
+      enable = true;
+      wifi.backend = "iwd";
+      dns = "systemd-resolved";
+    };
+    #wireless.iwd.enable = true;
     useDHCP = false; # NetworkManager handles this
     firewall = {
       enable = true;
@@ -16,7 +19,7 @@ _: {
     enable = true;
     settings = {
       Resolve = {
-        DNSSEC = "true";
+        DNSSEC = "allow-downgrade";
         Domains = ["~."];
         FallbackDNS = [
           "1.1.1.1" # Cloudflare
