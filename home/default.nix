@@ -6,6 +6,7 @@
     ./git.nix
     ./theme.nix
     ./desktop/i3.nix
+    ./desktop/firefox.nix
     ./editor.nix
     ./terminal.nix
   ];
