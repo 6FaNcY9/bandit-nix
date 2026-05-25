@@ -155,6 +155,7 @@ in {
           {class = "Pavucontrol";}
           {class = "Blueman-manager";}
           {class = "flameshot";}
+          {class = "copyq";}
           {title = "Picture-in-Picture";}
         ];
       };
@@ -174,6 +175,10 @@ in {
 
       # ─── Startup applications ───────────────────────────
       startup = [
+        {
+          command = "${pkgs.autotiling}/bin/autotiling";
+          notification = false;
+        }
         # Lock screen automatically before suspend.
         {
           command = "${pkgs.xss-lock}/bin/xss-lock --transfer-sleep-lock -- ${pkgs.i3lock}/bin/i3lock -c 262626 -n";
@@ -218,5 +223,6 @@ in {
     brightnessctl
     pulseaudio # for pactl
     networkmanagerapplet
+    autotiling
   ];
 }
