@@ -80,6 +80,7 @@
       gtk.enable = true;
       grub.enable = true;
       console.enable = true;
+      lightdm.enable = true;
     };
   };
 
