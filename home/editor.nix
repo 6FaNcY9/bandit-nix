@@ -5,14 +5,6 @@ _: {
     viAlias = true;
     vimAlias = true;
 
-    colorschemes.gruvbox = {
-      enable = true;
-      settings = {
-        contrast_dark = "hard";
-        transparent_bg = false;
-      };
-    };
-
     # ─── Core options ─────────────────────────────────────
     globals.mapleader = " ";
     globals.maplocalleader = " ";
@@ -284,7 +276,7 @@ _: {
       # Statusline
       lualine = {
         enable = true;
-        settings.options.theme = "gruvbox";
+        settings.options.theme = "auto";
       };
 
       # Git signs in gutter
