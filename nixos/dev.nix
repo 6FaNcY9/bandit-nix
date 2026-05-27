@@ -33,6 +33,8 @@
     bat
     eza
     gcc
+    xclip
+    tree-sitter
     gnumake
     pkg-config
     usbutils

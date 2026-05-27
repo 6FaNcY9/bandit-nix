@@ -48,7 +48,7 @@
     xfce4-panel
     xfce4-settings
     xfce4-session
-    thunar
+    xfce.thunar
     xfce4-terminal
     xfce4-power-manager
     xfce4-notifyd

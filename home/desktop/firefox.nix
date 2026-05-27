@@ -4,6 +4,9 @@
     profiles.default = {
       id = 0;
       isDefault = true;
+      # Point to the existing profile dir so Firefox data is preserved across rebuilds.
+      # Without this HM creates a fresh empty profile and Firefox appears to "reset".
+      path = "0tfd3fet.default";
     };
   };
 

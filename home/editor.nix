@@ -31,12 +31,29 @@ _: {
       clipboard = "unnamedplus";
     };
 
+    # ─── Clipboard Manager ──────────────────────────────────────────
+    clipboard = {
+      register = "unnamedplus";
+      provider.xclip.enable = true;
+    };
+
     # ─── Plugins ──────────────────────────────────────────
     plugins = {
       # Treesitter — syntax highlighting and structure
       treesitter = {
         enable = true;
+        ensureInstalled = [
+          "lua"
+          "vim"
+          "bash"
+          "python"
+          "json"
+          "yaml"
+          "rust"
+          "nix"
+        ]; 
         settings = {
+          incrementalSelection.enable = true;
           highlight.enable = true;
           indent.enable = true;
         };
