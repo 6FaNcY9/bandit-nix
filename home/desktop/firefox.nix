@@ -1,4 +1,4 @@
-_: {
+{lib, ...}: {
   programs.firefox.enable = true;
 
   # Workaround for stylix/issues/2071: Firefox ignores userChrome.css theming
@@ -7,7 +7,7 @@ _: {
   # to pick up the dark GTK theme Stylix installed.
   dconf.settings = {
     "org/gnome/desktop/interface" = {
-      color-scheme = "prefer-dark";
+      color-scheme = lib.mkForce "prefer-dark";
     };
   };
 }
