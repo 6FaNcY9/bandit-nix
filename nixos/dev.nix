@@ -44,5 +44,6 @@
     nix-output-monitor
     nvd
     nix-index
+    sops
   ];
 }

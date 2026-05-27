@@ -1,8 +1,4 @@
-{
-  pkgs,
-  lib,
-  ...
-}: {
+{pkgs, ...}: {
   # X server
   services = {
     displayManager.defaultSession = "xfce+i3";
@@ -72,10 +68,5 @@
     wlr.enable = false;
     extraPortals = [pkgs.xdg-desktop-portal-gtk];
     config.common.default = "gtk";
-  };
-
-  qt = {
-    enable = true;
-    platformTheme = lib.mkForce "gtk2";
   };
 }

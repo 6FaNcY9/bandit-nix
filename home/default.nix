@@ -7,6 +7,7 @@
     ./theme.nix
     ./desktop/i3.nix
     ./desktop/firefox.nix
+    ./desktop/xfce-colors.nix
     ./editor.nix
     ./terminal.nix
   ];
