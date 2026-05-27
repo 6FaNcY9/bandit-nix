@@ -5,6 +5,8 @@
     ./git.nix
     ./theme.nix
     ./desktop/i3.nix
+    ./desktop/dunst.nix
+    ./desktop/rofi.nix
     ./desktop/firefox.nix
     ./desktop/xfce-colors.nix
     ./editor.nix

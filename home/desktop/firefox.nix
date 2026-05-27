@@ -1,5 +1,13 @@
 {lib, ...}: {
-  programs.firefox.enable = true;
+  programs.firefox = {
+    enable = true;
+    profiles.default = {
+      id = 0;
+      isDefault = true;
+    };
+  };
+
+  stylix.targets.firefox.profileNames = [ "default" ];
 
   # Workaround for stylix/issues/2071: Firefox ignores userChrome.css theming
   # when xdg-desktop-portal-gtk is active because the portal reads dconf

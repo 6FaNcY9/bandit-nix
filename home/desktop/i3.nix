@@ -185,10 +185,6 @@ in {
           notification = false;
         }
         {
-          command = "${pkgs.dunst}/bin/dunst";
-          notification = false;
-        }
-        {
           command = "${pkgs.networkmanagerapplet}/bin/nm-applet";
           notification = false;
         }
@@ -217,7 +213,6 @@ in {
     rofi
     flameshot
     xss-lock
-    dunst
     copyq
     playerctl
     brightnessctl
