@@ -45,7 +45,7 @@
 
     base16Scheme = "${pkgs.base16-schemes}/share/themes/gruvbox-dark.yaml";
 
-    image = ../hosts/bandit/wallpaper.png;
+    image = ../hosts/bandit/wallpaper.jpg;
 
     fonts = {
       monospace = {
