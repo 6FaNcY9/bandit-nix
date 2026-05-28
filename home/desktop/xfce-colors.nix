@@ -24,7 +24,7 @@ _: {
       "panels/panel-1/length" = 100;
       "panels/panel-1/size" = 30;
       "panels/panel-1/background-style" = 1; # solid color
-      "panels/panel-1/background-color" = "#111111ff";
+      "panels/panel-1/background-color" = "#111111";
 
       # Plugin ordering (IDs 1–12)
       "panels/panel-1/plugin-ids" = [1 2 3 4 5 6 7 8 9 10 11 12];
@@ -66,7 +66,7 @@ _: {
 
       # ── Genmon — panel-netmon script, 1s refresh ───────────────
       "plugins/plugin-7/Command" = "/home/vino/.local/bin/panel-netmon";
-      "plugins/plugin-7/UpdatePeriod" = 1000;
+      "plugins/plugin-7/update-period" = 1000;
 
       # ── Pager — 1 row of mini workspace squares ─────────────────
       "plugins/plugin-9/rows" = 1;
