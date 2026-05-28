@@ -3,7 +3,7 @@
   config,
   ...
 }: {
-  programs.fish.enable = true;
+  programs.zsh.enable = true;
 
   users = {
     mutableUsers = false;
@@ -20,7 +20,7 @@
         # "podman" removed — not needed for rootless podman
       ];
 
-      shell = pkgs.fish;
+      shell = pkgs.zsh;
       hashedPasswordFile = config.sops.secrets."user-password".path;
     };
   };

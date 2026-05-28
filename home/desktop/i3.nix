@@ -55,7 +55,7 @@
     "${mod}+Shift+m" = "scratchpad show";
 
     # App launchers
-    "${mod}+Return" = "exec ${pkgs.xfce4-terminal}/bin/xfce4-terminal";
+    "${mod}+Return" = "exec ${pkgs.kitty}/bin/kitty";
     "${mod}+Shift+w" = "exec ${pkgs.firefox}/bin/firefox";
     "${mod}+d" = "exec ${pkgs.rofi}/bin/rofi -show drun";
     "${mod}+Shift+v" = "exec --no-startup-id ${pkgs.copyq}/bin/copyq toggle";
@@ -77,7 +77,7 @@
     "${mod}+Shift+period" = "exec ${pkgs.dunst}/bin/dunstctl close-all";
 
     # App finder
-    "${mod}+a" = "exec ${pkgs.xfce.xfce4-appfinder}/bin/xfce4-appfinder --collapsed";
+    "${mod}+a" = "exec ${pkgs.xfce4-appfinder}/bin/xfce4-appfinder --collapsed";
   };
 
   # ─── Media keys ───────────────────────────────────────
