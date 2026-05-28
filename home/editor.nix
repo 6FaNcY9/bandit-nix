@@ -76,7 +76,16 @@
       lsp = {
         enable = true;
         servers = {
-          nil_ls.enable = true;
+          nixd = {
+            enable = true;
+            settings = {
+              nixpkgs.expr = "import <nixpkgs> {}";
+              options = {
+                nixos.expr = "(builtins.getFlake \"/home/vino/src/bandit-nix\").nixosConfigurations.bandit.options";
+                home_manager.expr = "(builtins.getFlake \"/home/vino/src/bandit-nix\").nixosConfigurations.bandit.options.home-manager.users.type.getSubOptions []";
+              };
+            };
+          };
           pyright.enable = true;
           bashls.enable = true;
           lua_ls.enable = true;
@@ -165,6 +174,10 @@
             {
               __unkeyed-1 = "<leader>g";
               group = "Git";
+            }
+            {
+              __unkeyed-1 = "<leader>cf";
+              group = "Format";
             }
             {
               __unkeyed-1 = "<leader>r";
@@ -309,6 +322,32 @@
         settings.options.theme = "auto";
       };
 
+      # Formatting — conform-nvim dispatches to per-filetype formatters
+      conform-nvim = {
+        enable = true;
+        settings = {
+          formatters_by_ft = {
+            nix = ["alejandra"];
+            python = ["ruff_format"];
+            bash = ["shfmt"];
+            sh = ["shfmt"];
+            lua = ["stylua"];
+            javascript = [["prettierd" "prettier"]];
+            typescript = [["prettierd" "prettier"]];
+            json = [["prettierd" "prettier"]];
+            yaml = [["prettierd" "prettier"]];
+            markdown = [["prettierd" "prettier"]];
+          };
+          format_on_save = {
+            timeout_ms = 500;
+            lsp_fallback = true;
+          };
+        };
+      };
+
+      # Lazygit — full git TUI inside nvim
+      lazygit.enable = true;
+
       # Git signs in gutter
       gitsigns = {
         enable = true;
@@ -354,8 +393,15 @@
       })
     '';
 
-    # ─── Debbuger ────────────────────────────────────────── 
-    extraPackages = with pkgs; [bashdb];
+    extraPackages = with pkgs; [
+      bashdb
+      # Formatters for conform-nvim
+      ruff
+      shfmt
+      stylua
+      prettier
+      prettierd
+    ];
 
     # ─── Keymaps ──────────────────────────────────────────
     keymaps = [
@@ -441,6 +487,26 @@
         key = "<leader>mp";
         action = "<cmd>PeekOpen<CR>";
         options.desc = "Markdown Preview";
+      }
+
+      # Lazygit
+      {
+        mode = "n";
+        key = "<leader>gg";
+        action = "<cmd>LazyGit<CR>";
+        options.desc = "Open Lazygit";
+      }
+
+      # Conform — manual format
+      {
+        mode = ["n" "v"];
+        key = "<leader>cf";
+        action.__raw = ''
+          function()
+            require("conform").format({ async = true, lsp_fallback = true })
+          end
+        '';
+        options.desc = "Format buffer";
       }
     ];
   };

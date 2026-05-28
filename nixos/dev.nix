@@ -46,6 +46,8 @@
     nix-output-monitor
     nvd
     nix-index
+    comma
+    lazygit
     sops
   ];
 }

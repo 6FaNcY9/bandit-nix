@@ -178,6 +178,11 @@
     };
 
     # ─── CLI tools ─────────────────────────────────────────────
+    nix-index = {
+      enable = true;
+      enableFishIntegration = true;
+    };
+
     eza.enable = true;
     bat.enable = true;
 
