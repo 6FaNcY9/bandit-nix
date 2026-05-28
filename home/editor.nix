@@ -1,8 +1,4 @@
-{
-  inputs,
-  pkgs,
-  ...
-}: {
+{pkgs, ...}: {
   programs.nixvim = {
     enable = true;
     defaultEditor = true;
@@ -349,10 +345,7 @@
     # ─── Custom Plugin Cheatsheet ──────────────────────────────────────────
     extraPlugins = [
       pkgs.vimPlugins.nvim-gdb
-      (pkgs.vimUtils.buildVimPlugin {
-        name = "cheatsheet.nvim";
-        src = inputs.cheatsheet-nvim;
-      })
+      pkgs.vimPlugins.cheatsheet-nvim
     ];
     extraConfigLua = ''
       require('cheatsheet').setup({
@@ -360,6 +353,8 @@
         bundled_plugin_cheatsheets = true,
       })
     '';
+
+    # ─── Debbuger ────────────────────────────────────────── 
     extraPackages = with pkgs; [bashdb];
 
     # ─── Keymaps ──────────────────────────────────────────

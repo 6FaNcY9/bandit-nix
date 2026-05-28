@@ -30,6 +30,7 @@
     sops-nix,
     stylix,
     nixos-hardware,
+    nixvim,
     ...
   } @ inputs: {
     nixosConfigurations.bandit = nixpkgs.lib.nixosSystem {
