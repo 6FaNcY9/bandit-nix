@@ -11,7 +11,7 @@
     Unit.Description = "Refresh public IP cache";
     Service = {
       Type = "oneshot";
-      ExecStart = "${pkgs.bash}/bin/bash -c '${pkgs.curl}/bin/curl -sf --max-time 5 ifconfig.me > \${XDG_RUNTIME_DIR}/public-ip-cache'";
+      ExecStart = "${pkgs.curl}/bin/curl -sf --max-time 5 ifconfig.me --output %t/public-ip-cache";
     };
   };
 
@@ -25,7 +25,7 @@
   };
 
   # Genmon panel script — reads cached IP + /proc/net/dev, never hangs.
-  home.file."local/bin/panel-netmon" = {
+  home.file.".local/bin/panel-netmon" = {
     executable = true;
     text = ''
       #!/usr/bin/env bash
