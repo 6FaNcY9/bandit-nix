@@ -4,34 +4,20 @@
   ...
 }: {
   programs = {
-    # ─── ZSH ──────────────────────────────────────────────────
-    zsh = {
+    # ─── Fish ─────────────────────────────────────────────────
+    fish = {
       enable = true;
-      enableCompletion = true;
-      autosuggestion.enable = true;
-      syntaxHighlighting.enable = true;
-      historySubstringSearch.enable = true;
-
-      history = {
-        size = 50000;
-        save = 50000;
-        ignoreDups = true;
-        ignoreSpace = true;
-        extended = true; # timestamps
-        share = true; # share across terminal sessions
-      };
 
       plugins = [
+        # ctrl-r history, ctrl-f file, ctrl-v cd — fzf keybindings
         {
-          # Shows nix-shell / nix develop context in prompt
-          name = "zsh-nix-shell";
-          file = "nix-shell.plugin.zsh";
-          src = pkgs.zsh-nix-shell;
+          name = "fzf-fish";
+          src = pkgs.fishPlugins.fzf-fish.src;
         }
+        # Reminds you when a shorter alias/abbr exists
         {
-          # Reminds you when a shorter alias exists
-          name = "zsh-you-should-use";
-          src = pkgs.zsh-you-should-use;
+          name = "fish-you-should-use";
+          src = pkgs.fishPlugins.fish-you-should-use.src;
         }
       ];
 
@@ -68,7 +54,7 @@
         vi = "nvim";
         vim = "nvim";
         # ── System ────────────────────────────────────────────
-        reload = "exec zsh";
+        reload = "exec fish";
         path = "echo $PATH | tr ':' '\n'";
         ports = "ss -tulanp";
         psg = "ps aux | grep";
@@ -77,47 +63,29 @@
         myip = "curl -sf ifconfig.me";
       };
 
-      initExtra = ''
+      interactiveShellInit = ''
         # ── Vi mode ───────────────────────────────────────────
-        bindkey -v
-        export KEYTIMEOUT=1  # faster mode switch (10ms)
+        fish_vi_key_bindings
 
-        # ── History navigation ────────────────────────────────
-        bindkey '^[[A' history-substring-search-up
-        bindkey '^[[B' history-substring-search-down
-        bindkey -M vicmd 'k' history-substring-search-up
-        bindkey -M vicmd 'j' history-substring-search-down
-        bindkey '^R' history-incremental-search-backward
-
-        # ── ZSH options ───────────────────────────────────────
-        setopt AUTO_CD          # cd by just typing the dir name
-        setopt GLOB_DOTS        # globs match dotfiles
-        setopt NO_BEEP
-        setopt HIST_VERIFY      # expand history before executing
-        setopt EXTENDED_GLOB
-        setopt PUSHD_IGNORE_DUPS
-
-        # ── Completion styling ────────────────────────────────
-        zstyle ':completion:*' menu select
-        zstyle ':completion:*' matcher-list 'm:{a-z}={A-Z}'
-        zstyle ':completion:*:descriptions' format '[%d]'
-        zstyle ':completion:*' list-colors "''${(s.:.)LS_COLORS}"
+        # ── Suppress default greeting ─────────────────────────
+        set -g fish_greeting ""
 
         # ── Cachix — token from sops secret, never global ─────
-        cachix() {
-          if [[ -r /run/secrets/cachix-secret ]]; then
-            CACHIX_AUTH_TOKEN=$(cat /run/secrets/cachix-secret) command cachix "$@"
+        function cachix
+          if test -r /run/secrets/cachix-secret
+            set -lx CACHIX_AUTH_TOKEN (cat /run/secrets/cachix-secret)
+            command cachix $argv
           else
-            command cachix "$@"
-          fi
-        }
+            command cachix $argv
+          end
+        end
       '';
     };
 
     # ─── Starship — gruvbox dark prompt ───────────────────────
     starship = {
       enable = true;
-      enableZshIntegration = true;
+      enableFishIntegration = true;
       settings = {
         palette = lib.mkForce "gruvbox_dark";
 
@@ -215,13 +183,13 @@
 
     zoxide = {
       enable = true;
-      enableZshIntegration = true;
+      enableFishIntegration = true;
     };
 
     fzf = {
       enable = true;
-      enableZshIntegration = true;
-      # Stylix manages colors (gruvbox-dark-hard) — no override needed
+      enableFishIntegration = true;
+      # Colors managed by Stylix (gruvbox-dark-hard)
     };
   };
 }
