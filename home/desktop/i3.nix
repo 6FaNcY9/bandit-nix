@@ -44,8 +44,8 @@
     "${mod}+f" = "fullscreen toggle";
     "${mod}+space" = "focus mode_toggle";
     "${mod}+Shift+space" = "floating toggle";
-    "${mod}+a" = "focus parent";
-    "${mod}+Shift+a" = "focus child";
+    "${mod}+p" = "focus parent";
+    "${mod}+Shift+p" = "focus child";
   };
 
   # ─── System / app launchers ───────────────────────────
@@ -75,6 +75,9 @@
     "${mod}+grave" = "exec ${pkgs.dunst}/bin/dunstctl history-pop";
     "${mod}+Shift+d" = "exec ${pkgs.dunst}/bin/dunstctl set-paused toggle";
     "${mod}+Shift+period" = "exec ${pkgs.dunst}/bin/dunstctl close-all";
+
+    # App finder
+    "${mod}+a" = "exec ${pkgs.xfce.xfce4-appfinder}/bin/xfce4-appfinder --collapsed";
   };
 
   # ─── Media keys ───────────────────────────────────────
