@@ -78,6 +78,21 @@ _: {
       "plugins/plugin-12/mode" = 2; # 0=analog, 1=binary, 2=digital
     };
 
+    # ── Thunar file manager ───────────────────────────────────────
+    "thunar" = {
+      "last-view" = "ThunarDetailsView";
+      "last-show-hidden" = false;
+      "misc-single-click" = false;
+      "misc-thumbnail-mode" = "THUNAR_THUMBNAIL_MODE_ALWAYS";
+      "misc-file-size-binary" = true;
+      "misc-date-style" = "THUNAR_DATE_STYLE_SIMPLE";
+    };
+
+    # ── Icon theme (Papirus-Dark for GTK apps incl. Thunar) ──────
+    "xsettings" = {
+      "Net/IconThemeName" = "Papirus-Dark";
+    };
+
     # ── Notification daemon appearance ────────────────────────────
     "xfce4-notifyd" = {
       "notify-location" = 1; # top-right

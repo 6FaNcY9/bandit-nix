@@ -1,4 +1,8 @@
-_: {
+{
+  inputs,
+  pkgs,
+  ...
+}: {
   programs.nixvim = {
     enable = true;
     defaultEditor = true;
@@ -43,6 +47,8 @@ _: {
       treesitter = {
         enable = true;
         ensureInstalled = [
+          "markdown"
+          "markdown_inline"
           "lua"
           "vim"
           "bash"
@@ -51,13 +57,24 @@ _: {
           "yaml"
           "rust"
           "nix"
-        ]; 
+        ];
         settings = {
           incrementalSelection.enable = true;
           highlight.enable = true;
           indent.enable = true;
         };
       };
+
+      # Markdown Plugin
+      render-markdown = {
+        enable = true;
+        settings = {
+          enable = true;
+          anti_conceal.enabled = true;
+        };
+      };
+
+      glow.enable = true;
 
       # LSP — language servers
       lsp = {
@@ -329,6 +346,22 @@ _: {
       web-devicons.enable = true;
     };
 
+    # ─── Custom Plugin Cheatsheet ──────────────────────────────────────────
+    extraPlugins = [
+      pkgs.vimPlugins.nvim-gdb
+      (pkgs.vimUtils.buildVimPlugin {
+        name = "cheatsheet.nvim";
+        src = inputs.cheatsheet-nvim;
+      })
+    ];
+    extraConfigLua = ''
+      require('cheatsheet').setup({
+        bundled_cheatsheets = true,
+        bundled_plugin_cheatsheets = true,
+      })
+    '';
+    extraPackages = with pkgs; [bashdb];
+
     # ─── Keymaps ──────────────────────────────────────────
     keymaps = [
       # General
@@ -399,54 +432,20 @@ _: {
         options.desc = "Flash remote";
       }
 
-      # DAP
+      # cheatsheet-nvim
       {
         mode = "n";
-        key = "<leader>db";
-        action.__raw = "function() require('dap').toggle_breakpoint() end";
-        options.desc = "Toggle breakpoint";
+        key = "<leader>?";
+        action = "<cmd>Cheatsheet<CR>";
+        options.desc = "Open cheatsheet";
       }
+
+      # Markdown Preview
       {
         mode = "n";
-        key = "<leader>dc";
-        action.__raw = "function() require('dap').continue() end";
-        options.desc = "Continue / start";
-      }
-      {
-        mode = "n";
-        key = "<leader>di";
-        action.__raw = "function() require('dap').step_into() end";
-        options.desc = "Step into";
-      }
-      {
-        mode = "n";
-        key = "<leader>do";
-        action.__raw = "function() require('dap').step_over() end";
-        options.desc = "Step over";
-      }
-      {
-        mode = "n";
-        key = "<leader>dO";
-        action.__raw = "function() require('dap').step_out() end";
-        options.desc = "Step out";
-      }
-      {
-        mode = "n";
-        key = "<leader>dr";
-        action.__raw = "function() require('dap').repl.open() end";
-        options.desc = "Open REPL";
-      }
-      {
-        mode = "n";
-        key = "<leader>du";
-        action.__raw = "function() require('dapui').toggle() end";
-        options.desc = "Toggle DAP UI";
-      }
-      {
-        mode = "n";
-        key = "<leader>dt";
-        action.__raw = "function() require('dap').terminate() end";
-        options.desc = "Terminate session";
+        key = "<leader>mp";
+        action = "<cmd>PeekOpen<CR>";
+        options.desc = "Markdown Preview";
       }
     ];
   };
