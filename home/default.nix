@@ -9,7 +9,9 @@
     ./desktop/rofi.nix
     ./desktop/firefox.nix
     ./desktop/xfce-colors.nix
+    ./desktop/panel.nix
     ./editor.nix
+    ./dap.nix
     ./terminal.nix
   ];
 
