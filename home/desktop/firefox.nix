@@ -10,7 +10,7 @@
     };
   };
 
-  stylix.targets.firefox.profileNames = [ "default" ];
+  stylix.targets.firefox.profileNames = ["default"];
 
   # Workaround for stylix/issues/2071: Firefox ignores userChrome.css theming
   # when xdg-desktop-portal-gtk is active because the portal reads dconf
