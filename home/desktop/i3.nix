@@ -176,6 +176,37 @@ in {
         titlebar = false;
       };
 
+      colors = {
+        focused = {
+          border      = lib.mkForce "#d79921";
+          background  = lib.mkForce "#282828";
+          text        = lib.mkForce "#ebdbb2";
+          indicator   = lib.mkForce "#458588";
+          childBorder = lib.mkForce "#d79921";
+        };
+        focusedInactive = {
+          border      = lib.mkForce "#3c3836";
+          background  = lib.mkForce "#1d2021";
+          text        = lib.mkForce "#a89984";
+          indicator   = lib.mkForce "#3c3836";
+          childBorder = lib.mkForce "#3c3836";
+        };
+        unfocused = {
+          border      = lib.mkForce "#3c3836";
+          background  = lib.mkForce "#1d2021";
+          text        = lib.mkForce "#a89984";
+          indicator   = lib.mkForce "#3c3836";
+          childBorder = lib.mkForce "#3c3836";
+        };
+        urgent = {
+          border      = lib.mkForce "#cc241d";
+          background  = lib.mkForce "#cc241d";
+          text        = lib.mkForce "#ebdbb2";
+          indicator   = lib.mkForce "#cc241d";
+          childBorder = lib.mkForce "#cc241d";
+        };
+      };
+
       # ─── Startup applications ───────────────────────────
       startup = [
         {
