@@ -15,13 +15,13 @@
           IdentityFile = "~/.ssh/github";
           IdentitiesOnly = true;
         };
-        "github-6fancy9" = {
+        "6FaNcY9" = {
           Hostname = "github.com";
           User = "git";
           IdentityFile = "~/.ssh/github";
           IdentitiesOnly = true;
         };
-        "github-banditstudent" = {
+        "BanditStudent" = {
           Hostname = "github.com";
           User = "git";
           IdentityFile = "~/.ssh/github-banditstudent";
