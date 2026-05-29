@@ -17,7 +17,8 @@
   virtualisation = {
     podman = {
       enable = true;
-      dockerCompat = false; # use rootless podman directly; system socket is a container-escape vector
+      dockerCompat = true; # use rootless podman directly; system socket is a container-escape vector
+      autoPrune.enable = true; # Clean up dangling images/containers
     };
     libvirtd.enable = true;
   };
