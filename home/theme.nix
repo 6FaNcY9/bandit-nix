@@ -36,6 +36,8 @@ _: {
     window.csd { border-radius: 0 !important; }
   '';
 
+  gtk.gtk4.theme = null;
+
   # Disable GTK animations for a snappier retro feel
   gtk.gtk3.extraConfig = {
     gtk-enable-animations = false;
