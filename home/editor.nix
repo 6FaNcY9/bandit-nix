@@ -508,6 +508,52 @@
         '';
         options.desc = "Format buffer";
       }
+      {
+        mode = "n";
+        key = "<leader>e";
+        action = "<cmd>Neotree focu1s<CR>";
+        options.desc = "Focus  Neo-tree";
+      }
+
+      # Nix rebuild with quickfix population
+      {
+        mode = "n";
+        key = "<leader>nr";
+        action.__raw = ''
+          function()
+            local cmd = "sudo nixos-rebuild test --flake .#bandit 2>&1"
+            local output = vim.fn.systemlist(cmd)
+            local qflist = {}
+            for _, line in ipairs(output) do
+              -- match "file.nix:line:col: message" patterns
+              local file, lnum, col, msg = line:match("([^:]+):(%d+):(%d+): (.+)")
+              if file then
+                table.insert(qflist, { filename = file, lnum = tonumber(lnum), col = tonumber(col), text = msg })
+              end
+            end
+            if #qflist > 0 then
+              vim.fn.setqflist(qflist)
+              vim.cmd("copen")
+            else
+              vim.notify(table.concat(output, "\n"), vim.log.levels.INFO)
+            end
+          end
+        '';
+        options.desc = "Nix rebuild → quickfix";
+      }
+
+      # Just evaluate (fast, no build)
+      {
+        mode = "n";
+        key = "<leader>ne";
+        action.__raw = ''
+          function()
+            local out = vim.fn.system("nix eval .#nixosConfigurations.bandit.config.system.build.toplevel 2>&1")
+            vim.notify(out, vim.log.levels.WARN)
+          end
+        '';
+        options.desc = "Nix eval check";
+      }
     ];
   };
 }
