@@ -1,15 +1,15 @@
 {pkgs, ...}: {
   home.packages = with pkgs; [
-    xfce.xfce4-whiskermenu-plugin
-    xfce.xfce4-genmon-plugin
-    xfce.xfce4-pulseaudio-plugin
-    xfce.xfce4-battery-plugin
-    xfce.xfce4-sensors-plugin
-    xfce.xfce4-power-manager
-    xfce.xfce4-netload-plugin
-    xfce.xfce4-screenshooter
-    xfce.xfce4-taskmanager
-    xfce.xfce4-appfinder
+    xfce4-whiskermenu-plugin
+    xfce4-genmon-plugin
+    xfce4-pulseaudio-plugin
+    xfce4-battery-plugin
+    xfce4-sensors-plugin
+    xfce4-power-manager
+    xfce4-netload-plugin
+    xfce4-screenshooter
+    xfce4-taskmanager
+    xfce4-appfinder
     lm_sensors
   ];
 
