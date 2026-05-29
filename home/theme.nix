@@ -11,28 +11,29 @@ _: {
     dunst.enable = false;
   };
 
-  # Remove rounded corners everywhere — retro/flat gruvbox aesthetic
+  # Soft 2px border-radius — retro gruvbox aesthetic with slight roundness
   stylix.targets.gtk.extraCss = ''
     * {
-      border-radius: 0 !important;
+      border-radius: 2px !important;
       box-shadow: none !important;
     }
     headerbar,
-    headerbar.titlebar { border-radius: 0 !important; }
-    .csd .titlebar { border-radius: 0 !important; }
+    headerbar.titlebar { border-radius: 2px !important; }
+    .csd .titlebar { border-radius: 2px !important; }
     popover.background,
-    popover > contents { border-radius: 0 !important; }
+    popover > contents { border-radius: 4px !important; }
     button,
     button.flat,
     button.suggested-action,
-    button.destructive-action { border-radius: 0 !important; }
+    button.destructive-action { border-radius: 2px !important; }
     entry,
-    spinbutton { border-radius: 0 !important; }
+    spinbutton { border-radius: 2px !important; }
     .menu,
     menuitem { border-radius: 0 !important; }
-    tooltip { border-radius: 0 !important; }
-    notebook > header tabs tab { border-radius: 0 !important; }
+    tooltip { border-radius: 2px !important; }
+    notebook > header tabs tab { border-radius: 2px !important; }
     treeview.view { border-radius: 0 !important; }
+    window.csd { border-radius: 0 !important; }
   '';
 
   # Disable GTK animations for a snappier retro feel
