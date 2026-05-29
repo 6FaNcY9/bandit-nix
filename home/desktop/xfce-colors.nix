@@ -17,25 +17,25 @@ _: {
     "xfce4-panel" = {
       "panels" = [1];
 
-      "panels/panel-1/position"         = "p=6;x=0;y=0";
-      "panels/panel-1/position-locked"  = true;
-      "panels/panel-1/length"           = 100;
-      "panels/panel-1/size"             = 30;
+      "panels/panel-1/position" = "p=6;x=0;y=0";
+      "panels/panel-1/position-locked" = true;
+      "panels/panel-1/length" = 100;
+      "panels/panel-1/size" = 30;
       "panels/panel-1/background-style" = 1;
       "panels/panel-1/background-color" = "#111111";
 
       "panels/panel-1/plugin-ids" = [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18];
 
       # ── Plugin type registration ────────────────────────────────
-      "plugins/plugin-1"  = "whiskermenu";
-      "plugins/plugin-2"  = "separator";
-      "plugins/plugin-3"  = "tasklist";
-      "plugins/plugin-4"  = "separator";
-      "plugins/plugin-5"  = "genmon";
-      "plugins/plugin-6"  = "genmon";
-      "plugins/plugin-7"  = "genmon";
-      "plugins/plugin-8"  = "sensors";
-      "plugins/plugin-9"  = "separator";
+      "plugins/plugin-1" = "whiskermenu";
+      "plugins/plugin-2" = "separator";
+      "plugins/plugin-3" = "tasklist";
+      "plugins/plugin-4" = "separator";
+      "plugins/plugin-5" = "genmon";
+      "plugins/plugin-6" = "genmon";
+      "plugins/plugin-7" = "genmon";
+      "plugins/plugin-8" = "sensors";
+      "plugins/plugin-9" = "separator";
       "plugins/plugin-10" = "pager";
       "plugins/plugin-11" = "separator";
       "plugins/plugin-12" = "pulseaudio";
@@ -48,44 +48,44 @@ _: {
 
       # ── Whiskermenu — ❄ bandit button ──────────────────────────
       "plugins/plugin-1/show-button-title" = true;
-      "plugins/plugin-1/button-title"      = "bandit";
-      "plugins/plugin-1/show-button-icon"  = true;
-      "plugins/plugin-1/button-icon"       = "nix-snowflake";
+      "plugins/plugin-1/button-title" = "bandit";
+      "plugins/plugin-1/show-button-icon" = true;
+      "plugins/plugin-1/button-icon" = "nix-snowflake";
 
       # ── Separators ─────────────────────────────────────────────
-      "plugins/plugin-2/style"  = 1;
+      "plugins/plugin-2/style" = 1;
       "plugins/plugin-2/expand" = false;
-      "plugins/plugin-4/style"  = 0;
+      "plugins/plugin-4/style" = 0;
       "plugins/plugin-4/expand" = true;
-      "plugins/plugin-9/style"  = 1;
+      "plugins/plugin-9/style" = 1;
       "plugins/plugin-11/style" = 1;
 
       # ── Tasklist — flat icon+label buttons ─────────────────────
-      "plugins/plugin-3/grouping"               = 0;
-      "plugins/plugin-3/show-labels"            = true;
+      "plugins/plugin-3/grouping" = 0;
+      "plugins/plugin-3/show-labels" = true;
       "plugins/plugin-3/include-all-workspaces" = false;
-      "plugins/plugin-3/flat-buttons"           = true;
-      "plugins/plugin-3/show-handle"            = false;
+      "plugins/plugin-3/flat-buttons" = true;
+      "plugins/plugin-3/show-handle" = false;
 
       # ── Genmon — net/cpu/mem scripts ───────────────────────────
-      "plugins/plugin-5/Command"      = "/home/vino/.local/bin/panel-net";
+      "plugins/plugin-5/Command" = "/home/vino/.local/bin/panel-net";
       "plugins/plugin-5/UpdatePeriod" = 2000;
-      "plugins/plugin-5/UseLabel"     = false;
-      "plugins/plugin-6/Command"      = "/home/vino/.local/bin/panel-cpu";
+      "plugins/plugin-5/UseLabel" = false;
+      "plugins/plugin-6/Command" = "/home/vino/.local/bin/panel-cpu";
       "plugins/plugin-6/UpdatePeriod" = 2000;
-      "plugins/plugin-6/UseLabel"     = false;
-      "plugins/plugin-7/Command"      = "/home/vino/.local/bin/panel-mem";
+      "plugins/plugin-6/UseLabel" = false;
+      "plugins/plugin-7/Command" = "/home/vino/.local/bin/panel-mem";
       "plugins/plugin-7/UpdatePeriod" = 3000;
-      "plugins/plugin-7/UseLabel"     = false;
+      "plugins/plugin-7/UseLabel" = false;
 
       # ── Pager ───────────────────────────────────────────────────
-      "plugins/plugin-10/rows"           = 1;
+      "plugins/plugin-10/rows" = 1;
       "plugins/plugin-10/miniature-view" = true;
 
       # ── Clock ───────────────────────────────────────────────────
       "plugins/plugin-18/digital-format" = "%a %H:%M";
       "plugins/plugin-18/tooltip-format" = "%A %d %B %Y";
-      "plugins/plugin-18/mode"           = 2;
+      "plugins/plugin-18/mode" = 2;
     };
 
     # ── Thunar file manager ───────────────────────────────────────

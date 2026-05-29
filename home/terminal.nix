@@ -45,19 +45,19 @@ _: {
       confirm_os_window_close = 0; # no "are you sure?" dialog
 
       # ── Tab bar ────────────────────────────────────────────
-      tab_bar_edge             = "top";
-      tab_bar_style            = "powerline";
-      tab_powerline_style      = "slanted";
-      tab_title_template       = "{index}: {title}";
-      tab_bar_min_tabs         = "2";
-      tab_bar_background       = "#111111";
-      active_tab_foreground    = "#1d2021";
-      active_tab_background    = "#d79921";
-      active_tab_font_style    = "bold";
-      inactive_tab_foreground  = "#a89984";
-      inactive_tab_background  = "#282828";
-      inactive_tab_font_style  = "normal";
-      tab_bar_margin_color     = "#111111";
+      tab_bar_edge = "top";
+      tab_bar_style = "powerline";
+      tab_powerline_style = "slanted";
+      tab_title_template = "{index}: {title}";
+      tab_bar_min_tabs = "2";
+      tab_bar_background = "#111111";
+      active_tab_foreground = "#1d2021";
+      active_tab_background = "#d79921";
+      active_tab_font_style = "bold";
+      inactive_tab_foreground = "#a89984";
+      inactive_tab_background = "#282828";
+      inactive_tab_font_style = "normal";
+      tab_bar_margin_color = "#111111";
 
       # ── Misc ───────────────────────────────────────────────
       strip_trailing_spaces = "smart";
