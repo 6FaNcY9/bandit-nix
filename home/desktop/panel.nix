@@ -1,9 +1,9 @@
 {pkgs, ...}: {
   home.packages = with pkgs; [
-    xfce.xfce4-systemload-plugin
-    xfce.xfce4-genmon-plugin
-    xfce.xfce4-taskmanager
-    xfce.xfce4-appfinder
+    xfce4-systemload-plugin
+    xfce4-genmon-plugin
+    xfce4-taskmanager
+    xfce4-appfinder
   ];
 
   # Writes cached public IP every 60s — genmon script reads the file, never blocks.
