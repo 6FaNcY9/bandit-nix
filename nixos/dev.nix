@@ -34,6 +34,7 @@
     bat
     eza
     gcc
+    gnupg
     xclip
     tree-sitter
     gnumake
