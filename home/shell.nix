@@ -55,7 +55,7 @@
         vim = "nvim";
         # ── System ────────────────────────────────────────────
         reload = "exec fish";
-        path = "echo $PATH | tr ':' '\n'";
+        path = "string split : $PATH";
         ports = "ss -tulanp";
         psg = "ps aux | grep";
         cls = "clear";
@@ -66,9 +66,14 @@
       interactiveShellInit = ''
         # ── Vi mode ───────────────────────────────────────────
         fish_vi_key_bindings
+        # Restore fzf bindings clobbered by vi mode
+        fzf_configure_bindings --history=\cr --directory=\cf --git_log=\cg --git_status=\cs
 
         # ── Suppress default greeting ─────────────────────────
         set -g fish_greeting ""
+
+        # ── Silence you-should-use for git shorthand aliases ──
+        set -gx YSU__IGNORED_GLOBAL_ALIASES "^(g|ga|gc|gca|gp|gl|gs|gd|glog)$"
 
         # ── Cachix — token from sops secret, never global ─────
         function cachix
