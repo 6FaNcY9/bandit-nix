@@ -15,67 +15,77 @@ _: {
 
     # ── Panel ─────────────────────────────────────────────────────
     "xfce4-panel" = {
-      # Declare panel 1 as the only panel
       "panels" = [1];
 
-      # Panel geometry and appearance
-      "panels/panel-1/position" = "p=6;x=0;y=0"; # top, full width
-      "panels/panel-1/position-locked" = true;
-      "panels/panel-1/length" = 100;
-      "panels/panel-1/size" = 30;
-      "panels/panel-1/background-style" = 1; # solid color
+      "panels/panel-1/position"         = "p=6;x=0;y=0";
+      "panels/panel-1/position-locked"  = true;
+      "panels/panel-1/length"           = 100;
+      "panels/panel-1/size"             = 30;
+      "panels/panel-1/background-style" = 1;
       "panels/panel-1/background-color" = "#111111";
 
-      # Plugin ordering (IDs 1–12)
-      "panels/panel-1/plugin-ids" = [1 2 3 4 5 6 7 8 9 10 11 12];
+      "panels/panel-1/plugin-ids" = [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18];
 
       # ── Plugin type registration ────────────────────────────────
-      "plugins/plugin-1" = "applicationsmenu";
-      "plugins/plugin-2" = "separator";
-      "plugins/plugin-3" = "tasklist";
-      "plugins/plugin-4" = "separator"; # spacer
-      "plugins/plugin-5" = "systemload";
-      "plugins/plugin-6" = "separator";
-      "plugins/plugin-7" = "genmon";
-      "plugins/plugin-8" = "separator";
-      "plugins/plugin-9" = "pager";
-      "plugins/plugin-10" = "separator";
-      "plugins/plugin-11" = "systray";
-      "plugins/plugin-12" = "clock";
+      "plugins/plugin-1"  = "whiskermenu";
+      "plugins/plugin-2"  = "separator";
+      "plugins/plugin-3"  = "tasklist";
+      "plugins/plugin-4"  = "separator";
+      "plugins/plugin-5"  = "genmon";
+      "plugins/plugin-6"  = "genmon";
+      "plugins/plugin-7"  = "genmon";
+      "plugins/plugin-8"  = "sensors";
+      "plugins/plugin-9"  = "separator";
+      "plugins/plugin-10" = "pager";
+      "plugins/plugin-11" = "separator";
+      "plugins/plugin-12" = "pulseaudio";
+      "plugins/plugin-13" = "battery";
+      "plugins/plugin-14" = "netload";
+      "plugins/plugin-15" = "power-manager-plugin";
+      "plugins/plugin-16" = "screenshooter";
+      "plugins/plugin-17" = "systray";
+      "plugins/plugin-18" = "clock";
 
-      # ── App menu ───────────────────────────────────────────────
+      # ── Whiskermenu — ❄ bandit button ──────────────────────────
       "plugins/plugin-1/show-button-title" = true;
-      "plugins/plugin-1/button-title" = "▸ apps";
-      "plugins/plugin-1/show-button-icon" = false;
+      "plugins/plugin-1/button-title"      = "bandit";
+      "plugins/plugin-1/show-button-icon"  = true;
+      "plugins/plugin-1/button-icon"       = "nix-snowflake";
 
       # ── Separators ─────────────────────────────────────────────
-      # style: 0=transparent, 1=separator line, 2=handle
-      "plugins/plugin-2/style" = 1;
+      "plugins/plugin-2/style"  = 1;
       "plugins/plugin-2/expand" = false;
-      "plugins/plugin-4/style" = 0; # transparent spacer
-      "plugins/plugin-4/expand" = true; # pushes right block to edge
-      "plugins/plugin-6/style" = 1;
-      "plugins/plugin-8/style" = 1;
-      "plugins/plugin-10/style" = 1;
+      "plugins/plugin-4/style"  = 0;
+      "plugins/plugin-4/expand" = true;
+      "plugins/plugin-9/style"  = 1;
+      "plugins/plugin-11/style" = 1;
 
-      # ── Tasklist — current workspace only, no grouping ─────────
-      "plugins/plugin-3/grouping" = 0;
-      "plugins/plugin-3/show-labels" = true;
+      # ── Tasklist — flat icon+label buttons ─────────────────────
+      "plugins/plugin-3/grouping"               = 0;
+      "plugins/plugin-3/show-labels"            = true;
       "plugins/plugin-3/include-all-workspaces" = false;
-      "plugins/plugin-3/flat-buttons" = true;
+      "plugins/plugin-3/flat-buttons"           = true;
+      "plugins/plugin-3/show-handle"            = false;
 
-      # ── Genmon — panel-netmon script, 1s refresh ───────────────
-      "plugins/plugin-7/Command" = "/home/vino/.local/bin/panel-netmon";
-      "plugins/plugin-7/update-period" = 1000;
+      # ── Genmon — net/cpu/mem scripts ───────────────────────────
+      "plugins/plugin-5/Command"      = "/home/vino/.local/bin/panel-net";
+      "plugins/plugin-5/UpdatePeriod" = 2000;
+      "plugins/plugin-5/UseLabel"     = false;
+      "plugins/plugin-6/Command"      = "/home/vino/.local/bin/panel-cpu";
+      "plugins/plugin-6/UpdatePeriod" = 2000;
+      "plugins/plugin-6/UseLabel"     = false;
+      "plugins/plugin-7/Command"      = "/home/vino/.local/bin/panel-mem";
+      "plugins/plugin-7/UpdatePeriod" = 3000;
+      "plugins/plugin-7/UseLabel"     = false;
 
-      # ── Pager — 1 row of mini workspace squares ─────────────────
-      "plugins/plugin-9/rows" = 1;
-      "plugins/plugin-9/miniature-view" = true;
+      # ── Pager ───────────────────────────────────────────────────
+      "plugins/plugin-10/rows"           = 1;
+      "plugins/plugin-10/miniature-view" = true;
 
-      # ── Clock — compact digital format ─────────────────────────
-      "plugins/plugin-12/digital-format" = "%a %H:%M";
-      "plugins/plugin-12/tooltip-format" = "%A %d %B %Y";
-      "plugins/plugin-12/mode" = 2; # 0=analog, 1=binary, 2=digital
+      # ── Clock ───────────────────────────────────────────────────
+      "plugins/plugin-18/digital-format" = "%a %H:%M";
+      "plugins/plugin-18/tooltip-format" = "%A %d %B %Y";
+      "plugins/plugin-18/mode"           = 2;
     };
 
     # ── Thunar file manager ───────────────────────────────────────
@@ -101,4 +111,18 @@ _: {
       "do-fadeout" = true;
     };
   };
+
+  # Whiskermenu menu appearance
+  xdg.configFile."xfce4/panel/whiskermenu-1.rc".text = ''
+    button-title=bandit
+    button-icon=nix-snowflake
+    show-button-icon=true
+    show-button-title=true
+    background-opacity=95
+    item-icon-size=16
+    category-icon-size=16
+    position-search-alternate=true
+    recent-items-max=5
+    show-recent-always=false
+  '';
 }
