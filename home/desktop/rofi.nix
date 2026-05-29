@@ -153,7 +153,7 @@ in {
       display-drun = " apps";
       display-run = " run";
       display-window = " windows";
-      terminal = "${pkgs.xfce4-terminal}/bin/xfce4-terminal";
+      terminal = "${pkgs.kitty}/bin/kitty";
       sort = true;
       matching = "fuzzy";
       tokenize = true;

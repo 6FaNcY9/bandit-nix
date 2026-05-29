@@ -481,14 +481,6 @@
         options.desc = "Open cheatsheet";
       }
 
-      # Markdown Preview
-      {
-        mode = "n";
-        key = "<leader>mp";
-        action = "<cmd>PeekOpen<CR>";
-        options.desc = "Markdown Preview";
-      }
-
       # Lazygit
       {
         mode = "n";
