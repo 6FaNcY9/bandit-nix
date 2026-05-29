@@ -1,0 +1,81 @@
+/* userChrome.css — gruvbox retro for bandit */
+
+:root {
+  --gruvbox-bg:      #282828;
+  --gruvbox-bg-hard: #1d2021;
+  --gruvbox-bg1:     #3c3836;
+  --gruvbox-bg2:     #504945;
+  --gruvbox-fg:      #ebdbb2;
+  --gruvbox-fg4:     #a89984;
+  --gruvbox-yellow:  #d79921;
+  --gruvbox-blue:    #458588;
+  --gruvbox-red:     #cc241d;
+}
+
+/* === Tab bar === */
+.tabbrowser-tab .tab-background {
+  background-color: var(--gruvbox-bg-hard) !important;
+  border-radius: 2px 2px 0 0 !important;
+  border: 1px solid var(--gruvbox-bg1) !important;
+  margin-inline: 1px !important;
+}
+.tabbrowser-tab[selected] .tab-background {
+  background-color: var(--gruvbox-bg) !important;
+  border-color: var(--gruvbox-blue) !important;
+  border-bottom: 2px solid var(--gruvbox-yellow) !important;
+}
+.tabbrowser-tab[attention]:not([selected]) .tab-background {
+  border-color: var(--gruvbox-red) !important;
+}
+.tab-label {
+  color: var(--gruvbox-fg4) !important;
+}
+.tabbrowser-tab[selected] .tab-label {
+  color: var(--gruvbox-fg) !important;
+  font-weight: bold !important;
+}
+#tabbrowser-tabs {
+  background-color: var(--gruvbox-bg-hard) !important;
+}
+
+/* === Toolbar === */
+#nav-bar {
+  background-color: var(--gruvbox-bg) !important;
+  border-bottom: 1px solid var(--gruvbox-bg1) !important;
+  box-shadow: none !important;
+}
+#urlbar-background {
+  background-color: var(--gruvbox-bg-hard) !important;
+  border: 1px solid var(--gruvbox-blue) !important;
+  border-radius: 2px !important;
+}
+#urlbar:focus-within > #urlbar-background {
+  border-color: var(--gruvbox-yellow) !important;
+  box-shadow: none !important;
+}
+#urlbar-input {
+  color: var(--gruvbox-fg) !important;
+}
+
+/* === Bookmarks bar === */
+#PersonalToolbar {
+  background-color: var(--gruvbox-bg-hard) !important;
+  border-bottom: 1px solid var(--gruvbox-bg1) !important;
+}
+
+/* === Remove roundness on menus/popups === */
+menupopup,
+panel,
+.panel-arrowcontent {
+  border-radius: 0 !important;
+}
+
+/* === Context menu === */
+menupopup {
+  background-color: var(--gruvbox-bg) !important;
+  border: 1px solid var(--gruvbox-bg1) !important;
+}
+menuitem:hover {
+  background-color: var(--gruvbox-bg1) !important;
+  color: var(--gruvbox-fg) !important;
+}
