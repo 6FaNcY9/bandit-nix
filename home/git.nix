@@ -15,6 +15,12 @@
           IdentityFile = "~/.ssh/github";
           IdentitiesOnly = true;
         };
+        "github-6fancy9" = {
+          Hostname = "github.com";
+          User = "git";
+          IdentityFile = "~/.ssh/github";
+          IdentitiesOnly = true;
+        };
         "github-banditstudent" = {
           Hostname = "github.com";
           User = "git";
