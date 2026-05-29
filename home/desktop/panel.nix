@@ -1,16 +1,7 @@
 {pkgs, ...}: {
   home.packages = with pkgs; [
-    xfce4-whiskermenu-plugin
-    xfce4-genmon-plugin
-    xfce4-pulseaudio-plugin
-    xfce4-battery-plugin
-    xfce4-sensors-plugin
-    xfce4-power-manager
-    xfce4-netload-plugin
-    xfce4-screenshooter
     xfce4-taskmanager
     xfce4-appfinder
-    lm_sensors
   ];
 
   # Refresh public IPv4 every 5 minutes — genmon-net reads the cached file.

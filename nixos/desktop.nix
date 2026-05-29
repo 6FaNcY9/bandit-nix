@@ -56,6 +56,15 @@
     xfce4-power-manager
     xfce4-notifyd
     brightnessctl
+    # Panel plugins — must be system packages so xfce4-panel finds the .so files
+    xfce4-whiskermenu-plugin
+    xfce4-genmon-plugin
+    xfce4-pulseaudio-plugin
+    xfce4-battery-plugin
+    xfce4-sensors-plugin
+    xfce4-netload-plugin
+    xfce4-screenshooter
+    lm_sensors
   ];
 
   # Polkit for privilege escalation in GUI apps (e.g. software updater)
