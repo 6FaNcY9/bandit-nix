@@ -500,13 +500,6 @@
         '';
         options.desc = "Format buffer";
       }
-      {
-        mode = "n";
-        key = "<leader>e";
-        action = "<cmd>Neotree focu1s<CR>";
-        options.desc = "Focus  Neo-tree";
-      }
-
       # Nix rebuild with quickfix population
       {
         mode = "n";
