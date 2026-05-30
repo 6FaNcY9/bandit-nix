@@ -3,14 +3,14 @@ _: {
     # ── Terminal ──────────────────────────────────────────────────
     "xfce4-terminal" = {
       "color-use-theme" = false;
-      "color-background" = "#272727";
-      "color-foreground" = "#ebdbb2";
-      "color-cursor" = "#ebdbb2";
+      "color-background" = "#2d2d2d";
+      "color-foreground" = "#cccccc";
+      "color-cursor" = "#cccccc";
       "color-bold-is-bright" = true;
       "scrollbar-style" = "TERMINAL_SCROLLBAR_NONE";
       "misc-slim-tabs" = true;
-      # 16-color gruvbox dark palette
-      "color-palette" = "#282828;#cc241d;#98971a;#d79921;#458588;#b16286;#689d6a;#a89984;#928374;#fb4934;#b8bb26;#fabd2f;#83a598;#d3869b;#8ec07c;#ebdbb2";
+      # 16-color tomorrow-night-eighties palette
+      "color-palette" = "#2d2d2d;#f2777a;#99cc99;#ffcc66;#6699cc;#cc99cc;#66cccc;#d3d0c8;#747369;#f2777a;#99cc99;#ffcc66;#6699cc;#cc99cc;#66cccc;#f2f0ec";
     };
 
     # ── Panel ─────────────────────────────────────────────────────
@@ -22,7 +22,7 @@ _: {
       "panels/panel-1/length" = 100;
       "panels/panel-1/size" = 30;
       "panels/panel-1/background-style" = 1;
-      "panels/panel-1/background-color" = "#111111";
+      "panels/panel-1/background-color" = "#2d2d2d";
 
       "panels/panel-1/plugin-ids" = [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18];
 
@@ -91,11 +91,13 @@ _: {
     # ── Thunar file manager ───────────────────────────────────────
     "thunar" = {
       "last-view" = "ThunarDetailsView";
-      "last-show-hidden" = false;
+      "last-show-hidden" = true;
       "misc-single-click" = false;
+      "misc-open-new-windows-in-tab" = true;
       "misc-thumbnail-mode" = "THUNAR_THUMBNAIL_MODE_ALWAYS";
       "misc-file-size-binary" = true;
       "misc-date-style" = "THUNAR_DATE_STYLE_SIMPLE";
+      "misc-confirm-move-to-trash" = false;
     };
 
     # ── Icon theme (Papirus-Dark for GTK apps incl. Thunar) ──────
@@ -103,7 +105,14 @@ _: {
       "Net/IconThemeName" = "Papirus-Dark";
     };
 
+    # ── Power manager ─────────────────────────────────────────────
+    "xfce4-power-manager" = {
+      "/xfce4-power-manager/lock-screen-suspend-hibernate" = true;
+    };
+
     # ── Notification daemon appearance ────────────────────────────
+    # Note: xfce4-notifyd is disabled via autostart override below.
+    # dunst handles notifications instead.
     "xfce4-notifyd" = {
       "notify-location" = 1; # top-right
       "expire-timeout" = 8000;
@@ -111,6 +120,14 @@ _: {
       "do-fadeout" = true;
     };
   };
+
+  # Prevent xfce4-notifyd from starting so dunst can own org.freedesktop.Notifications
+  xdg.configFile."autostart/xfce4-notifyd.desktop".text = ''
+    [Desktop Entry]
+    Type=Application
+    Name=Xfce Notification Daemon
+    Hidden=true
+  '';
 
   # Whiskermenu menu appearance
   xdg.configFile."xfce4/panel/whiskermenu-1.rc".text = ''

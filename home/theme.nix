@@ -11,34 +11,41 @@ _: {
     dunst.enable = false;
   };
 
-  # Soft 2px border-radius — retro gruvbox aesthetic with slight roundness
+  # Retro dark aesthetic — square corners, visible borders, classic feel
   stylix.targets.gtk.extraCss = ''
     * {
-      border-radius: 2px !important;
-      box-shadow: none !important;
+      border-radius: 0;
+      transition: none;
     }
-    headerbar,
-    headerbar.titlebar { border-radius: 2px !important; }
-    .csd .titlebar { border-radius: 2px !important; }
-    popover.background,
-    popover > contents { border-radius: 4px !important; }
-    button,
-    button.flat,
-    button.suggested-action,
-    button.destructive-action { border-radius: 2px !important; }
-    entry,
-    spinbutton { border-radius: 2px !important; }
-    .menu,
-    menuitem { border-radius: 0 !important; }
-    tooltip { border-radius: 2px !important; }
-    notebook > header tabs tab { border-radius: 2px !important; }
-    treeview.view { border-radius: 0 !important; }
-    window.csd { border-radius: 0 !important; }
+
+    window, dialog, .background { border-radius: 0; }
+    window.csd { border-radius: 0; }
+    headerbar, headerbar.titlebar, .titlebar { border-radius: 0; box-shadow: none; border-bottom: 1px solid #515151; }
+    .csd .titlebar { border-radius: 0; }
+
+    button { border-radius: 0; box-shadow: none; }
+    button:active { box-shadow: inset 1px 1px 0 rgba(0,0,0,0.3); }
+
+    entry, spinbutton { border-radius: 0; }
+
+    popover, popover.background, popover > contents { border-radius: 0; }
+
+    .menu, menu, menuitem { border-radius: 0; }
+    menubar { border-radius: 0; }
+
+    tooltip { border-radius: 0; }
+
+    notebook > header tabs tab { border-radius: 0; }
+    treeview.view { border-radius: 0; }
+
+    scrollbar { border-radius: 0; }
+    scrollbar slider { border-radius: 0; min-width: 12px; min-height: 12px; }
+    scrollbar.horizontal slider { min-height: 12px; }
+    scrollbar.vertical slider { min-width: 12px; }
   '';
 
   gtk.gtk4.theme = null;
 
-  # Disable GTK animations for a snappier retro feel
   gtk.gtk3.extraConfig = {
     gtk-enable-animations = false;
     gtk-button-images = true;

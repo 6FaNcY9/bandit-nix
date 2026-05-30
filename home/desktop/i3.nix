@@ -10,6 +10,10 @@
   brightnessctlBin = "${pkgs.brightnessctl}/bin/brightnessctl";
   playerctlBin = "${pkgs.playerctl}/bin/playerctl";
 
+  # ─── tomorrow-night-eighties palette ──────────────────
+  # base00=#2d2d2d base01=#393939 base02=#515151 base03=#999999
+  # base05=#cccccc base08=#f2777a base0A=#ffcc66 base0D=#6699cc
+
   # ─── Directional focus (vim + arrows) ─────────────────
   directionalFocus = {
     "${mod}+j" = "focus left";
@@ -65,7 +69,10 @@
     "${mod}+Shift+c" = "reload";
     "${mod}+Shift+r" = "restart";
     "${mod}+r" = ''mode "resize"'';
-    "${mod}+Shift+x" = "exec ${pkgs.i3lock}/bin/i3lock -c 262626";
+    "${mod}+Shift+x" = "exec xfce4-screensaver-command --lock";
+
+    # Shortcut cheatsheet
+    "${mod}+F1" = "exec ${pkgs.kitty}/bin/kitty --title 'i3 Shortcuts' --override 'remember_window_size=no' --override 'initial_window_width=800' --override 'initial_window_height=560' ${pkgs.bash}/bin/bash -c 'cat ~/.local/bin/i3-cheatsheet | ${pkgs.less}/bin/less -R'";
 
     # Screenshots — flameshot needs the env vars on i3
     "Print" = "exec --no-startup-id env XDG_CURRENT_DESKTOP=i3 XDG_SESSION_TYPE=x11 QT_QPA_PLATFORM=xcb ${pkgs.flameshot}/bin/flameshot gui";
@@ -125,6 +132,11 @@ in {
     config = {
       modifier = mod;
 
+      fonts = {
+        names = lib.mkForce ["JetBrainsMono Nerd Font Mono"];
+        size = lib.mkForce 9.0;
+      };
+
       # ─── Keybindings ────────────────────────────────────
       keybindings = lib.mkOptionDefault (
         directionalFocus
@@ -154,12 +166,15 @@ in {
       # ─── Floating windows ───────────────────────────────
       floating = {
         modifier = mod;
+        titlebar = true;
+        border = 1;
         criteria = [
           {class = "Pavucontrol";}
           {class = "Blueman-manager";}
           {class = "flameshot";}
           {class = "copyq";}
           {title = "Picture-in-Picture";}
+          {title = "i3 Shortcuts";}
         ];
       };
 
@@ -172,38 +187,39 @@ in {
       };
 
       window = {
-        border = 2;
-        titlebar = false;
+        border = 1;
+        titlebar = true;
       };
 
+      # ─── Window colors (tomorrow-night-eighties) ────────
       colors = {
         focused = {
-          border = lib.mkForce "#d79921";
-          background = lib.mkForce "#282828";
-          text = lib.mkForce "#ebdbb2";
-          indicator = lib.mkForce "#458588";
-          childBorder = lib.mkForce "#d79921";
+          border = lib.mkForce "#ffcc66";
+          background = lib.mkForce "#2d2d2d";
+          text = lib.mkForce "#cccccc";
+          indicator = lib.mkForce "#6699cc";
+          childBorder = lib.mkForce "#ffcc66";
         };
         focusedInactive = {
-          border = lib.mkForce "#3c3836";
-          background = lib.mkForce "#1d2021";
-          text = lib.mkForce "#a89984";
-          indicator = lib.mkForce "#3c3836";
-          childBorder = lib.mkForce "#3c3836";
+          border = lib.mkForce "#393939";
+          background = lib.mkForce "#2d2d2d";
+          text = lib.mkForce "#999999";
+          indicator = lib.mkForce "#393939";
+          childBorder = lib.mkForce "#393939";
         };
         unfocused = {
-          border = lib.mkForce "#3c3836";
-          background = lib.mkForce "#1d2021";
-          text = lib.mkForce "#a89984";
-          indicator = lib.mkForce "#3c3836";
-          childBorder = lib.mkForce "#3c3836";
+          border = lib.mkForce "#393939";
+          background = lib.mkForce "#2d2d2d";
+          text = lib.mkForce "#999999";
+          indicator = lib.mkForce "#393939";
+          childBorder = lib.mkForce "#393939";
         };
         urgent = {
-          border = lib.mkForce "#cc241d";
-          background = lib.mkForce "#cc241d";
-          text = lib.mkForce "#ebdbb2";
-          indicator = lib.mkForce "#cc241d";
-          childBorder = lib.mkForce "#cc241d";
+          border = lib.mkForce "#f2777a";
+          background = lib.mkForce "#f2777a";
+          text = lib.mkForce "#cccccc";
+          indicator = lib.mkForce "#f2777a";
+          childBorder = lib.mkForce "#f2777a";
         };
       };
 
@@ -213,9 +229,9 @@ in {
           command = "${pkgs.autotiling}/bin/autotiling";
           notification = false;
         }
-        # Lock screen automatically before suspend.
+        # Lock screen on suspend (xfce4-power-manager handles idle lock)
         {
-          command = "${pkgs.xss-lock}/bin/xss-lock --transfer-sleep-lock -- ${pkgs.i3lock}/bin/i3lock -c 262626 -n";
+          command = "${pkgs.xss-lock}/bin/xss-lock -- xfce4-screensaver-command --lock";
           notification = false;
         }
         {
@@ -242,6 +258,85 @@ in {
     };
   };
 
+  # ─── Shortcut cheatsheet script ──────────────────────
+  home.file.".local/bin/i3-cheatsheet" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      cat <<'EOF'
+      ╔══════════════════════════════════════════════════════════╗
+      ║           i3 Shortcuts  (Mod = Super / Win key)          ║
+      ╚══════════════════════════════════════════════════════════╝
+
+      LAUNCH
+        Mod+Return          kitty (terminal)
+        Mod+Shift+W         firefox
+        Mod+D               rofi app launcher
+        Mod+Shift+V         copyq clipboard manager
+        Mod+A               XFCE app finder
+
+      WINDOWS
+        Mod+Shift+Q         kill focused window
+        Mod+F               fullscreen toggle
+        Mod+Shift+Space     toggle float/tile
+        Mod+Space           focus float ↔ tile
+        Mod+Shift+X         lock screen
+
+      FOCUS  (also works with arrow keys)
+        Mod+J               focus left
+        Mod+K               focus down
+        Mod+L               focus up
+        Mod+;               focus right
+
+      MOVE  (also works with arrow keys)
+        Mod+Shift+J         move left
+        Mod+Shift+K         move down
+        Mod+Shift+L         move up
+        Mod+Shift+;         move right
+
+      LAYOUT
+        Mod+H               split horizontal
+        Mod+V               split vertical
+        Mod+E               toggle split
+        Mod+S               stacking layout
+        Mod+W               tabbed layout
+        Mod+P / Shift+P     focus parent / child
+
+      RESIZE MODE  (Mod+R, then…)
+        H/J/K/L or Arrows   resize window
+        Return / Escape     exit resize mode
+
+      WORKSPACES
+        Mod+1…0             switch to workspace 1–10
+        Mod+Shift+1…0       move window to workspace
+
+      SCRATCHPAD
+        Mod+M               send to scratchpad
+        Mod+Shift+M         show scratchpad
+
+      NOTIFICATIONS (dunst)
+        Mod+`               show notification history
+        Mod+Shift+D         pause / resume notifications
+        Mod+Shift+.         close all notifications
+
+      SCREENSHOTS
+        Print / F11         flameshot GUI screenshot
+
+      MEDIA
+        XF86AudioRaise/Lower  volume ±5%
+        XF86AudioMute         mute toggle
+        XF86MonBrightness+/-  screen brightness
+        XF86AudioPlay/Next/Prev  media control
+
+      i3 CONFIG
+        Mod+Shift+C         reload config
+        Mod+Shift+R         restart i3
+        Mod+F1              this help screen
+
+      EOF
+    '';
+  };
+
   # ─── Required packages ────────────────────────────────
   home.packages = with pkgs; [
     rofi
@@ -253,5 +348,6 @@ in {
     pulseaudio # for pactl
     networkmanagerapplet
     autotiling
+    less
   ];
 }

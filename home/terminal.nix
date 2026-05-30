@@ -19,7 +19,7 @@ _: {
       # ── Cursor ─────────────────────────────────────────────
       cursor_shape = "beam";
       cursor_blink_interval = "0.5";
-      cursor_trail = 3; # subtle animated trail
+      cursor_trail = 1;
 
       # ── URL handling ───────────────────────────────────────
       detect_urls = "yes";
@@ -41,7 +41,7 @@ _: {
       visual_bell_duration = "0.0";
 
       # ── Window ─────────────────────────────────────────────
-      window_padding_width = 6;
+      window_padding_width = 8;
       confirm_os_window_close = 0; # no "are you sure?" dialog
 
       # ── Tab bar ────────────────────────────────────────────
@@ -50,14 +50,14 @@ _: {
       tab_powerline_style = "slanted";
       tab_title_template = "{index}: {title}";
       tab_bar_min_tabs = "2";
-      tab_bar_background = "#111111";
-      active_tab_foreground = "#1d2021";
-      active_tab_background = "#d79921";
+      tab_bar_background = "#2d2d2d";
+      active_tab_foreground = "#2d2d2d";
+      active_tab_background = "#ffcc66";
       active_tab_font_style = "bold";
-      inactive_tab_foreground = "#a89984";
-      inactive_tab_background = "#282828";
+      inactive_tab_foreground = "#999999";
+      inactive_tab_background = "#393939";
       inactive_tab_font_style = "normal";
-      tab_bar_margin_color = "#111111";
+      tab_bar_margin_color = "#2d2d2d";
 
       # ── Misc ───────────────────────────────────────────────
       strip_trailing_spaces = "smart";
@@ -97,6 +97,12 @@ _: {
       # Clipboard
       "ctrl+shift+c" = "copy_to_clipboard";
       "ctrl+shift+v" = "paste_from_clipboard";
+
+      # New window/tab in current directory
+      "ctrl+shift+n" = "new_os_window_with_cwd";
+
+      # Unicode character picker
+      "ctrl+shift+u" = "kitten unicode_input";
 
       # Config reload
       "ctrl+shift+f5" = "load_config_file";

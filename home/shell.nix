@@ -9,7 +9,7 @@
       enable = true;
 
       plugins = [
-        # ctrl-r history, ctrl-f file, ctrl-v cd — fzf keybindings
+        # fzf keybindings: ctrl-r history, ctrl-f dir, ctrl-v vars, ctrl-alt-p procs
         {
           name = "fzf-fish";
           src = pkgs.fishPlugins.fzf-fish.src;
@@ -19,7 +19,54 @@
           name = "fish-you-should-use";
           src = pkgs.fishPlugins.fish-you-should-use.src;
         }
+        # fzf on top of fish's native tab completion engine
+        {
+          name = "fifc";
+          src = pkgs.fishPlugins.fifc.src;
+        }
+        # Auto-close (), [], {}, "", ''
+        {
+          name = "autopair";
+          src = pkgs.fishPlugins.autopair.src;
+        }
+        # Colorized man pages
+        {
+          name = "colored-man-pages";
+          src = pkgs.fishPlugins.colored-man-pages.src;
+        }
+        # Remove failed / typo commands from history
+        {
+          name = "sponge";
+          src = pkgs.fishPlugins.sponge.src;
+        }
+        # Desktop notification when long command finishes
+        {
+          name = "done";
+          src = pkgs.fishPlugins.done.src;
+        }
+        # Text expansions: . → ./, ... → ../..
+        {
+          name = "puffer";
+          src = pkgs.fishPlugins.puffer.src;
+        }
       ];
+
+      shellAbbrs = {
+        # Nix rebuilds
+        nrs = "sudo nixos-rebuild switch --flake .#bandit";
+        nrt = "sudo nixos-rebuild test --flake .#bandit";
+        nfc = "nix flake check --no-update-lock-file";
+        # Git
+        gst = "git status";
+        gcm = "git commit -m";
+        gco = "git checkout";
+        gpsh = "git push";
+        # Systemd
+        jfu = "journalctl -fu";
+        jb = "journalctl -b";
+        sc = "systemctl";
+        scu = "systemctl --user";
+      };
 
       shellAliases = {
         # ── Nix workflow ──────────────────────────────────────
@@ -67,7 +114,8 @@
         # ── Vi mode ───────────────────────────────────────────
         fish_vi_key_bindings
         # Restore fzf bindings clobbered by vi mode
-        fzf_configure_bindings --history=\cr --directory=\cf --git_log=\cg --git_status=\cs
+        # ctrl-r=history  ctrl-f=dir  ctrl-v=shell-vars  ctrl-alt-p=processes
+        fzf_configure_bindings --history=\cr --directory=\cf --git_log=\cg --git_status=\cs --variables=\cv --processes=\ca\cp
 
         # ── Suppress default greeting ─────────────────────────
         set -g fish_greeting ""
@@ -92,19 +140,19 @@
       enable = true;
       enableFishIntegration = true;
       settings = {
-        palette = lib.mkForce "gruvbox_dark";
+        palette = lib.mkForce "tomorrow_night_eighties";
 
-        palettes.gruvbox_dark = {
-          color_fg0 = "#fbf1c7";
-          color_bg1 = "#3c3836";
-          color_bg3 = "#665c54";
-          color_blue = "#458588";
-          color_aqua = "#689d6a";
-          color_green = "#98971a";
-          color_orange = "#d65d0e";
-          color_purple = "#b16286";
-          color_red = "#cc241d";
-          color_yellow = "#d79921";
+        palettes.tomorrow_night_eighties = {
+          color_fg0 = "#f2f0ec";
+          color_bg1 = "#393939";
+          color_bg3 = "#515151";
+          color_blue = "#6699cc";
+          color_aqua = "#66cccc";
+          color_green = "#99cc99";
+          color_orange = "#f99157";
+          color_purple = "#cc99cc";
+          color_red = "#f2777a";
+          color_yellow = "#ffcc66";
         };
 
         format = "$username$directory$git_branch$git_status$nix_shell$cmd_duration$line_break$character";

@@ -22,7 +22,7 @@
         # ── Appearance ──────────────────────────────────────────
         corner_radius = 0;
         frame_width = 2;
-        frame_color = "#458588";
+        frame_color = "#6699cc";
         separator_height = 2;
         separator_color = "frame";
         padding = 10;
@@ -74,26 +74,26 @@
       };
 
       urgency_low = {
-        background = "#282828";
-        foreground = "#a89984";
-        frame_color = "#504945";
-        highlight = "#a89984";
+        background = "#2d2d2d";
+        foreground = "#999999";
+        frame_color = "#393939";
+        highlight = "#999999";
         timeout = 5;
       };
 
       urgency_normal = {
-        background = "#282828";
-        foreground = "#ebdbb2";
-        frame_color = "#458588";
-        highlight = "#458588";
+        background = "#2d2d2d";
+        foreground = "#cccccc";
+        frame_color = "#6699cc";
+        highlight = "#6699cc";
         timeout = 10;
       };
 
       urgency_critical = {
-        background = "#1d2021";
-        foreground = "#fb4934";
-        frame_color = "#cc241d";
-        highlight = "#fb4934";
+        background = "#2d2d2d";
+        foreground = "#f2777a";
+        frame_color = "#f2777a";
+        highlight = "#f2777a";
         timeout = 0;
       };
     };
