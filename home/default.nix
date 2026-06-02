@@ -15,6 +15,7 @@
     ./desktop/powermenu.nix
     ./editor.nix
     ./terminal.nix
+    ./node.nix
   ];
 
   home = {
