@@ -66,6 +66,10 @@
         jb = "journalctl -b";
         sc = "systemctl";
         scu = "systemctl --user";
+        # Safety — abbrs expand only at the prompt, never inside plugins/functions
+        rm = "rm -i";
+        cp = "cp -i";
+        mv = "mv -i";
       };
 
       shellAliases = {
@@ -92,10 +96,6 @@
         gs = "git status";
         gd = "git diff";
         glog = "git log --oneline --decorate --graph";
-        # ── Safety ────────────────────────────────────────────
-        rm = "rm -i";
-        cp = "cp -i";
-        mv = "mv -i";
         # ── Editor ────────────────────────────────────────────
         v = "nvim";
         vi = "nvim";
