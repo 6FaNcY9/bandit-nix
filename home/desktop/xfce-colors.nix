@@ -29,7 +29,9 @@ _: {
       "panels/panel-1/enter-opacity" = 100;
       "panels/panel-1/leave-opacity" = 100;
 
-      "panels/panel-1/plugin-ids" = [1 2 3 4 5 6 7 8 9 10 11 12];
+      # Layout (13 plugins):
+      # [❄] │ [tasklist w/ labels ──expand──] │ [cpu][mem][net] │ [vol][bat][tray][pager] │ [clock]
+      "panels/panel-1/plugin-ids" = [1 2 3 4 5 6 7 8 9 10 11 12 13];
 
       # ── Plugin type registration ────────────────────────────────
       "plugins/plugin-1" = "whiskermenu";
@@ -43,7 +45,8 @@ _: {
       "plugins/plugin-9" = "pulseaudio";
       "plugins/plugin-10" = "battery";
       "plugins/plugin-11" = "systray";
-      "plugins/plugin-12" = "clock";
+      "plugins/plugin-12" = "pager";
+      "plugins/plugin-13" = "clock";
 
       # ── Whiskermenu — icon-only ❄ button ───────────────────────
       "plugins/plugin-1/show-button-title" = false;
@@ -57,29 +60,37 @@ _: {
       "plugins/plugin-4/expand" = true; # pushes right group
       "plugins/plugin-8/style" = 1; # handle line
 
-      # ── Tasklist — icon-only grouped flat buttons ──────────────
+      # ── Tasklist — labeled grouped flat buttons ─────────────────
       "plugins/plugin-3/grouping" = 1;
-      "plugins/plugin-3/show-labels" = false;
+      "plugins/plugin-3/show-labels" = true;
       "plugins/plugin-3/include-all-workspaces" = false;
       "plugins/plugin-3/flat-buttons" = true;
       "plugins/plugin-3/show-handle" = false;
       "plugins/plugin-3/show-only-minimized" = false;
 
       # ── Genmon — cpu/mem/net scripts ───────────────────────────
+      # Both cases needed: genmon reads lowercase 'command', home-manager sets uppercase
       "plugins/plugin-5/Command" = "/home/vino/.local/bin/panel-cpu";
+      "plugins/plugin-5/command" = "/home/vino/.local/bin/panel-cpu";
       "plugins/plugin-5/UpdatePeriod" = 2000;
       "plugins/plugin-5/UseLabel" = false;
       "plugins/plugin-6/Command" = "/home/vino/.local/bin/panel-mem";
+      "plugins/plugin-6/command" = "/home/vino/.local/bin/panel-mem";
       "plugins/plugin-6/UpdatePeriod" = 3000;
       "plugins/plugin-6/UseLabel" = false;
       "plugins/plugin-7/Command" = "/home/vino/.local/bin/panel-net";
+      "plugins/plugin-7/command" = "/home/vino/.local/bin/panel-net";
       "plugins/plugin-7/UpdatePeriod" = 2000;
       "plugins/plugin-7/UseLabel" = false;
 
+      # ── Pager — workspace minimap ───────────────────────────────
+      "plugins/plugin-12/rows" = 1;
+      "plugins/plugin-12/miniature-view" = true;
+
       # ── Clock ───────────────────────────────────────────────────
-      "plugins/plugin-12/digital-format" = "%a %H:%M";
-      "plugins/plugin-12/tooltip-format" = "%A %d %B %Y";
-      "plugins/plugin-12/mode" = 2;
+      "plugins/plugin-13/digital-format" = "%a %H:%M";
+      "plugins/plugin-13/tooltip-format" = "%A %d %B %Y";
+      "plugins/plugin-13/mode" = 2;
     };
 
     # ── Thunar file manager ───────────────────────────────────────
