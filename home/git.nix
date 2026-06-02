@@ -43,7 +43,7 @@
         navigate = true;
         side-by-side = true;
         line-numbers = true;
-        syntax-theme = "gruvbox-dark";
+        syntax-theme = "TwoDark";
       };
     };
 
