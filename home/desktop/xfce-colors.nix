@@ -29,9 +29,9 @@ _: {
       "panels/panel-1/enter-opacity" = 100;
       "panels/panel-1/leave-opacity" = 100;
 
-      # Layout (13 plugins):
-      # [❄] │ [tasklist w/ labels ──expand──] │ [cpu][mem][net] │ [vol][bat][tray][pager] │ [clock]
-      "panels/panel-1/plugin-ids" = [1 2 3 4 5 6 7 8 9 10 11 12 13];
+      # Layout (14 plugins):
+      # [❄] │ [tasklist w/ labels ──expand──] │ [cpu][mem][net] │ [vol][bat] │ [pager] │ [clock] │ [tray]
+      "panels/panel-1/plugin-ids" = [1 2 3 4 5 6 7 8 9 10 11 12 13 14];
 
       # ── Plugin type registration ────────────────────────────────
       "plugins/plugin-1" = "whiskermenu";
@@ -44,9 +44,10 @@ _: {
       "plugins/plugin-8" = "separator";
       "plugins/plugin-9" = "pulseaudio";
       "plugins/plugin-10" = "battery";
-      "plugins/plugin-11" = "systray";
-      "plugins/plugin-12" = "pager";
+      "plugins/plugin-11" = "pager";
+      "plugins/plugin-12" = "separator";
       "plugins/plugin-13" = "clock";
+      "plugins/plugin-14" = "systray";
 
       # ── Whiskermenu — icon-only ❄ button ───────────────────────
       "plugins/plugin-1/show-button-title" = false;
@@ -83,13 +84,24 @@ _: {
       "plugins/plugin-7/UpdatePeriod" = 2000;
       "plugins/plugin-7/UseLabel" = false;
 
-      # ── Pager — workspace minimap ───────────────────────────────
-      "plugins/plugin-12/rows" = 1;
-      "plugins/plugin-12/miniature-view" = true;
+      # ── Battery — icon + percentage only ───────────────────────
+      "plugins/plugin-10/show-percentage" = true;
+      "plugins/plugin-10/show-time" = false;
+      "plugins/plugin-10/show-icon" = true;
+      "plugins/plugin-10/show-label" = false;
 
-      # ── Clock ───────────────────────────────────────────────────
-      "plugins/plugin-13/digital-format" = "%a %H:%M";
-      "plugins/plugin-13/tooltip-format" = "%A %d %B %Y";
+      # ── Pager — workspace minimap ───────────────────────────────
+      "plugins/plugin-11/rows" = 1;
+      "plugins/plugin-11/miniature-view" = true;
+
+      # ── Separator before clock — thin line ──────────────────────
+      "plugins/plugin-12/style" = 1;
+      "plugins/plugin-12/expand" = false;
+
+      # ── Clock — yellow, date + time, bracketed ──────────────────
+      "plugins/plugin-13/digital-format" = "[ <span color='#ffcc66'>%a %d  %H:%M</span> ]";
+      "plugins/plugin-13/digital-font" = "JetBrainsMono Nerd Font 11";
+      "plugins/plugin-13/tooltip-format" = "%A %d %B %Y  –  week %V";
       "plugins/plugin-13/mode" = 2;
     };
 
