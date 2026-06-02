@@ -27,6 +27,12 @@
           IdentityFile = "~/.ssh/github-banditstudent";
           IdentitiesOnly = true;
         };
+        "mrija" = {
+          Hostname = "s16.thehost.com.ua";
+          User = "mrija_org";
+          IdentityFile = "~/.ssh/thehost_mrija";
+          IdentitiesOnly = true;
+        };
       };
     };
 
