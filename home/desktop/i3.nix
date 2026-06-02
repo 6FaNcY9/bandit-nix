@@ -192,8 +192,8 @@ in {
       };
 
       window = {
-        border = 2;
-        titlebar = true;
+        border = 3;
+        titlebar = false;
       };
 
       # ─── Window colors (tomorrow-night-eighties) ────────
