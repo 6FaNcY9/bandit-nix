@@ -117,8 +117,18 @@
         # ctrl-r=history  ctrl-f=dir  ctrl-v=shell-vars  ctrl-alt-p=processes
         fzf_configure_bindings --history=\cr --directory=\cf --git_log=\cg --git_status=\cs --variables=\cv --processes=\ca\cp
 
-        # ── Suppress default greeting ─────────────────────────
-        set -g fish_greeting ""
+        # ── Retro greeter ─────────────────────────────────────
+        function fish_greeting
+            set -l nixver (nixos-version 2>/dev/null | string split ' ' --max 2 --field 1)
+            set -l kern (uname -r)
+            echo ""
+            set_color ffcc66
+            echo "  λ  bandit · NixOS $nixver"
+            set_color 999999
+            echo "  kernel $kern  ·  fish $version"
+            set_color normal
+            echo ""
+        end
 
         # ── Silence you-should-use for git shorthand aliases ──
         set -gx YSU__IGNORED_GLOBAL_ALIASES '^(g|ga|gc|gca|gp|gl|gs|gd|glog)$'

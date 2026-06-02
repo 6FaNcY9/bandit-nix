@@ -14,17 +14,22 @@ _: {
     };
 
     # ── Panel ─────────────────────────────────────────────────────
+    # Layout (12 plugins):
+    # [❄] │ [tasklist───expand───] │ [cpu][mem][net] │ [vol][bat][tray] │ [clock]
     "xfce4-panel" = {
       "panels" = [1];
 
       "panels/panel-1/position" = "p=6;x=0;y=0";
       "panels/panel-1/position-locked" = true;
       "panels/panel-1/length" = 100;
-      "panels/panel-1/size" = 30;
+      "panels/panel-1/size" = 26;
+      "panels/panel-1/nrows" = 1;
       "panels/panel-1/background-style" = 1;
       "panels/panel-1/background-color" = "#2d2d2d";
+      "panels/panel-1/enter-opacity" = 100;
+      "panels/panel-1/leave-opacity" = 100;
 
-      "panels/panel-1/plugin-ids" = [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18];
+      "panels/panel-1/plugin-ids" = [1 2 3 4 5 6 7 8 9 10 11 12];
 
       # ── Plugin type registration ────────────────────────────────
       "plugins/plugin-1" = "whiskermenu";
@@ -34,58 +39,47 @@ _: {
       "plugins/plugin-5" = "genmon";
       "plugins/plugin-6" = "genmon";
       "plugins/plugin-7" = "genmon";
-      "plugins/plugin-8" = "sensors";
-      "plugins/plugin-9" = "separator";
-      "plugins/plugin-10" = "pager";
-      "plugins/plugin-11" = "separator";
-      "plugins/plugin-12" = "pulseaudio";
-      "plugins/plugin-13" = "battery";
-      "plugins/plugin-14" = "netload";
-      "plugins/plugin-15" = "power-manager-plugin";
-      "plugins/plugin-16" = "screenshooter";
-      "plugins/plugin-17" = "systray";
-      "plugins/plugin-18" = "clock";
+      "plugins/plugin-8" = "separator";
+      "plugins/plugin-9" = "pulseaudio";
+      "plugins/plugin-10" = "battery";
+      "plugins/plugin-11" = "systray";
+      "plugins/plugin-12" = "clock";
 
-      # ── Whiskermenu — ❄ bandit button ──────────────────────────
-      "plugins/plugin-1/show-button-title" = true;
-      "plugins/plugin-1/button-title" = "bandit";
+      # ── Whiskermenu — icon-only ❄ button ───────────────────────
+      "plugins/plugin-1/show-button-title" = false;
       "plugins/plugin-1/show-button-icon" = true;
       "plugins/plugin-1/button-icon" = "nix-snowflake";
 
       # ── Separators ─────────────────────────────────────────────
-      "plugins/plugin-2/style" = 1;
+      "plugins/plugin-2/style" = 1; # handle line
       "plugins/plugin-2/expand" = false;
-      "plugins/plugin-4/style" = 0;
-      "plugins/plugin-4/expand" = true;
-      "plugins/plugin-9/style" = 1;
-      "plugins/plugin-11/style" = 1;
+      "plugins/plugin-4/style" = 0; # transparent
+      "plugins/plugin-4/expand" = true; # pushes right group
+      "plugins/plugin-8/style" = 1; # handle line
 
-      # ── Tasklist — flat icon+label buttons ─────────────────────
-      "plugins/plugin-3/grouping" = 0;
-      "plugins/plugin-3/show-labels" = true;
+      # ── Tasklist — icon-only grouped flat buttons ──────────────
+      "plugins/plugin-3/grouping" = 1;
+      "plugins/plugin-3/show-labels" = false;
       "plugins/plugin-3/include-all-workspaces" = false;
       "plugins/plugin-3/flat-buttons" = true;
       "plugins/plugin-3/show-handle" = false;
+      "plugins/plugin-3/show-only-minimized" = false;
 
-      # ── Genmon — net/cpu/mem scripts ───────────────────────────
-      "plugins/plugin-5/Command" = "/home/vino/.local/bin/panel-net";
+      # ── Genmon — cpu/mem/net scripts ───────────────────────────
+      "plugins/plugin-5/Command" = "/home/vino/.local/bin/panel-cpu";
       "plugins/plugin-5/UpdatePeriod" = 2000;
       "plugins/plugin-5/UseLabel" = false;
-      "plugins/plugin-6/Command" = "/home/vino/.local/bin/panel-cpu";
-      "plugins/plugin-6/UpdatePeriod" = 2000;
+      "plugins/plugin-6/Command" = "/home/vino/.local/bin/panel-mem";
+      "plugins/plugin-6/UpdatePeriod" = 3000;
       "plugins/plugin-6/UseLabel" = false;
-      "plugins/plugin-7/Command" = "/home/vino/.local/bin/panel-mem";
-      "plugins/plugin-7/UpdatePeriod" = 3000;
+      "plugins/plugin-7/Command" = "/home/vino/.local/bin/panel-net";
+      "plugins/plugin-7/UpdatePeriod" = 2000;
       "plugins/plugin-7/UseLabel" = false;
 
-      # ── Pager ───────────────────────────────────────────────────
-      "plugins/plugin-10/rows" = 1;
-      "plugins/plugin-10/miniature-view" = true;
-
       # ── Clock ───────────────────────────────────────────────────
-      "plugins/plugin-18/digital-format" = "%a %H:%M";
-      "plugins/plugin-18/tooltip-format" = "%A %d %B %Y";
-      "plugins/plugin-18/mode" = 2;
+      "plugins/plugin-12/digital-format" = "%a %H:%M";
+      "plugins/plugin-12/tooltip-format" = "%A %d %B %Y";
+      "plugins/plugin-12/mode" = 2;
     };
 
     # ── Thunar file manager ───────────────────────────────────────
@@ -108,6 +102,13 @@ _: {
     # ── Power manager ─────────────────────────────────────────────
     "xfce4-power-manager" = {
       "/xfce4-power-manager/lock-screen-suspend-hibernate" = true;
+      # 0 = nothing — i3 binds XF86PowerOff to the rofi power menu instead
+      "/xfce4-power-manager/power-button-action" = 0;
+    };
+
+    # ── xfwm4 (disabled as WM, but its compositor can still run) ──
+    "xfwm4" = {
+      "/general/use_compositing" = false;
     };
 
     # ── Notification daemon appearance ────────────────────────────

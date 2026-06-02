@@ -11,6 +11,7 @@
     ./desktop/firefox.nix
     ./desktop/xfce-colors.nix
     ./desktop/panel.nix
+    ./desktop/powermenu.nix
     ./editor.nix
     ./terminal.nix
   ];

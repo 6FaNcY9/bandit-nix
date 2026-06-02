@@ -70,6 +70,11 @@
     "${mod}+Shift+r" = "restart";
     "${mod}+r" = ''mode "resize"'';
     "${mod}+Shift+x" = "exec xfce4-screensaver-command --lock";
+    "${mod}+q" = "move workspace to output next";
+
+    # Power menu — hardware power button + keyboard fallback
+    "XF86PowerOff" = "exec --no-startup-id ~/.local/bin/powermenu";
+    "${mod}+Escape" = "exec --no-startup-id ~/.local/bin/powermenu";
 
     # Shortcut cheatsheet
     "${mod}+F1" = "exec ${pkgs.kitty}/bin/kitty --title 'i3 Shortcuts' --override 'remember_window_size=no' --override 'initial_window_width=800' --override 'initial_window_height=560' ${pkgs.bash}/bin/bash -c 'cat ~/.local/bin/i3-cheatsheet | ${pkgs.less}/bin/less -R'";
@@ -134,7 +139,7 @@ in {
 
       fonts = {
         names = lib.mkForce ["JetBrainsMono Nerd Font Mono"];
-        size = lib.mkForce 9.0;
+        size = lib.mkForce 10.0;
       };
 
       # ─── Keybindings ────────────────────────────────────
@@ -167,7 +172,7 @@ in {
       floating = {
         modifier = mod;
         titlebar = true;
-        border = 1;
+        border = 2;
         criteria = [
           {class = "Pavucontrol";}
           {class = "Blueman-manager";}
@@ -180,14 +185,14 @@ in {
 
       # ─── Window appearance ──────────────────────────────
       gaps = {
-        inner = 8;
-        outer = 4;
+        inner = 6;
+        outer = 0;
         smartGaps = true;
-        smartBorders = "on";
+        smartBorders = "off";
       };
 
       window = {
-        border = 1;
+        border = 2;
         titlebar = true;
       };
 

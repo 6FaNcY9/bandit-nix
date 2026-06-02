@@ -23,10 +23,10 @@
         corner_radius = 0;
         frame_width = 2;
         frame_color = "#6699cc";
-        separator_height = 2;
+        separator_height = 1;
         separator_color = "frame";
-        padding = 10;
-        horizontal_padding = 12;
+        padding = 12;
+        horizontal_padding = 14;
         text_icon_padding = 10;
 
         # ── Progress bar ────────────────────────────────────────
@@ -41,7 +41,7 @@
         font = "JetBrainsMono Nerd Font 10";
         line_height = 2;
         markup = "full";
-        format = "<b>%s</b>\\n%b";
+        format = "<b>%s</b>\\n<span foreground='#999999'>%b</span>";
         alignment = "left";
         vertical_alignment = "center";
         show_age_threshold = 60;

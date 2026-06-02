@@ -1,17 +1,17 @@
 {pkgs, ...}: let
-  # Gruvbox dark palette
-  bg = "#282828";
-  bg1 = "#3c3836";
-  bg2 = "#504945";
-  bg3 = "#665c54";
-  fg = "#ebdbb2";
-  fg2 = "#d5c4a1";
-  fg4 = "#a89984";
-  blue = "#458588";
-  red = "#cc241d";
+  # tomorrow-night-eighties palette
+  bg = "#2d2d2d";
+  bg1 = "#393939";
+  bg2 = "#515151";
+  fg = "#cccccc";
+  fg2 = "#999999";
+  yellow = "#ffcc66";
+  blue = "#6699cc";
+  red = "#f2777a";
+  cyan = "#66cccc";
 in {
-  # Write theme to rofi themes dir so it can be referenced by name
-  xdg.configFile."rofi/themes/gruvbox-dark.rasi".text = ''
+  # ── Main launcher theme ───────────────────────────────────────
+  xdg.configFile."rofi/themes/retro-eighties.rasi".text = ''
     * {
         background-color: transparent;
         text-color:       ${fg};
@@ -20,9 +20,9 @@ in {
     window {
         background-color: ${bg};
         border:           2px;
-        border-color:     ${blue};
+        border-color:     ${yellow};
         border-radius:    0;
-        width:            600px;
+        width:            640px;
         padding:          0;
     }
 
@@ -35,23 +35,23 @@ in {
     inputbar {
         background-color: ${bg1};
         border:           0 0 2px 0;
-        border-color:     ${blue};
-        padding:          8px 12px;
+        border-color:     ${yellow};
+        padding:          10px 14px;
         spacing:          8px;
         children:         [ prompt, entry ];
     }
 
     prompt {
         background-color: transparent;
-        text-color:       ${blue};
+        text-color:       ${cyan};
         font:             "JetBrainsMono Nerd Font Bold 11";
     }
 
     entry {
         background-color: transparent;
         text-color:       ${fg};
-        placeholder:      "type to search...";
-        placeholder-color: ${fg4};
+        placeholder:      "type to search…";
+        placeholder-color: ${fg2};
         cursor:           text;
     }
 
@@ -59,20 +59,20 @@ in {
         background-color: ${bg1};
         border:           0 0 1px 0;
         border-color:     ${bg2};
-        padding:          4px 12px;
+        padding:          4px 14px;
     }
 
     textbox {
-        text-color: ${fg4};
+        text-color: ${fg2};
         font:       "JetBrainsMono Nerd Font 9";
     }
 
     listview {
         background-color: ${bg};
         border:           0;
-        padding:          4px 0;
+        padding:          6px 0;
         spacing:          0;
-        lines:            10;
+        lines:            12;
         scrollbar:        false;
         fixed-height:     true;
     }
@@ -81,14 +81,14 @@ in {
         background-color: transparent;
         border:           0;
         border-radius:    0;
-        padding:          6px 12px;
-        spacing:          8px;
+        padding:          8px 14px;
+        spacing:          10px;
         orientation:      horizontal;
     }
 
     element.normal.normal {
         background-color: transparent;
-        text-color:       ${fg2};
+        text-color:       ${fg};
     }
 
     element.normal.urgent {
@@ -102,25 +102,27 @@ in {
     }
 
     element.selected.normal {
-        background-color: ${bg2};
-        text-color:       ${fg};
-        border:           0 0 0 3px;
-        border-color:     ${blue};
+        background-color: ${bg1};
+        text-color:       ${yellow};
+        border:           0 0 0 4px;
+        border-color:     ${yellow};
     }
 
     element.selected.urgent {
         background-color: ${red};
-        text-color:       ${fg};
+        text-color:       ${bg};
     }
 
     element.selected.active {
-        background-color: ${bg2};
+        background-color: ${bg1};
         text-color:       ${blue};
+        border:           0 0 0 4px;
+        border-color:     ${blue};
     }
 
     element.alternate.normal {
         background-color: transparent;
-        text-color:       ${fg2};
+        text-color:       ${fg};
     }
 
     element-icon {
@@ -132,19 +134,77 @@ in {
         background-color: transparent;
         vertical-align:   0.5;
     }
+  '';
 
-    scrollbar {
+  # ── Power-menu theme (narrower, centered) ─────────────────────
+  xdg.configFile."rofi/themes/retro-power.rasi".text = ''
+    * {
+        background-color: transparent;
+        text-color:       ${fg};
+    }
+
+    window {
+        background-color: ${bg};
+        border:           2px;
+        border-color:     ${red};
+        border-radius:    0;
+        width:            280px;
+        padding:          0;
+        location:         center;
+        anchor:           center;
+    }
+
+    mainbox {
+        spacing:   0;
+        padding:   0;
+        children:  [ inputbar, listview ];
+    }
+
+    inputbar {
         background-color: ${bg1};
-        handle-color:     ${bg3};
-        handle-width:     8px;
-        border:           0;
+        border:           0 0 2px 0;
+        border-color:     ${red};
+        padding:          8px 14px;
+        children:         [ prompt ];
+    }
+
+    prompt {
+        background-color: transparent;
+        text-color:       ${red};
+        font:             "JetBrainsMono Nerd Font Bold 11";
+    }
+
+    listview {
+        background-color: ${bg};
+        padding:          6px 0;
+        spacing:          0;
+        lines:            5;
+        scrollbar:        false;
+        fixed-height:     true;
+    }
+
+    element {
+        padding:          8px 18px;
+        spacing:          10px;
+        font:             "JetBrainsMono Nerd Font 11";
+    }
+
+    element.normal.normal {
+        text-color: ${fg};
+    }
+
+    element.selected.normal {
+        background-color: ${bg1};
+        text-color:       ${red};
+        border:           0 0 0 4px;
+        border-color:     ${red};
     }
   '';
 
   programs.rofi = {
     enable = true;
     package = pkgs.rofi;
-    theme = "gruvbox-dark";
+    theme = "retro-eighties";
 
     extraConfig = {
       modi = "drun,run,window";

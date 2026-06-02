@@ -17,8 +17,8 @@ _: {
       scrollback_pager_history_size = 4; # MB on disk for very long sessions
 
       # ── Cursor ─────────────────────────────────────────────
-      cursor_shape = "beam";
-      cursor_blink_interval = "0.5";
+      cursor_shape = "block";
+      cursor_blink_interval = "0.6";
       cursor_trail = 1;
 
       # ── URL handling ───────────────────────────────────────
@@ -41,14 +41,15 @@ _: {
       visual_bell_duration = "0.0";
 
       # ── Window ─────────────────────────────────────────────
-      window_padding_width = 8;
+      window_padding_width = 6;
+      hide_window_decorations = "yes";
       confirm_os_window_close = 0; # no "are you sure?" dialog
 
       # ── Tab bar ────────────────────────────────────────────
       tab_bar_edge = "top";
-      tab_bar_style = "powerline";
-      tab_powerline_style = "slanted";
-      tab_title_template = "{index}: {title}";
+      tab_bar_style = "separator";
+      tab_separator = " ┃ ";
+      tab_title_template = "{index}│{title}";
       tab_bar_min_tabs = "2";
       tab_bar_background = "#2d2d2d";
       active_tab_foreground = "#2d2d2d";
