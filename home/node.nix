@@ -7,6 +7,11 @@
     };
   };
 
+  home.packages = with pkgs; [
+    bun # required by claude-mem worker runtime
+    unzip # required by bun installer scripts
+  ];
+
   # Make npm-global bins (e.g. from npm install -g) available in PATH
   home.sessionPath = ["$HOME/.npm-global/bin"];
 }
