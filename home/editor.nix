@@ -93,8 +93,9 @@
           marksman.enable = true;
           rust_analyzer = {
             enable = true;
-            installCargo = true;
-            installRustc = true;
+            # Rust toolchain provided per-project via direnv/devenv.
+            installCargo = false;
+            installRustc = false;
           };
         };
         keymaps = {

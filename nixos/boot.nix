@@ -27,8 +27,6 @@
     tmp.useTmpfs = true;
   };
 
-  security.rtkit.enable = true;
-
   # Disable NixOS documentation — large closure not needed on a desktop.
   documentation = {
     enable = false;
