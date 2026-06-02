@@ -1,41 +1,5 @@
 {pkgs, ...}: {
   programs = {
-    ssh = {
-      enable = true;
-      enableDefaultConfig = false;
-      settings = {
-        "*" = {
-          HashKnownHosts = "yes";
-          ServerAliveInterval = 60;
-          ServerAliveCountMax = 3;
-        };
-        "github.com" = {
-          Hostname = "github.com";
-          User = "git";
-          IdentityFile = "~/.ssh/github";
-          IdentitiesOnly = true;
-        };
-        "6FaNcY9" = {
-          Hostname = "github.com";
-          User = "git";
-          IdentityFile = "~/.ssh/github";
-          IdentitiesOnly = true;
-        };
-        "BanditStudent" = {
-          Hostname = "github.com";
-          User = "git";
-          IdentityFile = "~/.ssh/github-banditstudent";
-          IdentitiesOnly = true;
-        };
-        "mrija" = {
-          Hostname = "s16.thehost.com.ua";
-          User = "mrija_org";
-          IdentityFile = "~/.ssh/thehost_mrija";
-          IdentitiesOnly = true;
-        };
-      };
-    };
-
     delta = {
       enable = true;
       enableGitIntegration = true;

@@ -2,6 +2,7 @@
   imports = [
     inputs.nixvim.homeModules.nixvim
     ./shell.nix
+    ./ssh.nix
     ./git.nix
     ./theme.nix
     ./qt.nix
