@@ -10,15 +10,13 @@ _: {
     wireplumber.enable = true;
 
     extraConfig.pipewire."92-low-latency" = {
-      context.properties = {
-        default = {
-          clock = {
-            rate = 48000;
-            quantum = 1024;
-            min-quantum = 32;
-            max-quantum = 8192;
-          };
-        };
+      # PipeWire expects flat dot-notation keys, not nested attrsets.
+      # Nested attrsets generate {"default":{"clock":{...}}} which is silently ignored.
+      "context.properties" = {
+        "default.clock.rate" = 48000;
+        "default.clock.quantum" = 1024;
+        "default.clock.min-quantum" = 32;
+        "default.clock.max-quantum" = 8192;
       };
     };
   };
