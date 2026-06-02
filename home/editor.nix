@@ -340,7 +340,7 @@
           };
           format_on_save = {
             timeout_ms = 500;
-            lsp_fallback = true;
+            lsp_format = "fallback";
           };
         };
       };
@@ -435,7 +435,7 @@
       {
         mode = "n";
         key = "<leader>tt";
-        action = "<cmd>TroubleToggle<CR>";
+        action.__raw = ''function() require("trouble").toggle({ mode = "diagnostics" }) end'';
         options.desc = "Toggle Trouble";
       }
 
@@ -495,7 +495,7 @@
         key = "<leader>cf";
         action.__raw = ''
           function()
-            require("conform").format({ async = true, lsp_fallback = true })
+            require("conform").format({ async = true, lsp_format = "fallback" })
           end
         '';
         options.desc = "Format buffer";

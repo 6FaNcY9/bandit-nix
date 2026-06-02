@@ -50,7 +50,7 @@ _: {
       "plugins/plugin-14" = "systray";
 
       # ── Whiskermenu — icon-only ❄ button ───────────────────────
-      "plugins/plugin-1/show-button-title" = false;
+      "plugins/plugin-1/show-button-title" = true;
       "plugins/plugin-1/show-button-icon" = true;
       "plugins/plugin-1/button-icon" = "nix-snowflake";
 

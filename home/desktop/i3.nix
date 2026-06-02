@@ -69,7 +69,7 @@
     "${mod}+Shift+c" = "reload";
     "${mod}+Shift+r" = "restart";
     "${mod}+r" = ''mode "resize"'';
-    "${mod}+Shift+x" = "exec xfce4-screensaver-command --lock";
+    "${mod}+Shift+x" = "exec ${pkgs.xfce.xfce4-screensaver}/bin/xfce4-screensaver-command --lock";
     "${mod}+q" = "move workspace to output next";
 
     # Power menu — hardware power button + keyboard fallback
@@ -236,7 +236,7 @@ in {
         }
         # Lock screen on suspend (xfce4-power-manager handles idle lock)
         {
-          command = "${pkgs.xss-lock}/bin/xss-lock -- xfce4-screensaver-command --lock";
+          command = "${pkgs.xss-lock}/bin/xss-lock -- ${pkgs.xfce.xfce4-screensaver}/bin/xfce4-screensaver-command --lock";
           notification = false;
         }
         {
