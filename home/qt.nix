@@ -1,8 +1,4 @@
-{
-  lib,
-  pkgs,
-  ...
-}: {
+{pkgs, ...}: {
   home.packages = with pkgs; [
     libsForQt5.qtstyleplugin-kvantum
     libsForQt5.qt5ct
@@ -25,6 +21,6 @@
 
   home.sessionVariables = {
     QT_QPA_PLATFORMTHEME = "qt5ct";
-    QT_STYLE_OVERRIDE = lib.mkForce "kvantum-dark";
+    QT_STYLE_OVERRIDE = "kvantum-dark";
   };
 }
