@@ -1,80 +1,168 @@
-/* userChrome.css — tomorrow-night-eighties palette for bandit */
+/* userChrome.css — tomorrow-night-eighties, compact + retro bevel
+   Matches home/theme.nix GTK bevel system: square corners, 1px
+   inset light/dark highlights, yellow accent on selection/focus. */
 
 :root {
   --bg:      #2d2d2d;
   --bg1:     #393939;
   --bg2:     #515151;
+  --bg3:     #1a1a1a;
   --fg:      #cccccc;
   --fg2:     #999999;
   --yellow:  #ffcc66;
   --blue:    #6699cc;
   --red:     #f2777a;
+
+  /* Compact metrics */
+  --tab-min-height: 24px !important;
+  --tab-block-margin: 0 !important;
+  --urlbar-min-height: 24px !important;
+  --urlbar-height: 24px !important;
+  --toolbarbutton-inner-padding: 3px !important;
+  --toolbarbutton-outer-padding: 1px !important;
+  --arrowpanel-menuitem-padding: 3px 6px !important;
 }
 
-/* === Tab bar === */
+/* Kill rounded corners + transitions everywhere in chrome */
+* {
+  border-radius: 0 !important;
+  transition: none !important;
+}
+
+/* === Tab bar — square, beveled, compact === */
+#TabsToolbar {
+  --tab-min-height: 24px !important;
+  background-color: var(--bg1) !important;
+}
+#tabbrowser-tabs {
+  background-color: var(--bg1) !important;
+  --tab-min-height: 24px !important;
+  min-height: 24px !important;
+}
+.tabbrowser-tab {
+  min-height: 24px !important;
+  padding-block: 0 !important;
+}
 .tabbrowser-tab .tab-background {
   background-color: var(--bg1) !important;
-  border-radius: 2px 2px 0 0 !important;
-  border: 1px solid var(--bg2) !important;
-  margin-inline: 1px !important;
+  border: none !important;
+  margin-inline: 0 !important;
+  box-shadow:
+    inset -1px -1px 0 var(--bg3),
+    inset  1px  1px 0 var(--bg2) !important;
 }
 .tabbrowser-tab[selected] .tab-background {
   background-color: var(--bg) !important;
-  border-color: var(--blue) !important;
-  border-bottom: 2px solid var(--yellow) !important;
+  box-shadow:
+    inset  1px  1px 0 var(--bg3),
+    inset -1px -1px 0 var(--bg2),
+    inset 0 -2px 0 var(--yellow) !important;
 }
 .tabbrowser-tab[attention]:not([selected]) .tab-background {
-  border-color: var(--red) !important;
+  box-shadow:
+    inset -1px -1px 0 var(--bg3),
+    inset  1px  1px 0 var(--red) !important;
 }
 .tab-label {
   color: var(--fg2) !important;
+  font-size: 11px !important;
 }
 .tabbrowser-tab[selected] .tab-label {
   color: var(--fg) !important;
   font-weight: bold !important;
 }
-#tabbrowser-tabs {
-  background-color: var(--bg1) !important;
+
+/* Show tab close button only on hover/selected */
+.tabbrowser-tab:not(:hover):not([selected]) .tab-close-button {
+  display: none !important;
 }
 
-/* === Toolbar === */
+/* === Nav bar — tighter, beveled buttons === */
 #nav-bar {
   background-color: var(--bg) !important;
   border-bottom: 1px solid var(--bg2) !important;
   box-shadow: none !important;
+  padding-block: 0 !important;
+}
+#nav-bar toolbarbutton {
+  padding: 0 2px !important;
+}
+#nav-bar toolbarbutton > .toolbarbutton-icon {
+  padding: 2px !important;
+  box-shadow:
+    inset -1px -1px 0 var(--bg3),
+    inset  1px  1px 0 var(--bg2) !important;
+}
+#nav-bar toolbarbutton:hover > .toolbarbutton-icon {
+  background-color: var(--bg1) !important;
+}
+#nav-bar toolbarbutton[open] > .toolbarbutton-icon,
+#nav-bar toolbarbutton:active > .toolbarbutton-icon {
+  box-shadow:
+    inset  1px  1px 0 var(--bg3),
+    inset -1px -1px 0 var(--bg2) !important;
+  background-color: var(--bg1) !important;
+}
+
+/* === URL bar — sunken inset === */
+#urlbar,
+#urlbar-background {
+  min-height: 24px !important;
 }
 #urlbar-background {
   background-color: var(--bg1) !important;
-  border: 1px solid var(--blue) !important;
-  border-radius: 2px !important;
+  border: none !important;
+  box-shadow:
+    inset  1px  1px 0 var(--bg3),
+    inset -1px -1px 0 var(--bg2) !important;
 }
-#urlbar:focus-within > #urlbar-background {
-  border-color: var(--yellow) !important;
-  box-shadow: none !important;
+#urlbar[focused="true"] > #urlbar-background {
+  box-shadow:
+    inset  1px  1px 0 var(--bg3),
+    inset -1px -1px 0 var(--bg2),
+    inset 0 -2px 0 var(--yellow) !important;
 }
 #urlbar-input {
   color: var(--fg) !important;
+  font-size: 12px !important;
 }
 
-/* === Bookmarks bar === */
+/* === Bookmarks bar — tight === */
 #PersonalToolbar {
   background-color: var(--bg1) !important;
   border-bottom: 1px solid var(--bg2) !important;
+  padding-block: 0 !important;
+  --bookmark-block-padding: 2px !important;
+}
+#PersonalToolbar .bookmark-item {
+  padding: 1px 4px !important;
+  font-size: 11px !important;
 }
 
-/* === Remove roundness on menus/popups === */
+/* === Menus / popovers — square, flat, retro === */
 menupopup,
 panel,
 .panel-arrowcontent {
-  border-radius: 0 !important;
-}
-
-/* === Context menu === */
-menupopup {
-  background-color: var(--bg) !important;
+  --panel-background: var(--bg) !important;
+  --panel-border-color: var(--bg2) !important;
   border: 1px solid var(--bg2) !important;
 }
-menuitem:hover {
-  background-color: var(--bg2) !important;
-  color: var(--fg) !important;
+menupopup {
+  background-color: var(--bg) !important;
+}
+menuitem,
+.menuitem-iconic {
+  padding: 2px 8px !important;
+}
+menuitem:hover,
+menuitem[_moz-menuactive="true"] {
+  background-color: var(--yellow) !important;
+  color: var(--bg) !important;
+}
+
+/* === Findbar / sidebar headers — match chrome === */
+.findbar-container,
+#sidebar-header {
+  background-color: var(--bg) !important;
+  border-top: 1px solid var(--bg2) !important;
 }
