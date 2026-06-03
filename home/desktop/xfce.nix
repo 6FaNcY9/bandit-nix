@@ -22,7 +22,7 @@ _: {
       "panels/panel-1/position" = "p=6;x=0;y=0";
       "panels/panel-1/position-locked" = true;
       "panels/panel-1/length" = 100;
-      "panels/panel-1/size" = 16;
+      "panels/panel-1/size" = 26;
       "panels/panel-1/nrows" = 1;
       "panels/panel-1/background-style" = 1;
       "panels/panel-1/background-color" = "#2d2d2d";
@@ -74,19 +74,22 @@ _: {
       "plugins/plugin-3/show-only-minimized" = false;
 
       # ── Genmon — cpu/mem/net scripts ───────────────────────────
-      # Both cases needed: genmon reads lowercase 'command', home-manager sets uppercase
+      # Genmon reads lowercase keys; HM sets PascalCase — both needed for command + uselabel
       "plugins/plugin-5/Command" = "/home/vino/.local/bin/panel-cpu";
       "plugins/plugin-5/command" = "/home/vino/.local/bin/panel-cpu";
       "plugins/plugin-5/UpdatePeriod" = 2000;
       "plugins/plugin-5/UseLabel" = false;
+      "plugins/plugin-5/uselabel" = false;
       "plugins/plugin-6/Command" = "/home/vino/.local/bin/panel-mem";
       "plugins/plugin-6/command" = "/home/vino/.local/bin/panel-mem";
       "plugins/plugin-6/UpdatePeriod" = 3000;
       "plugins/plugin-6/UseLabel" = false;
+      "plugins/plugin-6/uselabel" = false;
       "plugins/plugin-7/Command" = "/home/vino/.local/bin/panel-net";
       "plugins/plugin-7/command" = "/home/vino/.local/bin/panel-net";
       "plugins/plugin-7/UpdatePeriod" = 2000;
       "plugins/plugin-7/UseLabel" = false;
+      "plugins/plugin-7/uselabel" = false;
 
       # ── Genmon — volume (click toggles mute) ───────────────────
       # Slots 9/10 previously held pulseaudio/battery plugins; force
@@ -95,6 +98,7 @@ _: {
       "plugins/plugin-9/command" = "/home/vino/.local/bin/panel-vol";
       "plugins/plugin-9/UpdatePeriod" = 1000;
       "plugins/plugin-9/UseLabel" = false;
+      "plugins/plugin-9/uselabel" = false;
       "plugins/plugin-9/Label" = "";
       "plugins/plugin-9/Title" = "";
       "plugins/plugin-9/Text" = "";
@@ -104,6 +108,7 @@ _: {
       "plugins/plugin-10/command" = "/home/vino/.local/bin/panel-bat";
       "plugins/plugin-10/UpdatePeriod" = 30000;
       "plugins/plugin-10/UseLabel" = false;
+      "plugins/plugin-10/uselabel" = false;
       "plugins/plugin-10/Label" = "";
       "plugins/plugin-10/Title" = "";
       "plugins/plugin-10/Text" = "";
@@ -114,7 +119,7 @@ _: {
 
       # ── Clock — yellow, date + time, bracketed ──────────────────
       "plugins/plugin-13/digital-format" = "[ <span color='#ffcc66'>%a %d  %H:%M</span> ]";
-      "plugins/plugin-13/digital-font" = "JetBrainsMono Nerd Font 16";
+      "plugins/plugin-13/digital-font" = "JetBrainsMono Nerd Font 14";
       "plugins/plugin-13/tooltip-format" = "%A %d %B %Y  –  week %V";
       "plugins/plugin-13/mode" = 2;
     };
@@ -174,12 +179,12 @@ _: {
     show-button-icon=true
     show-button-title=true
     background-opacity=95
-    item-icon-size=12
-    category-icon-size=12
+    item-icon-size=8
+    category-icon-size=8
     position-search-alternate=true
     recent-items-max=5
     show-recent-always=false
-    item-font=JetBrainsMono Nerd Font 12
-    category-font=JetBrainsMono Nerd Font Bold 12
+    item-font=JetBrainsMono Nerd Font 8
+    category-font=JetBrainsMono Nerd Font Bold 8
   '';
 }
