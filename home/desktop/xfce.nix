@@ -22,7 +22,7 @@ _: {
       "panels/panel-1/position" = "p=6;x=0;y=0";
       "panels/panel-1/position-locked" = true;
       "panels/panel-1/length" = 100;
-      "panels/panel-1/size" = 18;
+      "panels/panel-1/size" = 16;
       "panels/panel-1/nrows" = 1;
       "panels/panel-1/background-style" = 1;
       "panels/panel-1/background-color" = "#2d2d2d";
@@ -114,7 +114,7 @@ _: {
 
       # ── Clock — yellow, date + time, bracketed ──────────────────
       "plugins/plugin-13/digital-format" = "[ <span color='#ffcc66'>%a %d  %H:%M</span> ]";
-      "plugins/plugin-13/digital-font" = "JetBrainsMono Nerd Font 11";
+      "plugins/plugin-13/digital-font" = "JetBrainsMono Nerd Font 16";
       "plugins/plugin-13/tooltip-format" = "%A %d %B %Y  –  week %V";
       "plugins/plugin-13/mode" = 2;
     };
