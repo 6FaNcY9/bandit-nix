@@ -1,4 +1,7 @@
-{pkgs, ...}: {
+{pkgs, ...}: let
+  # GPG signing key — swap here when keys rotate
+  signingKey = "4D8770567A65FE1369E2BCC1611871842A8C1619";
+in {
   programs = {
     delta = {
       enable = true;
@@ -39,7 +42,7 @@
         };
 
         commit.gpgsign = true;
-        user.signingkey = "4D8770567A65FE1369E2BCC1611871842A8C1619";
+        user.signingkey = signingKey;
       };
     };
   };
