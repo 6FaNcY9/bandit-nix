@@ -13,7 +13,7 @@
         "browser.uidensity" = 1;
       };
 
-      userChrome = builtins.readFile ./firefox-userchrome.css;
+      userChrome = builtins.readFile ./userchrome.css;
     };
   };
 
