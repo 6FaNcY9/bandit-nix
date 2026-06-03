@@ -2,7 +2,7 @@ _: {
   programs.kitty = {
     enable = true;
 
-    # Stylix manages colors (gruvbox-dark-hard) and font (JetBrainsMono Nerd Font)
+    # Stylix manages colors (tomorrow-night-eighties) and font (JetBrainsMono Nerd Font)
     # so we only configure behavior here
 
     shellIntegration = {

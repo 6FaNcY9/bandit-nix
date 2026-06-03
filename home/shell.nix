@@ -146,7 +146,7 @@
       '';
     };
 
-    # ─── Starship — gruvbox dark prompt ───────────────────────
+    # ─── Starship — tomorrow-night-eighties prompt ────────────
     starship = {
       enable = true;
       enableFishIntegration = true;
@@ -273,7 +273,7 @@
     fzf = {
       enable = true;
       enableFishIntegration = true;
-      # Colors managed by Stylix (gruvbox-dark-hard)
+      # Colors managed by Stylix (tomorrow-night-eighties)
     };
   };
 }
