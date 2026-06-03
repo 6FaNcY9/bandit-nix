@@ -1,4 +1,8 @@
-{pkgs, inputs, ...}: {
+{
+  pkgs,
+  inputs,
+  ...
+}: {
   programs.nixvim = {
     enable = true;
     defaultEditor = true;
