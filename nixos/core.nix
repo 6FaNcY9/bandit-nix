@@ -61,17 +61,17 @@
         name = "JetBrainsMono Nerd Font";
       };
       sizes = {
-        terminal = 12;
-        applications = 11;
-        desktop = 11;
-        popups = 11;
+        terminal = 16;
+        applications = 16;
+        desktop = 16;
+        popups = 12;
       };
     };
 
     cursor = {
       package = pkgs.capitaine-cursors;
       name = "capitaine-cursors";
-      size = 24;
+      size = 26;
     };
 
     targets = {
