@@ -102,7 +102,7 @@
         vim = "nvim";
         # ── System ────────────────────────────────────────────
         reload = "exec fish";
-        path = "string split : $PATH";
+        paths = "string split : $PATH";
         ports = "ss -tulanp";
         psg = "ps aux | grep";
         cls = "clear";

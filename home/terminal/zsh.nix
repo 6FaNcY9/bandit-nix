@@ -80,7 +80,7 @@
         vim = "nvim";
         # ── System ────────────────────────────────────────────
         reload = "exec zsh";
-        path = "echo $PATH | tr ':' '\\n'";
+        paths = "echo $PATH | tr ':' '\n'";
         ports = "ss -tulanp";
         psg = "ps aux | grep";
         cls = "clear";
