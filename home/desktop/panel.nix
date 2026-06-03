@@ -71,7 +71,7 @@
           else
             PCT=0
           fi
-          echo "<txt><span color='#515151'>[</span><span color='#99cc99'> ''${PCT}%</span><span color='#515151'>]</span></txt>"
+          echo "<txt><span color='#515151'>[</span><span color='#99cc99'><span size='18432'>󰻠</span> ''${PCT}%</span><span color='#515151'>]</span></txt>"
         '';
       };
 
