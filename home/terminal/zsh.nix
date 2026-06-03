@@ -2,7 +2,9 @@
   pkgs,
   inputs,
   ...
-}: {
+}: let
+  sharedAliases = import ../aliases.nix;
+in {
   programs = {
     # ─── Zsh ──────────────────────────────────────────────────────
     zsh = {
@@ -43,59 +45,28 @@
         source ${inputs.fzf-tab-source}/fzf-tab-source.plugin.zsh
       '';
 
-      shellAliases = {
-        # ── Nix workflow ──────────────────────────────────────
-        ns = "nh os switch";
-        nt = "nh os test";
-        nfu = "nix flake update";
-        ngc = "nix-collect-garbage -d";
-        nd = "nix develop";
-        nsp = "nix shell nixpkgs#";
-        nrs = "sudo nixos-rebuild switch --flake .#bandit";
-        nrt = "sudo nixos-rebuild test --flake .#bandit";
-        nfc = "nix flake check --no-update-lock-file";
-        # ── Navigation ────────────────────────────────────────
-        ll = "eza -la --icons --git";
-        la = "eza -la --icons --git";
-        lt = "eza --tree --icons --level=2";
-        lta = "eza --tree --icons --level=3 -a";
-        cat = "bat";
-        # ── Git ───────────────────────────────────────────────
-        g = "git";
-        ga = "git add";
-        gc = "git commit";
-        gca = "git commit --amend";
-        gp = "git push";
-        gl = "git pull";
-        gs = "git status";
-        gst = "git status";
-        gd = "git diff";
-        gcm = "git commit -m";
-        gco = "git checkout";
-        gpsh = "git push";
-        glog = "git log --oneline --decorate --graph";
-        # ── Editor ────────────────────────────────────────────
-        v = "nvim";
-        vi = "nvim";
-        vim = "nvim";
-        # ── System ────────────────────────────────────────────
-        reload = "exec zsh";
-        paths = "echo $PATH | tr ':' '\n'";
-        ports = "ss -tulanp";
-        psg = "ps aux | grep";
-        cls = "clear";
-        # ── Network ───────────────────────────────────────────
-        myip = "curl -sf ifconfig.me";
-        # ── Systemd ───────────────────────────────────────────
-        jfu = "journalctl -fu";
-        jb = "journalctl -b";
-        sc = "systemctl";
-        scu = "systemctl --user";
-        # ── Safety ────────────────────────────────────────────
-        rm = "rm -i";
-        cp = "cp -i";
-        mv = "mv -i";
-      };
+      shellAliases =
+        sharedAliases
+        // {
+          # zsh-only (fish has these as abbrs in shell.nix)
+          nrs = "sudo nixos-rebuild switch --flake .#bandit";
+          nrt = "sudo nixos-rebuild test --flake .#bandit";
+          nfc = "nix flake check --no-update-lock-file";
+          gst = "git status";
+          gcm = "git commit -m";
+          gco = "git checkout";
+          gpsh = "git push";
+          jfu = "journalctl -fu";
+          jb = "journalctl -b";
+          sc = "systemctl";
+          scu = "systemctl --user";
+          rm = "rm -i";
+          cp = "cp -i";
+          mv = "mv -i";
+          # zsh-specific (different syntax from fish)
+          reload = "exec zsh";
+          paths = "echo $PATH | tr ':' '\n'";
+        };
 
       initContent = ''
         # ── Vi mode ───────────────────────────────────────────

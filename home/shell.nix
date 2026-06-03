@@ -2,7 +2,9 @@
   lib,
   pkgs,
   ...
-}: {
+}: let
+  sharedAliases = import ./aliases.nix;
+in {
   programs = {
     # ─── Fish ─────────────────────────────────────────────────
     fish = {
@@ -72,44 +74,14 @@
         mv = "mv -i";
       };
 
-      shellAliases = {
-        # ── Nix workflow ──────────────────────────────────────
-        ns = "nh os switch";
-        nt = "nh os test";
-        nfu = "nix flake update";
-        ngc = "nix-collect-garbage -d";
-        nd = "nix develop";
-        nsp = "nix shell nixpkgs#";
-        nsn = "nix search nixpkgs#";
-        # ── Navigation ────────────────────────────────────────
-        ll = "eza -la --icons --git";
-        la = "eza -la --icons --git";
-        lt = "eza --tree --icons --level=2";
-        lta = "eza --tree --icons --level=3 -a";
-        cat = "bat";
-        # ── Git ───────────────────────────────────────────────
-        g = "git";
-        ga = "git add";
-        gc = "git commit";
-        gca = "git commit --amend";
-        gp = "git push";
-        gl = "git pull";
-        gs = "git status";
-        gd = "git diff";
-        glog = "git log --oneline --decorate --graph";
-        # ── Editor ────────────────────────────────────────────
-        v = "nvim";
-        vi = "nvim";
-        vim = "nvim";
-        # ── System ────────────────────────────────────────────
-        reload = "exec fish";
-        paths = "string split : $PATH";
-        ports = "ss -tulanp";
-        psg = "ps aux | grep";
-        cls = "clear";
-        # ── Network ───────────────────────────────────────────
-        myip = "curl -sf ifconfig.me";
-      };
+      shellAliases =
+        sharedAliases
+        // {
+          nsn = "nix search nixpkgs#";
+          # Fish-specific (different syntax from zsh)
+          reload = "exec fish";
+          paths = "string split : $PATH";
+        };
 
       interactiveShellInit = ''
         # ── Vi mode ───────────────────────────────────────────
