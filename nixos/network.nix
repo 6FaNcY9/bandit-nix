@@ -5,7 +5,6 @@ _: {
       wifi.backend = "iwd";
       dns = "systemd-resolved";
     };
-    #wireless.iwd.enable = true;
     useDHCP = false; # NetworkManager handles this
     firewall = {
       enable = true;
