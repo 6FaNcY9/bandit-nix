@@ -308,7 +308,7 @@ in {
         Mod+P / Shift+P     focus parent / child
 
       RESIZE MODE  (Mod+R, then…)
-        H/J/K/L or Arrows   resize window
+        J/K/L/; or Arrows   resize window
         Return / Escape     exit resize mode
 
       WORKSPACES
@@ -349,7 +349,6 @@ in {
     copyq
     playerctl
     brightnessctl
-    pulseaudio # for pactl
     networkmanagerapplet
     autotiling
     less
