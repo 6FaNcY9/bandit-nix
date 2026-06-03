@@ -1,9 +1,10 @@
-{pkgs, ...}: {
+{pkgs, inputs, ...}: {
   programs.nixvim = {
     enable = true;
     defaultEditor = true;
     viAlias = true;
     vimAlias = true;
+    nixpkgs.source = inputs.nixpkgs;
 
     # ─── Core options ─────────────────────────────────────
     globals.mapleader = " ";
