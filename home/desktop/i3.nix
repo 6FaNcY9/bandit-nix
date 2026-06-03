@@ -188,7 +188,7 @@ in {
         inner = 6;
         outer = 0;
         smartGaps = true;
-        smartBorders = "off";
+        smartBorders = "on";
       };
 
       window = {
