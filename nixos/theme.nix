@@ -35,14 +35,14 @@
         terminal = 16;
         applications = 16;
         desktop = 16;
-        popups = 12;
+        popups = 10;
       };
     };
 
     cursor = {
       package = pkgs.capitaine-cursors;
       name = "capitaine-cursors";
-      size = 26;
+      size = 30;
     };
 
     targets = {
@@ -53,6 +53,8 @@
       # kmscon target sets removed nixpkgs options (extraConfig/fonts) — disable
       # until Stylix updates its kmscon module for the new API.
       kmscon.enable = false;
+      qt.enable = true;
+      plymouth.enable = true;
     };
   };
 }
