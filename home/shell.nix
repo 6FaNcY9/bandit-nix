@@ -248,4 +248,8 @@ in {
       # Colors managed by Stylix (tomorrow-night-eighties)
     };
   };
+
+  # Wire docker-compose as a Docker CLI plugin so `docker compose`
+  # works with podman-dockerCompat. User-level path keeps NixOS pure.
+  home.file.".docker/cli-plugins/docker-compose".source = "${pkgs.docker-compose}/bin/docker-compose";
 }

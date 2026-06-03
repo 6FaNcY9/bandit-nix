@@ -23,14 +23,9 @@
     libvirtd.enable = true;
   };
 
-  # Wire docker-compose as a Docker CLI plugin so `docker compose` works with podman-dockerCompat
-  system.activationScripts.dockerComposePlugin = {
-    text = ''
-      mkdir -p /usr/local/lib/docker/cli-plugins
-      ln -sf ${pkgs.docker-compose}/bin/docker-compose /usr/local/lib/docker/cli-plugins/docker-compose
-    '';
-    deps = [];
-  };
+  # docker-compose CLI plugin is wired user-side via home.file in
+  # home/shell.nix (~/.docker/cli-plugins/docker-compose). Docker CLI
+  # discovers user plugins there, so no /usr/local pollution needed.
 
   environment.systemPackages = with pkgs; [
     docker-compose
