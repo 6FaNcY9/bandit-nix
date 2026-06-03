@@ -20,11 +20,7 @@
 
       windowManager.i3 = {
         enable = true;
-        extraPackages = with pkgs; [
-          i3status
-          i3lock
-          dmenu
-        ];
+        extraPackages = [];
       };
     };
 
@@ -59,8 +55,6 @@
     # Panel plugins — must be system packages so xfce4-panel finds the .so files
     xfce4-whiskermenu-plugin
     xfce4-genmon-plugin
-    xfce4-pulseaudio-plugin
-    xfce4-battery-plugin
   ];
 
   # Polkit for privilege escalation in GUI apps (e.g. software updater)
