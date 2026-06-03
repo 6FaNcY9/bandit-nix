@@ -84,15 +84,33 @@ _: {
         inset -1px -1px 0 #515151;
       background-color: #393939;
     }
-    /* Tasklist — active window sunken + accent, inactive raised */
-    .xfce4-panel .tasklist-button {
+    /* Tasklist — active window sunken + accent, inactive raised.
+       XFCE uses wnck-tasklist; older themes target .tasklist-button,
+       but current widgets are bare <button> children of wnck-tasklist. */
+    .xfce4-panel .tasklist-button,
+    .xfce4-panel wnck-tasklist button,
+    .xfce4-panel .tasklist button {
       border-radius: 0;
       min-width: 80px;
+      padding: 0 6px;
+      background-image: none;
+      background-color: #2d2d2d;
       box-shadow:
         inset -1px -1px 0 #1a1a1a,
         inset  1px  1px 0 #515151;
     }
-    .xfce4-panel .tasklist-button:checked {
+    .xfce4-panel .tasklist-button:hover,
+    .xfce4-panel wnck-tasklist button:hover,
+    .xfce4-panel .tasklist button:hover {
+      background-color: #393939;
+    }
+    .xfce4-panel .tasklist-button:checked,
+    .xfce4-panel .tasklist-button:active,
+    .xfce4-panel wnck-tasklist button:checked,
+    .xfce4-panel wnck-tasklist button:active,
+    .xfce4-panel .tasklist button:checked,
+    .xfce4-panel .tasklist button:active {
+      background-image: none;
       background-color: #393939;
       color: #ffcc66;
       box-shadow:
