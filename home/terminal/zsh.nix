@@ -138,8 +138,8 @@
         export MANPAGER="sh -c 'col -bx | bat -l man -p'"
         export MANROFFOPT="-c"
 
-        # ── Greeting ──────────────────────────────────────────
-        if [[ $- == *i* ]]; then
+        # ── Greeting — top-level shell only, not nested/exec zsh ─
+        if [[ $- == *i* && $SHLVL -eq 1 ]]; then
           nixver=$(nixos-version 2>/dev/null | cut -d' ' -f1)
           kern=$(uname -r)
           print ""
