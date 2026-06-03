@@ -40,7 +40,7 @@
         autoload -U compinit && compinit -i
         source ${pkgs.zsh-fzf-tab}/share/fzf-tab/fzf-tab.plugin.zsh
         # fzf-tab-source: extra completions (git, systemd, cargo, pip, etc.)
-        source ${inputs.fzf-tab-source}/source.plugin.zsh
+        source ${inputs.fzf-tab-source}/fzf-tab-source.plugin.zsh
       '';
 
       shellAliases = {
