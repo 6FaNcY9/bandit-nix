@@ -9,6 +9,10 @@ _: {
     firefox.enable = true;
     rofi.enable = false;
     dunst.enable = false;
+    bat.enable = true;
+    fzf.enable = true;
+    starship.enable = true;
+    btop.enable = true;
   };
 
   # Retro dark aesthetic — square corners, beveled chrome, classic 90s feel
