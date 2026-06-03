@@ -65,7 +65,7 @@
 }
 .tab-label {
   color: var(--fg2) !important;
-  font-size: 11px !important;
+  font-size: 14px !important;
 }
 .tabbrowser-tab[selected] .tab-label {
   color: var(--fg) !important;
@@ -124,7 +124,7 @@
 }
 #urlbar-input {
   color: var(--fg) !important;
-  font-size: 12px !important;
+  font-size: 14px !important;
 }
 
 /* === Bookmarks bar — tight === */
@@ -136,7 +136,7 @@
 }
 #PersonalToolbar .bookmark-item {
   padding: 1px 4px !important;
-  font-size: 11px !important;
+  font-size: 14px !important;
 }
 
 /* === Menus / popovers — square, flat, retro === */
