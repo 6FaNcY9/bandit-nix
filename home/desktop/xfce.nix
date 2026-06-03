@@ -153,15 +153,6 @@ _: {
       "/general/use_compositing" = false;
     };
 
-    # ── Notification daemon appearance ────────────────────────────
-    # Note: xfce4-notifyd is disabled via autostart override below.
-    # dunst handles notifications instead.
-    "xfce4-notifyd" = {
-      "notify-location" = 1; # top-right
-      "expire-timeout" = 8000;
-      "initial-opacity" = 0.95;
-      "do-fadeout" = true;
-    };
   };
 
   # Prevent xfce4-notifyd from starting so dunst can own org.freedesktop.Notifications
