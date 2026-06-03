@@ -249,6 +249,20 @@
     eza.enable = true;
     bat.enable = true;
 
+    fish.functions.cb = {
+      description = "Copy file contents to clipboard (or stdin if no arg)";
+      body = ''
+        if test (count $argv) -eq 0
+          xclip -selection clipboard
+        else if test -f $argv[1]
+          xclip -selection clipboard < $argv[1]
+        else
+          echo "cb: '$argv[1]' is not a file" >&2
+          return 1
+        end
+      '';
+    };
+
     zoxide = {
       enable = true;
       enableFishIntegration = true;
