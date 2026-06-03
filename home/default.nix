@@ -2,7 +2,6 @@
   imports = [
     inputs.nixvim.homeModules.nixvim
     ./shell.nix
-    ./shell-zsh.nix
     ./ssh.nix
     ./git.nix
     ./theme.nix
@@ -15,7 +14,7 @@
     ./desktop/panel.nix
     ./desktop/powermenu.nix
     ./editor.nix
-    ./terminal.nix
+    ./terminal
     ./node.nix
   ];
 
