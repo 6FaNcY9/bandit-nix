@@ -97,7 +97,7 @@
         mv = "mv -i";
       };
 
-      initExtra = ''
+      initContent = ''
         # ── Vi mode ───────────────────────────────────────────
         bindkey -v
         export KEYTIMEOUT=1
