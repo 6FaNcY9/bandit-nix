@@ -23,8 +23,4 @@ _: {
     };
   };
 
-  # Framework 13 AMD speaker fix
-  boot.extraModprobeConfig = ''
-    options snd-hda-intel model=auto
-  '';
 }
