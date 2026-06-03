@@ -22,7 +22,7 @@ _: {
       "panels/panel-1/position" = "p=6;x=0;y=0";
       "panels/panel-1/position-locked" = true;
       "panels/panel-1/length" = 100;
-      "panels/panel-1/size" = 26;
+      "panels/panel-1/size" = 18;
       "panels/panel-1/nrows" = 1;
       "panels/panel-1/background-style" = 1;
       "panels/panel-1/background-color" = "#2d2d2d";
@@ -174,12 +174,12 @@ _: {
     show-button-icon=true
     show-button-title=true
     background-opacity=95
-    item-icon-size=8
-    category-icon-size=8
+    item-icon-size=12
+    category-icon-size=12
     position-search-alternate=true
     recent-items-max=5
     show-recent-always=false
-    item-font=JetBrainsMono Nerd Font
-    category-font=JetBrainsMono Nerd Font Bold
+    item-font=JetBrainsMono Nerd Font 12
+    category-font=JetBrainsMono Nerd Font Bold 12
   '';
 }
