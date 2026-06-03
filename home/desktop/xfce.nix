@@ -89,16 +89,24 @@ _: {
       "plugins/plugin-7/UseLabel" = false;
 
       # ── Genmon — volume (click toggles mute) ───────────────────
+      # Slots 9/10 previously held pulseaudio/battery plugins; force
+      # Label/Title/Text empty so stale rc values can't surface a label.
       "plugins/plugin-9/Command" = "/home/vino/.local/bin/panel-vol";
       "plugins/plugin-9/command" = "/home/vino/.local/bin/panel-vol";
       "plugins/plugin-9/UpdatePeriod" = 1000;
       "plugins/plugin-9/UseLabel" = false;
+      "plugins/plugin-9/Label" = "";
+      "plugins/plugin-9/Title" = "";
+      "plugins/plugin-9/Text" = "";
 
       # ── Genmon — battery (color-coded level + status icon) ──────
       "plugins/plugin-10/Command" = "/home/vino/.local/bin/panel-bat";
       "plugins/plugin-10/command" = "/home/vino/.local/bin/panel-bat";
       "plugins/plugin-10/UpdatePeriod" = 30000;
       "plugins/plugin-10/UseLabel" = false;
+      "plugins/plugin-10/Label" = "";
+      "plugins/plugin-10/Title" = "";
+      "plugins/plugin-10/Text" = "";
 
       # ── Pager — workspace minimap ───────────────────────────────
       "plugins/plugin-11/rows" = 1;
