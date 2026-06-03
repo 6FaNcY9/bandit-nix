@@ -122,7 +122,6 @@
         # ── Zsh options ───────────────────────────────────────
         setopt AUTO_CD
         setopt GLOB_DOTS
-        setopt EXTENDED_GLOB
         setopt NO_BEEP
         setopt INTERACTIVE_COMMENTS
 
