@@ -59,7 +59,6 @@
 
         # ── History / timing ────────────────────────────────────
         sort = true;
-        idle_threshold = 120;
 
         # ── Actions ─────────────────────────────────────────────
         dmenu = "${pkgs.rofi}/bin/rofi -dmenu -p dunst";
