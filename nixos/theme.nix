@@ -32,9 +32,9 @@
         name = "JetBrainsMono Nerd Font";
       };
       sizes = {
-        terminal = 16;
-        applications = 16;
-        desktop = 16;
+        terminal = 12;
+        applications = 14;
+        desktop = 12;
         popups = 10;
       };
     };

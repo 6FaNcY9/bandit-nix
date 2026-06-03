@@ -70,6 +70,10 @@ _: {
 
     tooltip { border-radius: 0; }
 
+    /* XFCE Panel — uniform font size for all widgets */
+    .xfce4-panel,
+    .xfce4-panel * { font-size: 14pt; }
+
     /* XFCE Panel — bevel chrome on all plugin buttons */
     .xfce4-panel button,
     .xfce4-panel .panel-button {
