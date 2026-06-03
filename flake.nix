@@ -25,6 +25,11 @@
     };
 
     nixos-hardware.url = "github:NixOS/nixos-hardware";
+
+    fzf-tab-source = {
+      url = "github:Freed-Wu/fzf-tab-source";
+      flake = false;
+    };
   };
 
   outputs = {

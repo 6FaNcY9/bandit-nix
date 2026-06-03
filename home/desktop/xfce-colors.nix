@@ -14,8 +14,8 @@ _: {
     };
 
     # ── Panel ─────────────────────────────────────────────────────
-    # Layout (12 plugins):
-    # [❄] │ [tasklist───expand───] │ [cpu][mem][net] │ [vol][bat][tray] │ [clock]
+    # Layout (15 plugins):
+    # [❄] │ [tasklist──expand──] │ [cpu][mem][net] │ [vol][bat] │ [systray] │ [clock] [pager]
     "xfce4-panel" = {
       "panels" = [1];
 
@@ -29,9 +29,8 @@ _: {
       "panels/panel-1/enter-opacity" = 100;
       "panels/panel-1/leave-opacity" = 100;
 
-      # Layout (14 plugins):
-      # [❄] │ [tasklist w/ labels ──expand──] │ [cpu][mem][net] │ [vol][bat] │ [pager] │ [clock] │ [tray]
-      "panels/panel-1/plugin-ids" = [1 2 3 4 5 6 7 8 9 10 11 12 13 14];
+      # [❄(1)] |(2) [tasklist(3)──expand(4)──] [cpu(5)][mem(6)][net(7)] |(8) [vol(9)][bat(10)] |(12) [systray(14)] |(15) [clock(13)] [pager(11)]
+      "panels/panel-1/plugin-ids" = [1 2 3 4 5 6 7 8 9 10 12 14 15 13 11];
 
       # ── Plugin type registration ────────────────────────────────
       "plugins/plugin-1" = "whiskermenu";
@@ -42,12 +41,13 @@ _: {
       "plugins/plugin-6" = "genmon";
       "plugins/plugin-7" = "genmon";
       "plugins/plugin-8" = "separator";
-      "plugins/plugin-9" = "pulseaudio";
-      "plugins/plugin-10" = "battery";
+      "plugins/plugin-9" = "genmon"; # volume (was pulseaudio)
+      "plugins/plugin-10" = "genmon"; # battery (was battery plugin)
       "plugins/plugin-11" = "pager";
       "plugins/plugin-12" = "separator";
       "plugins/plugin-13" = "clock";
       "plugins/plugin-14" = "systray";
+      "plugins/plugin-15" = "separator";
 
       # ── Whiskermenu — icon-only ❄ button ───────────────────────
       "plugins/plugin-1/show-button-title" = true;
@@ -57,15 +57,19 @@ _: {
       # ── Separators ─────────────────────────────────────────────
       "plugins/plugin-2/style" = 1; # handle line
       "plugins/plugin-2/expand" = false;
-      "plugins/plugin-4/style" = 0; # transparent
-      "plugins/plugin-4/expand" = true; # pushes right group
-      "plugins/plugin-8/style" = 1; # handle line
+      "plugins/plugin-4/style" = 0; # transparent expand — pushes right group to edge
+      "plugins/plugin-4/expand" = true;
+      "plugins/plugin-8/style" = 1; # handle line before monitors
+      "plugins/plugin-12/style" = 1; # handle line before systray
+      "plugins/plugin-12/expand" = false;
+      "plugins/plugin-15/style" = 1; # handle line before clock
+      "plugins/plugin-15/expand" = false;
 
-      # ── Tasklist — labeled grouped flat buttons ─────────────────
+      # ── Tasklist — labeled grouped 3D buttons ───────────────────
       "plugins/plugin-3/grouping" = 1;
       "plugins/plugin-3/show-labels" = true;
       "plugins/plugin-3/include-all-workspaces" = false;
-      "plugins/plugin-3/flat-buttons" = true;
+      "plugins/plugin-3/flat-buttons" = false; # 3D raised style
       "plugins/plugin-3/show-handle" = false;
       "plugins/plugin-3/show-only-minimized" = false;
 
@@ -84,19 +88,21 @@ _: {
       "plugins/plugin-7/UpdatePeriod" = 2000;
       "plugins/plugin-7/UseLabel" = false;
 
-      # ── Battery — icon + percentage only ───────────────────────
-      "plugins/plugin-10/show-percentage" = true;
-      "plugins/plugin-10/show-time" = false;
-      "plugins/plugin-10/show-icon" = true;
-      "plugins/plugin-10/show-label" = false;
+      # ── Genmon — volume (click toggles mute) ───────────────────
+      "plugins/plugin-9/Command" = "/home/vino/.local/bin/panel-vol";
+      "plugins/plugin-9/command" = "/home/vino/.local/bin/panel-vol";
+      "plugins/plugin-9/UpdatePeriod" = 1000;
+      "plugins/plugin-9/UseLabel" = false;
+
+      # ── Genmon — battery (color-coded level + status icon) ──────
+      "plugins/plugin-10/Command" = "/home/vino/.local/bin/panel-bat";
+      "plugins/plugin-10/command" = "/home/vino/.local/bin/panel-bat";
+      "plugins/plugin-10/UpdatePeriod" = 30000;
+      "plugins/plugin-10/UseLabel" = false;
 
       # ── Pager — workspace minimap ───────────────────────────────
       "plugins/plugin-11/rows" = 1;
       "plugins/plugin-11/miniature-view" = true;
-
-      # ── Separator before clock — thin line ──────────────────────
-      "plugins/plugin-12/style" = 1;
-      "plugins/plugin-12/expand" = false;
 
       # ── Clock — yellow, date + time, bracketed ──────────────────
       "plugins/plugin-13/digital-format" = "[ <span color='#ffcc66'>%a %d  %H:%M</span> ]";
@@ -160,10 +166,12 @@ _: {
     show-button-icon=true
     show-button-title=true
     background-opacity=95
-    item-icon-size=16
-    category-icon-size=16
+    item-icon-size=8
+    category-icon-size=8
     position-search-alternate=true
     recent-items-max=5
     show-recent-always=false
+    item-font=JetBrainsMono Nerd Font
+    category-font=JetBrainsMono Nerd Font Bold
   '';
 }

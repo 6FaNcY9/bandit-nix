@@ -149,6 +149,7 @@
     starship = {
       enable = true;
       enableFishIntegration = true;
+      enableZshIntegration = true;
       settings = {
         palette = lib.mkForce "tomorrow_night_eighties";
 

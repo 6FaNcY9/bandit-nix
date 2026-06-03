@@ -142,6 +142,22 @@
         "type": "github"
       }
     },
+    "fzf-tab-source": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1768398004,
+        "narHash": "sha256-ar025RTlDFWEnE9Ql8WBz4tiBmz1B2tsZiRI2/mVCDI=",
+        "owner": "Freed-Wu",
+        "repo": "fzf-tab-source",
+        "rev": "5463698036f5e23ef275b4b55c42551879ebfab4",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Freed-Wu",
+        "repo": "fzf-tab-source",
+        "type": "github"
+      }
+    },
     "gnome-shell": {
       "flake": false,
       "locked": {
@@ -276,6 +292,7 @@
     },
     "root": {
       "inputs": {
+        "fzf-tab-source": "fzf-tab-source",
         "home-manager": "home-manager",
         "nixos-hardware": "nixos-hardware",
         "nixpkgs": "nixpkgs_2",

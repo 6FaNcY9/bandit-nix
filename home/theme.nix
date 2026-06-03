@@ -66,6 +66,40 @@ _: {
 
     tooltip { border-radius: 0; }
 
+    /* XFCE Panel — bevel chrome on all plugin buttons */
+    .xfce4-panel button,
+    .xfce4-panel .panel-button {
+      border-radius: 0;
+      padding: 0 3px;
+      box-shadow:
+        inset -1px -1px 0 #1a1a1a,
+        inset  1px  1px 0 #515151;
+    }
+    .xfce4-panel button:active,
+    .xfce4-panel button:checked,
+    .xfce4-panel .panel-button:active,
+    .xfce4-panel .panel-button:checked {
+      box-shadow:
+        inset  1px  1px 0 #1a1a1a,
+        inset -1px -1px 0 #515151;
+      background-color: #393939;
+    }
+    /* Tasklist — active window sunken + accent, inactive raised */
+    .xfce4-panel .tasklist-button {
+      border-radius: 0;
+      min-width: 80px;
+      box-shadow:
+        inset -1px -1px 0 #1a1a1a,
+        inset  1px  1px 0 #515151;
+    }
+    .xfce4-panel .tasklist-button:checked {
+      background-color: #393939;
+      color: #ffcc66;
+      box-shadow:
+        inset  1px  1px 0 #1a1a1a,
+        inset -1px -1px 0 #515151;
+    }
+
     notebook > header tabs tab { border-radius: 0; }
     treeview.view { border-radius: 0; }
 
