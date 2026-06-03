@@ -2,6 +2,7 @@ _: {
   imports = [
     ./sops.nix
     ./core.nix
+    ./theme.nix
     ./boot.nix
     ./network.nix
     ./graphics.nix
