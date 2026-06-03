@@ -80,6 +80,7 @@
         ngc = "nix-collect-garbage -d";
         nd = "nix develop";
         nsp = "nix shell nixpkgs#";
+        nsn = "nix search nixpkgs#";
         # ── Navigation ────────────────────────────────────────
         ll = "eza -la --icons --git";
         la = "eza -la --icons --git";
