@@ -9,8 +9,8 @@
     ./desktop/i3.nix
     ./desktop/dunst.nix
     ./desktop/rofi.nix
-    ./desktop/firefox.nix
-    ./desktop/xfce-colors.nix
+    ./desktop/firefox
+    ./desktop/xfce.nix
     ./desktop/panel.nix
     ./desktop/powermenu.nix
     ./editor.nix
