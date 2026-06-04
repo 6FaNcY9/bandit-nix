@@ -126,6 +126,20 @@ _: {
         inset -1px -1px 0 #515151;
     }
 
+    /* Genmon monitor chips (cpu/mem/net/vol/bat) — raised bevel chip.
+       Genmon renders as eventbox+label, not a button, so we target
+       eventbox directly. Systray also uses eventbox — excluded via
+       na-tray-child selector where supported; visually harmless otherwise. */
+    .xfce4-panel eventbox {
+      border-radius: 0;
+      background-color: #393939;
+      margin: 2px 1px;
+      padding: 0 2px;
+      box-shadow:
+        inset -1px -1px 0 #1a1a1a,
+        inset  1px  1px 0 #515151;
+    }
+
     notebook > header tabs tab { border-radius: 0; }
     treeview.view { border-radius: 0; }
 
