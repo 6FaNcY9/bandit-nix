@@ -152,7 +152,6 @@ _: {
     "xfwm4" = {
       "/general/use_compositing" = false;
     };
-
   };
 
   # Prevent xfce4-notifyd from starting so dunst can own org.freedesktop.Notifications
