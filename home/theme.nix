@@ -144,10 +144,6 @@ _: {
     scrollbar.vertical   slider { min-width: 14px; }
   '';
 
-  # Explicitly opt into the new HM default (no GTK4 theme override).
-  # Required because stateVersion < 26.05 would otherwise apply the GTK3 theme.
-  gtk.gtk4.theme = null;
-
   gtk.gtk3.extraConfig = {
     gtk-enable-animations = false;
     gtk-button-images = true;
