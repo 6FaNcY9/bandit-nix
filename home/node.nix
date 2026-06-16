@@ -1,9 +1,10 @@
-{pkgs, ...}: {
+{config, pkgs, ...}: {
   programs.npm = {
     enable = true;
     package = pkgs.nodejs;
     settings = {
-      prefix = "$HOME/.npm-global";
+      prefix = "${config.xdg.dataHome}/npm-global";
+      cache = "${config.xdg.cacheHome}/npm";
     };
   };
 
@@ -14,5 +15,5 @@
   ];
 
   # Make npm-global bins (e.g. from npm install -g) available in PATH
-  home.sessionPath = ["$HOME/.npm-global/bin"];
+  home.sessionPath = ["${config.xdg.dataHome}/npm-global/bin"];
 }

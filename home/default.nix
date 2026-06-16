@@ -1,6 +1,7 @@
 {inputs, ...}: {
   imports = [
     inputs.nixvim.homeModules.nixvim
+    ./xdg-cleanup.nix
     ./shell.nix
     ./ssh.nix
     ./git.nix
