@@ -1,4 +1,5 @@
 {
+  config,
   pkgs,
   inputs,
   ...
@@ -9,6 +10,7 @@ in {
     # ─── Zsh ──────────────────────────────────────────────────────
     zsh = {
       enable = true;
+      dotDir = "${config.xdg.configHome}/zsh";
       autosuggestion.enable = true;
       syntaxHighlighting.enable = true;
       enableCompletion = true;
@@ -22,6 +24,7 @@ in {
       history = {
         size = 100000;
         save = 100000;
+        path = "${config.xdg.stateHome}/zsh/history";
         ignoreDups = true;
         share = true;
         extended = true;
@@ -35,11 +38,24 @@ in {
           src = pkgs.zsh-autopair;
           file = "share/zsh/zsh-autopair/autopair.zsh";
         }
+        # Remind when a defined alias exists for a typed command
+        {
+          name = "you-should-use";
+          src = pkgs.zsh-you-should-use;
+          file = "share/zsh/plugins/you-should-use/you-should-use.plugin.zsh";
+        }
+        # Keep zsh config inside nix-shell / nix develop
+        {
+          name = "nix-shell";
+          src = pkgs.zsh-nix-shell;
+          file = "share/zsh/plugins/zsh-nix-shell/nix-shell.plugin.zsh";
+        }
       ];
 
       # fzf-tab must be loaded after compinit — hook into completionInit
       completionInit = ''
-        autoload -U compinit && compinit -i
+        mkdir -p ${config.xdg.cacheHome}/zsh
+        autoload -U compinit && compinit -i -d ${config.xdg.cacheHome}/zsh/zcompdump
         source ${pkgs.zsh-fzf-tab}/share/fzf-tab/fzf-tab.plugin.zsh
         # fzf-tab-source: extra completions (git, systemd, cargo, pip, etc.)
         source ${inputs.fzf-tab-source}/fzf-tab-source.plugin.zsh
@@ -69,23 +85,13 @@ in {
         };
 
       initContent = ''
-        # ── Vi mode ───────────────────────────────────────────
-        bindkey -v
-        export KEYTIMEOUT=1
+        # ── Extra completions (~150 tools) ───────────────────
+        fpath+=(${pkgs.zsh-completions}/share/zsh/site-functions)
 
-        # Cursor shape: block in normal, beam in insert
-        _zle_cursor_vicmd()  { print -n '\e[2 q' }
-        _zle_cursor_viins()  { print -n '\e[5 q' }
-        _zle_keymap_select() { [[ $KEYMAP == vicmd ]] && _zle_cursor_vicmd || _zle_cursor_viins }
-        zle -N zle-keymap-select _zle_keymap_select
-        zle -N zle-line-init     _zle_cursor_viins
-        print -n '\e[5 q'
-
-        # Restore useful bindings in vi insert mode
-        bindkey '^a' beginning-of-line
-        bindkey '^e' end-of-line
-        bindkey '^w' backward-kill-word
-        bindkey '^k' kill-line
+        # ── Emacs mode ────────────────────────────────────────
+        bindkey -e
+        bindkey '^[[1;5D' backward-word   # Ctrl+Left
+        bindkey '^[[1;5C' forward-word    # Ctrl+Right
         # fzf history widget (ctrl-r) — source only key-bindings, not completion
         # (completion is handled by fzf-tab loaded in completionInit above)
         [[ -f ${pkgs.fzf}/share/fzf/key-bindings.zsh ]] && source ${pkgs.fzf}/share/fzf/key-bindings.zsh
@@ -97,11 +103,27 @@ in {
         setopt INTERACTIVE_COMMENTS
 
         # ── fzf-tab tweaks ────────────────────────────────────
+        # Disable built-in menu so fzf-tab owns completion display entirely
+        zstyle ':completion:*' menu no
+        # Named groups — required for fzf-tab-source $group-based preview branches
+        # (git-checkout, journalctl, ps, ip, etc. all switch on $group)
+        zstyle ':completion:*' group-name ""
+        # Coloured entries in completion lists
+        zstyle ':completion:*' list-colors ''${(s.:.)LS_COLORS}
+
+        # cd / zoxide: eza directory preview (fzf-tab-source has no cd source)
         zstyle ':fzf-tab:complete:cd:*' fzf-preview \
           'eza -1 --icons --color=always $realpath 2>/dev/null'
-        zstyle ':fzf-tab:complete:*:*' fzf-preview \
-          'bat --color=always --style=numbers $realpath 2>/dev/null || ls -la $realpath 2>/dev/null'
-        zstyle ':fzf-tab:*' fzf-flags --height=50% --border=sharp
+        zstyle ':fzf-tab:complete:__zoxide_z:*' fzf-preview \
+          'eza -1 --icons --color=always $realpath 2>/dev/null || ls -la $realpath 2>/dev/null'
+        # NOTE: no ':fzf-tab:complete:*:*' here — fzf-tab-source's --complete.zsh
+        # registers ':fzf-tab:complete:*' as the catch-all using the smarter
+        # `less ''${realpath#-*=}`. A *:* override would silently win over it.
+
+        # lesspipe: lets `less` open archives, images, etc. in fzf previews
+        export LESSOPEN="|${pkgs.lesspipe}/bin/lesspipe.sh %s"
+
+        zstyle ':fzf-tab:*' fzf-flags --height=50% --border=sharp --ansi
         zstyle ':fzf-tab:*' switch-group ',' '.'
 
         # ── Colored man pages via bat ─────────────────────────
