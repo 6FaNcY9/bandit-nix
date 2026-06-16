@@ -84,9 +84,13 @@
         case "$CHOICE" in
           *"Enable Tor routing"*)
             systemctl start tor-routing-enable.service
+            # Wait for Tor circuits then refresh IP — panel shows exit node IP
+            (sleep 5 && systemctl --user start public-ip-refresh.service) &
             ;;
           *"Disable Tor routing"*)
             systemctl stop tor-routing-enable.service
+            # Refresh immediately — panel shows real IP again
+            systemctl --user start public-ip-refresh.service
             ;;
           *"Check Tor IP"*)
             ${pkgs.xdg-utils}/bin/xdg-open "https://check.torproject.org" &
