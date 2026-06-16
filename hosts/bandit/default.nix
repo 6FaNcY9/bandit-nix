@@ -1,6 +1,7 @@
 {lib, ...}: {
   imports = [
     ./hardware.nix
+    ../../nixos/tor.nix
   ];
 
   networking.hostName = "bandit";

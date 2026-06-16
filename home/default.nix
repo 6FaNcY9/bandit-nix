@@ -8,6 +8,7 @@
     ./theme.nix
     ./qt.nix
     ./desktop/i3.nix
+    ./desktop/netmenu.nix
     ./desktop/dunst.nix
     ./desktop/rofi.nix
     ./desktop/firefox
