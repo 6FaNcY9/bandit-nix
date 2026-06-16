@@ -18,6 +18,15 @@
   lt = "eza --tree --icons --level=2";
   lta = "eza --tree --icons --level=3 -a";
   cat = "bat";
+  home = "cd ~";
+  csrc = "cd ~/src";
+  cnix = "cd ~/src/bandit-nix";
+  cconf = "cd ~/.config";
+  cproj = "cd ~/Projects";
+  cdocs = "cd ~/Documents";
+  cdl = "cd ~/Downloads";
+  cvms = "cd ~/vms";
+  cpic = "cd ~/Pictures";
 
   # ── Git ───────────────────────────────────────────────
   g = "git";
