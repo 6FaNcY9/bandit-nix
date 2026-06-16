@@ -29,8 +29,8 @@
         executable = true;
         text = ''
           #!/usr/bin/env bash
-          IPV4=$(cat "$XDG_RUNTIME_DIR/public-ip-cache" 2>/dev/null || echo "?.?.?.?")
-          IPV4_DISPLAY=''${IPV4%.*}.x
+          IPV4=$(tr -d '[:space:]' < "$XDG_RUNTIME_DIR/public-ip-cache" 2>/dev/null || true)
+          IPV4_DISPLAY=''${IPV4:-?.?.?.?}
 
           IFACE=$(ip route show default 2>/dev/null | awk '/default/ {print $5; exit}')
           if [[ -z "$IFACE" ]]; then
