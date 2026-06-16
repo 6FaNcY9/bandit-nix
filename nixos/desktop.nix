@@ -58,8 +58,17 @@
   ];
 
   # Polkit for privilege escalation in GUI apps (e.g. software updater)
-  security.polkit.enable = true;
-
+  security.polkit = {
+    enable = true;
+    extraConfig = ''
+      polkit.addRule(function(action, subject) {
+        if (action.id == "org.libvirt.unix.manage" &&
+            subject.isInGroup("libvirtd")) {
+          return polkit.Result.YES;
+        }
+      });
+    '';
+  };
   # Needed for XFCE settings daemon and GTK apps
   programs.dconf.enable = true;
   hardware.acpilight.enable = true;

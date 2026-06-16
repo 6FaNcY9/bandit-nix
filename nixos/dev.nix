@@ -20,7 +20,18 @@
       dockerCompat = true; # use rootless podman directly; system socket is a container-escape vector
       autoPrune.enable = true; # Clean up dangling images/containers
     };
-    libvirtd.enable = true;
+    libvirtd = {
+      enable = true;
+      qemu = {
+        package = pkgs.qemu_kvm;
+        swtpm.enable = true;
+        vhostUserPackages = [pkgs.virtiofsd];
+        verbatimConfig = ''
+          memory_backing_dir = "/dev/shm"
+        '';
+      };
+    };
+    spiceUSBRedirection.enable = true;
   };
 
   # docker-compose CLI plugin is wired user-side via home.file in
@@ -55,5 +66,9 @@
     comma
     lazygit
     sops
+    grc       # fzf-tab-source: colorized ip/network output in previews
+    lesspipe  # fzf-tab-source: lets `less` preview archives/images/etc
+    virtio-win  # Windows virtio drivers ISO (mount in VM during install)
+    win-spice   # SPICE guest tools installer for Windows
   ];
 }
