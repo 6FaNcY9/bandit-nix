@@ -4,7 +4,7 @@
     Unit.Description = "Refresh public IP cache";
     Service = {
       Type = "oneshot";
-      ExecStart = "${pkgs.curl}/bin/curl -sf4 --max-time 8 https://ifconfig.me --output %t/public-ip-cache";
+      ExecStart = "${pkgs.curl}/bin/curl -sf4 --max-time 8 https://icanhazip.com --output %t/public-ip-cache";
     };
   };
 
