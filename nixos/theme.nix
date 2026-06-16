@@ -32,16 +32,16 @@
         name = "JetBrainsMono Nerd Font";
       };
       sizes = {
-        terminal = 12;
+        terminal = 14;
         applications = 14;
-        desktop = 12;
-        popups = 10;
+        desktop = 14;
+        popups = 11;
       };
     };
 
     cursor = {
-      package = pkgs.capitaine-cursors;
-      name = "capitaine-cursors";
+      package = pkgs.openzone-cursors;
+      name = "OpenZone_Black_Slim";
       size = 30;
     };
 
