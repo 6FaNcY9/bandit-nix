@@ -1,8 +1,16 @@
 {pkgs, ...}: let
-  # GPG signing key — swap here when keys rotate
   signingKey = "4D8770567A65FE1369E2BCC1611871842A8C1619";
 in {
   programs = {
+    gh = {
+      enable = true;
+      gitCredentialHelper.enable = true;
+      settings = {
+        git_protocol = "ssh";
+        prompt = "enabled";
+      };
+    };
+
     delta = {
       enable = true;
       enableGitIntegration = true;
@@ -35,7 +43,6 @@ in {
         push.autoSetupRemote = true;
         merge.conflictstyle = "diff3";
         rerere.enabled = true;
-
         core = {
           autocrlf = "input";
           editor = "nvim";
