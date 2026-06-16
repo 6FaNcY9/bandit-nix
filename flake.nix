@@ -39,7 +39,16 @@
     stylix,
     nixos-hardware,
     ...
-  } @ inputs: {
+  } @ inputs:
+  let
+    hmBase = {
+      useGlobalPkgs = true;
+      useUserPackages = true;
+      backupFileExtension = "hm-backup";
+      extraSpecialArgs = {inherit inputs;};
+      users.vino = import ./home;
+    };
+  in {
     nixosConfigurations.bandit = nixpkgs.lib.nixosSystem {
       specialArgs = {inherit inputs;};
       modules = [
@@ -50,15 +59,18 @@
         ./hosts/bandit
         ./nixos
         home-manager.nixosModules.home-manager
-        {
-          home-manager = {
-            useGlobalPkgs = true;
-            useUserPackages = true;
-            backupFileExtension = "hm-backup";
-            extraSpecialArgs = {inherit inputs;};
-            users.vino = import ./home;
-          };
-        }
+        {home-manager = hmBase;}
+      ];
+    };
+
+    nixosConfigurations.bandit-lab = nixpkgs.lib.nixosSystem {
+      specialArgs = {inherit inputs;};
+      modules = [
+        sops-nix.nixosModules.sops
+        ./hosts/bandit-lab
+        ./nixos/server.nix
+        home-manager.nixosModules.home-manager
+        {home-manager = hmBase;}
       ];
     };
   };
