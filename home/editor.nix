@@ -39,7 +39,7 @@
     # ─── Clipboard Manager ──────────────────────────────────────────
     clipboard = {
       register = "unnamedplus";
-      provider.xclip.enable = true;
+      providers.xclip.enable = true;
     };
 
     # ─── Plugins ──────────────────────────────────────────
@@ -47,19 +47,19 @@
       # Treesitter — syntax highlighting and structure
       treesitter = {
         enable = true;
-        ensureInstalled = [
-          "markdown"
-          "markdown_inline"
-          "lua"
-          "vim"
-          "bash"
-          "python"
-          "json"
-          "yaml"
-          "rust"
-          "nix"
-        ];
         settings = {
+          ensure_installed = [
+            "markdown"
+            "markdown_inline"
+            "lua"
+            "vim"
+            "bash"
+            "python"
+            "json"
+            "yaml"
+            "rust"
+            "nix"
+          ];
           incrementalSelection.enable = true;
           highlight.enable = true;
           indent.enable = true;
