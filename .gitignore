@@ -1,7 +1,17 @@
 .sisyphus/
 .superpowers/
+.serena/
 CLAUDE.md
 themes/
 GEMINI.md
 .vscode/
 docs/superpowers/
+
+# Local machine-maintenance helpers. These are intentionally not tracked because
+# they may contain host-specific paths, experiments, or one-off cleanup logic.
+/script/
+docs/codebase-review.md
+
+# Windows VM answer file contains a plaintext local-only password.
+# Commit only after encoding the password or replacing changeme.
+hosts/bandit/windows/

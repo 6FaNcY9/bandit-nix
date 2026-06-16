@@ -230,4 +230,4 @@ update-flake:
       git commit -m "chore: update flake.lock [skip ci]"
       # Push using the project access token stored in $GITLAB_PUSH_TOKEN.
       # Never hardcode tokens — store them as a masked CI/CD variable.
-      git push "https://gitlab-ci-token:${GITLAB_PUSH_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" HEAD:${CI_DEFAULT_BRANCH}
+      git push "https://oauth2:${GITLAB_PUSH_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" HEAD:${CI_DEFAULT_BRANCH}
