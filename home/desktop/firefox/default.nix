@@ -6,6 +6,7 @@
       id = 0;
       isDefault = true;
       path = "0tfd3fet.default";
+      extensions.force = true;
 
       settings = {
         "toolkit.legacyUserProfileCustomizations.stylesheets" = true;

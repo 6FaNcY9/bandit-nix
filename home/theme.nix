@@ -6,7 +6,11 @@ _: {
     kitty.enable = true;
     nixvim.enable = true;
     i3.enable = true;
-    firefox.enable = true;
+    firefox = {
+      enable = true;
+      firefoxGnomeTheme.enable = true;
+      colorTheme.enable = true;
+    };
     rofi.enable = false;
     dunst.enable = false;
     bat.enable = true;
