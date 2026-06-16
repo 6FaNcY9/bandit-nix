@@ -26,6 +26,12 @@
     # Hook chain into OUTPUT (locally originated packets)
     ${ipt} -t nat -A OUTPUT -j TOR_TRANS
 
+    # Block ICMP outbound (ping leaks real IP — Tor can't carry ICMP)
+    ${ipt} -A OUTPUT -p icmp ! -o lo -j DROP
+
+    # Block non-DNS UDP outbound (Tor can't carry UDP; DNS already redirected above)
+    ${ipt} -A OUTPUT -p udp ! --dport 53 ! -o lo -j DROP
+
     # Block IPv6 outbound to prevent leaks (Tor is IPv4-only)
     ${ip6t} -A OUTPUT ! -o lo -j DROP 2>/dev/null || true
   '';
@@ -35,6 +41,8 @@
     ${ipt} -t nat -D OUTPUT    -j TOR_TRANS 2>/dev/null || true
     ${ipt} -t nat -F TOR_TRANS              2>/dev/null || true
     ${ipt} -t nat -X TOR_TRANS              2>/dev/null || true
+    ${ipt} -D OUTPUT -p icmp ! -o lo -j DROP      2>/dev/null || true
+    ${ipt} -D OUTPUT -p udp  ! --dport 53 ! -o lo -j DROP 2>/dev/null || true
     ${ip6t} -D OUTPUT ! -o lo  -j DROP      2>/dev/null || true
   '';
 in {
