@@ -3,7 +3,6 @@
 {
   config,
   modulesPath,
-  pkgs,
   ...
 }: {
   imports = [
@@ -15,8 +14,6 @@
     systemd-boot.enable = true;
     efi.canTouchEfiVariables = true;
   };
-
-  boot.kernelPackages = pkgs.linuxPackages_latest;
 
   # ── CPU ───────────────────────────────────────────────────────────────────
   hardware.cpu.intel.updateMicrocode = true;

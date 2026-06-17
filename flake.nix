@@ -39,8 +39,7 @@
     stylix,
     nixos-hardware,
     ...
-  } @ inputs:
-  let
+  } @ inputs: let
     hmBase = {
       useGlobalPkgs = true;
       useUserPackages = true;
@@ -48,6 +47,7 @@
       extraSpecialArgs = {inherit inputs;};
       users.vino = import ./home;
     };
+    hmWithStylix = hmBase // {sharedModules = [stylix.homeModules.stylix];};
   in {
     nixosConfigurations.bandit = nixpkgs.lib.nixosSystem {
       specialArgs = {inherit inputs;};
@@ -70,7 +70,7 @@
         ./hosts/bandit-lab
         ./nixos/server.nix
         home-manager.nixosModules.home-manager
-        {home-manager = hmBase;}
+        {home-manager = hmWithStylix;}
       ];
     };
   };
