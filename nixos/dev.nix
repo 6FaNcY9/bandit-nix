@@ -66,9 +66,9 @@
     comma
     lazygit
     sops
-    grc       # fzf-tab-source: colorized ip/network output in previews
-    lesspipe  # fzf-tab-source: lets `less` preview archives/images/etc
-    virtio-win  # Windows virtio drivers ISO (mount in VM during install)
-    win-spice   # SPICE guest tools installer for Windows
+    grc # fzf-tab-source: colorized ip/network output in previews
+    lesspipe # fzf-tab-source: lets `less` preview archives/images/etc
+    virtio-win # Windows virtio drivers ISO (mount in VM during install)
+    win-spice # SPICE guest tools installer for Windows
   ];
 }
