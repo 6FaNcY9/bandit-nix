@@ -104,7 +104,7 @@ in {
         end
 
         # ── Silence you-should-use for git shorthand aliases ──
-        set -gx YSU__IGNORED_GLOBAL_ALIASES '^(g|ga|gc|gca|gp|gl|gs|gd|glog)$'
+        set -gx YSU_IGNORED_GLOBAL_ALIASES '^(g|ga|gc|gca|gp|gl|gs|gd|glog)$'
 
         # ── Cachix — token from sops secret, never global ─────
         function cachix
