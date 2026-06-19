@@ -13,6 +13,7 @@
     Timer = {
       OnStartupSec = "5s";
       OnUnitActiveSec = "5min";
+      Persistent = true;
     };
     Install.WantedBy = ["default.target"];
   };
@@ -29,7 +30,7 @@
         executable = true;
         text = ''
           #!/usr/bin/env bash
-          IPV4=$(tr -d '[:space:]' < "$XDG_RUNTIME_DIR/public-ip-cache" 2>/dev/null || true)
+          IPV4=$(cat "$XDG_RUNTIME_DIR/public-ip-cache" 2>/dev/null | tr -d '[:space:]')
           IPV4_DISPLAY=''${IPV4:-?.?.?.?}
 
           IFACE=$(ip route show default 2>/dev/null | awk '/default/ {print $5; exit}')
