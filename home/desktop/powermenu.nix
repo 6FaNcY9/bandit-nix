@@ -14,7 +14,7 @@
       case "$chosen" in
         *Lock)     ${pkgs.xfce4-screensaver}/bin/xfce4-screensaver-command --lock ;;
         *Logout)   ${pkgs.i3}/bin/i3-msg exit ;;
-        *Suspend)  ${pkgs.xfce4-screensaver}/bin/xfce4-screensaver-command --lock && systemctl suspend ;;
+        *Suspend)  ${pkgs.xfce4-screensaver}/bin/xfce4-screensaver-command --lock; systemctl suspend ;;
         *Reboot)   systemctl reboot ;;
         *Shutdown) systemctl poweroff ;;
       esac
