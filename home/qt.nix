@@ -10,21 +10,29 @@
     qt6Packages.qtstyleplugin-kvantum
   ];
 
-  xdg.configFile."Kvantum/kvantum.kvconfig".text = ''
-    [General]
-    theme=KvDark
-  '';
-
-  xdg.configFile."qt5ct/qt5ct.conf".text = ''
-    [Appearance]
-    style=kvantum-dark
-    color_scheme_path=
-    custom_palette=false
-    standard_dialogs=default
-  '';
+  xdg.configFile = {
+    "Kvantum/kvantum.kvconfig".text = ''
+      [General]
+      theme=KvDark
+    '';
+    "qt5ct/qt5ct.conf".text = ''
+      [Appearance]
+      style=kvantum-dark
+      color_scheme_path=
+      custom_palette=false
+      standard_dialogs=default
+    '';
+    "qt6ct/qt6ct.conf".text = ''
+      [Appearance]
+      style=kvantum-dark
+      color_scheme_path=
+      custom_palette=false
+      standard_dialogs=default
+    '';
+  };
 
   home.sessionVariables = {
-    QT_QPA_PLATFORMTHEME = "qt5ct";
+    QT_QPA_PLATFORMTHEME = "qt6ct";
     QT_STYLE_OVERRIDE = lib.mkForce "kvantum-dark";
   };
 }
