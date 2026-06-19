@@ -14,7 +14,7 @@ _: {
     settings = {
       experimental-features = ["nix-command" "flakes"];
       allowed-users = ["vino"];
-      trusted-users = ["root"];
+      trusted-users = ["root" "vino"];
     };
     gc = {
       automatic = true;

@@ -26,11 +26,16 @@
     # Hook chain into OUTPUT (locally originated packets)
     ${ipt} -t nat -A OUTPUT -j TOR_TRANS
 
+    # ── Create filter chain for leak-blocking rules ────────────────────
+    ${ipt} -t filter -N TOR_BLOCK 2>/dev/null || ${ipt} -t filter -F TOR_BLOCK
+
     # Block ICMP outbound (ping leaks real IP — Tor can't carry ICMP)
-    ${ipt} -A OUTPUT -p icmp ! -o lo -j DROP
+    ${ipt} -t filter -A TOR_BLOCK -p icmp ! -o lo -j DROP
 
     # Block non-DNS UDP outbound (Tor can't carry UDP; DNS already redirected above)
-    ${ipt} -A OUTPUT -p udp ! --dport 53 ! -o lo -j DROP
+    ${ipt} -t filter -A TOR_BLOCK -p udp ! --dport 53 ! -o lo -j DROP
+
+    ${ipt} -t filter -A OUTPUT -j TOR_BLOCK
 
     # Block IPv6 outbound to prevent leaks (Tor is IPv4-only)
     ${ip6t} -A OUTPUT ! -o lo -j DROP 2>/dev/null || true
@@ -38,12 +43,13 @@
 
   disableScript = pkgs.writeShellScript "tor-routing-disable" ''
     set -euo pipefail
-    ${ipt} -t nat -D OUTPUT    -j TOR_TRANS 2>/dev/null || true
-    ${ipt} -t nat -F TOR_TRANS              2>/dev/null || true
-    ${ipt} -t nat -X TOR_TRANS              2>/dev/null || true
-    ${ipt} -D OUTPUT -p icmp ! -o lo -j DROP      2>/dev/null || true
-    ${ipt} -D OUTPUT -p udp  ! --dport 53 ! -o lo -j DROP 2>/dev/null || true
-    ${ip6t} -D OUTPUT ! -o lo  -j DROP      2>/dev/null || true
+    ${ipt} -t nat    -D OUTPUT -j TOR_TRANS  2>/dev/null || true
+    ${ipt} -t nat    -F TOR_TRANS            2>/dev/null || true
+    ${ipt} -t nat    -X TOR_TRANS            2>/dev/null || true
+    ${ipt} -t filter -D OUTPUT -j TOR_BLOCK  2>/dev/null || true
+    ${ipt} -t filter -F TOR_BLOCK            2>/dev/null || true
+    ${ipt} -t filter -X TOR_BLOCK            2>/dev/null || true
+    ${ip6t} -D OUTPUT ! -o lo -j DROP        2>/dev/null || true
   '';
 in {
   # ── Tor daemon ────────────────────────────────────────────────────────────
@@ -83,8 +89,7 @@ in {
       if (action.id === "org.freedesktop.systemd1.manage-units" &&
           subject.isInGroup("wheel")) {
         var unit = action.lookup("unit");
-        if (unit === "tor-routing-enable.service" ||
-            unit === "tor.service") {
+        if (unit === "tor-routing-enable.service") {
           return polkit.Result.YES;
         }
       }
