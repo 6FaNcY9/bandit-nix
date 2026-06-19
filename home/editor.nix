@@ -33,7 +33,6 @@
       scrolloff = 8;
       splitright = true;
       splitbelow = true;
-      clipboard = "unnamedplus";
     };
 
     # ─── Clipboard Manager ──────────────────────────────────────────
