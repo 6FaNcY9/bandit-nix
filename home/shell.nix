@@ -223,6 +223,17 @@ in {
     eza.enable = true;
     bat.enable = true;
 
+    btop = {
+      enable = true;
+      settings = {
+        vim_keys = true;
+        update_ms = 1000;
+        proc_tree = false;
+        proc_per_core = true;
+        show_battery = true;
+      };
+    };
+
     fish.functions.cb = {
       description = "Copy file contents to clipboard (or stdin if no arg)";
       body = ''
