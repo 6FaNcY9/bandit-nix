@@ -10,29 +10,9 @@
     qt6Packages.qtstyleplugin-kvantum
   ];
 
-  xdg.configFile = {
-    "Kvantum/kvantum.kvconfig".text = ''
-      [General]
-      theme=KvDark
-    '';
-    "qt5ct/qt5ct.conf".text = ''
-      [Appearance]
-      style=kvantum-dark
-      color_scheme_path=
-      custom_palette=false
-      standard_dialogs=default
-    '';
-    "qt6ct/qt6ct.conf".text = ''
-      [Appearance]
-      style=kvantum-dark
-      color_scheme_path=
-      custom_palette=false
-      standard_dialogs=default
-    '';
-  };
-
+  # Stylix manages qt5ct/qt6ct/kvantum config files via qt module.
+  # Force qt6ct (Stylix defaults to qt5ct) so Qt6 apps use the correct theme.
   home.sessionVariables = {
-    QT_QPA_PLATFORMTHEME = "qt6ct";
-    QT_STYLE_OVERRIDE = lib.mkForce "kvantum-dark";
+    QT_QPA_PLATFORMTHEME = lib.mkForce "qt6ct";
   };
 }
