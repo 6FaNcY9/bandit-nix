@@ -1,4 +1,8 @@
-{inputs, ...}: {
+{
+  inputs,
+  pkgs,
+  ...
+}: {
   imports = [
     inputs.nixvim.homeModules.nixvim
     ./xdg-cleanup.nix
@@ -24,5 +28,8 @@
     username = "vino";
     homeDirectory = "/home/vino";
     stateVersion = "25.11";
+    packages = with pkgs; [
+      bitwarden-cli
+    ];
   };
 }
