@@ -46,18 +46,46 @@ Six sequential phases. Each phase is a standalone branch and PR. Phases 1–2 re
 ### NixOS Config Changes
 
 **`hosts/bandit/hardware.nix`:**
-- New partition UUIDs from `lsblk -f` post-install
-- `boot.initrd.luks.devices` block:
+- Use disk **labels** (not UUIDs) so `hardware.nix` survives reinstalls without edits:
   ```nix
   boot.initrd.luks.devices."cryptroot" = {
-    device = "/dev/disk/by-uuid/<UUID-of-nvme0n1p2>";
+    device = "/dev/disk/by-label/cryptroot";
     allowDiscards = true;  # SSD TRIM through LUKS
   };
+  fileSystems."/" = { device = "/dev/disk/by-label/bandit"; options = ["subvol=@" "noatime" "compress=zstd"]; };
+  fileSystems."/home" = { device = "/dev/disk/by-label/bandit"; options = ["subvol=@home" "noatime" "compress=zstd"]; };
+  fileSystems."/nix"  = { device = "/dev/disk/by-label/bandit"; options = ["subvol=@nix"  "noatime" "compress=zstd"]; };
   ```
-- BTRFS subvolume mount options with `noatime,compress=zstd`
+- EFI partition labeled `BOOT` so `fileSystems."/boot"` is also label-stable
 
 **`nixos/boot.nix`:**
 - `boot.initrd.availableKernelModules` must include `nvme`, `cryptd`, `aes_x86_64`
+
+### Reinstall Script — `scripts/install-bandit.sh`
+
+Checked into the repo. Run from any NixOS minimal live ISO with network access:
+
+```bash
+curl -sL https://raw.githubusercontent.com/6FaNcY9/bandit-nix/main/scripts/install-bandit.sh | bash
+```
+
+**Script responsibilities (in order):**
+
+1. Prompt for target disk (e.g. `/dev/nvme0n1`) — safety check: print model + size, require typed confirmation
+2. Wipe + repartition with `sgdisk`:
+   - p1: 512 MB EFI, type `EF00`, label `BOOT`
+   - p2: remainder, type `8309` (LUKS), label `cryptroot`
+3. Format EFI: `mkfs.fat -F32 -n BOOT /dev/nvme0n1p1`
+4. Create LUKS2 container on p2 (prompts for passphrase): `cryptsetup luksFormat --label cryptroot /dev/nvme0n1p2`
+5. Open container: `cryptsetup open /dev/nvme0n1p2 cryptroot`
+6. Create BTRFS pool with label `bandit`: `mkfs.btrfs -L bandit /dev/mapper/cryptroot`
+7. Create subvolumes: `@`, `@home`, `@nix`, `@snapshots`
+8. Mount everything under `/mnt` with correct options
+9. Prompt for age key path (e.g. USB at `/run/media/nixos/gpg-backup/key.txt`) → copy to `/mnt/var/lib/sops-nix/key.txt` (creates dir)
+10. Install: `nixos-install --flake github:6FaNcY9/bandit-nix#bandit --no-root-passwd`
+11. Print post-install checklist (set root password, restore `/home`, restore SSH keys)
+
+**No config edits needed between reinstalls** — labels are stable, flake pulled from GitHub.
 
 ---
 
