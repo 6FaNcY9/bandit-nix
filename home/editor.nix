@@ -396,6 +396,16 @@
         bundled_cheatsheets = true,
         bundled_plugin_cheatsheets = true,
       })
+
+      vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
+        pattern = { "*/secrets/*", "*.age", "*.env", "*.env.*" },
+        callback = function()
+          vim.opt_local.undofile = false
+          vim.opt_local.swapfile = false
+          vim.opt_local.backup = false
+          vim.opt_local.writebackup = false
+        end,
+      })
     '';
 
     extraPackages = with pkgs; [
