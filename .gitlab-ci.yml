@@ -44,7 +44,6 @@ default:
     # `cachix use` adds the cache's public key automatically.
     - nix profile install nixpkgs#cachix
     - cachix use "${CACHIX_CACHE_NAME}"
-    - cachix authtoken "${CACHIX_AUTH_TOKEN}"
 
 # ---------------------------------------------------------------------------
 # Stages
@@ -196,9 +195,11 @@ populate-cache:
   # whatever was built before the failure is still pushed to Cachix.
   allow_failure: true
   script:
+    - cachix authtoken "${CACHIX_AUTH_TOKEN}"
     - |
       nix build .#nixosConfigurations.bandit.config.system.build.toplevel \
         --print-build-logs \
+        --print-out-paths \
         --no-update-lock-file \
         --keep-going \
         --fallback \
