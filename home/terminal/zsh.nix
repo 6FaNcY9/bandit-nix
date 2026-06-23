@@ -149,6 +149,23 @@ in {
           fi
         }
 
+        # ── nsp: open a nix shell with nixpkgs packages ──────
+        nsp() {
+          if [[ $# -eq 0 ]]; then
+            print "Usage: nsp <package> [package ...]" >&2
+            return 1
+          fi
+
+          local packages=()
+          local package
+
+          for package in "$@"; do
+            packages+=("nixpkgs#$package")
+          done
+
+          nix shell "''${packages[@]}"
+        }
+
         # ── cb: copy file/stdin to clipboard ──────────────────
         cb() {
           if [[ $# -eq 0 ]]; then
