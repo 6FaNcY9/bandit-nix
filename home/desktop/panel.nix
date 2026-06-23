@@ -30,7 +30,12 @@
         executable = true;
         text = ''
           #!/usr/bin/env bash
-          IPV4=$(cat "$XDG_RUNTIME_DIR/public-ip-cache" 2>/dev/null | tr -d '[:space:]')
+          IP_CACHE="$XDG_RUNTIME_DIR/public-ip-cache"
+          if [[ -r "$IP_CACHE" ]] && [[ $(find "$IP_CACHE" -mmin -10 -print 2>/dev/null) ]]; then
+            IPV4=$(tr -d '[:space:]' < "$IP_CACHE")
+          else
+            IPV4=""
+          fi
           IPV4_DISPLAY=''${IPV4:-?.?.?.?}
 
           IFACE=$(ip route show default 2>/dev/null | awk '/default/ {print $5; exit}')
@@ -39,7 +44,7 @@
             exit 0
           fi
 
-          PREV="/tmp/panel-net-prev-$IFACE"
+          PREV="$XDG_RUNTIME_DIR/panel-net-prev-$IFACE"
           read -r prev_rx prev_tx < "$PREV" 2>/dev/null
           RX=$(awk -v i="$IFACE:" '$1==i {print $2}' /proc/net/dev)
           TX=$(awk -v i="$IFACE:" '$1==i {print $10}' /proc/net/dev)
@@ -62,7 +67,7 @@
         text = ''
           #!/usr/bin/env bash
           read -r _ u n s i _ < /proc/stat
-          PREV="/tmp/panel-cpu-prev"
+          PREV="$XDG_RUNTIME_DIR/panel-cpu-prev"
           read -r pu pn ps pi < "$PREV" 2>/dev/null || { pu=0; pn=0; ps=0; pi=0; }
           echo "$u $n $s $i" > "$PREV"
           USED=$(( (u + n + s) - (pu + pn + ps) ))
