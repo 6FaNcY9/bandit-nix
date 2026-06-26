@@ -4,6 +4,7 @@
     ./wan.nix
     ./webhost.nix
     ./traefik.nix
+    ./mrija-archive.nix
   ];
 
   networking.hostName = "bandit-lab";
