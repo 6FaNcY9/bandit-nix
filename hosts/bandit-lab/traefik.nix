@@ -19,7 +19,10 @@
     group = "docker";
     staticConfigOptions = {
       log.level = "INFO";
-      entryPoints.web.address = ":80";
+      entryPoints.web = {
+        address = ":80";
+        forwardedHeaders.insecure = true;
+      };
       providers.docker = {
         endpoint = "unix:///var/run/docker.sock";
         exposedByDefault = false;
