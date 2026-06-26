@@ -27,12 +27,20 @@ in {
   ];
 
   # ── Boot ──────────────────────────────────────────────────────────────────
+  # GRUB + separate /efi mount: kernels/initrds go to BTRFS (unlimited),
+  # only the ~2 MB GRUB EFI binary lands on the 100 MiB Windows-shared ESP.
   boot.loader = {
-    systemd-boot = {
+    grub = {
       enable = true;
-      configurationLimit = 5; # Existing Windows ESP is only 100 MiB.
+      device = "nodev";
+      efiSupport = true;
+      useOSProber = false;
+      configurationLimit = 10;
     };
-    efi.canTouchEfiVariables = true;
+    efi = {
+      canTouchEfiVariables = true;
+      efiSysMountPoint = "/efi";
+    };
   };
 
   # ── CPU ───────────────────────────────────────────────────────────────────
@@ -74,7 +82,7 @@ in {
     "/nix" = btrfsSubvol "@nix";
     "/var/log" = (btrfsSubvol "@log") // {neededForBoot = true;};
     "/.snapshots" = btrfsSubvol "@snapshots";
-    "/boot" = {
+    "/efi" = {
       device = "/dev/disk/by-uuid/C625-99B7";
       fsType = "vfat";
       options = ["fmask=0077" "dmask=0077"];
