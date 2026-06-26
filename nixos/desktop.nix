@@ -50,7 +50,6 @@
     xarchiver
     xfce4-terminal
     xfce4-power-manager
-    xfce4-notifyd
     brightnessctl
     # Panel plugins — must be system packages so xfce4-panel finds the .so files
     xfce4-whiskermenu-plugin

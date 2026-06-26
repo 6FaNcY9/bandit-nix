@@ -39,10 +39,7 @@
       enable = true;
       nix-direnv.enable = true;
     };
-    nh = {
-      enable = true;
-      flake = "/home/vino/src/bandit-nix";
-    };
+    nh.enable = true;
   };
 
   # ── Memory ────────────────────────────────────────────────────────────────
