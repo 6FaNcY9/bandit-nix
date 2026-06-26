@@ -91,18 +91,28 @@
         '';
       };
 
-      # ── Genmon: battery (color-coded, icon tracks charge level) ──
+      # ── Genmon: battery — shows [<profile-icon> <bat-icon> X%], click cycles power profile ──
       ".local/bin/panel-bat" = {
         executable = true;
         text = ''
           #!/usr/bin/env bash
           BAT_DIR=$(ls -d /sys/class/power_supply/BAT* 2>/dev/null | head -1)
           if [[ -z "$BAT_DIR" ]]; then
-            echo "<txt><span color='#515151'>[</span><span color='#999999'>󰁽 ?</span><span color='#515151'>]</span></txt>"
+            echo "<txt><span color='#515151'>[</span><span color='#999999'>󰾅 󰁽 ?</span><span color='#515151'>]</span></txt>"
             exit 0
           fi
           BAT=$(cat "$BAT_DIR/capacity" 2>/dev/null || echo "?")
           STATUS=$(cat "$BAT_DIR/status" 2>/dev/null || echo "Unknown")
+
+          # Power profile icon + color
+          PROFILE=$(powerprofilesctl get 2>/dev/null || echo "balanced")
+          case "''${PROFILE}" in
+            performance) PICON="󱐋"; PCOLOR="#f2777a" ;;
+            power-saver) PICON="󰌪"; PCOLOR="#99cc99" ;;
+            *)           PICON="󰾅"; PCOLOR="#ffcc66" ;;
+          esac
+
+          # Battery icon + color
           if [[ "$STATUS" == "Charging" || "$STATUS" == "Full" ]]; then
             ICON="󰂄"; COLOR="#99cc99"
           elif [[ "$BAT" =~ ^[0-9]+$ && "$BAT" -le 10 ]]; then
@@ -116,7 +126,23 @@
           else
             ICON="󰂁"; COLOR="#99cc99"
           fi
-          echo "<txt><span color='#515151'>[</span><span color=\"''${COLOR}\">''${ICON} ''${BAT}%</span><span color='#515151'>]</span></txt>"
+
+          echo "<txt><span color='#515151'>[</span><span color=\"''${PCOLOR}\">''${PICON}</span> <span color=\"''${COLOR}\">''${ICON} ''${BAT}%</span><span color='#515151'>]</span></txt><click>''${HOME}/.local/bin/panel-bat-click</click>"
+        '';
+      };
+
+      # ── Cycles power profile: performance → balanced → power-saver → … ──
+      ".local/bin/panel-bat-click" = {
+        executable = true;
+        text = ''
+          #!/usr/bin/env bash
+          CURRENT=$(powerprofilesctl get 2>/dev/null || echo "balanced")
+          case "$CURRENT" in
+            performance) NEXT=balanced ;;
+            balanced)    NEXT=power-saver ;;
+            *)           NEXT=performance ;;
+          esac
+          powerprofilesctl set "$NEXT"
         '';
       };
 
