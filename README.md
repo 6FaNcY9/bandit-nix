@@ -91,6 +91,39 @@ The script formats only the root partition and creates BTRFS subvolumes for
 sops-nix age key to `/var/lib/sops-nix/key.txt` before running
 `nixos-install --flake .#bandit-lab`.
 
+If networking fails during `nixos-install`, do not rerun the default command
+unless you want to format again. Fix networking and resume only the install
+phase:
+
+```bash
+sudo ./install-bandit-lab.sh \
+  --age-key /tmp/sops-age-key.txt \
+  --mode install
+```
+
+If you rebooted after formatting, mount the existing BTRFS subvolumes first,
+then install:
+
+```bash
+sudo ./install-bandit-lab.sh \
+  --age-key /tmp/sops-age-key.txt \
+  --mode mount
+
+sudo ./install-bandit-lab.sh \
+  --age-key /tmp/sops-age-key.txt \
+  --mode install
+```
+
+For other hosts or machines, use the generic installer directly:
+
+```bash
+sudo ./install-nixos.sh \
+  --host <flake-host> \
+  --root-dev /dev/disk/by-id/<root-partition> \
+  --boot-dev /dev/disk/by-id/<efi-partition> \
+  --age-key /path/to/key.txt
+```
+
 After first boot:
 
 - Cockpit server UI: `https://bandit-lab:9090`
