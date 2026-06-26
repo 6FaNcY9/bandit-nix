@@ -1,22 +1,20 @@
 {config, ...}: {
-  # Public hostname for the lab server.
-  # Cloudflare token secret must contain:
-  #   CLOUDFLARE_API_TOKEN=...
-  services.cloudflare-ddns = {
+  sops.secrets."cloudflare-tunnel-credentials" = {
+    owner = "cloudflared";
+    group = "cloudflared";
+    mode = "0400";
+  };
+
+  services.cloudflared = {
     enable = true;
-    credentialsFile = config.sops.secrets."cloudflare-ddns-env".path;
-    domains = ["bandit-lab.mrija.org"];
-    provider.ipv6 = "none";
-    proxied = "true";
-    ttl = 1;
-    updateOnStart = true;
-    updateCron = "@every 5m";
-    recordComment = "Managed by bandit-nix services.cloudflare-ddns";
+    tunnels."bandit-lab" = {
+      credentialsFile = config.sops.secrets."cloudflare-tunnel-credentials".path;
+      default = "http_status:404";
+      ingress."bandit-lab.mrija.org" = "http://localhost:80";
+    };
   };
 
   services.nginx.virtualHosts."bandit-lab.mrija.org" = {
-    enableACME = true;
-    forceSSL = true;
     locations."/" = {
       return = "200 'bandit-lab online\n'";
       extraConfig = ''
