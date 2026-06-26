@@ -10,12 +10,12 @@
   ];
 
   # ── Firewall ──────────────────────────────────────────────────────────────
-  networking.firewall.allowedTCPPorts = [80 443 9443];
+  networking.firewall.allowedTCPPorts = [80 443];
 
   # ── Server GUI ───────────────────────────────────────────────────────────
   services.cockpit = {
     enable = true;
-    openFirewall = true;
+    openFirewall = false;
     plugins = with pkgs; [
       cockpit-files
     ];
@@ -27,7 +27,7 @@
   # ── File storage ─────────────────────────────────────────────────────────
   services.samba = {
     enable = true;
-    openFirewall = true;
+    openFirewall = false;
     settings = {
       global = {
         security = "user";
@@ -46,7 +46,7 @@
   };
   services.samba-wsdd = {
     enable = true;
-    openFirewall = true;
+    openFirewall = false;
   };
 
   # ── ACME / Let's Encrypt ──────────────────────────────────────────────────
@@ -98,7 +98,7 @@
     backend = "docker";
     containers.portainer = {
       image = "portainer/portainer-ce:lts";
-      ports = ["9443:9443"];
+      ports = ["127.0.0.1:9443:9443"];
       volumes = [
         "/var/run/docker.sock:/var/run/docker.sock"
         "/var/lib/portainer:/data"

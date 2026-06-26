@@ -133,6 +133,51 @@ After first boot:
 - Shared storage path: `/srv/storage`
 - Container data path: `/srv/containers`
 
+### WAN Access
+
+`bandit-lab` manages the public DNS record for:
+
+```text
+bandit-lab.mrija.org
+```
+
+Cloudflare DDNS expects a sops secret named `cloudflare-ddns-env` whose
+decrypted content is:
+
+```env
+CLOUDFLARE_API_TOKEN=...
+```
+
+Create a Cloudflare API token scoped to the `mrija.org` zone with DNS edit
+permission, add it to `secrets/secrets.yaml`, then rebuild:
+
+```bash
+sudo nixos-rebuild switch --flake .#bandit-lab
+```
+
+Forward only these ports from the router to the server:
+
+```text
+TCP 80
+TCP 443
+```
+
+If using IPv6, allow inbound TCP 80/443 to the server address in the router
+firewall. Do not expose Cockpit, Samba, or Portainer directly to the WAN.
+
+Admin access should use SSH/Tailscale tunnels:
+
+```bash
+ssh -L 9090:127.0.0.1:9090 -L 9443:127.0.0.1:9443 vino@bandit-lab.mrija.org
+```
+
+Then open:
+
+```text
+https://127.0.0.1:9090
+https://127.0.0.1:9443
+```
+
 ### Prerequisites
 
 1. A working NixOS installation

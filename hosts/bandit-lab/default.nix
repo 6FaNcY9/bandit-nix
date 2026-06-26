@@ -1,6 +1,7 @@
 {...}: {
   imports = [
     ./hardware.nix
+    ../../nixos/wan.nix
     ../../nixos/webhost.nix
   ];
 

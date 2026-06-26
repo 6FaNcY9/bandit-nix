@@ -33,6 +33,11 @@ _: {
         owner = "vino";
         mode = "0400";
       };
+      "cloudflare-ddns-env" = {
+        owner = "cloudflare-ddns";
+        group = "cloudflare-ddns";
+        mode = "0400";
+      };
       "thehost-sshkey" = {
         owner = "vino";
         path = "/home/vino/.ssh/thehost_mrija";
