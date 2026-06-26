@@ -1,7 +1,5 @@
 {config, ...}: {
   sops.secrets."cloudflare-tunnel-credentials" = {
-    owner = "cloudflared";
-    group = "cloudflared";
     mode = "0400";
   };
 
