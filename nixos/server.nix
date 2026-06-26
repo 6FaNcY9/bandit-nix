@@ -37,6 +37,31 @@
   ];
 
   programs = {
+    zsh = {
+      interactiveShellInit = ''
+        # Keep console/SSH editing sane even when the terminal reports odd keys.
+        stty erase '^?' 2>/dev/null || true
+        bindkey -e
+        bindkey '^?' backward-delete-char
+        bindkey '^H' backward-delete-char
+        bindkey '^[[3~' delete-char
+        bindkey '^[[H' beginning-of-line
+        bindkey '^[[F' end-of-line
+        bindkey '^[[1;5D' backward-word
+        bindkey '^[[1;5C' forward-word
+      '';
+
+      ohMyZsh = {
+        enable = true;
+        plugins = [
+          "git"
+          "sudo"
+          "systemd"
+        ];
+        theme = "robbyrussell";
+      };
+    };
+
     direnv = {
       enable = true;
       nix-direnv.enable = true;
