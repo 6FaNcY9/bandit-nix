@@ -61,6 +61,7 @@
     # App launchers
     "${mod}+Return" = "exec ${pkgs.kitty}/bin/kitty";
     "${mod}+Shift+w" = "exec ${pkgs.firefox}/bin/firefox";
+    "${mod}+Shift+e" = "exec ${pkgs.thunderbird}/bin/thunderbird";
     "${mod}+d" = "exec ${pkgs.rofi}/bin/rofi -show drun";
     "${mod}+Shift+v" = "exec --no-startup-id ${pkgs.copyq}/bin/copyq toggle";
 
@@ -171,6 +172,7 @@ in {
       # ─── Workspace assignments ──────────────────────────
       assigns = {
         "1" = [{class = "^firefox$";}];
+        "4" = [{class = "^thunderbird$";}];
         "3" = [{class = "^Thunar$";}];
       };
 
