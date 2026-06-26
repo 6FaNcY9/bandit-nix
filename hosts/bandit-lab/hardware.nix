@@ -1,36 +1,64 @@
-# Run `nixos-generate-config` on bandit-lab and verify disk UUIDs/devices.
-# Assumed layout: NVMe, GPT, UEFI, single 3 TB BTRFS volume.
+# Run `nixos-generate-config` on bandit-lab and replace device paths with
+# stable /dev/disk/by-uuid or /dev/disk/by-partuuid entries before installing.
+#
+# Confirmed Windows layout on the 4 TB Corsair MP600 PRO NVMe:
+#   /dev/nvme0n1p1  100 MiB  EFI System Partition
+#   /dev/nvme0n1p2   16 MiB  Microsoft Reserved - do not use for NixOS
+#   /dev/nvme0n1p3  1.5 TiB  likely NixOS target, format as BTRFS
+#   /dev/nvme0n1p4  2.2 TiB  Windows C:
+#   /dev/nvme0n1p5  538 MiB  Windows Recovery
 {
   config,
+  lib,
   modulesPath,
+  pkgs,
   ...
-}: {
+}: let
+  rootDev = "/dev/nvme0n1p3";
+  btrfsDefaults = ["subvol=@" "noatime" "compress=zstd" "space_cache=v2" "discard=async"];
+  btrfsSubvol = subvol: {
+    device = rootDev;
+    fsType = "btrfs";
+    options = ["subvol=${subvol}" "noatime" "compress=zstd" "space_cache=v2" "discard=async"];
+  };
+in {
   imports = [
     (modulesPath + "/installer/scan/not-detected.nix")
   ];
 
   # ── Boot ──────────────────────────────────────────────────────────────────
   boot.loader = {
-    systemd-boot.enable = true;
+    systemd-boot = {
+      enable = true;
+      configurationLimit = 5; # Existing Windows ESP is only 100 MiB.
+    };
     efi.canTouchEfiVariables = true;
   };
 
   # ── CPU ───────────────────────────────────────────────────────────────────
+  boot.kernelModules = ["kvm-intel"];
+  hardware.cpu.amd.updateMicrocode = lib.mkForce false;
   hardware.cpu.intel.updateMicrocode = true;
 
-  # ── GPU — NVIDIA 5090 Ti ──────────────────────────────────────────────────
+  # ── GPU — NVIDIA GeForce RTX 4090 Laptop ─────────────────────────────────
+  hardware.graphics = {
+    enable = true;
+    enable32Bit = true;
+  };
+  services.xserver.videoDrivers = ["nvidia"];
   hardware.nvidia = {
     modesetting.enable = true;
-    open = true; # open kernel module required for Blackwell (50xx series)
+    open = false;
     nvidiaSettings = false; # headless server
     package = config.boot.kernelPackages.nvidiaPackages.stable;
     powerManagement.enable = true;
   };
-  # No xserver — headless server. NVIDIA kernel module loaded via hardware.nvidia.
+  environment.systemPackages = with pkgs; [
+    nvtopPackages.nvidia
+  ];
 
   # ── Filesystems — BTRFS with subvolumes ──────────────────────────────────
-  # Replace /dev/nvme0n1 with actual device from nixos-generate-config.
-  # Before installing: mkfs.btrfs /dev/nvme0n1p2 then mount and create subvols:
+  # Before installing: mkfs.btrfs /dev/nvme0n1p3 then mount and create subvols:
   #   btrfs subvolume create @
   #   btrfs subvolume create @home
   #   btrfs subvolume create @nix
@@ -38,31 +66,14 @@
   #   btrfs subvolume create @snapshots
   fileSystems = {
     "/" = {
-      device = "/dev/nvme0n1p2";
+      device = rootDev;
       fsType = "btrfs";
-      options = ["subvol=@" "noatime" "compress=zstd" "space_cache=v2" "discard=async"];
+      options = btrfsDefaults;
     };
-    "/home" = {
-      device = "/dev/nvme0n1p2";
-      fsType = "btrfs";
-      options = ["subvol=@home" "noatime" "compress=zstd" "space_cache=v2" "discard=async"];
-    };
-    "/nix" = {
-      device = "/dev/nvme0n1p2";
-      fsType = "btrfs";
-      options = ["subvol=@nix" "noatime" "compress=zstd" "space_cache=v2" "discard=async"];
-    };
-    "/var/log" = {
-      device = "/dev/nvme0n1p2";
-      fsType = "btrfs";
-      options = ["subvol=@log" "noatime" "compress=zstd" "space_cache=v2" "discard=async"];
-      neededForBoot = true;
-    };
-    "/.snapshots" = {
-      device = "/dev/nvme0n1p2";
-      fsType = "btrfs";
-      options = ["subvol=@snapshots" "noatime" "compress=zstd" "space_cache=v2" "discard=async"];
-    };
+    "/home" = btrfsSubvol "@home";
+    "/nix" = btrfsSubvol "@nix";
+    "/var/log" = (btrfsSubvol "@log") // {neededForBoot = true;};
+    "/.snapshots" = btrfsSubvol "@snapshots";
     "/boot" = {
       device = "/dev/nvme0n1p1";
       fsType = "vfat";
