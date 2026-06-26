@@ -32,6 +32,8 @@
     nvd
     sops
     cachix
+    btop
+    htop
   ];
 
   programs = {
@@ -40,6 +42,16 @@
       nix-direnv.enable = true;
     };
     nh.enable = true;
+  };
+
+  # ── Remote access ────────────────────────────────────────────────────────
+  services.openssh = {
+    enable = true;
+    openFirewall = true;
+    settings = {
+      PasswordAuthentication = true;
+      PermitRootLogin = "no";
+    };
   };
 
   # ── Memory ────────────────────────────────────────────────────────────────

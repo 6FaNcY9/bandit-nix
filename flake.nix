@@ -47,7 +47,6 @@
       extraSpecialArgs = {inherit inputs;};
       users.vino = import ./home;
     };
-    hmWithStylix = hmBase // {sharedModules = [stylix.homeModules.stylix];};
   in {
     nixosConfigurations = {
       bandit = nixpkgs.lib.nixosSystem {
@@ -85,8 +84,6 @@
           sops-nix.nixosModules.sops
           ./hosts/bandit-lab
           ./nixos/server.nix
-          home-manager.nixosModules.home-manager
-          {home-manager = hmWithStylix;}
         ];
       };
     };

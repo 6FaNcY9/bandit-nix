@@ -61,6 +61,45 @@ A personal NixOS configuration for the "bandit" host, built from scratch with mi
 
 ## 🚀 Installation
 
+### bandit-lab Live ISO Install
+
+From the NixOS live installer, connect to the network, clone this repo, and run:
+
+```bash
+git clone https://github.com/6FaNcY9/bandit-nix.git
+cd bandit-nix
+sudo ./install-bandit-lab.sh --age-key /run/media/nixos/USB/key.txt
+```
+
+Defaults match the current planned lab disk layout:
+
+- Root/NixOS target: `/dev/nvme0n1p5`
+- Existing EFI partition: `/dev/nvme0n1p1`
+- Host flake output: `.#bandit-lab`
+
+Override devices when needed:
+
+```bash
+sudo ./install-bandit-lab.sh \
+  --root-dev /dev/disk/by-id/<root-partition> \
+  --boot-dev /dev/disk/by-id/<efi-partition> \
+  --age-key /run/media/nixos/USB/key.txt
+```
+
+The script formats only the root partition and creates BTRFS subvolumes for
+`/`, `/home`, `/nix`, `/var/log`, and `/.snapshots`. It also installs the
+sops-nix age key to `/var/lib/sops-nix/key.txt` before running
+`nixos-install --flake .#bandit-lab`.
+
+After first boot:
+
+- Cockpit server UI: `https://bandit-lab:9090`
+- Portainer container UI: `https://bandit-lab:9443`
+- Tailscale: `sudo tailscale up`
+- Samba password for file storage: `sudo smbpasswd -a vino`
+- Shared storage path: `/srv/storage`
+- Container data path: `/srv/containers`
+
 ### Prerequisites
 
 1. A working NixOS installation

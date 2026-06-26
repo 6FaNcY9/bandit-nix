@@ -1,8 +1,53 @@
-# Web hosting module — import from hosts/bandit-lab/default.nix when ready.
-# Provides: nginx reverse proxy, ACME/Let's Encrypt, PostgreSQL.
+# Homelab services for bandit-lab.
+# Provides: server UI, nginx reverse proxy, ACME, PostgreSQL, containers,
+# Tailscale VPN, and a simple SMB storage share.
 {pkgs, ...}: {
+  # ── Host paths ───────────────────────────────────────────────────────────
+  systemd.tmpfiles.rules = [
+    "d /srv/containers 0750 vino users -"
+    "d /srv/storage 0770 vino users -"
+    "d /var/lib/portainer 0750 root root -"
+  ];
+
   # ── Firewall ──────────────────────────────────────────────────────────────
-  networking.firewall.allowedTCPPorts = [80 443];
+  networking.firewall.allowedTCPPorts = [80 443 9443];
+
+  # ── Server GUI ───────────────────────────────────────────────────────────
+  services.cockpit = {
+    enable = true;
+    openFirewall = true;
+    plugins = with pkgs; [
+      cockpit-files
+    ];
+  };
+
+  # ── VPN ──────────────────────────────────────────────────────────────────
+  services.tailscale.enable = true;
+
+  # ── File storage ─────────────────────────────────────────────────────────
+  services.samba = {
+    enable = true;
+    openFirewall = true;
+    settings = {
+      global = {
+        security = "user";
+        "server string" = "bandit-lab";
+        "map to guest" = "Bad User";
+      };
+      storage = {
+        path = "/srv/storage";
+        browseable = "yes";
+        writable = "yes";
+        "valid users" = "vino";
+        "create mask" = "0660";
+        "directory mask" = "0770";
+      };
+    };
+  };
+  services.samba-wsdd = {
+    enable = true;
+    openFirewall = true;
+  };
 
   # ── ACME / Let's Encrypt ──────────────────────────────────────────────────
   security.acme = {
@@ -41,7 +86,30 @@
   # ── Docker (for containerised client projects) ────────────────────────────
   virtualisation.docker = {
     enable = true;
+    enableOnBoot = true;
     autoPrune.enable = true;
+    daemon.settings = {
+      data-root = "/srv/containers/docker";
+      log-driver = "local";
+      live-restore = true;
+    };
+  };
+  virtualisation.oci-containers = {
+    backend = "docker";
+    containers.portainer = {
+      image = "portainer/portainer-ce:lts";
+      ports = ["9443:9443"];
+      volumes = [
+        "/var/run/docker.sock:/var/run/docker.sock"
+        "/var/lib/portainer:/data"
+      ];
+    };
   };
   users.users.vino.extraGroups = ["docker"];
+
+  environment.systemPackages = with pkgs; [
+    cifs-utils
+    docker-compose
+    tailscale
+  ];
 }

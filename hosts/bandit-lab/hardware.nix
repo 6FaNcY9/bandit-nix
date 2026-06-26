@@ -4,9 +4,9 @@
 # Confirmed Windows layout on the 4 TB Corsair MP600 PRO NVMe:
 #   /dev/nvme0n1p1  100 MiB  EFI System Partition
 #   /dev/nvme0n1p2   16 MiB  Microsoft Reserved - do not use for NixOS
-#   /dev/nvme0n1p3  1.5 TiB  likely NixOS target, format as BTRFS
-#   /dev/nvme0n1p4  2.2 TiB  Windows C:
-#   /dev/nvme0n1p5  538 MiB  Windows Recovery
+#   /dev/nvme0n1p3  1.3 TiB  Windows C: - do not use for NixOS
+#   /dev/nvme0n1p4  538 MiB  Windows Recovery
+#   /dev/nvme0n1p5  2.7 TiB  NixOS target, format as BTRFS
 {
   config,
   lib,
@@ -14,7 +14,7 @@
   pkgs,
   ...
 }: let
-  rootDev = "/dev/nvme0n1p3";
+  rootDev = "/dev/nvme0n1p5";
   btrfsDefaults = ["subvol=@" "noatime" "compress=zstd" "space_cache=v2" "discard=async"];
   btrfsSubvol = subvol: {
     device = rootDev;
@@ -58,7 +58,7 @@ in {
   ];
 
   # ── Filesystems — BTRFS with subvolumes ──────────────────────────────────
-  # Before installing: mkfs.btrfs /dev/nvme0n1p3 then mount and create subvols:
+  # Before installing: mkfs.btrfs /dev/nvme0n1p5 then mount and create subvols:
   #   btrfs subvolume create @
   #   btrfs subvolume create @home
   #   btrfs subvolume create @nix
