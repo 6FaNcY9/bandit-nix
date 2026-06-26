@@ -49,29 +49,46 @@
     };
     hmWithStylix = hmBase // {sharedModules = [stylix.homeModules.stylix];};
   in {
-    nixosConfigurations.bandit = nixpkgs.lib.nixosSystem {
-      specialArgs = {inherit inputs;};
-      modules = [
-        {nixpkgs.hostPlatform = "x86_64-linux";}
-        stylix.nixosModules.stylix
-        nixos-hardware.nixosModules.framework-13-7040-amd
-        sops-nix.nixosModules.sops
-        ./hosts/bandit
-        ./nixos
-        home-manager.nixosModules.home-manager
-        {home-manager = hmBase;}
-      ];
-    };
+    nixosConfigurations = {
+      bandit = nixpkgs.lib.nixosSystem {
+        specialArgs = {inherit inputs;};
+        modules = [
+          {nixpkgs.hostPlatform = "x86_64-linux";}
+          stylix.nixosModules.stylix
+          nixos-hardware.nixosModules.framework-13-7040-amd
+          sops-nix.nixosModules.sops
+          ./hosts/bandit
+          ./nixos
+          home-manager.nixosModules.home-manager
+          {home-manager = hmBase;}
+        ];
+      };
 
-    nixosConfigurations.bandit-lab = nixpkgs.lib.nixosSystem {
-      specialArgs = {inherit inputs;};
-      modules = [
-        sops-nix.nixosModules.sops
-        ./hosts/bandit-lab
-        ./nixos/server.nix
-        home-manager.nixosModules.home-manager
-        {home-manager = hmWithStylix;}
-      ];
+      bandit-ci = nixpkgs.lib.nixosSystem {
+        specialArgs = {inherit inputs;};
+        modules = [
+          {nixpkgs.hostPlatform = "x86_64-linux";}
+          stylix.nixosModules.stylix
+          nixos-hardware.nixosModules.framework-13-7040-amd
+          sops-nix.nixosModules.sops
+          ./hosts/bandit
+          ./nixos
+          ./nixos/ci-overrides.nix
+          home-manager.nixosModules.home-manager
+          {home-manager = hmBase;}
+        ];
+      };
+
+      bandit-lab = nixpkgs.lib.nixosSystem {
+        specialArgs = {inherit inputs;};
+        modules = [
+          sops-nix.nixosModules.sops
+          ./hosts/bandit-lab
+          ./nixos/server.nix
+          home-manager.nixosModules.home-manager
+          {home-manager = hmWithStylix;}
+        ];
+      };
     };
   };
 }
