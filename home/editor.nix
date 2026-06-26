@@ -86,7 +86,7 @@
               nixpkgs.expr = "import <nixpkgs> {}";
               options = {
                 nixos.expr = "(builtins.getFlake \"/home/vino/src/bandit-nix\").nixosConfigurations.bandit.options";
-                home_manager.expr = "(builtins.getFlake \"/home/vino/src/bandit-nix\").nixosConfigurations.bandit.options.home-manager.users.type.getSubOptions []";
+                home_manager.expr = "(builtins.getFlake \"/home/vino/src/bandit-nix\").nixosConfigurations.bandit.options.home-manager.users.type.getSubOptions {}";
               };
             };
           };

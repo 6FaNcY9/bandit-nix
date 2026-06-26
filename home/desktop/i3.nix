@@ -6,7 +6,7 @@
   mod = "Mod4";
 
   # ─── Helpers ──────────────────────────────────────────
-  pactlBin = "${pkgs.pulseaudio}/bin/pactl";
+  pactlBin = "${pkgs.pipewire}/bin/pactl";
   brightnessctlBin = "${pkgs.brightnessctl}/bin/brightnessctl";
   playerctlBin = "${pkgs.playerctl}/bin/playerctl";
 

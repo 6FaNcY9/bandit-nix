@@ -50,7 +50,7 @@
           TX=$(awk -v i="$IFACE:" '$1==i {print $10}' /proc/net/dev)
           echo "$RX $TX" > "$PREV"
 
-          if [[ -n "$prev_rx" && "$RX" -ge "$prev_rx" ]]; then
+          if [[ -n "$prev_rx" && "$RX" -ge "$prev_rx" && "$TX" -ge "$prev_tx" ]]; then
             DRX=$(( (RX - prev_rx) / 1024 ))
             DTX=$(( (TX - prev_tx) / 1024 ))
           else
