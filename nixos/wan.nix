@@ -6,6 +6,7 @@
     enable = true;
     credentialsFile = config.sops.secrets."cloudflare-ddns-env".path;
     domains = ["bandit-lab.mrija.org"];
+    provider.ipv6 = "none";
     proxied = "true";
     ttl = 1;
     updateOnStart = true;
