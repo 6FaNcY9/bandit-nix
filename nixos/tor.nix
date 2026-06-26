@@ -32,8 +32,8 @@
     # Block ICMP outbound (ping leaks real IP — Tor can't carry ICMP)
     ${ipt} -t filter -A TOR_BLOCK -p icmp ! -o lo -j DROP
 
-    # Block non-DNS UDP outbound (Tor can't carry UDP; DNS already redirected above)
-    ${ipt} -t filter -A TOR_BLOCK -p udp ! --dport 53 ! -o lo -j DROP
+    # Block all non-loopback UDP (DNS was redirected to loopback:9053 above)
+    ${ipt} -t filter -A TOR_BLOCK -p udp ! -o lo -j DROP
 
     ${ipt} -t filter -A OUTPUT -j TOR_BLOCK
 
@@ -65,7 +65,6 @@ in {
       dns.enable = true;
     };
     settings = {
-      ExcludeExitNodes = "{??}";
       ExitNodes = "{de},{at},{ch},{nl},{se},{fi}";
     };
   };

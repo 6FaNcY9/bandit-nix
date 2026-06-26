@@ -2,20 +2,21 @@ name: Nightly Build Test
 
 on:
   workflow_dispatch:
-
-permissions:
-  contents: write
+  schedule:
+    - cron: '0 2 * * *'
 
 jobs:
   update-and-build:
     name: Update Flake Inputs and Build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v13
+        uses: DeterminateSystems/nix-installer-action@ab6bcb2d5af0e904d04aea750e2089e9dc4cbfdd # v13
         with:
           extra-conf: |
             substituters = https://cache.nixos.org
@@ -24,6 +25,16 @@ jobs:
       - name: Update flake inputs
         run: nix flake update
 
+      - name: Check flake
+        run: nix flake check --no-update-lock-file
+
+      - name: Build with updated inputs
+        run: |
+          nix build .#nixosConfigurations.bandit-ci.config.system.build.toplevel \
+            --print-build-logs \
+            --no-update-lock-file \
+            --fallback
+
       - name: Commit updated flake.lock
         run: |
           git config user.name "github-actions[bot]"
@@ -31,16 +42,6 @@ jobs:
           git add flake.lock
           git commit -m "chore: update flake.lock" || echo "No changes to commit"
           git push || echo "Nothing to push"
-
-      - name: Check flake
-        run: nix flake check --no-update-lock-file
-
-      - name: Build with updated inputs
-        run: |
-          nix build .#nixosConfigurations.bandit.config.system.build.toplevel \
-            --print-build-logs \
-            --no-update-lock-file \
-            --fallback
 
       - name: Report build status
         if: always()

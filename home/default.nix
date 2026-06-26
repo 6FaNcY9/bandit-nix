@@ -16,6 +16,7 @@
     ./desktop/dunst.nix
     ./desktop/rofi.nix
     ./desktop/firefox
+    ./desktop/thunderbird.nix
     ./desktop/xfce.nix
     ./desktop/panel.nix
     ./desktop/powermenu.nix
