@@ -14,7 +14,7 @@
   pkgs,
   ...
 }: let
-  rootDev = "/dev/nvme0n1p5";
+  rootDev = "/dev/disk/by-uuid/620b7a32-8630-41f6-9d7b-8d694abdaa38";
   btrfsDefaults = ["subvol=@" "noatime" "compress=zstd" "space_cache=v2" "discard=async"];
   btrfsSubvol = subvol: {
     device = rootDev;
@@ -75,7 +75,7 @@ in {
     "/var/log" = (btrfsSubvol "@log") // {neededForBoot = true;};
     "/.snapshots" = btrfsSubvol "@snapshots";
     "/boot" = {
-      device = "/dev/nvme0n1p1";
+      device = "/dev/disk/by-uuid/C625-99B7";
       fsType = "vfat";
       options = ["fmask=0077" "dmask=0077"];
     };
