@@ -35,6 +35,6 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .
+          git diff --name-only -- '*.nix' | xargs -r git add --
           git commit -m "style: auto-format nix files"
           git push

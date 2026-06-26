@@ -142,7 +142,7 @@ build-system:
   stage: build
   script:
     - |
-      nix build .#nixosConfigurations.bandit.config.system.build.toplevel \
+      nix build .#nixosConfigurations.bandit-ci.config.system.build.toplevel \
         --dry-run \
         --no-update-lock-file
 
@@ -204,7 +204,7 @@ populate-cache:
         --keep-going \
         --fallback \
         --max-jobs 1 \
-        --cores 2 | cachix push "${CACHIX_CACHE_NAME}" || true
+        --cores 2 | cachix push "${CACHIX_CACHE_NAME}"
     - echo "✅ Pushed whatever was built to Cachix — run again if needed"
 
 # ---------------------------------------------------------------------------
