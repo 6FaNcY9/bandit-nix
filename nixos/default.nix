@@ -1,6 +1,7 @@
 _: {
   imports = [
     ./sops.nix
+    ./tor.nix
     ./core.nix
     ./theme.nix
     ./boot.nix
