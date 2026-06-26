@@ -1,6 +1,6 @@
 # Homelab services for bandit-lab.
-# Provides: server UI, nginx reverse proxy, ACME, PostgreSQL, containers,
-# Tailscale VPN, and a simple SMB storage share.
+# Provides: server UI, PostgreSQL, Docker + Portainer, Tailscale VPN, SMB storage.
+# HTTP routing handled by Traefik (traefik.nix). TLS terminated by Cloudflare.
 {pkgs, ...}: {
   # ── Host paths ───────────────────────────────────────────────────────────
   systemd.tmpfiles.rules = [
@@ -10,7 +10,8 @@
   ];
 
   # ── Firewall ──────────────────────────────────────────────────────────────
-  networking.firewall.allowedTCPPorts = [80 443];
+  # Port 80 used by Traefik (tunnel connects locally, no external exposure needed).
+  networking.firewall.allowedTCPPorts = [80];
 
   # ── Server GUI ───────────────────────────────────────────────────────────
   services.cockpit = {
@@ -49,41 +50,19 @@
     openFirewall = false;
   };
 
-  # ── ACME / Let's Encrypt ──────────────────────────────────────────────────
-  security.acme = {
-    acceptTerms = true;
-    defaults.email = "vinobandit@ik.me";
-  };
-
-  # ── Nginx ─────────────────────────────────────────────────────────────────
-  services.nginx = {
-    enable = true;
-    recommendedGzipSettings = true;
-    recommendedOptimisation = true;
-    recommendedProxySettings = true;
-    recommendedTlsSettings = true;
-
-    # Add virtualHosts per project, e.g.:
-    # virtualHosts."example.com" = {
-    #   enableACME = true;
-    #   forceSSL = true;
-    #   locations."/" = { proxyPass = "http://127.0.0.1:3000"; };
-    # };
-  };
-
   # ── PostgreSQL ────────────────────────────────────────────────────────────
   services.postgresql = {
     enable = true;
     package = pkgs.postgresql_16;
     settings = {
       max_connections = 100;
-      shared_buffers = "4GB"; # ~6% of 64 GB RAM
+      shared_buffers = "4GB";
       effective_cache_size = "48GB";
       work_mem = "64MB";
     };
   };
 
-  # ── Docker (for containerised client projects) ────────────────────────────
+  # ── Docker ────────────────────────────────────────────────────────────────
   virtualisation.docker = {
     enable = true;
     enableOnBoot = true;
@@ -102,6 +81,13 @@
       volumes = [
         "/var/run/docker.sock:/var/run/docker.sock"
         "/var/lib/portainer:/data"
+      ];
+      extraOptions = [
+        "--network=proxy"
+        "--label=traefik.enable=true"
+        "--label=traefik.http.routers.portainer.rule=Host(`portainer.bandit-lab.mrija.org`)"
+        "--label=traefik.http.routers.portainer.entrypoints=web"
+        "--label=traefik.http.services.portainer.loadbalancer.server.port=9000"
       ];
     };
   };
