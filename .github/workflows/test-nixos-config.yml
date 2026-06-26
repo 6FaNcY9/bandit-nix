@@ -154,12 +154,26 @@ jobs:
       - name: Test VM boots
         timeout-minutes: 5
         run: |
-          QEMU_OPTS="-m 1024 -nographic -serial mon:stdio" \
-          timeout 60s result/bin/run-bandit-vm &
+          timeout 90s result/bin/run-bandit-vm 2>&1 | tee /tmp/vm-boot.log &
           VM_PID=$!
-          sleep 30
-          kill $VM_PID 2>/dev/null || true
-          echo "✅ VM boot test completed"
+          for i in $(seq 1 18); do
+            sleep 5
+            if grep -qE "login:|Startup finished" /tmp/vm-boot.log 2>/dev/null; then
+              echo "✅ VM reached login prompt"
+              kill "$VM_PID" 2>/dev/null || true
+              exit 0
+            fi
+            if grep -qE "Kernel panic|kernel BUG at|OOPS:" /tmp/vm-boot.log 2>/dev/null; then
+              echo "❌ VM kernel panic detected"
+              tail -50 /tmp/vm-boot.log
+              kill "$VM_PID" 2>/dev/null || true
+              exit 1
+            fi
+          done
+          kill "$VM_PID" 2>/dev/null || true
+          echo "❌ VM did not reach login prompt within 90s"
+          tail -50 /tmp/vm-boot.log
+          exit 1
 
   update-flake:
     name: Update flake.lock
