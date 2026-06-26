@@ -10,7 +10,7 @@
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
-      ExecStart = "${pkgs.docker}/bin/docker network create proxy || true";
+      ExecStart = "${pkgs.bash}/bin/bash -c '${pkgs.docker}/bin/docker network create proxy || true'";
     };
   };
 

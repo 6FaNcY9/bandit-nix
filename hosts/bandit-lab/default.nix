@@ -1,9 +1,9 @@
 {...}: {
   imports = [
     ./hardware.nix
-    ../../nixos/wan.nix
-    ../../nixos/webhost.nix
-    ../../nixos/traefik.nix
+    ./wan.nix
+    ./webhost.nix
+    ./traefik.nix
   ];
 
   networking.hostName = "bandit-lab";
