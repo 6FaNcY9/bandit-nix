@@ -1,10 +1,10 @@
 # bandit-nix
 
-A personal NixOS configuration for the "bandit" host, built from scratch with minimal LLM assistance. This configuration manages a complete NixOS system with home-manager integration, secrets management, and a customized desktop environment.
+A personal NixOS configuration for the `bandit` laptop and `bandit-lab` homelab host. This flake manages NixOS systems with home-manager integration, secrets management, CI evaluation, and a customized desktop environment.
 
 ## 🖥️ System Information
 
-- **Host**: bandit (Framework 13 with AMD 7040 chipset)
+- **Hosts**: bandit (Framework 13 with AMD 7040 chipset), bandit-lab (homelab server)
 - **User**: vino
 - **NixOS Version**: 25.11
 - **Architecture**: x86_64-linux
@@ -21,6 +21,12 @@ A personal NixOS configuration for the "bandit" host, built from scratch with mi
 - **Desktop Environment**: i3 window manager with XFCE panel integration
 - **Developer Tooling**: OpenSSH, podman, libvirt, direnv, and local CI linters available system-wide
 - **Modular Structure**: Clean separation of system and user configurations
+
+## Flake Outputs
+
+- `.#bandit` - laptop workstation configuration with Home Manager, Stylix, nixvim, i3, and desktop tooling.
+- `.#bandit-ci` - CI-safe evaluation output for the laptop configuration; imports `nixos/ci-overrides.nix` so encrypted SOPS files do not need host keys in CI.
+- `.#bandit-lab` - homelab server configuration with SSH, Cloudflare Tunnel, Traefik, Docker-backed services, Tailscale, Samba, PostgreSQL, and server maintenance defaults.
 
 ## 📁 Project Structure
 
@@ -135,35 +141,23 @@ After first boot:
 
 ### WAN Access
 
-`bandit-lab` manages the public DNS record for:
+`bandit-lab` exposes public HTTP services through Cloudflare Tunnel for:
 
 ```text
 bandit-lab.mrija.org
 ```
 
-Cloudflare DDNS expects a sops secret named `cloudflare-ddns-env` whose
-decrypted content is:
-
-```env
-CLOUDFLARE_API_TOKEN=...
-```
-
-Create a Cloudflare API token scoped to the `mrija.org` zone with DNS edit
-permission, add it to `secrets/secrets.yaml`, then rebuild:
+Cloudflare Tunnel expects a sops secret named
+`cloudflare-tunnel-credentials` containing the tunnel credentials JSON.
+Provision the host age key at `/var/lib/sops-nix/key.txt`, add the encrypted
+secret to `secrets/secrets.yaml`, then rebuild:
 
 ```bash
 sudo nixos-rebuild switch --flake .#bandit-lab
 ```
 
-Forward only these ports from the router to the server:
-
-```text
-TCP 80
-TCP 443
-```
-
-If using IPv6, allow inbound TCP 80/443 to the server address in the router
-firewall. Do not expose Cockpit, Samba, or Portainer directly to the WAN.
+No router port forwarding is required for the tunnel path. Do not expose
+Cockpit, Samba, Portainer, or direct Traefik ports to the WAN.
 
 Admin access should use SSH/Tailscale tunnels:
 
