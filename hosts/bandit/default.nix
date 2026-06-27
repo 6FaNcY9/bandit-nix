@@ -23,4 +23,9 @@
 
   # Framework 13 AMD 7040: s2idle is the only working suspend mode.
   boot.kernelParams = ["mem_sleep_default=s2idle"];
+
+  # ── Programs ───────────────────────────────────────────────
+  programs = {
+    nix-ld.enable = true;
+  };
 }

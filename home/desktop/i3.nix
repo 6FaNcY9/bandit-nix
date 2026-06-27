@@ -252,6 +252,10 @@ in {
           notification = false;
         }
         {
+          command = "${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1";
+          notification = false;
+        }
+        {
           command = "${pkgs.blueman}/bin/blueman-applet";
           notification = false;
         }

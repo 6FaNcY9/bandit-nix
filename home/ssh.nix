@@ -38,6 +38,12 @@ _: {
         IdentityFile = "~/.ssh/thehost_mrija";
         IdentitiesOnly = true;
       };
+      "bandit-lab" = {
+        Hostname = "192.168.1.2";
+        User = "vino";
+        IdentityFile = "~/.ssh/homelabKey";
+        IdentitiesOnly = true;
+      };
     };
   };
 }
