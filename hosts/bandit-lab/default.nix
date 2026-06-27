@@ -5,6 +5,8 @@
     ./webhost.nix
     ./traefik.nix
     ./mrija-archive.nix
+    ./vaultwarden.nix
+    ./jellyfin.nix
   ];
 
   networking.hostName = "bandit-lab";

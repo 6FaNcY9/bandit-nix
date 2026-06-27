@@ -19,7 +19,7 @@ in {
         set -euo pipefail
         API_KEY=$(grep '^MRIJA_API_KEY=' ${envFile} | cut -d= -f2-)
         ${pkgs.curl}/bin/curl -sf -X POST http://127.0.0.1:8081/api/sync \
-          -H "X-Api-Key: $API_KEY"
+          -H "X-API-Key: $API_KEY"
         echo "Sync triggered."
       '';
     };
