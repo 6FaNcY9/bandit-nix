@@ -32,25 +32,36 @@ This file tracks the security review work. Low-risk Phase 1/2 changes were start
 These are still good ideas, but should not be rushed.
 
 ### `allowUnfreePredicate`
-Current config uses:
+Current config uses a scoped predicate in `nixos/core.nix`:
 
 ```nix
-nixpkgs.config.allowUnfree = true;
+nixpkgs.config.allowUnfreePredicate = pkg:
+  builtins.elem (lib.getName pkg) [
+    "cheatsheet.nvim"
+    "cuda_nvml_dev"
+    "nvidia-kernel-modules"
+    "nvidia-persistenced"
+    "nvidia-settings"
+    "nvidia-x11"
+  ];
 ```
 
-Do not replace this blindly. First audit which unfree packages are actually needed, then create a precise `allowUnfreePredicate`. An incomplete predicate can make `nixos-rebuild` fail.
+Keep this exact unless evaluation proves another unfree package is required.
+Do not return to global `allowUnfree = true`.
 
 ### Strict DNS-over-TLS
 `DNSOverTLS = "yes"` gives stronger privacy than opportunistic mode, but port 853 is blocked on some hotel/café/airport networks. For now, keep `DNSOverTLS = "opportunistic"` unless broken DNS on restrictive networks is acceptable.
 
 ### SOPS validation in CI
-`nixos/default.nix` still has:
+Production SOPS validation is no longer disabled in `nixos/sops.nix`.
+The CI-only override lives in `nixos/ci-overrides.nix`:
 
 ```nix
 sops.validateSopsFiles = false;
 ```
 
-This should be moved out of production config, but only together with CI changes that pass the override in CI. Do this as one atomic change so CI does not break.
+Keep this override scoped to the `bandit-ci` output so normal host
+evaluation still validates encrypted SOPS files.
 
 ### Flake input branches
 - Keep `home-manager/master` for now because this system tracks `nixos-unstable`. Switching to a release branch while `nixpkgs` remains unstable can introduce module compatibility problems.
@@ -82,8 +93,8 @@ Still pending:
 - Reorder `.github/workflows/nightly-build.yml` so `flake.lock` is committed only after checks/builds pass.
 - Fix `.gitlab-ci.yml` Cachix population: use `nix path-info --recursive ./result | cachix push ...`.
 - Fix `.gitlab-ci.yml` `update-flake` auth prefix: use `oauth2:${GITLAB_PUSH_TOKEN}` for PATs.
-- Move `cachix authtoken` out of global CI setup and into only jobs that push artifacts.
-- Pin GitHub Actions and CI Docker images to immutable digests/SHAs.
+- Keep `cachix authtoken` scoped to jobs that push artifacts.
+- Keep GitHub Actions and CI Docker images pinned to immutable digests/SHAs.
 - Tighten GitHub workflow `permissions` blocks.
 - Make the VM smoke test actually check for a login prompt.
 

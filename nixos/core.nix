@@ -1,6 +1,21 @@
-_: {
-  # Allow unfree packages (e.g. firmware blobs, steam, vscode)
-  nixpkgs.config.allowUnfree = true;
+{
+  lib,
+  pkgs,
+  ...
+}: {
+  nixpkgs.config.allowUnfreePredicate = pkg:
+    builtins.elem (lib.getName pkg) [
+      "cheatsheet.nvim"
+      "cuda_nvml_dev"
+      "nvidia-kernel-modules"
+      "nvidia-persistenced"
+      "nvidia-settings"
+      "nvidia-x11"
+    ];
+  environment.systemPackages = with pkgs; [
+    bubblewrap
+  ];
+
   i18n.defaultLocale = "en_US.UTF-8";
   time.timeZone = "Europe/Vienna";
 

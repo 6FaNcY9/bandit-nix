@@ -1,8 +1,4 @@
 _: {
-  # Disable sops file validation during CI builds where no age key is available.
-  # Secrets are only decryptable on the real machine.
-  sops.validateSopsFiles = false;
-
   sops = {
     defaultSopsFile = ../secrets/secrets.yaml;
     # Age private key for this host — must be provisioned at first boot:
