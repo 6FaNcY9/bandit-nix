@@ -15,3 +15,5 @@ docs/codebase-review.md
 # Windows VM answer file contains a plaintext local-only password.
 # Commit only after encoding the password or replacing changeme.
 hosts/bandit/windows/
+
+.claude/
