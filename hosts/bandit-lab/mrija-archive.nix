@@ -1,11 +1,7 @@
 {pkgs, ...}: let
   maildir = "/srv/containers/mrija-archive/maildir";
   data = "/srv/containers/mrija-archive/data";
-  sshKey = "/home/vino/.ssh/thehost_mrija";
-  remoteHost = "mrija_org@s16.thehost.com.ua";
-  # Adjust remotePath to match actual Maildir location on thehost.com.ua.
-  # Verify with: ssh -i ${sshKey} ${remoteHost} 'find ~ -name cur -maxdepth 4'
-  remotePath = "Maildir/";
+  envFile = "/srv/containers/mrija-archive/deploy/.env";
 in {
   systemd.tmpfiles.rules = [
     "d ${maildir} 0750 vino users -"
@@ -13,7 +9,7 @@ in {
   ];
 
   systemd.services.mrija-archive-sync = {
-    description = "Sync mrija.org Maildir and reindex";
+    description = "Trigger mrija-archive daily mail sync";
     after = ["network-online.target" "docker.service"];
     requires = ["docker.service"];
     serviceConfig = {
@@ -21,22 +17,10 @@ in {
       User = "vino";
       ExecStart = pkgs.writeShellScript "mrija-sync" ''
         set -euo pipefail
-
-        echo "Syncing Maildir from ${remoteHost}…"
-        ${pkgs.rsync}/bin/rsync -az --delete \
-          -e "${pkgs.openssh}/bin/ssh -i ${sshKey} -o StrictHostKeyChecking=accept-new" \
-          ${remoteHost}:${remotePath} ${maildir}/
-
-        echo "Reindexing…"
-        ${pkgs.docker}/bin/docker run --rm \
-          -v ${maildir}:/maildir:ro \
-          -v ${data}:/data \
-          mrija-archive:latest \
-          python -m maildir_report.index_mailbox \
-            --maildir /maildir \
-            --db /data/mail_index.sqlite
-
-        echo "Sync complete."
+        API_KEY=$(grep '^MRIJA_API_KEY=' ${envFile} | cut -d= -f2-)
+        ${pkgs.curl}/bin/curl -sf -X POST http://127.0.0.1:8081/api/sync \
+          -H "X-Api-Key: $API_KEY"
+        echo "Sync triggered."
       '';
     };
   };
