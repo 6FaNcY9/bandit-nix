@@ -45,22 +45,27 @@ in {
 
   # ── CPU ───────────────────────────────────────────────────────────────────
   boot.kernelModules = ["kvm-intel"];
-  hardware.cpu.amd.updateMicrocode = lib.mkForce false;
-  hardware.cpu.intel.updateMicrocode = true;
+  hardware = {
+    cpu = {
+      amd.updateMicrocode = lib.mkForce false;
+      intel.updateMicrocode = true;
+    };
 
-  # ── GPU — NVIDIA GeForce RTX 4090 Laptop ─────────────────────────────────
-  hardware.graphics = {
-    enable = true;
-    enable32Bit = true;
+    # ── GPU — NVIDIA GeForce RTX 4090 Laptop ───────────────────────────────
+    graphics = {
+      enable = true;
+      enable32Bit = true;
+    };
+
+    nvidia = {
+      modesetting.enable = true;
+      open = false;
+      nvidiaSettings = false; # headless server
+      package = config.boot.kernelPackages.nvidiaPackages.stable;
+      powerManagement.enable = true;
+    };
   };
   services.xserver.videoDrivers = ["nvidia"];
-  hardware.nvidia = {
-    modesetting.enable = true;
-    open = false;
-    nvidiaSettings = false; # headless server
-    package = config.boot.kernelPackages.nvidiaPackages.stable;
-    powerManagement.enable = true;
-  };
   environment.systemPackages = with pkgs; [
     nvtopPackages.nvidia
   ];

@@ -30,7 +30,6 @@
       };
       api = {
         dashboard = true;
-        insecure = true;
       };
     };
   };

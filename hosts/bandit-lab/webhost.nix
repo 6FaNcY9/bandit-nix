@@ -9,56 +9,55 @@
     "d /var/lib/portainer 0750 root root -"
   ];
 
-  # ── Firewall ──────────────────────────────────────────────────────────────
-  # Port 80 used by Traefik (tunnel connects locally, no external exposure needed).
-  networking.firewall.allowedTCPPorts = [80];
-
   # ── Server GUI ───────────────────────────────────────────────────────────
-  services.cockpit = {
-    enable = true;
-    openFirewall = false;
-    plugins = with pkgs; [
-      cockpit-files
-    ];
-  };
+  services = {
+    cockpit = {
+      enable = true;
+      openFirewall = false;
+      plugins = with pkgs; [
+        cockpit-files
+      ];
+    };
 
-  # ── VPN ──────────────────────────────────────────────────────────────────
-  services.tailscale.enable = true;
+    # ── VPN ────────────────────────────────────────────────────────────────
+    tailscale.enable = true;
 
-  # ── File storage ─────────────────────────────────────────────────────────
-  services.samba = {
-    enable = true;
-    openFirewall = false;
-    settings = {
-      global = {
-        security = "user";
-        "server string" = "bandit-lab";
-        "map to guest" = "Bad User";
-      };
-      storage = {
-        path = "/srv/storage";
-        browseable = "yes";
-        writable = "yes";
-        "valid users" = "vino";
-        "create mask" = "0660";
-        "directory mask" = "0770";
+    # ── File storage ───────────────────────────────────────────────────────
+    samba = {
+      enable = true;
+      openFirewall = false;
+      settings = {
+        global = {
+          security = "user";
+          "server string" = "bandit-lab";
+          "map to guest" = "Bad User";
+        };
+        storage = {
+          path = "/srv/storage";
+          browseable = "yes";
+          writable = "yes";
+          "valid users" = "vino";
+          "create mask" = "0660";
+          "directory mask" = "0770";
+        };
       };
     };
-  };
-  services.samba-wsdd = {
-    enable = true;
-    openFirewall = false;
-  };
 
-  # ── PostgreSQL ────────────────────────────────────────────────────────────
-  services.postgresql = {
-    enable = true;
-    package = pkgs.postgresql_16;
-    settings = {
-      max_connections = 100;
-      shared_buffers = "4GB";
-      effective_cache_size = "48GB";
-      work_mem = "64MB";
+    samba-wsdd = {
+      enable = true;
+      openFirewall = false;
+    };
+
+    # ── PostgreSQL ─────────────────────────────────────────────────────────
+    postgresql = {
+      enable = true;
+      package = pkgs.postgresql_16;
+      settings = {
+        max_connections = 100;
+        shared_buffers = "4GB";
+        effective_cache_size = "48GB";
+        work_mem = "64MB";
+      };
     };
   };
 
@@ -90,6 +89,10 @@
         "--label=traefik.http.services.portainer.loadbalancer.server.port=9000"
       ];
     };
+  };
+  systemd.services.docker-portainer = {
+    after = ["docker-network-proxy.service"];
+    requires = ["docker-network-proxy.service"];
   };
   users.users.vino.extraGroups = ["docker"];
 
