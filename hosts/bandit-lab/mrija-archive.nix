@@ -5,6 +5,8 @@
 in {
   systemd = {
     tmpfiles.rules = [
+      "d /srv/containers/mrija-archive 0750 vino users -"
+      "d /srv/containers/mrija-archive/deploy 0750 vino users -"
       "d ${maildir} 0750 vino users -"
       "d ${data} 0750 vino users -"
     ];
@@ -17,11 +19,12 @@ in {
       serviceConfig = {
         Type = "oneshot";
         User = "vino";
+        EnvironmentFile = envFile;
         ExecStart = pkgs.writeShellScript "mrija-sync" ''
           set -euo pipefail
-          API_KEY=$(grep '^MRIJA_API_KEY=' ${envFile} | cut -d= -f2-)
+          : "''${MRIJA_API_KEY:?missing MRIJA_API_KEY in ${envFile}}"
           ${pkgs.curl}/bin/curl -sf -X POST http://127.0.0.1:8081/api/sync \
-            -H "X-API-Key: $API_KEY"
+            -H "X-API-Key: ''${MRIJA_API_KEY}"
           echo "Sync triggered."
         '';
       };

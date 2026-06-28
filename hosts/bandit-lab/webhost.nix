@@ -75,7 +75,7 @@
   virtualisation.oci-containers = {
     backend = "docker";
     containers.portainer = {
-      image = "portainer/portainer-ce:lts";
+      image = "portainer/portainer-ce@sha256:5f9b4bda5582fc72c07d730f86168205f4042d82c9cde011c9146b12496e4625";
       ports = ["127.0.0.1:9443:9443"];
       volumes = [
         "/var/run/docker.sock:/var/run/docker.sock"
@@ -94,7 +94,6 @@
     after = ["docker-network-proxy.service"];
     requires = ["docker-network-proxy.service"];
   };
-  users.users.vino.extraGroups = ["docker"];
 
   environment.systemPackages = with pkgs; [
     cifs-utils

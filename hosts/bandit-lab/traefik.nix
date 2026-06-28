@@ -21,7 +21,10 @@
       log.level = "INFO";
       entryPoints.web = {
         address = ":80";
-        forwardedHeaders.insecure = true;
+        forwardedHeaders.trustedIPs = [
+          "127.0.0.1/32"
+          "::1/128"
+        ];
       };
       providers.docker = {
         endpoint = "unix:///var/run/docker.sock";

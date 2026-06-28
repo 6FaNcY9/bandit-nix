@@ -5,6 +5,7 @@ host=""
 flake_ref=""
 root_dev=""
 boot_dev=""
+boot_mount="/boot"
 age_key=""
 btrfs_label="nixos"
 mode="all"
@@ -21,13 +22,14 @@ Generic NixOS live-ISO installer for flake-based hosts.
 Required:
   --host HOST             Flake host to install, for example bandit-lab.
   --root-dev PATH         Root partition to format or mount as BTRFS.
-  --boot-dev PATH         EFI system partition to mount at /boot.
+  --boot-dev PATH         EFI system partition.
 
 Options:
   --flake-ref REF         Flake reference. Default: this repo path.
                          Install target becomes REF#HOST.
   --age-key PATH          sops-nix age private key copied to
                          /mnt/var/lib/sops-nix/key.txt.
+  --boot-mount PATH       EFI mount point in the target config. Default: /boot.
   --btrfs-label LABEL     BTRFS filesystem label. Default: nixos.
   --mode MODE             all, prepare, mount, install. Default: all.
                          all     = flake check, format, mount, copy key, install
@@ -86,6 +88,10 @@ while [[ $# -gt 0 ]]; do
       boot_dev="${2:-}"
       shift 2
       ;;
+    --boot-mount)
+      boot_mount="${2:-}"
+      shift 2
+      ;;
     --age-key)
       age_key="${2:-}"
       shift 2
@@ -123,6 +129,7 @@ done
 [[ -b "$root_dev" ]] || die "root device is not a block device: $root_dev"
 [[ -b "$boot_dev" ]] || die "boot device is not a block device: $boot_dev"
 [[ "$root_dev" != "$boot_dev" ]] || die "--root-dev and --boot-dev must differ"
+[[ "$boot_mount" == /* ]] || die "--boot-mount must be an absolute path"
 
 case "$mode" in
   all|prepare|mount|install) ;;
@@ -149,6 +156,7 @@ info "Host: $host"
 info "Flake target: $target"
 info "Root partition: $root_dev"
 info "EFI partition: $boot_dev"
+info "EFI mount point: $boot_mount"
 [[ -n "$age_key" ]] && info "SOPS age key: $age_key"
 info "Mode: $mode"
 
@@ -190,12 +198,12 @@ if [[ "$mode" == "all" || "$mode" == "prepare" || "$mode" == "mount" ]]; then
 
   info "Mounting target filesystems"
   mount -o subvol=@,noatime,compress=zstd,space_cache=v2,discard=async "$root_dev" /mnt
-  mkdir -p /mnt/{boot,home,nix,var/log,.snapshots}
+  mkdir -p /mnt/home /mnt/nix /mnt/var/log /mnt/.snapshots "/mnt$boot_mount"
   mount -o subvol=@home,noatime,compress=zstd,space_cache=v2,discard=async "$root_dev" /mnt/home
   mount -o subvol=@nix,noatime,compress=zstd,space_cache=v2,discard=async "$root_dev" /mnt/nix
   mount -o subvol=@log,noatime,compress=zstd,space_cache=v2,discard=async "$root_dev" /mnt/var/log
   mount -o subvol=@snapshots,noatime,compress=zstd,space_cache=v2,discard=async "$root_dev" /mnt/.snapshots
-  mount "$boot_dev" /mnt/boot
+  mount "$boot_dev" "/mnt$boot_mount"
 
   if [[ -n "$age_key" ]]; then
     info "Installing sops-nix age key"
@@ -208,7 +216,7 @@ fi
 
 if [[ "$mode" == "all" || "$mode" == "install" ]]; then
   mountpoint -q /mnt || die "/mnt is not mounted; run --mode prepare or --mode mount first"
-  mountpoint -q /mnt/boot || die "/mnt/boot is not mounted"
+  mountpoint -q "/mnt$boot_mount" || die "/mnt$boot_mount is not mounted"
 
   if [[ -n "$age_key" && ! -f /mnt/var/lib/sops-nix/key.txt ]]; then
     info "Installing sops-nix age key"
