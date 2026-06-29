@@ -359,6 +359,7 @@ in {
           untracked = "?";
           staged = "+";
           deleted = "x";
+          stashed = "stash";
         };
 
         nix_shell = {
@@ -374,9 +375,9 @@ in {
         };
 
         character = {
-          success_symbol = "[  ](fg:color_bg1 bg:color_green bold) ";
-          error_symbol = "[  ](fg:color_bg1 bg:color_red bold) ";
-          vimcmd_symbol = "[  ](fg:color_bg1 bg:color_yellow bold) ";
+          success_symbol = "[＄](color_green bold) ";
+          error_symbol = "[＄](color_red bold) ";
+          vimcmd_symbol = "[＄](color_yellow bold) ";
         };
       };
     };

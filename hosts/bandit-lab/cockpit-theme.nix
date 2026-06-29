@@ -127,6 +127,29 @@
       border-radius: 0 !important;
       box-shadow: inset 1px 1px 0 #747369, inset -1px -1px 0 #111111 !important;
     }
+
+    #system-terminal-page,
+    #terminal,
+    .terminal,
+    .terminal-wrapper,
+    .xterm,
+    .xterm-viewport,
+    .xterm-screen,
+    .xterm-rows {
+      background: #1d1f21 !important;
+      color: #f2f0ec !important;
+      font-family: "JetBrainsMono Nerd Font Mono", "JetBrainsMono Nerd Font", "JetBrains Mono", monospace !important;
+    }
+
+    #terminal {
+      border: 1px solid #515151 !important;
+      box-shadow: inset 1px 1px 0 #747369, inset -1px -1px 0 #111111 !important;
+    }
+
+    .terminal .xterm-viewport,
+    .xterm .xterm-viewport {
+      scrollbar-color: #515151 #1d1f21 !important;
+    }
   '';
   bindBranding = [
     "${brandingCss}:${pkgs.cockpit}/share/cockpit/branding/nixos/branding.css"
