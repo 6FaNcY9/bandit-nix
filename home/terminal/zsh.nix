@@ -4,7 +4,7 @@
   inputs,
   ...
 }: let
-  sharedAliases = import ../aliases.nix;
+  sharedAliases = import ./aliases.nix;
 in {
   programs = {
     # ─── Zsh ──────────────────────────────────────────────────────
@@ -64,7 +64,7 @@ in {
       shellAliases =
         sharedAliases
         // {
-          # zsh-only (fish has these as abbrs in shell.nix)
+          # zsh-only (fish has these as abbrs in fish.nix)
           nrs = "sudo nixos-rebuild switch --flake .#bandit";
           nrt = "sudo nixos-rebuild test --flake .#bandit";
           nfc = "nix flake check --no-update-lock-file";

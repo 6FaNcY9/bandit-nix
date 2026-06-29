@@ -53,7 +53,7 @@ A personal NixOS configuration for the `bandit` laptop and `bandit-lab` homelab 
 │   └── users.nix          # User account definitions
 ├── home/                  # Home Manager user configurations
 │   ├── default.nix        # Main home configuration
-│   ├── shell.nix          # Shell environment and aliases
+│   ├── terminal/          # Shells, prompt, terminal tools
 │   ├── editor.nix         # Text editor configuration
 │   ├── git.nix            # Git configuration
 │   ├── theme.nix          # User theme settings
@@ -275,7 +275,7 @@ sudo nixos-rebuild switch --flake .#bandit
 
 - **Theme**: Stylix configuration can be adjusted in the relevant home/nixos files
 - **Window Manager**: i3 configuration is in `home/desktop/i3.nix`
-- **Shell**: Customize your shell in `home/shell.nix`
+- **Shell**: Customize shells and prompt under `home/terminal/`
 - **Git**: Git settings are in `home/git.nix`
 - **Editor**: Neovim/editor configs are in `home/editor.nix`
 

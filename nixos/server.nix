@@ -325,19 +325,19 @@ in {
         hostname = {
           ssh_only = false;
           style = "color_red bold";
-          format = "[$hostname]($style) ";
+          format = "[\\[$hostname\\]]($style) ";
         };
 
         username = {
           style_user = "color_green bold";
           style_root = "color_red bold";
-          format = "[$user]($style) ";
+          format = "[\\[$user\\]]($style) ";
           show_always = false;
         };
 
         directory = {
           style = "color_blue bold";
-          format = "[$path]($style)[$read_only]($read_only_style) ";
+          format = "[\\[$path$read_only\\]]($style) ";
           truncation_length = 4;
           truncate_to_repo = false;
           read_only = " ro";
@@ -345,8 +345,8 @@ in {
 
         git_branch = {
           style = "color_yellow bold";
-          format = "on [$symbol$branch]($style) ";
-          symbol = "git:";
+          format = "[\\[$symbol$branch\\]]($style) ";
+          symbol = "";
         };
 
         git_status = {
@@ -360,24 +360,25 @@ in {
           staged = "+";
           deleted = "x";
           stashed = "stash";
+          format = "[\\[$all_status$ahead_behind\\]]($style) ";
         };
 
         nix_shell = {
-          format = "via [$symbol$state]($style) ";
+          format = "[\\[$symbol$state\\]]($style) ";
           style = "color_aqua bold";
           symbol = "nix:";
         };
 
         cmd_duration = {
           min_time = 1000;
-          style = "color_orange";
-          format = "took [$duration]($style) ";
+          style = "color_orange bold";
+          format = "[\\[$duration\\]]($style) ";
         };
 
         character = {
-          success_symbol = "[＄](color_green bold) ";
-          error_symbol = "[＄](color_red bold) ";
-          vimcmd_symbol = "[＄](color_yellow bold) ";
+          success_symbol = "[\\$](color_green bold) ";
+          error_symbol = "[\\$](color_red bold) ";
+          vimcmd_symbol = "[\\$](color_yellow bold) ";
         };
       };
     };

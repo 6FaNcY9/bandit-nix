@@ -1,10 +1,5 @@
-{
-  lib,
-  pkgs,
-  ...
-}: let
+{pkgs, ...}: let
   sharedAliases = import ./aliases.nix;
-  retroTheme = import ../lib/retro-theme.nix;
 in {
   programs = {
     # ─── Fish ─────────────────────────────────────────────────
@@ -119,118 +114,6 @@ in {
       '';
     };
 
-    # ─── Starship — tomorrow-night-eighties prompt ────────────
-    starship = {
-      enable = true;
-      enableFishIntegration = true;
-      enableZshIntegration = true;
-      settings = {
-        palette = lib.mkForce "tomorrow_night_eighties";
-
-        palettes.tomorrow_night_eighties = retroTheme.starshipPalette;
-
-        format = "$hostname$username$directory$git_branch$git_status$nix_shell$cmd_duration$line_break$character";
-
-        hostname = {
-          ssh_only = false;
-          style = "color_green bold";
-          format = "[$hostname]($style) ";
-        };
-
-        username = {
-          style_user = "color_green bold";
-          style_root = "color_red bold";
-          format = "[$user]($style) ";
-          show_always = false;
-        };
-
-        directory = {
-          style = "color_blue bold";
-          format = "[$path]($style)[$read_only]($read_only_style) ";
-          truncation_length = 4;
-          truncate_to_repo = false;
-          read_only = " 󰌾";
-        };
-
-        git_branch = {
-          style = "color_yellow bold";
-          format = "on [$symbol$branch]($style) ";
-          symbol = " ";
-        };
-
-        git_status = {
-          style = "color_red bold";
-          conflicted = "⚡";
-          ahead = "⇡\${count}";
-          behind = "⇣\${count}";
-          diverged = "⇕⇡\${ahead_count}⇣\${behind_count}";
-          modified = "!";
-          untracked = "?";
-          staged = "+";
-          deleted = "✘";
-          stashed = "stash";
-        };
-
-        nix_shell = {
-          format = "via [$symbol$state]($style) ";
-          style = "color_aqua bold";
-          symbol = "❄ ";
-          impure_msg = "impure";
-          pure_msg = "pure";
-        };
-
-        cmd_duration = {
-          min_time = 2000;
-          format = "took [$duration]($style) ";
-          style = "color_orange bold";
-        };
-
-        character = {
-          success_symbol = "[＄](color_green bold) ";
-          error_symbol = "[＄](color_red bold) ";
-          vimcmd_symbol = "[＄](color_yellow bold) ";
-        };
-
-        # Language modules — only shown inside relevant project dirs
-        rust = {
-          style = "color_orange bold";
-          format = "via [$symbol($version)]($style) ";
-        };
-        python = {
-          style = "color_blue bold";
-          format = "via [$symbol$pyenv_prefix($version)($virtualenv)]($style) ";
-        };
-        nodejs = {
-          style = "color_green bold";
-          format = "via [$symbol($version)]($style) ";
-        };
-        golang = {
-          style = "color_aqua bold";
-          format = "via [$symbol($version)]($style) ";
-        };
-      };
-    };
-
-    # ─── CLI tools ─────────────────────────────────────────────
-    nix-index = {
-      enable = true;
-      enableFishIntegration = true;
-    };
-
-    eza.enable = true;
-    bat.enable = true;
-
-    btop = {
-      enable = true;
-      settings = {
-        vim_keys = true;
-        update_ms = 1000;
-        proc_tree = false;
-        proc_per_core = true;
-        show_battery = true;
-      };
-    };
-
     fish.functions.cb = {
       description = "Copy file contents to clipboard (or stdin if no arg)";
       body = ''
@@ -244,20 +127,5 @@ in {
         end
       '';
     };
-
-    zoxide = {
-      enable = true;
-      enableFishIntegration = true;
-    };
-
-    fzf = {
-      enable = true;
-      enableFishIntegration = true;
-      # Colors managed by Stylix (tomorrow-night-eighties)
-    };
   };
-
-  # Wire docker-compose as a Docker CLI plugin so `docker compose`
-  # works with podman-dockerCompat. User-level path keeps NixOS pure.
-  home.file.".config/docker/cli-plugins/docker-compose".source = "${pkgs.docker-compose}/bin/docker-compose";
 }

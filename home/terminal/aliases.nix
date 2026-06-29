@@ -1,6 +1,6 @@
-# Shell-agnostic aliases shared by fish (home/shell.nix) and zsh
+# Shell-agnostic aliases shared by fish.nix and zsh.nix.
 # (home/terminal/zsh.nix). Fish abbreviations (shellAbbrs) live in
-# shell.nix because zsh has no equivalent concept; per-shell aliases
+# fish.nix because zsh has no equivalent concept; per-shell aliases
 # (`reload`, `paths`) live in each respective file because their
 # implementations differ between shells.
 {
