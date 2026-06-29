@@ -177,16 +177,21 @@ in {
               bind "?" {
                   LaunchOrFocusPlugin "file:${zellijForgotWasm}" {
                       "LOAD_ZELLIJ_BINDINGS" "false"
-                      "command menu" "Ctrl-Space then Space"
-                      "shortcut help" "Ctrl-Space then ?"
-                      "tab switcher" "Ctrl-Space then r"
-                      "new pane" "Ctrl-Space then Space then n"
-                      "split down" "Ctrl-Space then Space then d"
-                      "split right" "Ctrl-Space then Space then r"
-                      "new tab" "Ctrl-Space then Space then t"
-                      "close pane" "Ctrl-Space then Space then x"
-                      "detach" "Ctrl-Space then Space then q"
-                      "leave mode" "Esc or Enter"
+                      "open stable workspace" "run zj from the shell"
+                      "key style" "press Ctrl-Space, release, then press the next key"
+                      "do not use Ctrl-g for commands" "Ctrl-g only locks/unlocks Zellij"
+                      "command menu" "Ctrl-Space, then Space"
+                      "shortcut help" "Ctrl-Space, then ?"
+                      "tab switcher" "Ctrl-Space, then r"
+                      "new pane" "Ctrl-Space, Space, then n"
+                      "split down" "Ctrl-Space, Space, then d"
+                      "split right" "Ctrl-Space, Space, then r"
+                      "new tab" "Ctrl-Space, Space, then t"
+                      "next tab" "Ctrl-Space, Space, then ]"
+                      "previous tab" "Ctrl-Space, Space, then ["
+                      "close pane" "Ctrl-Space, Space, then x"
+                      "detach" "Ctrl-Space, Space, then q"
+                      "leave mode/menu" "Esc or Enter"
                       floating true
                   }
                   SwitchToMode "Normal"
@@ -212,17 +217,17 @@ in {
 
       themes {
           tomorrow-night-eighties {
-              fg 242 240 236
+              fg 213 196 161
               bg 45 45 45
-              black 45 45 45
+              black 30 30 30
               red 242 119 122
-              green 153 204 153
+              green 102 153 204
               yellow 255 204 102
               blue 102 153 204
-              magenta 204 153 204
+              magenta 153 153 153
               cyan 102 204 204
-              white 242 240 236
-              orange 249 145 87
+              white 213 196 161
+              orange 81 81 81
           }
       }
     '';
@@ -266,12 +271,18 @@ in {
           print "zellij quick help"
           print "  zj [name]     attach/create a zellij session"
           print "  zjm           open the Zellij command menu"
-          print "  Ctrl-Space    enter Zellij session/menu mode"
-          print "  Space         open the command menu after Ctrl-Space"
-          print "  ?             open shortcut help after Ctrl-Space"
-          print "  r             open tab switcher after Ctrl-Space"
-          print "  F1            show compact-bar keybinding hints"
-          print "  Esc/Enter     leave a Zellij mode"
+          print ""
+          print "How keys work:"
+          print "  Press Ctrl-Space, release both keys, then press the next key."
+          print "  Example: Ctrl-Space, release, Space opens the command menu."
+          print "  Example: Ctrl-Space, release, ? opens shortcut help."
+          print "  Ctrl-g is only lock/unlock; it is not the menu leader."
+          print ""
+          print "Main keys after Ctrl-Space:"
+          print "  Space         command menu"
+          print "  ?             shortcut help"
+          print "  r             tab switcher"
+          print "  Esc/Enter     leave mode"
         }
 
         zjm() {
