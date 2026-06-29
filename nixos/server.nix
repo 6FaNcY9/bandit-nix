@@ -4,6 +4,7 @@
   pkgs,
   ...
 }: let
+  retroTheme = import ../lib/retro-theme.nix;
   zellijMenu = pkgs.writeShellScriptBin "zellij-menu" ''
     set -euo pipefail
 
@@ -34,8 +35,8 @@
         'Exit menu|Esc' \
       | "$fzf" \
           --no-sort \
-          --border=rounded \
-          --prompt='zellij action > ' \
+          --border=sharp \
+          --prompt='zellij  ' \
           --delimiter='|' \
           --with-nth=1,2 \
           --expect='n,d,r,t,],\[,tab,f,w,z,e,?,R,s,p,c,x,q' \
@@ -202,13 +203,13 @@ in {
               bg 45 45 45
               black 30 30 30
               red 242 119 122
-              green 102 153 204
+              green 153 204 153
               yellow 255 204 102
               blue 102 153 204
-              magenta 153 153 153
+              magenta 204 153 204
               cyan 102 204 204
-              white 213 196 161
-              orange 81 81 81
+              white 242 240 236
+              orange 249 145 87
           }
       }
     '';
@@ -237,98 +238,7 @@ in {
             right = "";
           };
           globalstatus = true;
-          theme = {
-            normal = {
-              a = {
-                bg = "#ffcc66";
-                fg = "#2d2d2d";
-                gui = "bold";
-              };
-              b = {
-                bg = "#393939";
-                fg = "#cccccc";
-              };
-              c = {
-                bg = "#2d2d2d";
-                fg = "#999999";
-              };
-            };
-            insert = {
-              a = {
-                bg = "#6699cc";
-                fg = "#2d2d2d";
-                gui = "bold";
-              };
-              b = {
-                bg = "#393939";
-                fg = "#cccccc";
-              };
-              c = {
-                bg = "#2d2d2d";
-                fg = "#999999";
-              };
-            };
-            visual = {
-              a = {
-                bg = "#cc99cc";
-                fg = "#2d2d2d";
-                gui = "bold";
-              };
-              b = {
-                bg = "#393939";
-                fg = "#cccccc";
-              };
-              c = {
-                bg = "#2d2d2d";
-                fg = "#999999";
-              };
-            };
-            replace = {
-              a = {
-                bg = "#f2777a";
-                fg = "#2d2d2d";
-                gui = "bold";
-              };
-              b = {
-                bg = "#393939";
-                fg = "#cccccc";
-              };
-              c = {
-                bg = "#2d2d2d";
-                fg = "#999999";
-              };
-            };
-            command = {
-              a = {
-                bg = "#99cc99";
-                fg = "#2d2d2d";
-                gui = "bold";
-              };
-              b = {
-                bg = "#393939";
-                fg = "#cccccc";
-              };
-              c = {
-                bg = "#2d2d2d";
-                fg = "#999999";
-              };
-            };
-            inactive = {
-              a = {
-                bg = "#393939";
-                fg = "#999999";
-                gui = "bold";
-              };
-              b = {
-                bg = "#2d2d2d";
-                fg = "#999999";
-              };
-              c = {
-                bg = "#2d2d2d";
-                fg = "#747369";
-              };
-            };
-          };
+          theme = retroTheme.lualineTheme;
         };
       };
     };
@@ -408,20 +318,15 @@ in {
       settings = {
         palette = "tomorrow_night_eighties";
 
-        palettes.tomorrow_night_eighties = {
-          color_fg0 = "#f2f0ec";
-          color_bg1 = "#393939";
-          color_bg3 = "#515151";
-          color_blue = "#6699cc";
-          color_aqua = "#66cccc";
-          color_green = "#99cc99";
-          color_orange = "#f99157";
-          color_purple = "#cc99cc";
-          color_red = "#f2777a";
-          color_yellow = "#ffcc66";
-        };
+        palettes.tomorrow_night_eighties = retroTheme.starshipPalette;
 
-        format = "$username$directory$git_branch$git_status$nix_shell$cmd_duration$line_break$character";
+        format = "$hostname$username$directory$git_branch$git_status$nix_shell$cmd_duration$line_break$character";
+
+        hostname = {
+          ssh_only = false;
+          style = "color_red bold";
+          format = "[$hostname]($style) ";
+        };
 
         username = {
           style_user = "color_green bold";
@@ -469,9 +374,9 @@ in {
         };
 
         character = {
-          success_symbol = "[>](color_green bold)";
-          error_symbol = "[>](color_red bold)";
-          vimcmd_symbol = "[<](color_yellow bold)";
+          success_symbol = "[  ](fg:color_bg1 bg:color_green bold) ";
+          error_symbol = "[  ](fg:color_bg1 bg:color_red bold) ";
+          vimcmd_symbol = "[  ](fg:color_bg1 bg:color_yellow bold) ";
         };
       };
     };

@@ -4,6 +4,7 @@
   ...
 }: let
   sharedAliases = import ./aliases.nix;
+  retroTheme = import ../lib/retro-theme.nix;
 in {
   programs = {
     # ─── Fish ─────────────────────────────────────────────────
@@ -126,20 +127,15 @@ in {
       settings = {
         palette = lib.mkForce "tomorrow_night_eighties";
 
-        palettes.tomorrow_night_eighties = {
-          color_fg0 = "#f2f0ec";
-          color_bg1 = "#393939";
-          color_bg3 = "#515151";
-          color_blue = "#6699cc";
-          color_aqua = "#66cccc";
-          color_green = "#99cc99";
-          color_orange = "#f99157";
-          color_purple = "#cc99cc";
-          color_red = "#f2777a";
-          color_yellow = "#ffcc66";
-        };
+        palettes.tomorrow_night_eighties = retroTheme.starshipPalette;
 
-        format = "$username$directory$git_branch$git_status$nix_shell$cmd_duration$line_break$character";
+        format = "$hostname$username$directory$git_branch$git_status$nix_shell$cmd_duration$line_break$character";
+
+        hostname = {
+          ssh_only = false;
+          style = "color_green bold";
+          format = "[$hostname]($style) ";
+        };
 
         username = {
           style_user = "color_green bold";
@@ -189,9 +185,9 @@ in {
         };
 
         character = {
-          success_symbol = "[❯](color_green bold)";
-          error_symbol = "[❯](color_red bold)";
-          vimcmd_symbol = "[❮](color_yellow bold)";
+          success_symbol = "[  ](fg:color_bg1 bg:color_green bold) ";
+          error_symbol = "[  ](fg:color_bg1 bg:color_red bold) ";
+          vimcmd_symbol = "[  ](fg:color_bg1 bg:color_yellow bold) ";
         };
 
         # Language modules — only shown inside relevant project dirs

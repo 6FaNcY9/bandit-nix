@@ -1,6 +1,7 @@
 {lib, ...}: {
   imports = [
     ./hardware.nix
+    ./cockpit-theme.nix
     ./wan.nix
     ./webhost.nix
     ./traefik.nix
