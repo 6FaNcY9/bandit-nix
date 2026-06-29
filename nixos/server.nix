@@ -2,7 +2,103 @@
   lib,
   pkgs,
   ...
-}: {
+}: let
+  zellijMenu = pkgs.writeShellScriptBin "zellij-menu" ''
+    set -euo pipefail
+
+    zellij=${lib.getExe pkgs.zellij}
+    fzf=${lib.getExe pkgs.fzf}
+    sed=${lib.getExe pkgs.gnused}
+
+    result="$(
+      printf '%s\n' \
+        'New pane (auto)|n' \
+        'Split pane down|d' \
+        'Split pane right|r' \
+        'New tab|t' \
+        'Next tab|]' \
+        'Previous tab|[' \
+        'Focus next pane|Tab' \
+        'Toggle fullscreen|f' \
+        'Toggle floating panes|w' \
+        'Toggle pane frames|z' \
+        'Edit scrollback|e' \
+        'Shortcut help|?' \
+        'Tab switcher|R' \
+        'Session manager|s' \
+        'Plugin manager|p' \
+        'Configuration|c' \
+        'Close focused pane|x' \
+        'Detach from Zellij|q' \
+        'Exit menu|Esc' \
+      | "$fzf" \
+          --no-sort \
+          --border=rounded \
+          --prompt='zellij action > ' \
+          --delimiter='|' \
+          --with-nth=1,2 \
+          --expect='n,d,r,t,],\[,tab,f,w,z,e,?,R,s,p,c,x,q' \
+          --bind='esc:abort'
+    )" || exit 0
+
+    key="$(printf '%s\n' "$result" | "$sed" -n '1p')"
+    choice="$(printf '%s\n' "$result" | "$sed" -n '$p')"
+
+    case "$key" in
+      n) action='New pane (auto)' ;;
+      d) action='Split pane down' ;;
+      r) action='Split pane right' ;;
+      t) action='New tab' ;;
+      ']') action='Next tab' ;;
+      '[') action='Previous tab' ;;
+      tab) action='Focus next pane' ;;
+      f) action='Toggle fullscreen' ;;
+      w) action='Toggle floating panes' ;;
+      z) action='Toggle pane frames' ;;
+      e) action='Edit scrollback' ;;
+      '?') action='Shortcut help' ;;
+      R) action='Tab switcher' ;;
+      s) action='Session manager' ;;
+      p) action='Plugin manager' ;;
+      c) action='Configuration' ;;
+      x) action='Close focused pane' ;;
+      q) action='Detach from Zellij' ;;
+      *) action="''${choice%%|*}" ;;
+    esac
+
+    case "$action" in
+      'New pane (auto)') "$zellij" action new-pane ;;
+      'Split pane down') "$zellij" action new-pane --direction down ;;
+      'Split pane right') "$zellij" action new-pane --direction right ;;
+      'New tab') "$zellij" action new-tab ;;
+      'Next tab') "$zellij" action go-to-next-tab ;;
+      'Previous tab') "$zellij" action go-to-previous-tab ;;
+      'Focus next pane') "$zellij" action focus-next-pane ;;
+      'Toggle fullscreen') "$zellij" action toggle-fullscreen ;;
+      'Toggle floating panes') "$zellij" action toggle-floating-panes ;;
+      'Toggle pane frames') "$zellij" action toggle-pane-frames ;;
+      'Edit scrollback') "$zellij" action edit-scrollback ;;
+      'Shortcut help') "$zellij" action launch-or-focus-plugin --floating --move-to-focused-tab file:${zellijForgotWasm} ;;
+      'Tab switcher') "$zellij" action launch-or-focus-plugin --floating --move-to-focused-tab file:${roomWasm} ;;
+      'Session manager') "$zellij" action launch-or-focus-plugin --floating --move-to-focused-tab zellij:session-manager ;;
+      'Plugin manager') "$zellij" action launch-or-focus-plugin --floating --move-to-focused-tab zellij:plugin-manager ;;
+      'Configuration') "$zellij" action launch-or-focus-plugin --floating --move-to-focused-tab zellij:configuration ;;
+      'Close focused pane') "$zellij" action close-pane ;;
+      'Detach from Zellij') "$zellij" action detach ;;
+      'Exit menu') exit 0 ;;
+    esac
+  '';
+
+  zellijForgotWasm = pkgs.fetchurl {
+    url = "https://github.com/karimould/zellij-forgot/releases/download/0.4.2/zellij_forgot.wasm";
+    hash = "sha256-MRlBRVGdvcEoaFtFb5cDdDePoZ/J2nQvvkoyG6zkSds=";
+  };
+
+  roomWasm = pkgs.fetchurl {
+    url = "https://github.com/rvcas/room/releases/download/v1.2.1/room.wasm";
+    hash = "sha256-kLSDpAt2JGj7dYYhYFh6BfvtzVwTrcs+0jHwG/nActE=";
+  };
+in {
   imports = [
     ./sops.nix
     ./core.nix
@@ -46,28 +142,87 @@
       fzf
       zoxide
       zellij
+      zellijMenu
+      starship
+      zsh-autosuggestions
+      zsh-fzf-tab
+      zsh-syntax-highlighting
       brightnessctl
       libinput
     ];
 
     etc."xdg/zellij/config.kdl".text = ''
-      theme "gruvbox-dark"
+      theme "tomorrow-night-eighties"
       pane_frames true
       default_layout "compact"
 
+      keybinds {
+          shared_except "locked" {
+              bind "Ctrl Space" { SwitchToMode "Session"; }
+          }
+
+          session {
+              bind "Ctrl Space" { SwitchToMode "Normal"; }
+              bind "Space" {
+                  Run "${zellijMenu}/bin/zellij-menu" {
+                      floating true
+                      close_on_exit true
+                      width "86%"
+                      height "80%"
+                      x "7%"
+                      y "10%"
+                  }
+                  SwitchToMode "Normal"
+              }
+              bind "?" {
+                  LaunchOrFocusPlugin "file:${zellijForgotWasm}" {
+                      "LOAD_ZELLIJ_BINDINGS" "false"
+                      "command menu" "Ctrl-Space then Space"
+                      "shortcut help" "Ctrl-Space then ?"
+                      "tab switcher" "Ctrl-Space then r"
+                      "new pane" "Ctrl-Space then Space then n"
+                      "split down" "Ctrl-Space then Space then d"
+                      "split right" "Ctrl-Space then Space then r"
+                      "new tab" "Ctrl-Space then Space then t"
+                      "close pane" "Ctrl-Space then Space then x"
+                      "detach" "Ctrl-Space then Space then q"
+                      "leave mode" "Esc or Enter"
+                      floating true
+                  }
+                  SwitchToMode "Normal"
+              }
+              bind "r" {
+                  LaunchOrFocusPlugin "file:${roomWasm}" {
+                      floating true
+                      ignore_case true
+                      quick_jump true
+                  }
+                  SwitchToMode "Normal"
+              }
+          }
+      }
+
+      plugins {
+          compact-bar location="zellij:compact-bar" {
+              tooltip "F1"
+          }
+          zellij-forgot location="file:${zellijForgotWasm}"
+          room location="file:${roomWasm}"
+      }
+
       themes {
-          gruvbox-dark {
-              fg 213 196 161
-              bg 40 40 40
-              black 40 40 40
-              red 204 36 29
-              green 152 151 26
-              yellow 215 153 33
-              blue 69 133 136
-              magenta 177 98 134
-              cyan 104 157 106
-              white 213 196 161
-              orange 214 93 14
+          tomorrow-night-eighties {
+              fg 242 240 236
+              bg 45 45 45
+              black 45 45 45
+              red 242 119 122
+              green 153 204 153
+              yellow 255 204 102
+              blue 102 153 204
+              magenta 204 153 204
+              cyan 102 204 204
+              white 242 240 236
+              orange 249 145 87
           }
       }
     '';
@@ -78,6 +233,10 @@
 
   programs = {
     zsh = {
+      autosuggestions.enable = true;
+      enableCompletion = true;
+      syntaxHighlighting.enable = true;
+
       interactiveShellInit = ''
         # Keep console/SSH editing sane even when the terminal reports odd keys.
         stty erase '^?' 2>/dev/null || true
@@ -91,7 +250,14 @@
         bindkey '^[[1;5C' forward-word
 
         [[ -r ${pkgs.fzf}/share/fzf/key-bindings.zsh ]] && source ${pkgs.fzf}/share/fzf/key-bindings.zsh
+        [[ -r ${pkgs.zsh-fzf-tab}/share/fzf-tab/fzf-tab.plugin.zsh ]] && source ${pkgs.zsh-fzf-tab}/share/fzf-tab/fzf-tab.plugin.zsh
         command -v zoxide >/dev/null 2>&1 && eval "$(zoxide init zsh)"
+        command -v starship >/dev/null 2>&1 && eval "$(starship init zsh)"
+
+        zstyle ':completion:*' menu no
+        zstyle ':completion:*' matcher-list 'm:{a-z}={A-Za-z}'
+        zstyle ':fzf-tab:*' fzf-flags --height=50% --border=sharp --ansi
+        zstyle ':fzf-tab:*' switch-group ',' '.'
 
         zj() {
           ZELLIJ_CONFIG_DIR=/etc/xdg/zellij zellij attach "''${1:-main}" --create
@@ -100,32 +266,29 @@
         zjh() {
           print "zellij quick help"
           print "  zj [name]     attach/create a zellij session"
-          print "  Ctrl-g ?      show zellij keybinding help"
-          print "  Ctrl-g p/n    previous/next pane"
-          print "  Ctrl-g t      new tab"
-          print "  Ctrl-g d      detach"
+          print "  zjm           open the Zellij command menu"
+          print "  Ctrl-Space    enter Zellij session/menu mode"
+          print "  Space         open the command menu after Ctrl-Space"
+          print "  ?             open shortcut help after Ctrl-Space"
+          print "  r             open tab switcher after Ctrl-Space"
+          print "  F1            show compact-bar keybinding hints"
+          print "  Esc/Enter     leave a Zellij mode"
+        }
+
+        zjm() {
+          if [[ -z "''${ZELLIJ:-}" ]]; then
+            print "zjm works inside Zellij. Run 'zj' first."
+            return 1
+          fi
+          zellij run --floating --close-on-exit --width 86% --height 80% --x 7% --y 10% -- ${zellijMenu}/bin/zellij-menu
         }
 
         if [[ $- == *i* && $SHLVL -eq 1 ]]; then
           print ""
-          print "bandit-lab TTY · run 'zj' for the terminal workspace · run 'zjh' for keys"
+          print "bandit-lab TTY · run 'zj' for Zellij · inside it press Ctrl-Space then Space for menu · run 'zjh' for help"
           print ""
         fi
       '';
-
-      ohMyZsh = {
-        enable = true;
-        plugins = [
-          "colored-man-pages"
-          "command-not-found"
-          "extract"
-          "git"
-          "history-substring-search"
-          "sudo"
-          "systemd"
-        ];
-        theme = "robbyrussell";
-      };
     };
 
     direnv = {
@@ -133,6 +296,79 @@
       nix-direnv.enable = true;
     };
     nh.enable = true;
+
+    starship = {
+      enable = true;
+      settings = {
+        palette = "tomorrow_night_eighties";
+
+        palettes.tomorrow_night_eighties = {
+          color_fg0 = "#f2f0ec";
+          color_bg1 = "#393939";
+          color_bg3 = "#515151";
+          color_blue = "#6699cc";
+          color_aqua = "#66cccc";
+          color_green = "#99cc99";
+          color_orange = "#f99157";
+          color_purple = "#cc99cc";
+          color_red = "#f2777a";
+          color_yellow = "#ffcc66";
+        };
+
+        format = "$username$directory$git_branch$git_status$nix_shell$cmd_duration$line_break$character";
+
+        username = {
+          style_user = "color_green bold";
+          style_root = "color_red bold";
+          format = "[$user]($style) ";
+          show_always = false;
+        };
+
+        directory = {
+          style = "color_blue bold";
+          format = "[$path]($style)[$read_only]($read_only_style) ";
+          truncation_length = 4;
+          truncate_to_repo = false;
+          read_only = " ro";
+        };
+
+        git_branch = {
+          style = "color_yellow bold";
+          format = "on [$symbol$branch]($style) ";
+          symbol = "git:";
+        };
+
+        git_status = {
+          style = "color_red bold";
+          conflicted = "!";
+          ahead = "up\${count}";
+          behind = "down\${count}";
+          diverged = "up\${ahead_count}/down\${behind_count}";
+          modified = "!";
+          untracked = "?";
+          staged = "+";
+          deleted = "x";
+        };
+
+        nix_shell = {
+          format = "via [$symbol$state]($style) ";
+          style = "color_aqua bold";
+          symbol = "nix:";
+        };
+
+        cmd_duration = {
+          min_time = 1000;
+          style = "color_orange";
+          format = "took [$duration]($style) ";
+        };
+
+        character = {
+          success_symbol = "[>](color_green bold)";
+          error_symbol = "[>](color_red bold)";
+          vimcmd_symbol = "[<](color_yellow bold)";
+        };
+      };
+    };
   };
 
   fonts.packages = [pkgs.nerd-fonts.jetbrains-mono];
