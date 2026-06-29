@@ -249,7 +249,7 @@ in {
         bindkey '^[[1;5D' backward-word
         bindkey '^[[1;5C' forward-word
 
-        [[ -r ${pkgs.fzf}/share/fzf/key-bindings.zsh ]] && source ${pkgs.fzf}/share/fzf/key-bindings.zsh
+        [[ -r ${pkgs.fzf}/share/fzf/key-bindings.zsh ]] && source ${pkgs.fzf}/share/fzf/key-bindings.zsh 2> >(${pkgs.gnugrep}/bin/grep -v "can't change option: zle" >&2)
         [[ -r ${pkgs.zsh-fzf-tab}/share/fzf-tab/fzf-tab.plugin.zsh ]] && source ${pkgs.zsh-fzf-tab}/share/fzf-tab/fzf-tab.plugin.zsh
         command -v zoxide >/dev/null 2>&1 && eval "$(zoxide init zsh)"
 
