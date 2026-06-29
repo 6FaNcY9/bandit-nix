@@ -155,7 +155,6 @@ in {
       theme "tomorrow-night-eighties"
       pane_frames true
       default_layout "compact"
-      simplified_ui true
 
       keybinds {
           shared_except "locked" {
