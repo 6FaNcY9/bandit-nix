@@ -23,7 +23,7 @@ in {
         ExecStart = pkgs.writeShellScript "mrija-sync" ''
           set -euo pipefail
           : "''${MRIJA_API_KEY:?missing MRIJA_API_KEY in ${envFile}}"
-          ${pkgs.curl}/bin/curl -sf -X POST http://127.0.0.1:8081/api/sync \
+          ${pkgs.curl}/bin/curl -sf --max-time 30 -X POST http://127.0.0.1:8081/api/sync \
             -H "X-API-Key: ''${MRIJA_API_KEY}"
           echo "Sync triggered."
         '';

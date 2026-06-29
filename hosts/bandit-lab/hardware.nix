@@ -62,10 +62,15 @@ in {
       open = false;
       nvidiaSettings = false; # headless server
       package = config.boot.kernelPackages.nvidiaPackages.stable;
-      powerManagement.enable = true;
+      powerManagement.enable = false; # server: no suspend/resume; use nvidia-persistenced instead
+      powerManagement.finegrained = false;
+      nvidiaPersistenced = true;
     };
   };
+
+  # NixOS' NVIDIA module keys off this option even on a headless host; keep X disabled in server.nix.
   services.xserver.videoDrivers = ["nvidia"];
+
   environment.systemPackages = with pkgs; [
     nvtopPackages.nvidia
   ];

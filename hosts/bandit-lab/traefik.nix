@@ -20,7 +20,7 @@
     staticConfigOptions = {
       log.level = "INFO";
       entryPoints.web = {
-        address = ":80";
+        address = "127.0.0.1:80";
         forwardedHeaders.trustedIPs = [
           "127.0.0.1/32"
           "::1/128"
@@ -30,9 +30,6 @@
         endpoint = "unix:///var/run/docker.sock";
         exposedByDefault = false;
         network = "proxy";
-      };
-      api = {
-        dashboard = true;
       };
     };
   };

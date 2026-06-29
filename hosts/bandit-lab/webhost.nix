@@ -1,13 +1,37 @@
 # Homelab services for bandit-lab.
 # Provides: server UI, PostgreSQL, Docker + Portainer, Tailscale VPN, SMB storage.
 # HTTP routing handled by Traefik (traefik.nix). TLS terminated by Cloudflare.
-{pkgs, ...}: {
+{
+  lib,
+  pkgs,
+  ...
+}: {
+  # bandit-lab: vino needs docker group for container management.
+  # Keep server group scope tighter than the desktop laptop profile.
+  users.users.vino.extraGroups = lib.mkForce ["wheel" "networkmanager" "docker"];
+
   # ── Host paths ───────────────────────────────────────────────────────────
-  systemd.tmpfiles.rules = [
-    "d /srv/containers 0750 vino users -"
-    "d /srv/storage 0770 vino users -"
-    "d /var/lib/portainer 0750 root root -"
-  ];
+  systemd = {
+    tmpfiles.rules = [
+      "d /srv/containers 0750 vino users -"
+      "d /srv/storage 0770 vino users -"
+      "d /var/lib/portainer 0750 root root -"
+    ];
+
+    # Cockpit is admin-only. Keep the systemd socket loopback-bound and access it via SSH/Tailscale tunnels.
+    sockets.cockpit = {
+      listenStreams = lib.mkForce [];
+      socketConfig.ListenStream = lib.mkForce [
+        ""
+        "127.0.0.1:9090"
+      ];
+    };
+
+    services.docker-portainer = {
+      after = ["docker-network-proxy.service"];
+      requires = ["docker-network-proxy.service"];
+    };
+  };
 
   # ── Server GUI ───────────────────────────────────────────────────────────
   services = {
@@ -52,6 +76,7 @@
     postgresql = {
       enable = true;
       package = pkgs.postgresql_16;
+      # NixOS defaults to Unix-socket access unless enableTCPIP is set.
       settings = {
         max_connections = 100;
         shared_buffers = "4GB";
@@ -59,6 +84,12 @@
         work_mem = "64MB";
       };
     };
+  };
+
+  networking.firewall = {
+    # LAN file sharing is intentional; WAN service exposure stays behind Cloudflare Tunnel/Tailscale.
+    allowedTCPPorts = [139 445 5357]; # SMB + WSDD
+    allowedUDPPorts = [137 138 3702]; # NetBIOS + WSDD
   };
 
   # ── Docker ────────────────────────────────────────────────────────────────
@@ -70,6 +101,8 @@
       data-root = "/srv/containers/docker";
       log-driver = "local";
       live-restore = true;
+      "icc" = false; # block inter-container comms by default
+      "userland-proxy" = false; # use iptables hairpin NAT instead
     };
   };
   virtualisation.oci-containers = {
@@ -89,10 +122,6 @@
         "--label=traefik.http.services.portainer.loadbalancer.server.port=9000"
       ];
     };
-  };
-  systemd.services.docker-portainer = {
-    after = ["docker-network-proxy.service"];
-    requires = ["docker-network-proxy.service"];
   };
 
   environment.systemPackages = with pkgs; [

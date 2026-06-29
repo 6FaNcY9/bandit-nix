@@ -6,6 +6,7 @@
     ./traefik.nix
     ./mrija-archive.nix
     ./vaultwarden.nix
+    ./power.nix
   ];
 
   networking.hostName = "bandit-lab";
