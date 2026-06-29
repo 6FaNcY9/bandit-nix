@@ -9,7 +9,6 @@ in {
       i3Support = true;
     };
 
-    # Kill XFCE panel (session manager starts it), then launch polybar
     script = ''
       export PATH="${pkgs.coreutils}/bin:${pkgs.gawk}/bin:${pkgs.iproute2}/bin:${pkgs.power-profiles-daemon}/bin:/run/current-system/sw/bin:$PATH"
       pkill xfce4-panel 2>/dev/null || true
@@ -23,7 +22,7 @@ in {
         bg1 = "#393939";
         bg3 = "#515151";
         fg = "#cccccc";
-        muted = "#999999";
+        muted = "#515151";
         green = "#99cc99";
         blue = "#6699cc";
         aqua = "#66cccc";
@@ -33,67 +32,82 @@ in {
         purple = "#cc99cc";
       };
 
-      # ── Main bar ────────────────────────────────────────────────────
+      # ── Main bar ──────────────────────────────────────────────────────
       "bar/main" = {
         width = "100%";
-        height = 26;
-        background = "\${colors.bg1}";
+        height = 28;
+        background = "\${colors.bg}";
         foreground = "\${colors.fg}";
-        font-0 = "JetBrainsMono Nerd Font Mono:size=11;3";
+        # Bold Nerd Font — powerline glyphs (U+E0B0/B2) are in this font
+        font-0 = "JetBrainsMono Nerd Font Mono:bold:size=10;3";
         line-size = 0;
         padding-left = 0;
-        padding-right = 0;
+        padding-right = 1;
         module-margin = 0;
-        modules-left = "nix sep i3";
-        modules-right = "cpu mem net vol bat clock tray";
+        modules-left = "nix nix-arrow i3";
+        modules-center = "clock";
+        modules-right = "cpu mem net vol bat tray";
         wm-restack = "i3";
         cursor-click = "pointer";
         override-redirect = false;
-        # Raised 3D look: bright highlight top, hard shadow bottom
+        # Raised bevel: 2px top highlight + 2px bottom shadow
         border-top-size = 2;
         border-bottom-size = 2;
         border-top-color = "#666666";
         border-bottom-color = "#111111";
       };
 
-      # ── Left: NixOS menu button ─────────────────────────────────────
+      # ── Left: NixOS launcher — solid blue pill ────────────────────────
       "module/nix" = {
         type = "custom/text";
-        format = " 󱄅 bandit ";
-        format-foreground = "\${colors.blue}";
-        format-background = "\${colors.bg1}";
+        format = "  󱄅  bandit  ";
+        format-foreground = "#ffffff";
+        format-background = "\${colors.blue}";
         click-left = "${rofi} -show drun";
       };
 
-      "module/sep" = {
+      # Powerline right-arrow: transitions blue button → dark panel
+      "module/nix-arrow" = {
         type = "custom/text";
-        format = "│";
-        format-foreground = "\${colors.bg3}";
+        format = "";
+        format-foreground = "\${colors.blue}";
+        format-background = "\${colors.bg}";
       };
 
-      # ── Left: i3 workspaces ─────────────────────────────────────────
+      # ── Left: i3 workspaces — filled/hollow pill style ────────────────
       "module/i3" = {
         type = "internal/i3";
         format = "<label-state>";
-        # focused: [ N ] in yellow
-        label-focused = "[ %name% ]";
-        label-focused-foreground = "\${colors.yellow}";
+        # active: dark text on yellow fill — looks like a pressed button
+        label-focused = " %name% ";
+        label-focused-foreground = "\${colors.bg}";
+        label-focused-background = "\${colors.yellow}";
         label-focused-padding = 0;
-        # unfocused: N muted
+        # inactive: dim number
         label-unfocused = " %name% ";
         label-unfocused-foreground = "\${colors.muted}";
         label-unfocused-padding = 0;
-        # visible (on other monitor)
+        # visible on another output
         label-visible = " %name% ";
         label-visible-foreground = "\${colors.fg}";
         label-visible-padding = 0;
-        # urgent: [ N ] in red
-        label-urgent = "[ %name% ]";
-        label-urgent-foreground = "\${colors.red}";
+        # urgent: red fill
+        label-urgent = " %name% ";
+        label-urgent-foreground = "\${colors.bg}";
+        label-urgent-background = "\${colors.red}";
         label-urgent-padding = 0;
       };
 
-      # ── Right: CPU (built-in, 3-level heat-map via warn) ─────────────
+      # ── Center: Clock — date muted · time bold yellow ─────────────────
+      "module/clock" = {
+        type = "internal/date";
+        interval = 10;
+        date = "%a %d";
+        time = "%H:%M";
+        label = "%{F#515151}%date%%{F-}   %{F#ffcc66} %time%%{F-}";
+      };
+
+      # ── Right: CPU (built-in, heat-map) ───────────────────────────────
       "module/cpu" = {
         type = "internal/cpu";
         interval = 2;
@@ -104,7 +118,7 @@ in {
         "label-warn" = "%percentage%%";
       };
 
-      # ── Right: Memory (built-in, heat-map via warn) ────────────────
+      # ── Right: Memory (built-in, heat-map) ────────────────────────────
       "module/mem" = {
         type = "internal/memory";
         interval = 3;
@@ -115,14 +129,14 @@ in {
         "label-warn" = "%used%";
       };
 
-      # ── Right: Network ──────────────────────────────────────────────
+      # ── Right: Network (custom script — wifi/eth + speeds) ────────────
       "module/net" = {
         type = "custom/script";
         exec = "/home/vino/.local/bin/bar-net";
         interval = 2;
       };
 
-      # ── Right: Volume (built-in pulseaudio) ────────────────────────
+      # ── Right: Volume (built-in pulseaudio, ramp icons) ───────────────
       "module/vol" = {
         type = "internal/pulseaudio";
         sink = "@DEFAULT_SINK@";
@@ -131,7 +145,7 @@ in {
         format-volume = "%{F#515151}─[%{F-}<ramp-volume>%{F#cccccc}<label-volume>%{F-}%{F#515151}]%{F-}";
         format-muted = "%{F#515151}─[%{F-}%{F#f2777a}󰝟 mute%{F-}%{F#515151}]%{F-}";
         label-volume = "%percentage%%";
-        ramp-volume-0 = "%{F#999999}󰕿 ";
+        ramp-volume-0 = "%{F#515151}󰕿 ";
         ramp-volume-1 = "%{F#99cc99}󰖀 ";
         ramp-volume-2 = "%{F#99cc99}󰕾 ";
         click-left = "${pactl} set-sink-mute @DEFAULT_SINK@ toggle";
@@ -140,7 +154,7 @@ in {
         scroll-down = "${pactl} set-sink-volume @DEFAULT_SINK@ -5%";
       };
 
-      # ── Right: Battery ──────────────────────────────────────────────
+      # ── Right: Battery (custom script — auto-detect + power profile) ──
       "module/bat" = {
         type = "custom/script";
         exec = "/home/vino/.local/bin/bar-bat";
@@ -148,25 +162,17 @@ in {
         click-left = "/home/vino/.local/bin/bar-bat-cycle";
       };
 
-      # ── Right: System tray ──────────────────────────────────────────
+      # ── Right: System tray (far right) ────────────────────────────────
       "module/tray" = {
         type = "internal/tray";
         tray-spacing = "4px";
-        tray-background = "\${colors.bg1}";
+        tray-background = "\${colors.bg}";
         tray-padding = "2px";
-      };
-
-      # ── Right: Clock ────────────────────────────────────────────────
-      "module/clock" = {
-        type = "internal/date";
-        interval = 30;
-        # Matches starship ─[ ] style
-        date = "%{F#515151}─[%{F-} %{F#ffcc66}%a %d  %H:%M%{F-} %{F#515151}]%{F-}";
       };
     };
   };
 
-  # ── Polybar scripts (output polybar %{F#color} tokens) ─────────────
+  # ── Scripts (polybar %{F#color} token output) ─────────────────────────
   home.file = {
     ".local/bin/bar-net" = {
       executable = true;
