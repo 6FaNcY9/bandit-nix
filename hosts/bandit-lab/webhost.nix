@@ -37,6 +37,10 @@
   services = {
     cockpit = {
       enable = true;
+      allowed-origins = [
+        "https://localhost:9090"
+        "https://127.0.0.1:9090"
+      ];
       openFirewall = false;
       plugins = with pkgs; [
         cockpit-files
