@@ -11,6 +11,7 @@ in {
 
     # Kill XFCE panel (session manager starts it), then launch polybar
     script = ''
+      export PATH="${pkgs.coreutils}/bin:${pkgs.gawk}/bin:${pkgs.iproute2}/bin:${pkgs.power-profiles-daemon}/bin:/run/current-system/sw/bin:$PATH"
       pkill xfce4-panel 2>/dev/null || true
       polybar-msg cmd quit 2>/dev/null || true
       polybar main &
