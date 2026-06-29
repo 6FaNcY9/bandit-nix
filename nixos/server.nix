@@ -1,4 +1,5 @@
 {
+  inputs,
   lib,
   pkgs,
   ...
@@ -238,6 +239,121 @@ in {
   };
 
   programs = {
+    nixvim = {
+      enable = true;
+      defaultEditor = true;
+      nixpkgs.source = inputs.nixpkgs;
+      viAlias = true;
+      vimAlias = true;
+
+      plugins.lualine = {
+        enable = true;
+        settings.options = {
+          component_separators = {
+            left = "";
+            right = "";
+          };
+          section_separators = {
+            left = "";
+            right = "";
+          };
+          globalstatus = true;
+          theme = {
+            normal = {
+              a = {
+                bg = "#ffcc66";
+                fg = "#2d2d2d";
+                gui = "bold";
+              };
+              b = {
+                bg = "#393939";
+                fg = "#cccccc";
+              };
+              c = {
+                bg = "#2d2d2d";
+                fg = "#999999";
+              };
+            };
+            insert = {
+              a = {
+                bg = "#6699cc";
+                fg = "#2d2d2d";
+                gui = "bold";
+              };
+              b = {
+                bg = "#393939";
+                fg = "#cccccc";
+              };
+              c = {
+                bg = "#2d2d2d";
+                fg = "#999999";
+              };
+            };
+            visual = {
+              a = {
+                bg = "#cc99cc";
+                fg = "#2d2d2d";
+                gui = "bold";
+              };
+              b = {
+                bg = "#393939";
+                fg = "#cccccc";
+              };
+              c = {
+                bg = "#2d2d2d";
+                fg = "#999999";
+              };
+            };
+            replace = {
+              a = {
+                bg = "#f2777a";
+                fg = "#2d2d2d";
+                gui = "bold";
+              };
+              b = {
+                bg = "#393939";
+                fg = "#cccccc";
+              };
+              c = {
+                bg = "#2d2d2d";
+                fg = "#999999";
+              };
+            };
+            command = {
+              a = {
+                bg = "#99cc99";
+                fg = "#2d2d2d";
+                gui = "bold";
+              };
+              b = {
+                bg = "#393939";
+                fg = "#cccccc";
+              };
+              c = {
+                bg = "#2d2d2d";
+                fg = "#999999";
+              };
+            };
+            inactive = {
+              a = {
+                bg = "#393939";
+                fg = "#999999";
+                gui = "bold";
+              };
+              b = {
+                bg = "#2d2d2d";
+                fg = "#999999";
+              };
+              c = {
+                bg = "#2d2d2d";
+                fg = "#747369";
+              };
+            };
+          };
+        };
+      };
+    };
+
     zsh = {
       autosuggestions.enable = true;
       enableCompletion = true;

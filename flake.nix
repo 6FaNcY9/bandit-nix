@@ -81,6 +81,7 @@
       bandit-lab = nixpkgs.lib.nixosSystem {
         specialArgs = {inherit inputs;};
         modules = [
+          inputs.nixvim.nixosModules.nixvim
           sops-nix.nixosModules.sops
           ./hosts/bandit-lab
           ./nixos/server.nix
