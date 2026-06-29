@@ -17,7 +17,7 @@
     ./desktop/firefox
     ./desktop/thunderbird.nix
     ./desktop/xfce.nix
-    ./desktop/panel.nix
+    ./desktop/bar.nix
     ./desktop/powermenu.nix
     ./editor.nix
     ./terminal

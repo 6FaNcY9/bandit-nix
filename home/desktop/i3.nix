@@ -263,10 +263,11 @@ in {
           command = "${pkgs.copyq}/bin/copyq";
           notification = false;
         }
-        # XFCE panel — provides system tray since you're running XFCE+i3
+        # Polybar — replaces XFCE panel; restart on i3 reload
         {
-          command = "${pkgs.xfce4-panel}/bin/xfce4-panel --disable-wm-check";
+          command = "systemctl --user restart polybar";
           notification = false;
+          always = true;
         }
       ];
 
