@@ -29,6 +29,13 @@ _: {
         owner = "vino";
         mode = "0400";
       };
+      "context7_api_key" = {
+        owner = "vino";
+        mode = "0400";
+      };
+      "vaultwarden-admin-token" = {
+        mode = "0400";
+      };
       "thehost-sshkey" = {
         owner = "vino";
         path = "/home/vino/.ssh/thehost_mrija";

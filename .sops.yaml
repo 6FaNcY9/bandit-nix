@@ -4,6 +4,7 @@
 keys:
   - &user  age134u5vtdts98pnept0k9v0uy4m6guthggfguw0ycvzn0evjeqgemsgl0krt
   - &host_bandit age1r6cncetmt3xx9mv2hedvwm8dwc2nhy9rmekhah747kxeguzygplq6a875l
+  - &host_bandit_lab age1urtv4pr4sgg5dvpx9kpkxaq8ef2rx98mn37gmncnjtdnf7c2h9uslg820j
   - &gpg_user 4D8770567A65FE1369E2BCC1611871842A8C1619  
 creation_rules:
   - path_regex: secrets/.*\.ya?ml
@@ -11,5 +12,6 @@ creation_rules:
       - age:
           - *user
           - *host_bandit
+          - *host_bandit_lab
         pgp:
           - *gpg_user 
