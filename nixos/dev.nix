@@ -40,32 +40,10 @@
 
   environment.systemPackages = with pkgs; [
     docker-compose
-    cachix
-    git
-    curl
-    wget
-    jq
-    ripgrep
-    fd
-    bat
-    eza
     gcc
-    gnupg
     xclip
-    tree-sitter
-    gnumake
-    pkg-config
-    usbutils
-    pciutils
-    lm_sensors
-    alejandra
-    deadnix
-    statix
-    nix-output-monitor
-    nvd
     comma
     lazygit
-    sops
     grc # fzf-tab-source: colorized ip/network output in previews
     lesspipe # fzf-tab-source: lets `less` preview archives/images/etc
     virtio-win # Windows virtio drivers ISO (mount in VM during install)

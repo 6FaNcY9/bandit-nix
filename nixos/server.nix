@@ -102,6 +102,7 @@
 in {
   imports = [
     ./sops.nix
+    ./cli-tools.nix
     ./core.nix
     ./boot.nix
     ./network.nix
@@ -112,28 +113,6 @@ in {
   environment = {
     # ── Base server packages (no desktop/VM tools) ──────────────────────────
     systemPackages = with pkgs; [
-      git
-      curl
-      wget
-      jq
-      ripgrep
-      fd
-      bat
-      eza
-      gnupg
-      tree-sitter
-      gnumake
-      pkg-config
-      usbutils
-      pciutils
-      lm_sensors
-      alejandra
-      deadnix
-      statix
-      nix-output-monitor
-      nvd
-      sops
-      cachix
       btop
       htop
       iotop
@@ -505,16 +484,6 @@ in {
 
   # ── TTY-only server surface ───────────────────────────────────────────────
   services = {
-    xserver = {
-      enable = false;
-      displayManager.lightdm.enable = false;
-      desktopManager.xfce.enable = false;
-      windowManager.i3.enable = false;
-    };
-
-    blueman.enable = lib.mkForce false;
-    gnome.gnome-keyring.enable = lib.mkForce false;
-
     kmscon = {
       enable = true;
       useXkbConfig = true;
@@ -525,9 +494,6 @@ in {
       };
     };
   };
-
-  hardware.bluetooth.enable = lib.mkForce false;
-  security.pam.services.greetd.enableGnomeKeyring = lib.mkForce false;
 
   services.openssh = {
     enable = true;
@@ -636,13 +602,14 @@ in {
   # ── BTRFS maintenance ─────────────────────────────────────────────────────
   services.btrfs.autoScrub = {
     enable = true;
+    # Server keeps the same monthly cadence as the laptop; adjust per-host if disk churn increases.
     interval = "monthly";
     fileSystems = ["/"];
   };
 
   # ── Nix build capacity ────────────────────────────────────────────────────
   nix.settings = {
-    max-jobs = 16; # i9 — adjust to actual core count after nixos-generate-config
+    max-jobs = 16; # i9-14900HX: 24 physical / 32 logical cores; 16 is conservative, raise if builds are slow
     cores = 0;
   };
 }
