@@ -24,7 +24,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    nixos-hardware.url = "github:NixOS/nixos-hardware";
+    nixos-hardware = {
+      url = "github:NixOS/nixos-hardware";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     fzf-tab-source = {
       url = "github:Freed-Wu/fzf-tab-source";
@@ -48,34 +51,26 @@
       users.vino = import ./home;
     };
   in {
-    nixosConfigurations = {
+    nixosConfigurations = let
+      banditModules = [
+        {nixpkgs.hostPlatform = "x86_64-linux";}
+        stylix.nixosModules.stylix
+        nixos-hardware.nixosModules.framework-13-7040-amd
+        sops-nix.nixosModules.sops
+        ./hosts/bandit
+        ./nixos
+        home-manager.nixosModules.home-manager
+        {home-manager = hmBase;}
+      ];
+    in {
       bandit = nixpkgs.lib.nixosSystem {
         specialArgs = {inherit inputs;};
-        modules = [
-          {nixpkgs.hostPlatform = "x86_64-linux";}
-          stylix.nixosModules.stylix
-          nixos-hardware.nixosModules.framework-13-7040-amd
-          sops-nix.nixosModules.sops
-          ./hosts/bandit
-          ./nixos
-          home-manager.nixosModules.home-manager
-          {home-manager = hmBase;}
-        ];
+        modules = banditModules;
       };
 
       bandit-ci = nixpkgs.lib.nixosSystem {
         specialArgs = {inherit inputs;};
-        modules = [
-          {nixpkgs.hostPlatform = "x86_64-linux";}
-          stylix.nixosModules.stylix
-          nixos-hardware.nixosModules.framework-13-7040-amd
-          sops-nix.nixosModules.sops
-          ./hosts/bandit
-          ./nixos
-          ./nixos/ci-overrides.nix
-          home-manager.nixosModules.home-manager
-          {home-manager = hmBase;}
-        ];
+        modules = banditModules ++ [./nixos/ci-overrides.nix];
       };
 
       bandit-lab = nixpkgs.lib.nixosSystem {
