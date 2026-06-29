@@ -198,7 +198,14 @@
       mkdir -p "$state_dir"
 
       restore_screen() {
-        local saved name value
+        local saved name value dpms
+        for saved in "$state_dir"/*.dpms; do
+          [[ -e "$saved" ]] || continue
+          read -r dpms < "$saved" || continue
+          [[ -w "$dpms" ]] && printf 'On\n' > "$dpms" || true
+          rm -f "$saved"
+        done
+
         for saved in "$state_dir"/*.brightness; do
           [[ -e "$saved" ]] || continue
           read -r name value < "$saved" || continue
@@ -208,7 +215,17 @@
       }
 
       dim_screen() {
-        local dev name current
+        local dev name current connector dpms status saved_name
+        for dpms in /sys/class/drm/card*-*/dpms; do
+          [[ -e "$dpms" && -w "$dpms" ]] || continue
+          connector="$(dirname "$dpms")"
+          status="$(cat "$connector/status" 2>/dev/null || true)"
+          [[ "$status" == "connected" ]] || continue
+          saved_name="$(basename "$connector")"
+          printf '%s\n' "$dpms" > "$state_dir/$saved_name.dpms"
+          printf 'Off\n' > "$dpms" || true
+        done
+
         for dev in /sys/class/backlight/*; do
           [[ -e "$dev" ]] || continue
           name="$(basename "$dev")"
