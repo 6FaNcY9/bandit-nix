@@ -9,8 +9,9 @@ in {
       i3Support = true;
     };
 
-    # Kill any running instance then relaunch on i3 reload
+    # Kill XFCE panel (session manager starts it), then launch polybar
     script = ''
+      pkill xfce4-panel 2>/dev/null || true
       polybar-msg cmd quit 2>/dev/null || true
       polybar main &
     '';
@@ -57,16 +58,16 @@ in {
       # ── Left: NixOS menu button ─────────────────────────────────────
       "module/nix" = {
         type = "custom/text";
-        content = " 󱄅 bandit ";
-        content-foreground = "\${colors.blue}";
-        content-background = "\${colors.bg}";
+        format = " 󱄅 bandit ";
+        format-foreground = "\${colors.blue}";
+        format-background = "\${colors.bg}";
         click-left = "${rofi} -show drun";
       };
 
       "module/sep" = {
         type = "custom/text";
-        content = "│";
-        content-foreground = "\${colors.bg3}";
+        format = "│";
+        format-foreground = "\${colors.bg3}";
       };
 
       # ── Left: i3 workspaces ─────────────────────────────────────────
