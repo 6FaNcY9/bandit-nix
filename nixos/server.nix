@@ -252,7 +252,6 @@ in {
         [[ -r ${pkgs.fzf}/share/fzf/key-bindings.zsh ]] && source ${pkgs.fzf}/share/fzf/key-bindings.zsh
         [[ -r ${pkgs.zsh-fzf-tab}/share/fzf-tab/fzf-tab.plugin.zsh ]] && source ${pkgs.zsh-fzf-tab}/share/fzf-tab/fzf-tab.plugin.zsh
         command -v zoxide >/dev/null 2>&1 && eval "$(zoxide init zsh)"
-        command -v starship >/dev/null 2>&1 && eval "$(starship init zsh)"
 
         zstyle ':completion:*' menu no
         zstyle ':completion:*' matcher-list 'm:{a-z}={A-Za-z}'
