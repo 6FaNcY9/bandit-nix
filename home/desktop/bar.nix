@@ -44,6 +44,11 @@ in {
         wm-restack = "i3";
         cursor-click = "pointer";
         override-redirect = false;
+        # Fake raised/3D look: lighter top edge = highlight, darker bottom = shadow
+        border-top-size = 1;
+        border-bottom-size = 1;
+        border-top-color = "#555555";
+        border-bottom-color = "#1a1a1a";
       };
 
       # ── Left: NixOS menu button ─────────────────────────────────────
