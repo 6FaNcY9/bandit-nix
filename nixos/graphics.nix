@@ -1,7 +1,6 @@
 {pkgs, ...}: {
-  # amd_pstate=active enables the modern AMD P-state driver for the
-  # Ryzen 7040 series iGPU/CPU — better power efficiency than acpi-cpufreq.
-  boot.kernelParams = ["amd_pstate=active"];
+  # amd_pstate=active is set by nixos-hardware framework-13-7040-amd module.
+  # Do not set it here to avoid duplicate in /proc/cmdline.
 
   hardware.graphics = {
     enable = true;

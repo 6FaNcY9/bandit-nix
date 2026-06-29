@@ -27,7 +27,4 @@
   };
 
   security.sudo.wheelNeedsPassword = true; # default but explicit is better
-  security.sudo.extraConfig = ''
-    vino ALL=(root) NOPASSWD: /run/current-system/sw/bin/nixos-rebuild
-  '';
 }

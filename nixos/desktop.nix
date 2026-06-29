@@ -37,6 +37,18 @@
     # For mounting/unmounting drives in file managers (e.g. Thunar)
     udisks2.enable = true;
     gvfs.enable = true;
+
+    # Gnome Keyring - needed for nm-applet to prompt for wifi passwords
+    gnome.gnome-keyring.enable = true;
+
+    blueman.enable = true;
+  };
+  security.pam.services.greetd.enableGnomeKeyring = true;
+
+  # Bluetooth
+  hardware.bluetooth = {
+    enable = true;
+    powerOnBoot = false;
   };
 
   # Tell XFCE session to use i3 as WM

@@ -12,7 +12,7 @@ _: {
     };
   };
 
-  # DNS over TLS
+  # Strict DoT — fails if DoT unavailable rather than falling back to cleartext
   services = {
     resolved = {
       enable = true;
@@ -33,17 +33,5 @@ _: {
         };
       };
     };
-
-    # Gnome Keyring - needed for nm-applet to prompt for wifi passwords
-    gnome.gnome-keyring.enable = true;
-
-    blueman.enable = true;
-  };
-  security.pam.services.greetd.enableGnomeKeyring = true;
-
-  # Bluetooth
-  hardware.bluetooth = {
-    enable = true;
-    powerOnBoot = false;
   };
 }

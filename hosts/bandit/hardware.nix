@@ -1,8 +1,6 @@
 {modulesPath, ...}: let
   rootDev = "/dev/disk/by-uuid/0629aaee-1698-49d1-b3e1-e7bb6b957cda";
-  # /swap intentionally has no compress=zstd (swapfiles can't be compressed)
   btrfsDefaults = ["compress=zstd" "noatime" "discard=async"];
-  swapOpts = ["noatime" "discard=async"];
   btrfsSubvol = subvol: extraOpts: {
     device = rootDev;
     fsType = "btrfs";
@@ -34,7 +32,6 @@ in {
     "/home" = btrfsSubvol "@home" btrfsDefaults;
     "/nix" = btrfsSubvol "@nix" btrfsDefaults;
     "/var" = btrfsSubvol "@var" btrfsDefaults;
-    "/swap" = btrfsSubvol "@swap" swapOpts;
     "/.snapshots" = btrfsSubvol "@/.snapshots" btrfsDefaults;
     "/home/.snapshots" = btrfsSubvol "@home/.snapshots" btrfsDefaults;
     "/boot" = {

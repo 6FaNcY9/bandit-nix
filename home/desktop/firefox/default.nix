@@ -12,6 +12,7 @@
         "toolkit.legacyUserProfileCustomizations.stylesheets" = true;
         "browser.compactmode.show" = true;
         "browser.uidensity" = 1;
+        "network.trr.mode" = 5; # disable built-in DoH; use system resolver (enforces our DoT policy)
       };
 
       userChrome = builtins.readFile ./userchrome.css;

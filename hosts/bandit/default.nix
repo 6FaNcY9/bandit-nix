@@ -6,6 +6,11 @@
   networking.hostName = "bandit";
   system.stateVersion = "25.11";
 
+  # Laptop-only: passwordless nixos-rebuild for quick iteration
+  security.sudo.extraConfig = ''
+    vino ALL=(root) NOPASSWD: /run/current-system/sw/bin/nixos-rebuild
+  '';
+
   # ── Bootloader (GRUB + EFI) ───────────────────────────────────────────────
   boot.loader = {
     grub = {

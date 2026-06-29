@@ -66,6 +66,7 @@ in {
     };
     settings = {
       ExitNodes = "{de},{at},{ch},{nl},{se},{fi}";
+      StrictNodes = true; # enforce exit country list; don't fall back to other countries
     };
   };
 
