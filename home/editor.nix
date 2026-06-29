@@ -267,7 +267,7 @@
             texthl = "DapLogPoint";
           };
           dapStopped = {
-            text = "→";
+            text = ">";
             texthl = "DapStopped";
           };
         };
@@ -324,7 +324,18 @@
       # Statusline
       lualine = {
         enable = true;
-        settings.options.theme = "auto";
+        settings.options = {
+          theme = "auto";
+          globalstatus = true;
+          component_separators = {
+            left = "";
+            right = "";
+          };
+          section_separators = {
+            left = "";
+            right = "";
+          };
+        };
       };
 
       # Formatting — conform-nvim dispatches to per-filetype formatters
