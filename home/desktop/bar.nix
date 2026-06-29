@@ -36,7 +36,7 @@ in {
       "bar/main" = {
         width = "100%";
         height = 26;
-        background = "\${colors.bg}";
+        background = "\${colors.bg1}";
         foreground = "\${colors.fg}";
         font-0 = "JetBrainsMono Nerd Font Mono:size=11;3";
         line-size = 0;
@@ -48,11 +48,11 @@ in {
         wm-restack = "i3";
         cursor-click = "pointer";
         override-redirect = false;
-        # Fake raised/3D look: lighter top edge = highlight, darker bottom = shadow
-        border-top-size = 1;
-        border-bottom-size = 1;
-        border-top-color = "#555555";
-        border-bottom-color = "#1a1a1a";
+        # Raised 3D look: bright highlight top, hard shadow bottom
+        border-top-size = 2;
+        border-bottom-size = 2;
+        border-top-color = "#666666";
+        border-bottom-color = "#111111";
       };
 
       # ── Left: NixOS menu button ─────────────────────────────────────
@@ -60,7 +60,7 @@ in {
         type = "custom/text";
         format = " 󱄅 bandit ";
         format-foreground = "\${colors.blue}";
-        format-background = "\${colors.bg}";
+        format-background = "\${colors.bg1}";
         click-left = "${rofi} -show drun";
       };
 
@@ -151,7 +151,7 @@ in {
       "module/tray" = {
         type = "internal/tray";
         tray-spacing = "4px";
-        tray-background = "\${colors.bg}";
+        tray-background = "\${colors.bg1}";
         tray-padding = "2px";
       };
 
@@ -170,7 +170,7 @@ in {
     ".local/bin/bar-net" = {
       executable = true;
       text = ''
-        #!/usr/bin/env bash
+        #!${pkgs.bash}/bin/bash
         IP_CACHE="$XDG_RUNTIME_DIR/public-ip-cache"
         if [[ -r "$IP_CACHE" ]] && [[ $(find "$IP_CACHE" -mmin -10 -print 2>/dev/null) ]]; then
           IPV4=$(tr -d '[:space:]' < "$IP_CACHE")
@@ -204,7 +204,7 @@ in {
     ".local/bin/bar-bat" = {
       executable = true;
       text = ''
-        #!/usr/bin/env bash
+        #!${pkgs.bash}/bin/bash
         BAT_DIR=$(ls -d /sys/class/power_supply/BAT* 2>/dev/null | head -1)
         if [[ -z "$BAT_DIR" ]]; then
           echo "%{F#515151}─[%{F-}%{F#515151}󰾅 · 󰁽 ?%{F-}%{F#515151}]%{F-}"
@@ -232,7 +232,7 @@ in {
     ".local/bin/bar-bat-cycle" = {
       executable = true;
       text = ''
-        #!/usr/bin/env bash
+        #!${pkgs.bash}/bin/bash
         CURRENT=$(powerprofilesctl get 2>/dev/null || echo "balanced")
         case "$CURRENT" in
           performance) NEXT=balanced ;;
