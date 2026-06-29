@@ -4,7 +4,7 @@
 in {
   services.polybar = {
     enable = true;
-    package = pkgs.polybar;
+    package = pkgs.polybar.override {pulseSupport = true;};
 
     # Kill any running instance then relaunch on i3 reload
     script = ''
@@ -40,7 +40,7 @@ in {
         padding-right = 0;
         module-margin = 0;
         modules-left = "nix sep i3";
-        modules-right = "cpu mem net vol bat tray clock";
+        modules-right = "cpu mem net vol bat clock tray";
         wm-restack = "i3";
         cursor-click = "pointer";
         override-redirect = false;
@@ -83,18 +83,26 @@ in {
         label-urgent-padding = 0;
       };
 
-      # ── Right: CPU ──────────────────────────────────────────────────
+      # ── Right: CPU (built-in, 3-level heat-map via warn) ─────────────
       "module/cpu" = {
-        type = "custom/script";
-        exec = "/home/vino/.local/bin/bar-cpu";
+        type = "internal/cpu";
         interval = 2;
+        format = "%{F#515151}─[%{F-}%{F#99cc99}󰻠 <label>%{F#515151}]%{F-}";
+        "format-warn" = "%{F#515151}─[%{F-}%{F#f2777a}󰻠 <label-warn>%{F#515151}]%{F-}";
+        "warn-percentage" = 75;
+        label = "%percentage%%";
+        "label-warn" = "%percentage%%";
       };
 
-      # ── Right: Memory ───────────────────────────────────────────────
+      # ── Right: Memory (built-in, heat-map via warn) ────────────────
       "module/mem" = {
-        type = "custom/script";
-        exec = "/home/vino/.local/bin/bar-mem";
+        type = "internal/memory";
         interval = 3;
+        format = "%{F#515151}─[%{F-}%{F#ffcc66}󰍛 <label>%{F#515151}]%{F-}";
+        "format-warn" = "%{F#515151}─[%{F-}%{F#f2777a}󰍛 <label-warn>%{F#515151}]%{F-}";
+        "warn-percentage" = 85;
+        label = "%used%";
+        "label-warn" = "%used%";
       };
 
       # ── Right: Network ──────────────────────────────────────────────
@@ -104,12 +112,20 @@ in {
         interval = 2;
       };
 
-      # ── Right: Volume ───────────────────────────────────────────────
+      # ── Right: Volume (built-in pulseaudio) ────────────────────────
       "module/vol" = {
-        type = "custom/script";
-        exec = "/home/vino/.local/bin/bar-vol";
-        interval = 1;
+        type = "internal/pulseaudio";
+        sink = "@DEFAULT_SINK@";
+        use-ui-max = false;
+        interval = 5;
+        format-volume = "%{F#515151}─[%{F-}<ramp-volume>%{F#cccccc}<label-volume>%{F-}%{F#515151}]%{F-}";
+        format-muted = "%{F#515151}─[%{F-}%{F#f2777a}󰝟 mute%{F-}%{F#515151}]%{F-}";
+        label-volume = "%percentage%%";
+        ramp-volume-0 = "%{F#999999}󰕿 ";
+        ramp-volume-1 = "%{F#99cc99}󰖀 ";
+        ramp-volume-2 = "%{F#99cc99}󰕾 ";
         click-left = "${pactl} set-sink-mute @DEFAULT_SINK@ toggle";
+        click-right = "pavucontrol &";
         scroll-up = "${pactl} set-sink-volume @DEFAULT_SINK@ +5%";
         scroll-down = "${pactl} set-sink-volume @DEFAULT_SINK@ -5%";
       };
@@ -119,7 +135,7 @@ in {
         type = "custom/script";
         exec = "/home/vino/.local/bin/bar-bat";
         interval = 30;
-        click-left = "/home/vino/.local/bin/panel-bat-click";
+        click-left = "/home/vino/.local/bin/bar-bat-cycle";
       };
 
       # ── Right: System tray ──────────────────────────────────────────
@@ -142,39 +158,6 @@ in {
 
   # ── Polybar scripts (output polybar %{F#color} tokens) ─────────────
   home.file = {
-    ".local/bin/bar-cpu" = {
-      executable = true;
-      text = ''
-        #!/usr/bin/env bash
-        read -r _ u n s i _ < /proc/stat
-        PREV="$XDG_RUNTIME_DIR/bar-cpu-prev"
-        read -r pu pn ps pi < "$PREV" 2>/dev/null || { pu=0; pn=0; ps=0; pi=0; }
-        echo "$u $n $s $i" > "$PREV"
-        USED=$(( (u + n + s) - (pu + pn + ps) ))
-        TOTAL=$(( USED + (i - pi) ))
-        PCT=0
-        [[ "$TOTAL" -gt 0 ]] && PCT=$(( USED * 100 / TOTAL ))
-        if   [[ "$PCT" -ge 80 ]]; then C="#f2777a"
-        elif [[ "$PCT" -ge 50 ]]; then C="#f99157"
-        else C="#99cc99"; fi
-        echo "%{F#515151}─[%{F-}%{F''${C}}󰻠 ''${PCT}%%{F-}%{F#515151}]%{F-}"
-      '';
-    };
-
-    ".local/bin/bar-mem" = {
-      executable = true;
-      text = ''
-        #!/usr/bin/env bash
-        read -r USED TOTAL < <(awk '/^Mem:/{print $3, $2}' <(free -m --si))
-        PCT=0; [[ "$TOTAL" -gt 0 ]] && PCT=$(( USED * 100 / TOTAL ))
-        DISPLAY=$(free -h --si | awk '/^Mem:/{print $3}')
-        if   [[ "$PCT" -ge 85 ]]; then C="#f2777a"
-        elif [[ "$PCT" -ge 60 ]]; then C="#f99157"
-        else C="#ffcc66"; fi
-        echo "%{F#515151}─[%{F-}%{F''${C}}󰍛 ''${DISPLAY}%{F-}%{F#515151}]%{F-}"
-      '';
-    };
-
     ".local/bin/bar-net" = {
       executable = true;
       text = ''
@@ -209,24 +192,6 @@ in {
       '';
     };
 
-    ".local/bin/bar-vol" = {
-      executable = true;
-      text = ''
-        #!/usr/bin/env bash
-        VOL=$(pactl get-sink-volume @DEFAULT_SINK@ 2>/dev/null | grep -o '[0-9]*%' | head -1 | tr -d '%')
-        MUTED=$(pactl get-sink-mute @DEFAULT_SINK@ 2>/dev/null | awk '{print $2}')
-        if [[ "$MUTED" == "yes" || -z "$VOL" ]]; then
-          echo "%{F#515151}─[%{F-}%{F#f2777a}󰝟 mute%{F-}%{F#515151}]%{F-}"
-        elif [[ "$VOL" -ge 70 ]]; then
-          echo "%{F#515151}─[%{F-}%{F#99cc99}󰕾 ''${VOL}%%{F-}%{F#515151}]%{F-}"
-        elif [[ "$VOL" -ge 30 ]]; then
-          echo "%{F#515151}─[%{F-}%{F#99cc99}󰖀 ''${VOL}%%{F-}%{F#515151}]%{F-}"
-        else
-          echo "%{F#515151}─[%{F-}%{F#999999}󰕿 ''${VOL}%%{F-}%{F#515151}]%{F-}"
-        fi
-      '';
-    };
-
     ".local/bin/bar-bat" = {
       executable = true;
       text = ''
@@ -254,5 +219,21 @@ in {
         echo "%{F#515151}─[%{F-}%{F''${PC}}''${PI}%{F-}%{F#515151} · %{F-}%{F''${BC}}''${BI} ''${BAT}%%{F-}%{F#515151}]%{F-}"
       '';
     };
+
+    ".local/bin/bar-bat-cycle" = {
+      executable = true;
+      text = ''
+        #!/usr/bin/env bash
+        CURRENT=$(powerprofilesctl get 2>/dev/null || echo "balanced")
+        case "$CURRENT" in
+          performance) NEXT=balanced ;;
+          balanced)    NEXT=power-saver ;;
+          *)           NEXT=performance ;;
+        esac
+        powerprofilesctl set "$NEXT"
+      '';
+    };
   };
+
+  home.packages = [pkgs.pavucontrol];
 }
