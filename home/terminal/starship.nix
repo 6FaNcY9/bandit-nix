@@ -10,24 +10,30 @@ in {
 
       palettes.tomorrow_night_eighties = retroTheme.starshipPalette;
 
-      format = "$hostname$username$directory$git_branch$git_status$nix_shell$cmd_duration$line_break$character";
+      # bandit » ~/src/bandit-nix »  main » ~2⇡1 »············ 3s
+      # ❯ _
+      format = "$hostname$directory$git_branch$git_status$nix_shell$rust$python$nodejs$golang$fill$cmd_duration$line_break$character";
+
+      fill = {
+        symbol = "·";
+        style = "color_bg3";
+      };
 
       hostname = {
         ssh_only = false;
-        style = "color_green bold";
-        format = "[\\[$hostname\\]]($style) ";
+        format = "[$hostname](color_green bold) [»](color_bg3) ";
       };
 
       username = {
         style_user = "color_green bold";
         style_root = "color_red bold";
-        format = "[\\[$user\\]]($style) ";
+        format = "[$user]($style) [»](color_bg3) ";
         show_always = false;
       };
 
       directory = {
         style = "color_blue bold";
-        format = "[\\[$path$read_only\\]]($style) ";
+        format = "[$path$read_only]($style) [»](color_bg3) ";
         truncation_length = 4;
         truncate_to_repo = false;
         read_only = " ro";
@@ -35,8 +41,8 @@ in {
 
       git_branch = {
         style = "color_yellow bold";
-        format = "[\\[$symbol$branch\\]]($style) ";
-        symbol = "";
+        format = "[$symbol$branch]($style) [»](color_bg3) ";
+        symbol = " ";
       };
 
       git_status = {
@@ -45,50 +51,46 @@ in {
         ahead = "⇡\${count}";
         behind = "⇣\${count}";
         diverged = "⇕⇡\${ahead_count}⇣\${behind_count}";
-        modified = "!";
+        modified = "~";
         untracked = "?";
         staged = "+";
         deleted = "✘";
-        stashed = "stash";
-        format = "[\\[$all_status$ahead_behind\\]]($style) ";
+        format = "[$all_status$ahead_behind]($style) [»](color_bg3) ";
       };
 
       nix_shell = {
-        format = "[\\[$symbol$state\\]]($style) ";
-        style = "color_aqua bold";
-        symbol = "nix:";
+        format = "[nix:$state](color_aqua bold) [»](color_bg3) ";
         impure_msg = "impure";
         pure_msg = "pure";
       };
 
       cmd_duration = {
         min_time = 2000;
-        format = "[\\[$duration\\]]($style) ";
+        format = "[$duration](color_orange bold)";
         style = "color_orange bold";
       };
 
       character = {
-        success_symbol = "[\\$](color_green bold) ";
-        error_symbol = "[\\$](color_red bold) ";
-        vimcmd_symbol = "[\\$](color_yellow bold) ";
+        success_symbol = "[❯](color_green bold) ";
+        error_symbol = "[❯](color_red bold) ";
+        vimcmd_symbol = "[❮](color_yellow bold) ";
       };
 
-      # Language modules — only shown inside relevant project dirs
       rust = {
         style = "color_orange bold";
-        format = "via [$symbol($version)]($style) ";
+        format = "[$symbol$version]($style) [»](color_bg3) ";
       };
       python = {
         style = "color_blue bold";
-        format = "via [$symbol$pyenv_prefix($version)($virtualenv)]($style) ";
+        format = "[$symbol$pyenv_prefix$version($virtualenv)]($style) [»](color_bg3) ";
       };
       nodejs = {
         style = "color_green bold";
-        format = "via [$symbol($version)]($style) ";
+        format = "[$symbol$version]($style) [»](color_bg3) ";
       };
       golang = {
         style = "color_aqua bold";
-        format = "via [$symbol($version)]($style) ";
+        format = "[$symbol$version]($style) [»](color_bg3) ";
       };
     };
   };
