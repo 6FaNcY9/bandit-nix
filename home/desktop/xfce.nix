@@ -126,7 +126,7 @@ _: {
       "plugins/plugin-11/miniature-view" = true;
 
       # ── Clock — yellow, date + time, bracketed ──────────────────
-      "plugins/plugin-13/digital-format" = "[ <span color='#ffcc66'>%a %d  %H:%M</span> ]";
+      "plugins/plugin-13/digital-format" = "<span color='#515151'>─[</span> <span color='#ffcc66'>%a %d  %H:%M</span> <span color='#515151'>]</span>";
       "plugins/plugin-13/digital-font" = "JetBrainsMono Nerd Font 14";
       "plugins/plugin-13/tooltip-format" = "%A %d %B %Y  –  week %V";
       "plugins/plugin-13/mode" = 2;

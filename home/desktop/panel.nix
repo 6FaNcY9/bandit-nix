@@ -40,8 +40,15 @@
 
           IFACE=$(ip route show default 2>/dev/null | awk '/default/ {print $5; exit}')
           if [[ -z "$IFACE" ]]; then
-            echo "<txt><span color='#515151'>[</span><span color='#66cccc'>󰓅</span> <span color='#6699cc'>''${IPV4_DISPLAY}</span><span color='#515151'>]</span></txt>"
+            echo "<txt><span color='#515151'>─[</span><span color='#66cccc'>󰓅 ''${IPV4_DISPLAY}</span><span color='#515151'>]</span></txt>"
             exit 0
+          fi
+
+          # Pick icon: wifi vs ethernet
+          if [[ -d "/sys/class/net/''${IFACE}/wireless" ]]; then
+            NICON="󰖩"
+          else
+            NICON="󰈀"
           fi
 
           PREV="$XDG_RUNTIME_DIR/panel-net-prev-$IFACE"
@@ -57,7 +64,7 @@
             DRX=0; DTX=0
           fi
 
-          echo "<txt><span color='#515151'>[</span><span color='#66cccc'>󰓅</span> <span color='#6699cc'>''${IPV4_DISPLAY}</span> <span color='#99cc99'>↑''${DTX}k ↓''${DRX}k</span><span color='#515151'>]</span></txt>"
+          echo "<txt><span color='#515151'>─[</span><span color='#66cccc'>''${NICON} ''${IPV4_DISPLAY}</span><span color='#515151'> · </span><span color='#99cc99'>↑''${DTX}k ↓''${DRX}k</span><span color='#515151'>]</span></txt>"
         '';
       };
 
@@ -77,7 +84,14 @@
           else
             PCT=0
           fi
-          echo "<txt><span color='#515151'>[</span><span color='#99cc99'><span size='18432'>󰻠</span> ''${PCT}%</span><span color='#515151'>]</span></txt>"
+          if [[ "$PCT" -ge 80 ]]; then
+            COLOR="#f2777a"
+          elif [[ "$PCT" -ge 50 ]]; then
+            COLOR="#f99157"
+          else
+            COLOR="#99cc99"
+          fi
+          echo "<txt><span color='#515151'>─[</span><span color=\"''${COLOR}\">󰻠 ''${PCT}%</span><span color='#515151'>]</span></txt>"
         '';
       };
 
@@ -86,8 +100,17 @@
         executable = true;
         text = ''
           #!/usr/bin/env bash
-          MEM=$(free -h --si | awk '/^Mem:/{print $3}')
-          echo "<txt><span color='#515151'>[</span><span color='#ffcc66'>󰍛 ''${MEM}</span><span color='#515151'>]</span></txt>"
+          read -r USED TOTAL < <(awk '/^Mem:/{print $3, $2}' <(free -m --si))
+          PCT=$(( USED * 100 / TOTAL ))
+          DISPLAY=$(free -h --si | awk '/^Mem:/{print $3}')
+          if [[ "$PCT" -ge 85 ]]; then
+            COLOR="#f2777a"
+          elif [[ "$PCT" -ge 60 ]]; then
+            COLOR="#f99157"
+          else
+            COLOR="#ffcc66"
+          fi
+          echo "<txt><span color='#515151'>─[</span><span color=\"''${COLOR}\">󰍛 ''${DISPLAY}</span><span color='#515151'>]</span></txt>"
         '';
       };
 
@@ -98,7 +121,7 @@
           #!/usr/bin/env bash
           BAT_DIR=$(ls -d /sys/class/power_supply/BAT* 2>/dev/null | head -1)
           if [[ -z "$BAT_DIR" ]]; then
-            echo "<txt><span color='#515151'>[</span><span color='#999999'>󰾅 󰁽 ?</span><span color='#515151'>]</span></txt>"
+            echo "<txt><span color='#515151'>─[</span><span color='#515151'>󰾅 · 󰁽 ?</span><span color='#515151'>]</span></txt>"
             exit 0
           fi
           BAT=$(cat "$BAT_DIR/capacity" 2>/dev/null || echo "?")
@@ -127,7 +150,7 @@
             ICON="󰂁"; COLOR="#99cc99"
           fi
 
-          echo "<txt><span color='#515151'>[</span><span color=\"''${PCOLOR}\">''${PICON}</span> <span color=\"''${COLOR}\">''${ICON} ''${BAT}%</span><span color='#515151'>]</span></txt><click>''${HOME}/.local/bin/panel-bat-click</click>"
+          echo "<txt><span color='#515151'>─[</span><span color=\"''${PCOLOR}\">''${PICON}</span><span color='#515151'> · </span><span color=\"''${COLOR}\">''${ICON} ''${BAT}%</span><span color='#515151'>]</span></txt><click>''${HOME}/.local/bin/panel-bat-click</click>"
         '';
       };
 
@@ -143,6 +166,19 @@
             *)           NEXT=performance ;;
           esac
           powerprofilesctl set "$NEXT"
+        '';
+      };
+
+      # ── Genmon: Tor status ───────────────────────────────────────
+      ".local/bin/panel-tor" = {
+        executable = true;
+        text = ''
+          #!/usr/bin/env bash
+          if systemctl is-active --quiet tor 2>/dev/null; then
+            echo "<txt><span color='#515151'>─[</span><span color='#cc99cc'>󰈀 tor</span><span color='#515151'>]</span></txt>"
+          else
+            echo "<txt><span color='#515151'>─[</span><span color='#515151'>󰈀 tor</span><span color='#515151'>]</span></txt>"
+          fi
         '';
       };
 
@@ -162,7 +198,7 @@
           else
             ICON="󰕿"; COLOR="#999999"; LABEL="''${VOL}%"
           fi
-          echo "<txt><span color='#515151'>[</span><span color=\"''${COLOR}\">''${ICON} ''${LABEL}</span><span color='#515151'>]</span></txt><click>pactl set-sink-mute @DEFAULT_SINK@ toggle</click>"
+          echo "<txt><span color='#515151'>─[</span><span color=\"''${COLOR}\">''${ICON} ''${LABEL}</span><span color='#515151'>]</span></txt><click>pactl set-sink-mute @DEFAULT_SINK@ toggle</click>"
         '';
       };
     };
