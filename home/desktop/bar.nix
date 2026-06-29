@@ -4,7 +4,10 @@
 in {
   services.polybar = {
     enable = true;
-    package = pkgs.polybar.override {pulseSupport = true;};
+    package = pkgs.polybar.override {
+      pulseSupport = true;
+      i3Support = true;
+    };
 
     # Kill any running instance then relaunch on i3 reload
     script = ''
@@ -54,7 +57,7 @@ in {
       # ── Left: NixOS menu button ─────────────────────────────────────
       "module/nix" = {
         type = "custom/text";
-        content = " ❄ bandit ";
+        content = " 󱄅 bandit ";
         content-foreground = "\${colors.blue}";
         content-background = "\${colors.bg}";
         click-left = "${rofi} -show drun";
