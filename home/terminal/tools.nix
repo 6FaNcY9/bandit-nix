@@ -1,8 +1,8 @@
 {pkgs, ...}: let
   aider-ollama = pkgs.writeShellScriptBin "aider-coder" ''
+    OLLAMA_API_BASE=http://192.168.1.2:11434 \
     exec ${pkgs.aider-chat}/bin/aider \
       --model ollama/qwen3-coder:30b \
-      --openai-api-base http://bandit-lab:11434/v1 \
       --no-auto-commits \
       "$@"
   '';
