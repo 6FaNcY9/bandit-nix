@@ -9,6 +9,8 @@
     ./mrija-archive.nix
     ./vaultwarden.nix
     ./power.nix
+    ./log-monitor.nix
+    ./auto-rebuild.nix
   ];
 
   networking.hostName = "bandit-lab";
