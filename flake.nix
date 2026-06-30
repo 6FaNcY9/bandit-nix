@@ -43,6 +43,39 @@
     nixos-hardware,
     ...
   } @ inputs: let
+    system = "x86_64-linux";
+    pkgs = import nixpkgs {
+      inherit system;
+      config.allowUnfree = true;
+    };
+    standaloneStylix = {
+      stylix = {
+        enable = true;
+        base16Scheme = "${pkgs.base16-schemes}/share/themes/gruvbox-dark.yaml";
+        image = "${pkgs.nixos-artwork.wallpapers.nineish-dark-gray}/share/wallpapers/nineish-dark-gray/contents/images/nix-wallpaper-nineish-dark-gray.png";
+        fonts = {
+          monospace = {
+            package = pkgs.nerd-fonts.jetbrains-mono;
+            name = "JetBrainsMono Nerd Font Mono";
+          };
+          sansSerif = {
+            package = pkgs.nerd-fonts.jetbrains-mono;
+            name = "JetBrainsMono Nerd Font";
+          };
+          serif = {
+            package = pkgs.nerd-fonts.jetbrains-mono;
+            name = "JetBrainsMono Nerd Font";
+          };
+          sizes = {
+            terminal = 14;
+            applications = 14;
+            desktop = 14;
+            popups = 11;
+          };
+        };
+      };
+    };
+
     hmBase = {
       useGlobalPkgs = true;
       useUserPackages = true;
@@ -53,7 +86,7 @@
   in {
     nixosConfigurations = let
       banditModules = [
-        {nixpkgs.hostPlatform = "x86_64-linux";}
+        {nixpkgs.hostPlatform = system;}
         stylix.nixosModules.stylix
         nixos-hardware.nixosModules.framework-13-7040-amd
         sops-nix.nixosModules.sops
@@ -82,6 +115,16 @@
           ./nixos/server.nix
         ];
       };
+    };
+
+    homeConfigurations.vino = home-manager.lib.homeManagerConfiguration {
+      inherit pkgs;
+      extraSpecialArgs = {inherit inputs;};
+      modules = [
+        stylix.homeModules.stylix
+        standaloneStylix
+        ./home
+      ];
     };
   };
 }
