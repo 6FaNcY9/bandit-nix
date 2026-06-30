@@ -1,5 +1,7 @@
 _: {
   networking = {
+    hosts."192.168.1.2" = ["bandit-lab"];
+
     networkmanager = {
       enable = true;
       dns = "systemd-resolved";
