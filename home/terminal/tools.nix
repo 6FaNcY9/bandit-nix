@@ -1,4 +1,12 @@
-{pkgs, ...}: {
+{pkgs, ...}: let
+  aider-ollama = pkgs.writeShellScriptBin "aider-coder" ''
+    exec ${pkgs.aider-chat}/bin/aider \
+      --model ollama/qwen3-coder:30b \
+      --ollama-api-base http://bandit-lab:11434 \
+      --no-auto-commits \
+      "$@"
+  '';
+in {
   programs = {
     nix-index = {
       enable = true;
@@ -30,6 +38,8 @@
       # Colors managed by Stylix.
     };
   };
+
+  home.packages = [aider-ollama pkgs.aider-chat];
 
   # Wire docker-compose as a Docker CLI plugin so `docker compose`
   # works with podman-dockerCompat. User-level path keeps NixOS pure.
