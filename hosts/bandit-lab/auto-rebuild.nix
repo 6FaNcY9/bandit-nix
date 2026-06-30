@@ -43,7 +43,7 @@ in {
       ExecStart = "${rebuildScript}";
       User = "root";
       Environment = [
-        "GIT_SSH_COMMAND=${pkgs.openssh}/bin/ssh -i /home/vino/.ssh/github -o StrictHostKeyChecking=accept-new"
+        "GIT_SSH_COMMAND=${pkgs.openssh}/bin/ssh -i /home/vino/.ssh/github-lab -o StrictHostKeyChecking=accept-new"
         "HOME=/root"
       ];
     };
