@@ -1,14 +1,29 @@
-{lib, ...}: let
-  retroTheme = import ../../lib/retro-theme.nix;
+{
+  lib,
+  config,
+  ...
+}: let
+  c = config.lib.stylix.colors.withHashtag;
 in {
   programs.starship = {
     enable = true;
     enableFishIntegration = true;
     enableZshIntegration = true;
     settings = {
-      palette = lib.mkForce "gruvbox_dark";
+      palette = lib.mkForce "stylix";
 
-      palettes.gruvbox_dark = retroTheme.starshipPalette;
+      palettes.stylix = {
+        color_fg0 = c.base05;
+        color_bg1 = c.base01;
+        color_bg3 = c.base02;
+        color_blue = c.base0D;
+        color_aqua = c.base0C;
+        color_green = c.base0B;
+        color_orange = c.base09;
+        color_purple = c.base0E;
+        color_red = c.base08;
+        color_yellow = c.base0A;
+      };
 
       # ╭─[ bandit ]─[ ~/src/bandit-nix ]─[  main ]─[ ~2⇡1 ]────[ 3s ]
       # ╰─$ _
