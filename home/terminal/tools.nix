@@ -2,7 +2,7 @@
   aider-ollama = pkgs.writeShellScriptBin "aider-coder" ''
     exec ${pkgs.aider-chat}/bin/aider \
       --model ollama/qwen3-coder:30b \
-      --ollama-api-base http://bandit-lab:11434 \
+      --openai-api-base http://bandit-lab:11434/v1 \
       --no-auto-commits \
       "$@"
   '';
