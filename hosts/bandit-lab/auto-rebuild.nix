@@ -1,4 +1,8 @@
-{pkgs, lib, ...}: let
+{
+  pkgs,
+  lib,
+  ...
+}: let
   repoDir = "/etc/nixos/bandit-nix";
 
   rebuildScript = pkgs.writeShellScript "auto-rebuild" ''
@@ -28,13 +32,17 @@
   '';
 in {
   # Allow vino to run nixos-rebuild without password
-  security.sudo.extraRules = [{
-    users = ["vino"];
-    commands = [{
-      command = "/run/current-system/sw/bin/nixos-rebuild";
-      options = ["NOPASSWD"];
-    }];
-  }];
+  security.sudo.extraRules = [
+    {
+      users = ["vino"];
+      commands = [
+        {
+          command = "/run/current-system/sw/bin/nixos-rebuild";
+          options = ["NOPASSWD"];
+        }
+      ];
+    }
+  ];
 
   systemd.services.auto-rebuild = {
     description = "Auto nixos-rebuild on new git commits";
