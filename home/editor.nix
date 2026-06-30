@@ -338,37 +338,97 @@ in {
           };
           globalstatus = true;
           theme = {
-              normal = {
-                a = {bg = c.base0A; fg = c.base00; gui = "bold";};
-                b = {bg = c.base01; fg = c.base06;};
-                c = {bg = c.base00; fg = c.base03;};
+            normal = {
+              a = {
+                bg = c.base0A;
+                fg = c.base00;
+                gui = "bold";
               };
-              insert = {
-                a = {bg = c.base0D; fg = c.base00; gui = "bold";};
-                b = {bg = c.base01; fg = c.base06;};
-                c = {bg = c.base00; fg = c.base03;};
+              b = {
+                bg = c.base01;
+                fg = c.base06;
               };
-              visual = {
-                a = {bg = c.base0E; fg = c.base00; gui = "bold";};
-                b = {bg = c.base01; fg = c.base06;};
-                c = {bg = c.base00; fg = c.base03;};
-              };
-              replace = {
-                a = {bg = c.base08; fg = c.base00; gui = "bold";};
-                b = {bg = c.base01; fg = c.base06;};
-                c = {bg = c.base00; fg = c.base03;};
-              };
-              command = {
-                a = {bg = c.base0B; fg = c.base00; gui = "bold";};
-                b = {bg = c.base01; fg = c.base06;};
-                c = {bg = c.base00; fg = c.base03;};
-              };
-              inactive = {
-                a = {bg = c.base01; fg = c.base03; gui = "bold";};
-                b = {bg = c.base00; fg = c.base03;};
-                c = {bg = c.base00; fg = c.base02;};
+              c = {
+                bg = c.base00;
+                fg = c.base03;
               };
             };
+            insert = {
+              a = {
+                bg = c.base0D;
+                fg = c.base00;
+                gui = "bold";
+              };
+              b = {
+                bg = c.base01;
+                fg = c.base06;
+              };
+              c = {
+                bg = c.base00;
+                fg = c.base03;
+              };
+            };
+            visual = {
+              a = {
+                bg = c.base0E;
+                fg = c.base00;
+                gui = "bold";
+              };
+              b = {
+                bg = c.base01;
+                fg = c.base06;
+              };
+              c = {
+                bg = c.base00;
+                fg = c.base03;
+              };
+            };
+            replace = {
+              a = {
+                bg = c.base08;
+                fg = c.base00;
+                gui = "bold";
+              };
+              b = {
+                bg = c.base01;
+                fg = c.base06;
+              };
+              c = {
+                bg = c.base00;
+                fg = c.base03;
+              };
+            };
+            command = {
+              a = {
+                bg = c.base0B;
+                fg = c.base00;
+                gui = "bold";
+              };
+              b = {
+                bg = c.base01;
+                fg = c.base06;
+              };
+              c = {
+                bg = c.base00;
+                fg = c.base03;
+              };
+            };
+            inactive = {
+              a = {
+                bg = c.base01;
+                fg = c.base03;
+                gui = "bold";
+              };
+              b = {
+                bg = c.base00;
+                fg = c.base03;
+              };
+              c = {
+                bg = c.base00;
+                fg = c.base02;
+              };
+            };
+          };
         };
       };
 
