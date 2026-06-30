@@ -17,3 +17,4 @@ docs/codebase-review.md
 hosts/bandit/windows/
 
 .claude/
+.firecrawl/

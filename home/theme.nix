@@ -1,4 +1,6 @@
-_: {
+{config, ...}: let
+  colors = config.lib.stylix.colors.withHashtag;
+in {
   stylix.targets = {
     fish.enable = true;
     gtk.enable = true;
@@ -32,7 +34,7 @@ _: {
     /* Title bars — hard line, no shadow, flat */
     headerbar, headerbar.titlebar, .titlebar {
       border-radius: 0;
-      border-bottom: 2px solid #515151;
+      border-bottom: 2px solid ${colors.base02};
       box-shadow: none;
       background-image: none;
     }
@@ -42,25 +44,25 @@ _: {
     button {
       border-radius: 0;
       box-shadow:
-        inset -1px -1px 0 #1a1a1a,
-        inset  1px  1px 0 #515151;
+        inset -1px -1px 0 ${colors.base00},
+        inset  1px  1px 0 ${colors.base02};
     }
     button:hover {
       background-image: none;
-      background-color: #393939;
+      background-color: ${colors.base01};
     }
     button:active, button:checked {
       box-shadow:
-        inset  1px  1px 0 #1a1a1a,
-        inset -1px -1px 0 #515151;
+        inset  1px  1px 0 ${colors.base00},
+        inset -1px -1px 0 ${colors.base02};
     }
 
     /* Sunken entries (text inputs inset into the surface) */
     entry, spinbutton, textview {
       border-radius: 0;
       box-shadow:
-        inset 1px 1px 0 #1a1a1a,
-        inset -1px -1px 0 #515151;
+        inset 1px 1px 0 ${colors.base00},
+        inset -1px -1px 0 ${colors.base02};
     }
 
     /* Popovers / menus — square + flat */
@@ -68,8 +70,8 @@ _: {
     .menu, menu, menuitem { border-radius: 0; }
     menubar { border-radius: 0; }
     menuitem:hover {
-      background-color: #ffcc66;
-      color: #2d2d2d;
+      background-color: ${colors.base0A};
+      color: ${colors.base00};
     }
 
     tooltip { border-radius: 0; }
@@ -84,17 +86,17 @@ _: {
       border-radius: 0;
       padding: 0 3px;
       box-shadow:
-        inset -1px -1px 0 #1a1a1a,
-        inset  1px  1px 0 #515151;
+        inset -1px -1px 0 ${colors.base00},
+        inset  1px  1px 0 ${colors.base02};
     }
     .xfce4-panel button:active,
     .xfce4-panel button:checked,
     .xfce4-panel .panel-button:active,
     .xfce4-panel .panel-button:checked {
       box-shadow:
-        inset  1px  1px 0 #1a1a1a,
-        inset -1px -1px 0 #515151;
-      background-color: #393939;
+        inset  1px  1px 0 ${colors.base00},
+        inset -1px -1px 0 ${colors.base02};
+      background-color: ${colors.base01};
     }
     /* Tasklist — active window sunken + accent, inactive raised.
        XFCE uses wnck-tasklist; older themes target .tasklist-button,
@@ -106,15 +108,15 @@ _: {
       min-width: 80px;
       padding: 0 6px;
       background-image: none;
-      background-color: #2d2d2d;
+      background-color: ${colors.base00};
       box-shadow:
-        inset -1px -1px 0 #1a1a1a,
-        inset  1px  1px 0 #515151;
+        inset -1px -1px 0 ${colors.base00},
+        inset  1px  1px 0 ${colors.base02};
     }
     .xfce4-panel .tasklist-button:hover,
     .xfce4-panel wnck-tasklist button:hover,
     .xfce4-panel .tasklist button:hover {
-      background-color: #393939;
+      background-color: ${colors.base01};
     }
     .xfce4-panel .tasklist-button:checked,
     .xfce4-panel .tasklist-button:active,
@@ -123,11 +125,11 @@ _: {
     .xfce4-panel .tasklist button:checked,
     .xfce4-panel .tasklist button:active {
       background-image: none;
-      background-color: #393939;
-      color: #ffcc66;
+      background-color: ${colors.base01};
+      color: ${colors.base0A};
       box-shadow:
-        inset  1px  1px 0 #1a1a1a,
-        inset -1px -1px 0 #515151;
+        inset  1px  1px 0 ${colors.base00},
+        inset -1px -1px 0 ${colors.base02};
     }
 
     /* Genmon monitor chips (cpu/mem/net/vol/bat) — raised bevel chip.
@@ -136,12 +138,12 @@ _: {
        na-tray-child selector where supported; visually harmless otherwise. */
     .xfce4-panel eventbox {
       border-radius: 0;
-      background-color: #393939;
+      background-color: ${colors.base01};
       margin: 2px 1px;
       padding: 0 2px;
       box-shadow:
-        inset -1px -1px 0 #1a1a1a,
-        inset  1px  1px 0 #515151;
+        inset -1px -1px 0 ${colors.base00},
+        inset  1px  1px 0 ${colors.base02};
     }
 
     notebook > header tabs tab { border-radius: 0; }
@@ -153,10 +155,10 @@ _: {
       border-radius: 0;
       min-width: 14px;
       min-height: 14px;
-      background-color: #515151;
+      background-color: ${colors.base02};
       box-shadow:
-        inset -1px -1px 0 #1a1a1a,
-        inset  1px  1px 0 #999999;
+        inset -1px -1px 0 ${colors.base00},
+        inset  1px  1px 0 ${colors.base03};
     }
     scrollbar.horizontal slider { min-height: 14px; }
     scrollbar.vertical   slider { min-width: 14px; }

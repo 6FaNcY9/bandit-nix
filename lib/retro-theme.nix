@@ -1,19 +1,19 @@
 let
   colors = {
-    bg = "#2d2d2d";
-    bg1 = "#393939";
-    bg3 = "#515151";
-    fg = "#f2f0ec";
-    muted = "#999999";
-    muted2 = "#747369";
-    panelFg = "#cccccc";
-    blue = "#6699cc";
-    aqua = "#66cccc";
-    green = "#99cc99";
-    orange = "#f99157";
-    purple = "#cc99cc";
-    red = "#f2777a";
-    yellow = "#ffcc66";
+    bg = "#282828";
+    bg1 = "#3c3836";
+    bg3 = "#504945";
+    fg = "#d5c4a1";
+    muted = "#928374";
+    muted2 = "#665c54";
+    panelFg = "#ebdbb2";
+    blue = "#458588";
+    aqua = "#689d6a";
+    green = "#98971a";
+    orange = "#d65d0e";
+    purple = "#b16286";
+    red = "#cc241d";
+    yellow = "#d79921";
   };
 in {
   inherit colors;
