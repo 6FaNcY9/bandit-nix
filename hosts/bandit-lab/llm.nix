@@ -1,4 +1,4 @@
-{pkgs, ...}: {
+{lib, pkgs, ...}: {
   # Local coding LLM service.
   #
   # Primary model:
@@ -38,6 +38,9 @@
       OLLAMA_ORIGINS = "http://127.0.0.1:* http://localhost:*";
     };
   };
+
+  # CUDA JIT needs W+X mmap; nixpkgs hardens this to true by default
+  systemd.services.ollama.serviceConfig.MemoryDenyWriteExecute = lib.mkForce false;
 
   environment.systemPackages = [
     pkgs.ollama-cuda
