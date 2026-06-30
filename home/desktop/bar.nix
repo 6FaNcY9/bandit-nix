@@ -215,7 +215,7 @@ in {
         #!${pkgs.bash}/bin/bash
         BAT_DIR=$(ls -d /sys/class/power_supply/BAT* 2>/dev/null | head -1)
         if [[ -z "$BAT_DIR" ]]; then
-          echo "%{F${colors.base0E}}[%{F-} %{F${colors.base0E}}${batteryIcon "󰾅"} · ${batteryIcon "󰁽"} ?%{F-} %{F${colors.base0E}}]%{F-}%{F${colors.base02}}─%{F-}"
+          echo "%{F${colors.base0E}}[%{F-} %{F${colors.base0E}}%{T3}${batteryIcon "󰾅"}%{T-} · %{T3}${batteryIcon "󰁽"}%{T-} ?%{F-} %{F${colors.base0E}}]%{F-}%{F${colors.base02}}─%{F-}"
           exit 0
         fi
         BAT=$(cat "$BAT_DIR/capacity" 2>/dev/null || echo "?")
