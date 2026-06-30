@@ -6,6 +6,42 @@
       --no-auto-commits \
       "$@"
   '';
+
+  qwen-summarize = pkgs.writeShellScriptBin "qwen-summarize" ''
+    exec ${pkgs.nodejs}/bin/node ${../../tools/qwen-mcp.mjs} summarize "$@"
+  '';
+
+  bandit-qwen = pkgs.writeShellScriptBin "bandit-qwen" ''
+    exec ${pkgs.nodejs}/bin/node ${../../tools/qwen-mcp.mjs} "$@"
+  '';
+
+  qwen-review = pkgs.writeShellScriptBin "qwen-review" ''
+    exec ${pkgs.nodejs}/bin/node ${../../tools/qwen-mcp.mjs} review "$@"
+  '';
+
+  qwen-ask = pkgs.writeShellScriptBin "qwen-ask" ''
+    exec ${pkgs.nodejs}/bin/node ${../../tools/qwen-mcp.mjs} ask "$@"
+  '';
+
+  qwen-compress = pkgs.writeShellScriptBin "qwen-compress" ''
+    exec ${pkgs.nodejs}/bin/node ${../../tools/qwen-mcp.mjs} compress "$@"
+  '';
+
+  qwen-diff = pkgs.writeShellScriptBin "qwen-diff" ''
+    exec ${pkgs.nodejs}/bin/node ${../../tools/qwen-mcp.mjs} diff "$@"
+  '';
+
+  qwen-log = pkgs.writeShellScriptBin "qwen-log" ''
+    exec ${pkgs.nodejs}/bin/node ${../../tools/qwen-mcp.mjs} log "$@"
+  '';
+
+  qwen-extract = pkgs.writeShellScriptBin "qwen-extract" ''
+    exec ${pkgs.nodejs}/bin/node ${../../tools/qwen-mcp.mjs} extract "$@"
+  '';
+
+  qwen-commit = pkgs.writeShellScriptBin "qwen-commit" ''
+    exec ${pkgs.nodejs}/bin/node ${../../tools/qwen-mcp.mjs} commit "$@"
+  '';
 in {
   programs = {
     nix-index = {
@@ -54,13 +90,32 @@ in {
     };
   };
 
-  home.sessionVariables.OLLAMA_API_BASE = "http://192.168.1.2:11434";
+  home = {
+    sessionVariables.OLLAMA_API_BASE = "http://192.168.1.2:11434";
 
-  home.file.".config/aider/model-settings.yml".source = ./aider-model-settings.yml;
+    file = {
+      ".config/aider/model-settings.yml".source = ./aider-model-settings.yml;
 
-  home.packages = [aider-ollama pkgs.aider-chat pkgs.playwright-driver];
+      # Wire docker-compose as a Docker CLI plugin so `docker compose`
+      # works with podman-dockerCompat. User-level path keeps NixOS pure.
+      ".config/docker/cli-plugins/docker-compose".source = "${pkgs.docker-compose}/bin/docker-compose";
+    };
 
-  # Wire docker-compose as a Docker CLI plugin so `docker compose`
-  # works with podman-dockerCompat. User-level path keeps NixOS pure.
-  home.file.".config/docker/cli-plugins/docker-compose".source = "${pkgs.docker-compose}/bin/docker-compose";
+    packages = [
+      aider-ollama
+      bandit-qwen
+      qwen-ask
+      qwen-commit
+      qwen-compress
+      qwen-diff
+      qwen-extract
+      qwen-log
+      qwen-review
+      qwen-summarize
+      pkgs.aider-chat
+      pkgs.playwright-driver
+      pkgs.python313
+      pkgs.uv
+    ];
+  };
 }
