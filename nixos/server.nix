@@ -6,10 +6,22 @@
 }: let
   # Gruvbox-dark base16 palette — kept in sync with nixos/theme.nix scheme
   c = {
-    base00 = "#282828"; base01 = "#3c3836"; base02 = "#504945"; base03 = "#928374";
-    base04 = "#a89984"; base05 = "#d5c4a1"; base06 = "#ebdbb2"; base07 = "#fbf1c7";
-    base08 = "#cc241d"; base09 = "#d65d0e"; base0A = "#d79921"; base0B = "#98971a";
-    base0C = "#689d6a"; base0D = "#458588"; base0E = "#b16286"; base0F = "#d65d0e";
+    base00 = "#282828";
+    base01 = "#3c3836";
+    base02 = "#504945";
+    base03 = "#928374";
+    base04 = "#a89984";
+    base05 = "#d5c4a1";
+    base06 = "#ebdbb2";
+    base07 = "#fbf1c7";
+    base08 = "#cc241d";
+    base09 = "#d65d0e";
+    base0A = "#d79921";
+    base0B = "#98971a";
+    base0C = "#689d6a";
+    base0D = "#458588";
+    base0E = "#b16286";
+    base0F = "#d65d0e";
   };
   zellijMenu = pkgs.writeShellScriptBin "zellij-menu" ''
     set -euo pipefail
@@ -245,37 +257,97 @@ in {
           };
           globalstatus = true;
           theme = {
-              normal = {
-                a = {bg = c.base0A; fg = c.base00; gui = "bold";};
-                b = {bg = c.base01; fg = c.base06;};
-                c = {bg = c.base00; fg = c.base03;};
+            normal = {
+              a = {
+                bg = c.base0A;
+                fg = c.base00;
+                gui = "bold";
               };
-              insert = {
-                a = {bg = c.base0D; fg = c.base00; gui = "bold";};
-                b = {bg = c.base01; fg = c.base06;};
-                c = {bg = c.base00; fg = c.base03;};
+              b = {
+                bg = c.base01;
+                fg = c.base06;
               };
-              visual = {
-                a = {bg = c.base0E; fg = c.base00; gui = "bold";};
-                b = {bg = c.base01; fg = c.base06;};
-                c = {bg = c.base00; fg = c.base03;};
-              };
-              replace = {
-                a = {bg = c.base08; fg = c.base00; gui = "bold";};
-                b = {bg = c.base01; fg = c.base06;};
-                c = {bg = c.base00; fg = c.base03;};
-              };
-              command = {
-                a = {bg = c.base0B; fg = c.base00; gui = "bold";};
-                b = {bg = c.base01; fg = c.base06;};
-                c = {bg = c.base00; fg = c.base03;};
-              };
-              inactive = {
-                a = {bg = c.base01; fg = c.base03; gui = "bold";};
-                b = {bg = c.base00; fg = c.base03;};
-                c = {bg = c.base00; fg = c.base02;};
+              c = {
+                bg = c.base00;
+                fg = c.base03;
               };
             };
+            insert = {
+              a = {
+                bg = c.base0D;
+                fg = c.base00;
+                gui = "bold";
+              };
+              b = {
+                bg = c.base01;
+                fg = c.base06;
+              };
+              c = {
+                bg = c.base00;
+                fg = c.base03;
+              };
+            };
+            visual = {
+              a = {
+                bg = c.base0E;
+                fg = c.base00;
+                gui = "bold";
+              };
+              b = {
+                bg = c.base01;
+                fg = c.base06;
+              };
+              c = {
+                bg = c.base00;
+                fg = c.base03;
+              };
+            };
+            replace = {
+              a = {
+                bg = c.base08;
+                fg = c.base00;
+                gui = "bold";
+              };
+              b = {
+                bg = c.base01;
+                fg = c.base06;
+              };
+              c = {
+                bg = c.base00;
+                fg = c.base03;
+              };
+            };
+            command = {
+              a = {
+                bg = c.base0B;
+                fg = c.base00;
+                gui = "bold";
+              };
+              b = {
+                bg = c.base01;
+                fg = c.base06;
+              };
+              c = {
+                bg = c.base00;
+                fg = c.base03;
+              };
+            };
+            inactive = {
+              a = {
+                bg = c.base01;
+                fg = c.base03;
+                gui = "bold";
+              };
+              b = {
+                bg = c.base00;
+                fg = c.base03;
+              };
+              c = {
+                bg = c.base00;
+                fg = c.base02;
+              };
+            };
+          };
         };
       };
     };
