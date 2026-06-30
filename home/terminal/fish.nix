@@ -91,9 +91,9 @@ in {
             set -l nixver (nixos-version 2>/dev/null | string split ' ' --max 2 --field 1)
             set -l kern (uname -r)
             echo ""
-            set_color ffcc66
+            set_color d79921
             echo "  λ  bandit · NixOS $nixver"
-            set_color 999999
+            set_color 928374
             echo "  kernel $kern  ·  fish $version"
             set_color normal
             echo ""

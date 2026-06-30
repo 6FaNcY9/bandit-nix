@@ -1,8 +1,10 @@
-_: {
+{config, ...}: let
+  colors = config.lib.stylix.colors.withHashtag;
+in {
   programs.kitty = {
     enable = true;
 
-    # Stylix manages colors (tomorrow-night-eighties) and font (JetBrainsMono Nerd Font)
+    # Stylix manages base colors and font; tab chrome follows the same palette.
     # so we only configure behavior here
 
     shellIntegration = {
@@ -52,14 +54,14 @@ _: {
       tab_separator = " ┃ ";
       tab_title_template = "{index}│{title}";
       tab_bar_min_tabs = "2";
-      tab_bar_background = "#2d2d2d";
-      active_tab_foreground = "#2d2d2d";
-      active_tab_background = "#ffcc66";
+      tab_bar_background = colors.base00;
+      active_tab_foreground = colors.base00;
+      active_tab_background = colors.base0A;
       active_tab_font_style = "bold";
-      inactive_tab_foreground = "#999999";
-      inactive_tab_background = "#393939";
+      inactive_tab_foreground = colors.base03;
+      inactive_tab_background = colors.base01;
       inactive_tab_font_style = "normal";
-      tab_bar_margin_color = "#2d2d2d";
+      tab_bar_margin_color = colors.base00;
 
       # ── Misc ───────────────────────────────────────────────
       strip_trailing_spaces = "smart";

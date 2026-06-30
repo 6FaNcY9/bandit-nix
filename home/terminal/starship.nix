@@ -6,9 +6,9 @@ in {
     enableFishIntegration = true;
     enableZshIntegration = true;
     settings = {
-      palette = lib.mkForce "tomorrow_night_eighties";
+      palette = lib.mkForce "gruvbox_dark";
 
-      palettes.tomorrow_night_eighties = retroTheme.starshipPalette;
+      palettes.gruvbox_dark = retroTheme.starshipPalette;
 
       # ╭─[ bandit ]─[ ~/src/bandit-nix ]─[  main ]─[ ~2⇡1 ]────[ 3s ]
       # ╰─$ _
@@ -71,9 +71,9 @@ in {
       };
 
       character = {
-        success_symbol = "[\\$](color_green bold) ";
-        error_symbol = "[\\$](color_red bold) ";
-        vimcmd_symbol = "[\\$](color_yellow bold) ";
+        success_symbol = "[\\$](color_green bold)";
+        error_symbol = "[\\$](color_red bold)";
+        vimcmd_symbol = "[\\$](color_yellow bold)";
       };
 
       rust = {

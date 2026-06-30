@@ -27,7 +27,7 @@
     fzf = {
       enable = true;
       enableFishIntegration = true;
-      # Colors managed by Stylix (tomorrow-night-eighties)
+      # Colors managed by Stylix.
     };
   };
 

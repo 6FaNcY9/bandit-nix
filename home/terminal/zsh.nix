@@ -135,8 +135,8 @@ in {
           nixver=$(nixos-version 2>/dev/null | cut -d' ' -f1)
           kern=$(uname -r)
           print ""
-          print -P "%F{#ffcc66}  λ  bandit · NixOS $nixver%f"
-          print -P "%F{#999999}  kernel $kern  ·  zsh $ZSH_VERSION%f"
+          print -P "%F{#d79921}  λ  bandit · NixOS $nixver%f"
+          print -P "%F{#928374}  kernel $kern  ·  zsh $ZSH_VERSION%f"
           print ""
         fi
 
