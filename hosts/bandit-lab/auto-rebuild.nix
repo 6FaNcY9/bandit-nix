@@ -5,6 +5,8 @@
     set -e
     REPO="${repoDir}"
 
+    export GIT_SSH_COMMAND="${pkgs.openssh}/bin/ssh -i /home/vino/.ssh/github-lab -o StrictHostKeyChecking=accept-new"
+
     # Clone if missing
     if [[ ! -d "$REPO/.git" ]]; then
       ${pkgs.git}/bin/git clone git@github.com:6FaNcY9/bandit-nix.git "$REPO"
