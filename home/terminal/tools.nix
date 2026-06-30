@@ -37,7 +37,7 @@ in {
       enableFishIntegration = true;
       # Colors managed by Stylix.
     };
-    
+
     aider-chat = {
       enable = true;
       settings = {
