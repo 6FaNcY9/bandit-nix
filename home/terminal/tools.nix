@@ -49,6 +49,7 @@ in {
         edit-format = "diff";
         model-settings-file = "~/.config/aider/model-settings.yml";
         suggest-shell-commands = true;
+        detect-urls = true;
       };
     };
   };
@@ -57,7 +58,7 @@ in {
 
   home.file.".config/aider/model-settings.yml".source = ./aider-model-settings.yml;
 
-  home.packages = [aider-ollama pkgs.aider-chat];
+  home.packages = [aider-ollama pkgs.aider-chat pkgs.playwright-driver];
 
   # Wire docker-compose as a Docker CLI plugin so `docker compose`
   # works with podman-dockerCompat. User-level path keeps NixOS pure.
