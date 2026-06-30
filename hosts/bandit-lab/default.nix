@@ -4,6 +4,7 @@
     ./cockpit-theme.nix
     ./wan.nix
     ./webhost.nix
+    ./llm.nix
     ./traefik.nix
     ./mrija-archive.nix
     ./vaultwarden.nix
