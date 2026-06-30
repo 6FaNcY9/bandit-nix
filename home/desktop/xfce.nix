@@ -48,8 +48,8 @@ in {
       "panels/panel-1/enter-opacity" = 100;
       "panels/panel-1/leave-opacity" = 100;
 
-      # [❄(1)] |(2) [tasklist(3)──expand(4)──] [cpu(5)][mem(6)][net(7)][tor(16)] |(8) [vol(9)][bat(10)] |(12) [systray(14)] |(15) [clock(13)] [pager(11)]
-      "panels/panel-1/plugin-ids" = [1 2 3 4 5 6 7 16 8 9 10 12 14 15 13 11];
+      # [❄(1)] |(2) [tasklist(3)──expand(4)──] [cpu(5)][mem(6)][disk(17)][net(7)][tor(16)] |(8) [vol(9)][bat(10)] |(12) [systray(14)] |(15) [clock(13)] [pager(11)]
+      "panels/panel-1/plugin-ids" = [1 2 3 4 5 6 17 7 16 8 9 10 12 14 15 13 11];
 
       # ── Plugin type registration ────────────────────────────────
       "plugins/plugin-1" = "whiskermenu";
@@ -109,6 +109,14 @@ in {
       "plugins/plugin-7/UpdatePeriod" = 2000;
       "plugins/plugin-7/UseLabel" = false;
       "plugins/plugin-7/uselabel" = false;
+
+      # ── Genmon — disk usage of / ───────────────────────────────────
+      "plugins/plugin-17" = "genmon";
+      "plugins/plugin-17/Command" = "/home/vino/.local/bin/panel-disk";
+      "plugins/plugin-17/command" = "/home/vino/.local/bin/panel-disk";
+      "plugins/plugin-17/UpdatePeriod" = 30000;
+      "plugins/plugin-17/UseLabel" = false;
+      "plugins/plugin-17/uselabel" = false;
 
       # ── Genmon — Tor status chip (click → net-menu) ────────────────
       "plugins/plugin-16" = "genmon";

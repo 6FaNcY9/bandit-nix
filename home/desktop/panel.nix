@@ -175,6 +175,23 @@ in {
         '';
       };
 
+      # ── Genmon: disk usage of / ─────────────────────────────────
+      ".local/bin/panel-disk" = {
+        executable = true;
+        text = ''
+          #!/usr/bin/env bash
+          read -r USED_H TOTAL_H PCT < <(df -h / | awk 'NR==2 {gsub(/%/,"",$5); print $3, $2, $5}')
+          if [[ "$PCT" -ge 90 ]]; then
+            COLOR="${colors.base08}"
+          elif [[ "$PCT" -ge 75 ]]; then
+            COLOR="${colors.base09}"
+          else
+            COLOR="${colors.base0B}"
+          fi
+          echo "<txt><span color='${colors.base02}'>─</span><span color='${colors.base0A}'>[</span><span color=\"''${COLOR}\">󰋊 ''${USED_H}/''${TOTAL_H}</span><span color='${colors.base0A}'>]</span><span color='${colors.base02}'>─</span></txt>"
+        '';
+      };
+
       # ── Genmon: Tor status ───────────────────────────────────────
       ".local/bin/panel-tor" = {
         executable = true;
