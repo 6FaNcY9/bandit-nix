@@ -1,6 +1,42 @@
 {pkgs, ...}: let
   ollamaUrl = "http://192.168.1.2:11434";
   ollamaModel = "bandit-coder";
+  firecrawlKeyFile = "/run/secrets/firecrawl-api-key";
+
+  fcScript = pkgs.writeShellScriptBin "fc" ''
+    # Usage: fc <url> [output-file]
+    # Scrapes URL via Firecrawl and saves markdown
+    set -e
+    URL="$1"
+    OUT="''${2:-/tmp/fc-content.md}"
+    [[ -z "$URL" ]] && { echo "Usage: fc <url> [output-file]" >&2; exit 1; }
+    API_KEY=$(cat ${firecrawlKeyFile})
+    ${pkgs.curl}/bin/curl -sf --max-time 30 \
+      -X POST https://api.firecrawl.dev/v1/scrape \
+      -H "Authorization: Bearer $API_KEY" \
+      -H "Content-Type: application/json" \
+      -d "{\"url\":\"$URL\",\"formats\":[\"markdown\"]}" \
+    | ${pkgs.jq}/bin/jq -r '.data.markdown' > "$OUT"
+    echo "Saved to $OUT" >&2
+    echo "$OUT"
+  '';
+
+  llmWebScript = pkgs.writeShellScriptBin "llm-web" ''
+    # Usage: llm-web <url> "<prompt about the page>"
+    set -e
+    URL="$1"
+    PROMPT="$2"
+    [[ -z "$URL" || -z "$PROMPT" ]] && {
+      echo "Usage: llm-web <url> \"<prompt>\"" >&2; exit 1
+    }
+    TMP=$(${fcScript}/bin/fc "$URL" 2>/dev/null)
+    CONTENT=$(cat "$TMP" | head -c 6000)
+    ${pkgs.jq}/bin/jq -n --arg p "$PROMPT\n\nPage content:\n$CONTENT" \
+      '{"model":"${ollamaModel}","prompt":$p,"stream":false}' \
+    | ${pkgs.curl}/bin/curl -sf --max-time 120 \
+        ${ollamaUrl}/api/generate -d @- \
+    | ${pkgs.jq}/bin/jq -r .response
+  '';
 
   llmQuery = pkgs.writeShellScriptBin "llm" ''
     # Usage: llm "your prompt"
@@ -51,7 +87,7 @@
 in {
   # ── llm: one-shot prompt to bandit-coder ────────────────────
   # ── gen-panel-script: generate XFCE genmon scripts via LLM ──
-  home.packages = [llmQuery genPanelScript];
+  home.packages = [llmQuery genPanelScript fcScript llmWebScript];
 
   # ── Pre-commit LLM review (warns, never blocks) ─────────────
   home.file.".config/git/hooks/pre-commit" = {

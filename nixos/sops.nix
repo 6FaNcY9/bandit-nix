@@ -41,6 +41,11 @@ _: {
         path = "/home/vino/.ssh/thehost_mrija";
         mode = "0600";
       };
+      "firecrawl-api-key" = {
+        owner = "vino";
+        path = "/run/secrets/firecrawl-api-key";
+        mode = "0400";
+      };
     };
   };
 }
