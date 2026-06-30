@@ -37,6 +37,17 @@ in {
       enableFishIntegration = true;
       # Colors managed by Stylix.
     };
+    
+    aider-chat = {
+      enable = true;
+      settings = {
+        model = "ollama/qwen3-coder:30b";
+        no_auto_commits = true;
+        env = {
+          OLLAMA_API_BASE = "http://192.168.1.2:11434";
+        };
+      };
+    };
   };
 
   home.packages = [aider-ollama pkgs.aider-chat];
