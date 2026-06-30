@@ -172,10 +172,18 @@ in {
       text = ''
         #!${pkgs.bash}/bin/bash
         IP_CACHE="$XDG_RUNTIME_DIR/public-ip-cache"
+        
+        # Try to get cached IP first
         if [[ -r "$IP_CACHE" ]] && [[ $(find "$IP_CACHE" -mmin -10 -print 2>/dev/null) ]]; then
           IPV4=$(tr -d '[:space:]' < "$IP_CACHE")
         fi
-        IPV4=''${IPV4:-?.?.?.?}
+        
+        # If no cache or stale, fetch new IP
+        if [[ -z "$IPV4" || "$IPV4" == "?.?.?.?" ]]; then
+          IPV4=$(curl -s https://api.ipify.org 2>/dev/null || echo "?.?.?.?")
+          # Cache the result
+          echo "$IPV4" > "$IP_CACHE"
+        fi
 
         IFACE=$(ip route show default 2>/dev/null | awk '/default/ {print $5; exit}')
         if [[ -z "$IFACE" ]]; then
