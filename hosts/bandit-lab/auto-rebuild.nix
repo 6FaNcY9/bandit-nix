@@ -10,6 +10,7 @@
     REPO="${repoDir}"
 
     export GIT_SSH_COMMAND="${pkgs.openssh}/bin/ssh -i /home/vino/.ssh/github-lab -o StrictHostKeyChecking=accept-new"
+    ${pkgs.git}/bin/git config --global --add safe.directory ${repoDir}
 
     # Clone if missing
     if [[ ! -d "$REPO/.git" ]]; then
