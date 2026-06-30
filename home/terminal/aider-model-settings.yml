@@ -1,0 +1,20 @@
+- name: ollama/qwen3-coder:30b
+  edit_format: diff
+  weak_model_name: ollama/dolphincoder:15b
+  use_repo_map: true
+  send_undo_reply: true
+  use_system_prompt: true
+  use_temperature: true
+  streaming: true
+  extra_params:
+    num_ctx: 32768
+
+- name: ollama/dolphincoder:15b
+  edit_format: whole
+  use_repo_map: false
+  send_undo_reply: false
+  use_system_prompt: true
+  use_temperature: true
+  streaming: true
+  extra_params:
+    num_ctx: 16384

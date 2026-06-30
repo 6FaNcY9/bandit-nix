@@ -42,12 +42,20 @@ in {
       enable = true;
       settings = {
         model = "ollama/qwen3-coder:30b";
+        weak-model = "ollama/dolphincoder:15b";
+        editor-model = "ollama/dolphincoder:15b";
         no-auto-commits = true;
+        architect = true;
+        edit-format = "diff";
+        model-settings-file = "~/.config/aider/model-settings.yml";
+        suggest-shell-commands = true;
       };
     };
   };
 
   home.sessionVariables.OLLAMA_API_BASE = "http://192.168.1.2:11434";
+
+  home.file.".config/aider/model-settings.yml".source = ./aider-model-settings.yml;
 
   home.packages = [aider-ollama pkgs.aider-chat];
 
