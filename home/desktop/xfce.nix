@@ -1,16 +1,35 @@
-_: {
+{config, ...}: let
+  colors = config.lib.stylix.colors.withHashtag;
+  terminalPalette = builtins.concatStringsSep ";" [
+    colors.base00
+    colors.base08
+    colors.base0B
+    colors.base0A
+    colors.base0D
+    colors.base0E
+    colors.base0C
+    colors.base05
+    colors.base03
+    colors.base08
+    colors.base0B
+    colors.base0A
+    colors.base0D
+    colors.base0E
+    colors.base0C
+    colors.base07
+  ];
+in {
   xfconf.settings = {
     # ── Terminal ──────────────────────────────────────────────────
     "xfce4-terminal" = {
       "color-use-theme" = false;
-      "color-background" = "#2d2d2d";
-      "color-foreground" = "#cccccc";
-      "color-cursor" = "#cccccc";
+      "color-background" = colors.base00;
+      "color-foreground" = colors.base05;
+      "color-cursor" = colors.base05;
       "color-bold-is-bright" = true;
       "scrollbar-style" = "TERMINAL_SCROLLBAR_NONE";
       "misc-slim-tabs" = true;
-      # 16-color tomorrow-night-eighties palette
-      "color-palette" = "#2d2d2d;#f2777a;#99cc99;#ffcc66;#6699cc;#cc99cc;#66cccc;#d3d0c8;#747369;#f2777a;#99cc99;#ffcc66;#6699cc;#cc99cc;#66cccc;#f2f0ec";
+      "color-palette" = terminalPalette;
     };
 
     # ── Panel ─────────────────────────────────────────────────────
@@ -25,7 +44,7 @@ _: {
       "panels/panel-1/size" = 26;
       "panels/panel-1/nrows" = 1;
       "panels/panel-1/background-style" = 1;
-      "panels/panel-1/background-color" = "#2d2d2d";
+      "panels/panel-1/background-color" = colors.base00;
       "panels/panel-1/enter-opacity" = 100;
       "panels/panel-1/leave-opacity" = 100;
 
@@ -126,7 +145,7 @@ _: {
       "plugins/plugin-11/miniature-view" = true;
 
       # ── Clock — yellow, date + time, bracketed ──────────────────
-      "plugins/plugin-13/digital-format" = "<span color='#515151'>─[</span> <span color='#ffcc66'>%a %d  %H:%M</span> <span color='#515151'>]</span>";
+      "plugins/plugin-13/digital-format" = "<span color='${colors.base02}'>─</span><span color='${colors.base0E}'>[</span> <span color='${colors.base0A}'>%a %d  %H:%M</span> <span color='${colors.base0E}'>]</span><span color='${colors.base02}'>─</span>";
       "plugins/plugin-13/digital-font" = "JetBrainsMono Nerd Font 14";
       "plugins/plugin-13/tooltip-format" = "%A %d %B %Y  –  week %V";
       "plugins/plugin-13/mode" = 2;

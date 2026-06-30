@@ -1,17 +1,17 @@
-/* userChrome.css — tomorrow-night-eighties, compact + retro bevel
+/* userChrome.css — Gruvbox dark, compact + retro bevel
    Matches home/theme.nix GTK bevel system: square corners, 1px
    inset light/dark highlights, yellow accent on selection/focus. */
 
 :root {
-  --bg:      #2d2d2d;
-  --bg1:     #393939;
-  --bg2:     #515151;
-  --bg3:     #1a1a1a;
-  --fg:      #cccccc;
-  --fg2:     #999999;
-  --yellow:  #ffcc66;
-  --blue:    #6699cc;
-  --red:     #f2777a;
+  --bg:      #282828;
+  --bg1:     #3c3836;
+  --bg2:     #504945;
+  --bg3:     #1d2021;
+  --fg:      #d5c4a1;
+  --fg2:     #928374;
+  --yellow:  #d79921;
+  --blue:    #458588;
+  --red:     #cc241d;
 
   /* Compact metrics */
   --tab-min-height: 24px !important;

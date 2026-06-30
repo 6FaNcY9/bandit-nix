@@ -1,14 +1,18 @@
-{pkgs, ...}: let
-  # tomorrow-night-eighties palette
-  bg = "#2d2d2d";
-  bg1 = "#393939";
-  bg2 = "#515151";
-  fg = "#cccccc";
-  fg2 = "#999999";
-  yellow = "#ffcc66";
-  blue = "#6699cc";
-  red = "#f2777a";
-  cyan = "#66cccc";
+{
+  config,
+  pkgs,
+  ...
+}: let
+  colors = config.lib.stylix.colors.withHashtag;
+  bg = colors.base00;
+  bg1 = colors.base01;
+  bg2 = colors.base02;
+  fg = colors.base05;
+  fg2 = colors.base03;
+  yellow = colors.base0A;
+  blue = colors.base0D;
+  red = colors.base08;
+  cyan = colors.base0C;
 in {
   # ── Main launcher theme ───────────────────────────────────────
   xdg.configFile."rofi/themes/retro-eighties.rasi".text = ''

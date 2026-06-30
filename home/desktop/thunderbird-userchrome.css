@@ -1,26 +1,26 @@
-/* tomorrow-night-eighties palette
-   bg:     #2d2d2d  bg2:    #393939  sel:    #515151
-   muted:  #999999  fg:     #cccccc  accent: #ffcc66
-   red:    #f2777a  blue:   #6699cc  green:  #99cc99 */
+/* Gruvbox dark palette
+   bg:     #282828  bg2:    #3c3836  sel:    #504945
+   muted:  #928374  fg:     #d5c4a1  accent: #d79921
+   red:    #cc241d  blue:   #458588  green:  #98971a */
 
 /* ── Global ──────────────────────────────────────────────── */
 :root {
-  --layout-background-0: #2d2d2d !important;
-  --layout-background-1: #2d2d2d !important;
-  --layout-background-2: #393939 !important;
-  --layout-background-3: #515151 !important;
-  --layout-color-0: #cccccc !important;
-  --layout-color-1: #cccccc !important;
-  --layout-color-2: #999999 !important;
-  --layout-color-3: #999999 !important;
-  --toolbar-bgcolor: #393939 !important;
-  --toolbar-color: #cccccc !important;
-  --toolbarbutton-hover-background: #515151 !important;
-  --toolbarbutton-active-background: #2d2d2d !important;
-  --selected-item-color: #ffcc66 !important;
-  --selected-item-text-color: #2d2d2d !important;
-  --focus-outline-color: #ffcc66 !important;
-  --splitter-color: #515151 !important;
+  --layout-background-0: #282828 !important;
+  --layout-background-1: #282828 !important;
+  --layout-background-2: #3c3836 !important;
+  --layout-background-3: #504945 !important;
+  --layout-color-0: #d5c4a1 !important;
+  --layout-color-1: #d5c4a1 !important;
+  --layout-color-2: #928374 !important;
+  --layout-color-3: #928374 !important;
+  --toolbar-bgcolor: #3c3836 !important;
+  --toolbar-color: #d5c4a1 !important;
+  --toolbarbutton-hover-background: #504945 !important;
+  --toolbarbutton-active-background: #282828 !important;
+  --selected-item-color: #d79921 !important;
+  --selected-item-text-color: #282828 !important;
+  --focus-outline-color: #d79921 !important;
+  --splitter-color: #504945 !important;
 }
 
 * {
@@ -33,96 +33,96 @@
 #mail-toolbar-menubar2,
 #tabs-toolbar,
 #toolbar-menubar {
-  background-color: #393939 !important;
-  color: #cccccc !important;
-  border-bottom: 1px solid #515151 !important;
+  background-color: #3c3836 !important;
+  color: #d5c4a1 !important;
+  border-bottom: 1px solid #504945 !important;
 }
 
 toolbarbutton {
   border-radius: 0 !important;
   padding: 2px 4px !important;
   box-shadow:
-    inset -1px -1px 0 #1a1a1a,
-    inset  1px  1px 0 #515151 !important;
+    inset -1px -1px 0 #1d2021,
+    inset  1px  1px 0 #504945 !important;
 }
 toolbarbutton:hover {
-  background-color: #515151 !important;
+  background-color: #504945 !important;
 }
 toolbarbutton:active,
 toolbarbutton[checked="true"],
 toolbarbutton[pressed="true"] {
   box-shadow:
-    inset  1px  1px 0 #1a1a1a,
-    inset -1px -1px 0 #515151 !important;
-  background-color: #393939 !important;
+    inset  1px  1px 0 #1d2021,
+    inset -1px -1px 0 #504945 !important;
+  background-color: #3c3836 !important;
 }
 
 /* ── Tab bar ──────────────────────────────────────────────── */
 .tabmail-tab {
   border-radius: 0 !important;
-  background-color: #2d2d2d !important;
-  color: #999999 !important;
+  background-color: #282828 !important;
+  color: #928374 !important;
 }
 .tabmail-tab[selected="true"] {
-  background-color: #393939 !important;
-  color: #ffcc66 !important;
-  box-shadow: inset 0 2px 0 #ffcc66 !important;
+  background-color: #3c3836 !important;
+  color: #d79921 !important;
+  box-shadow: inset 0 2px 0 #d79921 !important;
 }
 .tabmail-tab:hover {
-  background-color: #393939 !important;
-  color: #cccccc !important;
+  background-color: #3c3836 !important;
+  color: #d5c4a1 !important;
 }
 
 /* ── Folder pane ──────────────────────────────────────────── */
 #folderPane-toolbar,
 #folder-pane-header {
-  background-color: #393939 !important;
-  color: #cccccc !important;
-  border-bottom: 1px solid #515151 !important;
+  background-color: #3c3836 !important;
+  color: #d5c4a1 !important;
+  border-bottom: 1px solid #504945 !important;
 }
 
 #folderTree {
-  background-color: #2d2d2d !important;
-  color: #cccccc !important;
+  background-color: #282828 !important;
+  color: #d5c4a1 !important;
 }
 
 treechildren::-moz-tree-row {
-  background-color: #2d2d2d !important;
+  background-color: #282828 !important;
 }
 treechildren::-moz-tree-row(hover) {
-  background-color: #393939 !important;
+  background-color: #3c3836 !important;
 }
 treechildren::-moz-tree-row(selected) {
-  background-color: #515151 !important;
+  background-color: #504945 !important;
 }
 treechildren::-moz-tree-cell-text {
-  color: #cccccc !important;
+  color: #d5c4a1 !important;
 }
 treechildren::-moz-tree-cell-text(selected) {
-  color: #ffcc66 !important;
+  color: #d79921 !important;
 }
 treechildren::-moz-tree-cell-text(unread) {
-  color: #ffcc66 !important;
+  color: #d79921 !important;
   font-weight: bold !important;
 }
 
 /* ── Thread pane ──────────────────────────────────────────── */
 #threadTree,
 .thread-pane-container {
-  background-color: #2d2d2d !important;
-  color: #cccccc !important;
+  background-color: #282828 !important;
+  color: #d5c4a1 !important;
 }
 
 /* ── Message pane ─────────────────────────────────────────── */
 #messagepanebox,
 #messagepaneboxwrapper,
 #messageBrowser {
-  background-color: #2d2d2d !important;
+  background-color: #282828 !important;
 }
 
 /* ── Splitters ────────────────────────────────────────────── */
 splitter {
-  background-color: #515151 !important;
+  background-color: #504945 !important;
   border: none !important;
   min-width: 3px !important;
   min-height: 3px !important;
@@ -132,17 +132,17 @@ splitter {
 .searchBox,
 #searchInput,
 input[type="search"] {
-  background-color: #393939 !important;
-  color: #cccccc !important;
-  border: 1px solid #515151 !important;
+  background-color: #3c3836 !important;
+  color: #d5c4a1 !important;
+  border: 1px solid #504945 !important;
   border-radius: 0 !important;
-  box-shadow: inset 1px 1px 0 #1a1a1a, inset -1px -1px 0 #515151 !important;
+  box-shadow: inset 1px 1px 0 #1d2021, inset -1px -1px 0 #504945 !important;
 }
 
 /* ── Status bar ───────────────────────────────────────────── */
 #status-bar,
 .statusbar {
-  background-color: #393939 !important;
-  color: #999999 !important;
-  border-top: 1px solid #515151 !important;
+  background-color: #3c3836 !important;
+  color: #928374 !important;
+  border-top: 1px solid #504945 !important;
 }

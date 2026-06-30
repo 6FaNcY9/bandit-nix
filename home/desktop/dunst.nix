@@ -1,4 +1,10 @@
-{pkgs, ...}: {
+{
+  config,
+  pkgs,
+  ...
+}: let
+  colors = config.lib.stylix.colors.withHashtag;
+in {
   services.dunst = {
     enable = true;
 
@@ -22,7 +28,7 @@
         # ── Appearance ──────────────────────────────────────────
         corner_radius = 0;
         frame_width = 2;
-        frame_color = "#6699cc";
+        frame_color = colors.base0D;
         separator_height = 1;
         separator_color = "frame";
         padding = 12;
@@ -41,7 +47,7 @@
         font = "JetBrainsMono Nerd Font 10";
         line_height = 2;
         markup = "full";
-        format = "<b>%s</b>\\n<span foreground='#999999'>%b</span>";
+        format = "<b>%s</b>\\n<span foreground='${colors.base03}'>%b</span>";
         alignment = "left";
         vertical_alignment = "center";
         show_age_threshold = 60;
@@ -73,26 +79,26 @@
       };
 
       urgency_low = {
-        background = "#2d2d2d";
-        foreground = "#999999";
-        frame_color = "#393939";
-        highlight = "#999999";
+        background = colors.base00;
+        foreground = colors.base03;
+        frame_color = colors.base01;
+        highlight = colors.base03;
         timeout = 5;
       };
 
       urgency_normal = {
-        background = "#2d2d2d";
-        foreground = "#cccccc";
-        frame_color = "#6699cc";
-        highlight = "#6699cc";
+        background = colors.base00;
+        foreground = colors.base05;
+        frame_color = colors.base0D;
+        highlight = colors.base0D;
         timeout = 10;
       };
 
       urgency_critical = {
-        background = "#2d2d2d";
-        foreground = "#f2777a";
-        frame_color = "#f2777a";
-        highlight = "#f2777a";
+        background = colors.base00;
+        foreground = colors.base08;
+        frame_color = colors.base08;
+        highlight = colors.base08;
         timeout = 0;
       };
     };

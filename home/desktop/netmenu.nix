@@ -1,4 +1,10 @@
-{pkgs, ...}: {
+{
+  config,
+  pkgs,
+  ...
+}: let
+  colors = config.lib.stylix.colors.withHashtag;
+in {
   home.packages = with pkgs; [
     xclip # for "copy public IP" action
   ];
@@ -10,9 +16,9 @@
       text = ''
         #!/usr/bin/env bash
         if systemctl is-active --quiet tor-routing-enable.service 2>/dev/null; then
-          echo "<txt><span color='#515151'>[</span><span color='#99cc99'>🧅 TOR</span><span color='#515151'>]</span></txt>"
+          echo "<txt><span color='${colors.base0E}'>[</span><span color='${colors.base0B}'>🧅 TOR</span><span color='${colors.base0E}'>]</span></txt>"
         else
-          echo "<txt><span color='#515151'>[</span><span color='#999999'>󰛳 net</span><span color='#515151'>]</span></txt>"
+          echo "<txt><span color='${colors.base02}'>[</span><span color='${colors.base03}'>󰛳 net</span><span color='${colors.base02}'>]</span></txt>"
         fi
         echo "<click>/home/vino/.local/bin/net-menu</click>"
       '';

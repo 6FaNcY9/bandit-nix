@@ -1,4 +1,10 @@
-{pkgs, ...}: {
+{
+  config,
+  pkgs,
+  ...
+}: let
+  colors = config.lib.stylix.colors.withHashtag;
+in {
   # Refresh public IPv4 every 5 minutes — genmon-net reads the cached file.
   systemd.user.services.public-ip-refresh = {
     Unit.Description = "Refresh public IP cache";
@@ -40,7 +46,7 @@
 
           IFACE=$(ip route show default 2>/dev/null | awk '/default/ {print $5; exit}')
           if [[ -z "$IFACE" ]]; then
-            echo "<txt><span color='#515151'>─[</span><span color='#66cccc'>󰓅 ''${IPV4_DISPLAY}</span><span color='#515151'>]</span></txt>"
+            echo "<txt><span color='${colors.base02}'>─</span><span color='${colors.base0C}'>[</span><span color='${colors.base0C}'>󰓅 ''${IPV4_DISPLAY}</span><span color='${colors.base0C}'>]</span><span color='${colors.base02}'>─</span></txt>"
             exit 0
           fi
 
@@ -64,7 +70,7 @@
             DRX=0; DTX=0
           fi
 
-          echo "<txt><span color='#515151'>─[</span><span color='#66cccc'>''${NICON} ''${IPV4_DISPLAY}</span><span color='#515151'> · </span><span color='#99cc99'>↑''${DTX}k ↓''${DRX}k</span><span color='#515151'>]</span></txt>"
+          echo "<txt><span color='${colors.base02}'>─</span><span color='${colors.base0C}'>[</span><span color='${colors.base0C}'>''${NICON} ''${IPV4_DISPLAY}</span><span color='${colors.base0D}'> · </span><span color='${colors.base0B}'>↑''${DTX}k ↓''${DRX}k</span><span color='${colors.base0C}'>]</span><span color='${colors.base02}'>─</span></txt>"
         '';
       };
 
@@ -85,13 +91,13 @@
             PCT=0
           fi
           if [[ "$PCT" -ge 80 ]]; then
-            COLOR="#f2777a"
+            COLOR="${colors.base08}"
           elif [[ "$PCT" -ge 50 ]]; then
-            COLOR="#f99157"
+            COLOR="${colors.base09}"
           else
-            COLOR="#99cc99"
+            COLOR="${colors.base0B}"
           fi
-          echo "<txt><span color='#515151'>─[</span><span color=\"''${COLOR}\">󰻠 ''${PCT}%</span><span color='#515151'>]</span></txt>"
+          echo "<txt><span color='${colors.base02}'>─</span><span color='${colors.base0B}'>[</span><span color=\"''${COLOR}\">󰻠 ''${PCT}%</span><span color='${colors.base0B}'>]</span><span color='${colors.base02}'>─</span></txt>"
         '';
       };
 
@@ -104,13 +110,13 @@
           PCT=$(( USED * 100 / TOTAL ))
           DISPLAY=$(free -h --si | awk '/^Mem:/{print $3}')
           if [[ "$PCT" -ge 85 ]]; then
-            COLOR="#f2777a"
+            COLOR="${colors.base08}"
           elif [[ "$PCT" -ge 60 ]]; then
-            COLOR="#f99157"
+            COLOR="${colors.base09}"
           else
-            COLOR="#ffcc66"
+            COLOR="${colors.base0A}"
           fi
-          echo "<txt><span color='#515151'>─[</span><span color=\"''${COLOR}\">󰍛 ''${DISPLAY}</span><span color='#515151'>]</span></txt>"
+          echo "<txt><span color='${colors.base02}'>─</span><span color='${colors.base09}'>[</span><span color=\"''${COLOR}\">󰍛 ''${DISPLAY}</span><span color='${colors.base09}'>]</span><span color='${colors.base02}'>─</span></txt>"
         '';
       };
 
@@ -121,7 +127,7 @@
           #!/usr/bin/env bash
           BAT_DIR=$(ls -d /sys/class/power_supply/BAT* 2>/dev/null | head -1)
           if [[ -z "$BAT_DIR" ]]; then
-            echo "<txt><span color='#515151'>─[</span><span color='#515151'>󰾅 · 󰁽 ?</span><span color='#515151'>]</span></txt>"
+            echo "<txt><span color='${colors.base02}'>─</span><span color='${colors.base0E}'>[</span><span color='${colors.base0E}'>󰾅 · 󰁽 ?</span><span color='${colors.base0E}'>]</span><span color='${colors.base02}'>─</span></txt>"
             exit 0
           fi
           BAT=$(cat "$BAT_DIR/capacity" 2>/dev/null || echo "?")
@@ -130,27 +136,27 @@
           # Power profile icon + color
           PROFILE=$(powerprofilesctl get 2>/dev/null || echo "balanced")
           case "''${PROFILE}" in
-            performance) PICON="󱐋"; PCOLOR="#f2777a" ;;
-            power-saver) PICON="󰌪"; PCOLOR="#99cc99" ;;
-            *)           PICON="󰾅"; PCOLOR="#ffcc66" ;;
+            performance) PICON="󱐋"; PCOLOR="${colors.base08}" ;;
+            power-saver) PICON="󰌪"; PCOLOR="${colors.base0B}" ;;
+            *)           PICON="󰾅"; PCOLOR="${colors.base0A}" ;;
           esac
 
           # Battery icon + color
           if [[ "$STATUS" == "Charging" || "$STATUS" == "Full" ]]; then
-            ICON="󰂄"; COLOR="#99cc99"
+            ICON="󰂄"; COLOR="${colors.base0B}"
           elif [[ "$BAT" =~ ^[0-9]+$ && "$BAT" -le 10 ]]; then
-            ICON="󰁺"; COLOR="#f2777a"
+            ICON="󰁺"; COLOR="${colors.base08}"
           elif [[ "$BAT" =~ ^[0-9]+$ && "$BAT" -le 25 ]]; then
-            ICON="󰁻"; COLOR="#f99157"
+            ICON="󰁻"; COLOR="${colors.base09}"
           elif [[ "$BAT" =~ ^[0-9]+$ && "$BAT" -le 50 ]]; then
-            ICON="󰁽"; COLOR="#ffcc66"
+            ICON="󰁽"; COLOR="${colors.base0A}"
           elif [[ "$BAT" =~ ^[0-9]+$ && "$BAT" -le 75 ]]; then
-            ICON="󰁿"; COLOR="#99cc99"
+            ICON="󰁿"; COLOR="${colors.base0B}"
           else
-            ICON="󰂁"; COLOR="#99cc99"
+            ICON="󰂁"; COLOR="${colors.base0B}"
           fi
 
-          echo "<txt><span color='#515151'>─[</span><span color=\"''${PCOLOR}\">''${PICON}</span><span color='#515151'> · </span><span color=\"''${COLOR}\">''${ICON} ''${BAT}%</span><span color='#515151'>]</span></txt><click>''${HOME}/.local/bin/panel-bat-click</click>"
+          echo "<txt><span color='${colors.base02}'>─</span><span color='${colors.base0E}'>[</span><span color=\"''${PCOLOR}\">''${PICON}</span><span color='${colors.base0D}'> · </span><span color=\"''${COLOR}\">''${ICON} ''${BAT}%</span><span color='${colors.base0E}'>]</span><span color='${colors.base02}'>─</span></txt><click>''${HOME}/.local/bin/panel-bat-click</click>"
         '';
       };
 
@@ -175,9 +181,9 @@
         text = ''
           #!/usr/bin/env bash
           if systemctl is-active --quiet tor 2>/dev/null; then
-            echo "<txt><span color='#515151'>─[</span><span color='#cc99cc'>󰈀 tor</span><span color='#515151'>]</span></txt>"
+            echo "<txt><span color='${colors.base02}'>─</span><span color='${colors.base0E}'>[</span><span color='${colors.base0E}'>󰈀 tor</span><span color='${colors.base0E}'>]</span><span color='${colors.base02}'>─</span></txt>"
           else
-            echo "<txt><span color='#515151'>─[</span><span color='#515151'>󰈀 tor</span><span color='#515151'>]</span></txt>"
+            echo "<txt><span color='${colors.base02}'>─</span><span color='${colors.base02}'>[</span><span color='${colors.base02}'>󰈀 tor</span><span color='${colors.base02}'>]</span><span color='${colors.base02}'>─</span></txt>"
           fi
         '';
       };
@@ -190,15 +196,15 @@
           VOL=$(pactl get-sink-volume @DEFAULT_SINK@ 2>/dev/null | grep -o '[0-9]*%' | head -1 | tr -d '%')
           MUTED=$(pactl get-sink-mute @DEFAULT_SINK@ 2>/dev/null | awk '{print $2}')
           if [[ "$MUTED" == "yes" || -z "$VOL" ]]; then
-            ICON="󰝟"; COLOR="#f2777a"; LABEL="mute"
+            ICON="󰝟"; COLOR="${colors.base08}"; LABEL="mute"
           elif [[ "$VOL" -ge 70 ]]; then
-            ICON="󰕾"; COLOR="#99cc99"; LABEL="''${VOL}%"
+            ICON="󰕾"; COLOR="${colors.base0B}"; LABEL="''${VOL}%"
           elif [[ "$VOL" -ge 30 ]]; then
-            ICON="󰖀"; COLOR="#99cc99"; LABEL="''${VOL}%"
+            ICON="󰖀"; COLOR="${colors.base0B}"; LABEL="''${VOL}%"
           else
-            ICON="󰕿"; COLOR="#999999"; LABEL="''${VOL}%"
+            ICON="󰕿"; COLOR="${colors.base03}"; LABEL="''${VOL}%"
           fi
-          echo "<txt><span color='#515151'>─[</span><span color=\"''${COLOR}\">''${ICON} ''${LABEL}</span><span color='#515151'>]</span></txt><click>pactl set-sink-mute @DEFAULT_SINK@ toggle</click>"
+          echo "<txt><span color='${colors.base02}'>─</span><span color='${colors.base0D}'>[</span><span color=\"''${COLOR}\">''${ICON} ''${LABEL}</span><span color='${colors.base0D}'>]</span><span color='${colors.base02}'>─</span></txt><click>pactl set-sink-mute @DEFAULT_SINK@ toggle</click>"
         '';
       };
     };

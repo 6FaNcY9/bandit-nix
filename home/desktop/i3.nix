@@ -1,8 +1,10 @@
 {
+  config,
   pkgs,
   lib,
   ...
 }: let
+  colors = config.lib.stylix.colors.withHashtag;
   mod = "Mod4";
 
   # ─── Helpers ──────────────────────────────────────────
@@ -10,9 +12,7 @@
   brightnessctlBin = "${pkgs.brightnessctl}/bin/brightnessctl";
   playerctlBin = "${pkgs.playerctl}/bin/playerctl";
 
-  # ─── tomorrow-night-eighties palette ──────────────────
-  # base00=#2d2d2d base01=#393939 base02=#515151 base03=#999999
-  # base05=#cccccc base08=#f2777a base0A=#ffcc66 base0D=#6699cc
+  # Window colors follow the active Stylix Base16 palette.
 
   # ─── Directional focus (vim + arrows) ─────────────────
   directionalFocus = {
@@ -204,35 +204,35 @@ in {
         titlebar = false;
       };
 
-      # ─── Window colors (tomorrow-night-eighties) ────────
+      # ─── Window colors ──────────────────────────────────
       colors = {
         focused = {
-          border = lib.mkForce "#ffcc66";
-          background = lib.mkForce "#2d2d2d";
-          text = lib.mkForce "#cccccc";
-          indicator = lib.mkForce "#6699cc";
-          childBorder = lib.mkForce "#ffcc66";
+          border = lib.mkForce colors.base0A;
+          background = lib.mkForce colors.base00;
+          text = lib.mkForce colors.base05;
+          indicator = lib.mkForce colors.base0D;
+          childBorder = lib.mkForce colors.base0A;
         };
         focusedInactive = {
-          border = lib.mkForce "#393939";
-          background = lib.mkForce "#2d2d2d";
-          text = lib.mkForce "#999999";
-          indicator = lib.mkForce "#393939";
-          childBorder = lib.mkForce "#393939";
+          border = lib.mkForce colors.base01;
+          background = lib.mkForce colors.base00;
+          text = lib.mkForce colors.base03;
+          indicator = lib.mkForce colors.base01;
+          childBorder = lib.mkForce colors.base01;
         };
         unfocused = {
-          border = lib.mkForce "#393939";
-          background = lib.mkForce "#2d2d2d";
-          text = lib.mkForce "#999999";
-          indicator = lib.mkForce "#393939";
-          childBorder = lib.mkForce "#393939";
+          border = lib.mkForce colors.base01;
+          background = lib.mkForce colors.base00;
+          text = lib.mkForce colors.base03;
+          indicator = lib.mkForce colors.base01;
+          childBorder = lib.mkForce colors.base01;
         };
         urgent = {
-          border = lib.mkForce "#f2777a";
-          background = lib.mkForce "#f2777a";
-          text = lib.mkForce "#cccccc";
-          indicator = lib.mkForce "#f2777a";
-          childBorder = lib.mkForce "#f2777a";
+          border = lib.mkForce colors.base08;
+          background = lib.mkForce colors.base08;
+          text = lib.mkForce colors.base05;
+          indicator = lib.mkForce colors.base08;
+          childBorder = lib.mkForce colors.base08;
         };
       };
 
