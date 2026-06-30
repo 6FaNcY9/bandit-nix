@@ -4,7 +4,13 @@
   pkgs,
   ...
 }: let
-  retroTheme = import ../lib/retro-theme.nix;
+  # Gruvbox-dark base16 palette — kept in sync with nixos/theme.nix scheme
+  c = {
+    base00 = "#282828"; base01 = "#3c3836"; base02 = "#504945"; base03 = "#928374";
+    base04 = "#a89984"; base05 = "#d5c4a1"; base06 = "#ebdbb2"; base07 = "#fbf1c7";
+    base08 = "#cc241d"; base09 = "#d65d0e"; base0A = "#d79921"; base0B = "#98971a";
+    base0C = "#689d6a"; base0D = "#458588"; base0E = "#b16286"; base0F = "#d65d0e";
+  };
   zellijMenu = pkgs.writeShellScriptBin "zellij-menu" ''
     set -euo pipefail
 
@@ -238,7 +244,38 @@ in {
             right = "";
           };
           globalstatus = true;
-          theme = retroTheme.lualineTheme;
+          theme = {
+              normal = {
+                a = {bg = c.base0A; fg = c.base00; gui = "bold";};
+                b = {bg = c.base01; fg = c.base06;};
+                c = {bg = c.base00; fg = c.base03;};
+              };
+              insert = {
+                a = {bg = c.base0D; fg = c.base00; gui = "bold";};
+                b = {bg = c.base01; fg = c.base06;};
+                c = {bg = c.base00; fg = c.base03;};
+              };
+              visual = {
+                a = {bg = c.base0E; fg = c.base00; gui = "bold";};
+                b = {bg = c.base01; fg = c.base06;};
+                c = {bg = c.base00; fg = c.base03;};
+              };
+              replace = {
+                a = {bg = c.base08; fg = c.base00; gui = "bold";};
+                b = {bg = c.base01; fg = c.base06;};
+                c = {bg = c.base00; fg = c.base03;};
+              };
+              command = {
+                a = {bg = c.base0B; fg = c.base00; gui = "bold";};
+                b = {bg = c.base01; fg = c.base06;};
+                c = {bg = c.base00; fg = c.base03;};
+              };
+              inactive = {
+                a = {bg = c.base01; fg = c.base03; gui = "bold";};
+                b = {bg = c.base00; fg = c.base03;};
+                c = {bg = c.base00; fg = c.base02;};
+              };
+            };
         };
       };
     };
@@ -316,11 +353,22 @@ in {
     starship = {
       enable = true;
       settings = {
-        palette = "tomorrow_night_eighties";
+        palette = "stylix";
 
-        palettes.tomorrow_night_eighties = retroTheme.starshipPalette;
+        palettes.stylix = {
+          color_fg0 = c.base05;
+          color_bg1 = c.base01;
+          color_bg3 = c.base02;
+          color_blue = c.base0D;
+          color_aqua = c.base0C;
+          color_green = c.base0B;
+          color_orange = c.base09;
+          color_purple = c.base0E;
+          color_red = c.base08;
+          color_yellow = c.base0A;
+        };
 
-        format = "$hostname$username$directory$git_branch$git_status$nix_shell$cmd_duration$line_break$character";
+        format = "$hostname$username$directory$git_branch$git_status$nix_shell$custom.net$time$cmd_duration$line_break$character";
 
         hostname = {
           ssh_only = false;
@@ -367,6 +415,34 @@ in {
           format = "[\\[$symbol$state\\]]($style) ";
           style = "color_aqua bold";
           symbol = "nix:";
+        };
+
+        "custom.net" = {
+          command = ''
+            IFACE=$(ip route show default 2>/dev/null | awk '/default/ {print $5; exit}')
+            [[ -z "$IFACE" ]] && exit 1
+            PREV="/tmp/starship-net-$IFACE"
+            RX=$(awk -v i="$IFACE:" '$1==i {print $2}' /proc/net/dev)
+            TX=$(awk -v i="$IFACE:" '$1==i {print $10}' /proc/net/dev)
+            if [[ -f "$PREV" ]]; then
+              read -r prev_rx prev_tx < "$PREV"
+              DRX=$(( (RX - prev_rx) / 1024 ))
+              DTX=$(( (TX - prev_tx) / 1024 ))
+            else
+              DRX=0; DTX=0
+            fi
+            echo "$RX $TX" > "$PREV"
+            echo "↑''${DTX}k ↓''${DRX}k"
+          '';
+          when = "true";
+          shell = ["bash" "-c"];
+          format = "[\\[$output\\]](color_aqua bold) ";
+        };
+
+        time = {
+          disabled = false;
+          format = "[\\[$time\\]](color_purple bold) ";
+          time_format = "%H:%M";
         };
 
         cmd_duration = {
