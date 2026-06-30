@@ -53,10 +53,7 @@ in {
       Type = "oneshot";
       ExecStart = "${rebuildScript}";
       User = "root";
-      Environment = [
-        "GIT_SSH_COMMAND=${pkgs.openssh}/bin/ssh -i /home/vino/.ssh/github-lab -o StrictHostKeyChecking=accept-new"
-        "HOME=/root"
-      ];
+      Environment = ["HOME=/root"];
     };
   };
 
