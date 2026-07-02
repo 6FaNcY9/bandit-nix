@@ -16,7 +16,7 @@
 
     base16Scheme = "${pkgs.base16-schemes}/share/themes/gruvbox-dark.yaml";
 
-    image = "${pkgs.nixos-artwork.wallpapers.nineish-dark-gray}/share/wallpapers/nineish-dark-gray/contents/images/nix-wallpaper-nineish-dark-gray.png";
+    image = ../hosts/bandit/wallpaper.png;
 
     fonts = {
       monospace = {
