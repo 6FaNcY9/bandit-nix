@@ -12,9 +12,9 @@
         "  Shutdown" \
         | ${pkgs.rofi}/bin/rofi -dmenu -i -p "session" -theme retro-power -no-show-icons -lines 5)
       case "$chosen" in
-        *Lock)     ${pkgs.xfce4-screensaver}/bin/xfce4-screensaver-command --lock ;;
+        *Lock)     ${pkgs.lightdm}/bin/dm-tool lock ;;
         *Logout)   ${pkgs.i3}/bin/i3-msg exit ;;
-        *Suspend)  ${pkgs.xfce4-screensaver}/bin/xfce4-screensaver-command --lock; systemctl suspend ;;
+        *Suspend)  ${pkgs.lightdm}/bin/dm-tool lock; systemctl suspend ;;
         *Reboot)   systemctl reboot ;;
         *Shutdown) systemctl poweroff ;;
       esac

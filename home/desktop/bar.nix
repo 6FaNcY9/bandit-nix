@@ -13,9 +13,9 @@
   rbLine = color: " %{F${color}}]%{F-}%{F${colors.base02}}─%{F-}";
   # Centered modules need their own leading rail because they do not touch neighbors.
   lbLine = color: "%{F${colors.base02}}─%{F-}%{F${color}}[%{F-} ";
-  # Font selectors: T2 is the larger icon font; T3 is the slightly smaller battery font.
+  # Use one icon font selector so Nerd Font glyphs render at a consistent size.
   icon = glyph: "%{T2}${glyph}%{T-}";
-  batteryIcon = glyph: "%{T4}${glyph}%{T-}";
+  batteryIcon = icon;
 in {
   services.polybar = {
     enable = true;
@@ -26,7 +26,6 @@ in {
 
     script = ''
       export PATH="${pkgs.coreutils}/bin:${pkgs.gawk}/bin:${pkgs.iproute2}/bin:${pkgs.power-profiles-daemon}/bin:/run/current-system/sw/bin:$PATH"
-      pkill xfce4-panel 2>/dev/null || true
       polybar-msg cmd quit 2>/dev/null || true
       polybar main &
     '';
@@ -53,8 +52,7 @@ in {
         background = "\${colors.bg}";
         foreground = "\${colors.fg}";
         font-0 = "JetBrainsMono Nerd Font Mono:style=Bold:size=13;4";
-        font-1 = "JetBrainsMono Nerd Font Mono:style=Bold:size=17;5";
-        font-2 = "JetBrainsMono Nerd Font Mono:style=Bold:size=15;4";
+        font-1 = "JetBrainsMono Nerd Font Mono:style=Bold:size=15;4";
         locale = "en_US.UTF-8";
         line-size = 0;
         padding-left = 0;
@@ -215,7 +213,7 @@ in {
         #!${pkgs.bash}/bin/bash
         BAT_DIR=$(ls -d /sys/class/power_supply/BAT* 2>/dev/null | head -1)
         if [[ -z "$BAT_DIR" ]]; then
-          echo "%{F${colors.base0E}}[%{F-} %{F${colors.base0E}}%{T3}${batteryIcon "󰾅"}%{T-} · %{T3}${batteryIcon "󰁽"}%{T-} ?%{F-} %{F${colors.base0E}}]%{F-}%{F${colors.base02}}─%{F-}"
+          echo "%{F${colors.base0E}}[%{F-} %{F${colors.base0E}}${batteryIcon "󰾅"} · ${batteryIcon "󰁽"} ?%{F-} %{F${colors.base0E}}]%{F-}%{F${colors.base02}}─%{F-}"
           exit 0
         fi
         BAT=$(cat "$BAT_DIR/capacity" 2>/dev/null || echo "?")
@@ -233,7 +231,7 @@ in {
         elif [[ "$BAT" =~ ^[0-9]+$ && "$BAT" -le 50 ]]; then BI="󰁽"; BC="${colors.base0A}"
         elif [[ "$BAT" =~ ^[0-9]+$ && "$BAT" -le 75 ]]; then BI="󰁿"; BC="${colors.base0B}"
         else BI="󰂁"; BC="${colors.base0B}"; fi
-        echo "%{F${colors.base0E}}[%{F-} %{F''${PC}}%{T3}''${PI}%{T-}%{F-}%{F${colors.base0D}} · %{F-}%{F''${BC}}%{T3}''${BI}%{T-} ''${BAT}%%{F-} %{F${colors.base0E}}]%{F-}%{F${colors.base02}}─%{F-}"
+        echo "%{F${colors.base0E}}[%{F-} %{F''${PC}}%{T2}''${PI}%{T-}%{F-}%{F${colors.base0D}} · %{F-}%{F''${BC}}%{T2}''${BI}%{T-} ''${BAT}%%{F-} %{F${colors.base0E}}]%{F-}%{F${colors.base02}}─%{F-}"
       '';
     };
 

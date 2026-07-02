@@ -2,8 +2,7 @@ _: {
   services = {
     fwupd.enable = true;
     fprintd.enable = true;
-    # upower provides battery status used by status bars (xfce4-panel)
-    # and desktop environments to show charge level and power state.
+    # upower provides battery status used by status bars and desktop apps.
     upower.enable = true;
   };
 

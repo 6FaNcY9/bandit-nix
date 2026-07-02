@@ -16,7 +16,6 @@
     ./desktop/rofi.nix
     ./desktop/firefox
     ./desktop/thunderbird.nix
-    ./desktop/xfce.nix
     ./desktop/bar.nix
     ./desktop/powermenu.nix
     ./editor.nix
