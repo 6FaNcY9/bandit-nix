@@ -1,6 +1,12 @@
-{config, ...}: let
+{
+  config,
+  pkgs,
+  ...
+}: let
   colors = config.lib.stylix.colors.withHashtag;
 in {
+  home.packages = [pkgs.gruvbox-plus-icons];
+
   stylix.targets = {
     fish.enable = true;
     gtk.enable = true;
@@ -119,6 +125,7 @@ in {
     gtk-enable-animations = false;
     gtk-button-images = true;
     gtk-menu-images = true;
+    gtk-icon-theme-name = "Gruvbox Plus Dark";
   };
 
   gtk.gtk4.extraConfig = {
