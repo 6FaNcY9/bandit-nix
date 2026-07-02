@@ -130,6 +130,16 @@
     "${mod}+Shift+0" = "move container to workspace number 10";
   };
 in {
+  # i3 has no compositor-level xdg-desktop-portal Screenshot backend, so
+  # flameshot's portal capture hangs 30s and fails. Force the X11 fallback.
+  xdg.configFile."flameshot/flameshot.ini".text = ''
+    [General]
+    drawColor=#ff0000
+    savePath=/home/vino/Pictures/Screenshots
+    useX11LegacyScreenshot=true
+  '';
+  home.file."Pictures/Screenshots/.keep".text = "";
+
   xsession.windowManager.i3 = {
     enable = true;
     config = {
