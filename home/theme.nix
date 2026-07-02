@@ -91,11 +91,37 @@ in {
     }
     scrollbar.horizontal slider { min-height: 14px; }
     scrollbar.vertical   slider { min-width: 14px; }
+
+    /* Golden/teal retro-colorful accents — match i3 focused border (#d79921)
+       and teal secondary accent (#458588) used across i3/kitty. */
+    button:focus, entry:focus, textview:focus {
+      outline: 2px solid #d79921;
+      outline-offset: -2px;
+    }
+    button:hover {
+      background-color: #458588;
+      color: ${colors.base00};
+    }
+    selection, *:selected {
+      background-color: #d79921;
+      color: ${colors.base00};
+    }
+    scrollbar slider:hover, scrollbar slider:active {
+      background-color: #d79921;
+    }
+    notebook > header tabs tab:checked {
+      border-bottom: 2px solid #d79921;
+    }
   '';
 
   gtk.gtk3.extraConfig = {
+    gtk-application-prefer-dark-theme = true;
     gtk-enable-animations = false;
     gtk-button-images = true;
     gtk-menu-images = true;
+  };
+
+  gtk.gtk4.extraConfig = {
+    gtk-application-prefer-dark-theme = true;
   };
 }
