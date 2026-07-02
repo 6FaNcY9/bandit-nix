@@ -4,7 +4,6 @@ in {
   stylix.targets = {
     fish.enable = true;
     gtk.enable = true;
-    xfce.enable = true;
     kitty.enable = true;
     nixvim.enable = true;
     i3.enable = true;
@@ -75,76 +74,6 @@ in {
     }
 
     tooltip { border-radius: 0; }
-
-    /* XFCE Panel — uniform font size for all widgets */
-    .xfce4-panel,
-    .xfce4-panel * { font-size: 14pt; }
-
-    /* XFCE Panel — bevel chrome on all plugin buttons */
-    .xfce4-panel button,
-    .xfce4-panel .panel-button {
-      border-radius: 0;
-      padding: 0 3px;
-      box-shadow:
-        inset -1px -1px 0 ${colors.base00},
-        inset  1px  1px 0 ${colors.base02};
-    }
-    .xfce4-panel button:active,
-    .xfce4-panel button:checked,
-    .xfce4-panel .panel-button:active,
-    .xfce4-panel .panel-button:checked {
-      box-shadow:
-        inset  1px  1px 0 ${colors.base00},
-        inset -1px -1px 0 ${colors.base02};
-      background-color: ${colors.base01};
-    }
-    /* Tasklist — active window sunken + accent, inactive raised.
-       XFCE uses wnck-tasklist; older themes target .tasklist-button,
-       but current widgets are bare <button> children of wnck-tasklist. */
-    .xfce4-panel .tasklist-button,
-    .xfce4-panel wnck-tasklist button,
-    .xfce4-panel .tasklist button {
-      border-radius: 0;
-      min-width: 80px;
-      padding: 0 6px;
-      background-image: none;
-      background-color: ${colors.base00};
-      box-shadow:
-        inset -1px -1px 0 ${colors.base00},
-        inset  1px  1px 0 ${colors.base02};
-    }
-    .xfce4-panel .tasklist-button:hover,
-    .xfce4-panel wnck-tasklist button:hover,
-    .xfce4-panel .tasklist button:hover {
-      background-color: ${colors.base01};
-    }
-    .xfce4-panel .tasklist-button:checked,
-    .xfce4-panel .tasklist-button:active,
-    .xfce4-panel wnck-tasklist button:checked,
-    .xfce4-panel wnck-tasklist button:active,
-    .xfce4-panel .tasklist button:checked,
-    .xfce4-panel .tasklist button:active {
-      background-image: none;
-      background-color: ${colors.base01};
-      color: ${colors.base0A};
-      box-shadow:
-        inset  1px  1px 0 ${colors.base00},
-        inset -1px -1px 0 ${colors.base02};
-    }
-
-    /* Genmon monitor chips (cpu/mem/net/vol/bat) — raised bevel chip.
-       Genmon renders as eventbox+label, not a button, so we target
-       eventbox directly. Systray also uses eventbox — excluded via
-       na-tray-child selector where supported; visually harmless otherwise. */
-    .xfce4-panel eventbox {
-      border-radius: 0;
-      background-color: ${colors.base01};
-      margin: 2px 1px;
-      padding: 0 2px;
-      box-shadow:
-        inset -1px -1px 0 ${colors.base00},
-        inset  1px  1px 0 ${colors.base02};
-    }
 
     notebook > header tabs tab { border-radius: 0; }
     treeview.view { border-radius: 0; }

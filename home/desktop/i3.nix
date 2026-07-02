@@ -70,7 +70,7 @@
     "${mod}+Shift+c" = "reload";
     "${mod}+Shift+r" = "restart";
     "${mod}+r" = ''mode "resize"'';
-    "${mod}+Shift+x" = "exec ${pkgs.xfce4-screensaver}/bin/xfce4-screensaver-command --lock";
+    "${mod}+Shift+x" = "exec ${pkgs.lightdm}/bin/dm-tool lock";
     "${mod}+q" = "move workspace to output next";
 
     # Power menu — hardware power button + keyboard fallback
@@ -88,9 +88,6 @@
     "${mod}+grave" = "exec ${pkgs.dunst}/bin/dunstctl history-pop";
     "${mod}+Shift+d" = "exec ${pkgs.dunst}/bin/dunstctl set-paused toggle";
     "${mod}+Shift+period" = "exec ${pkgs.dunst}/bin/dunstctl close-all";
-
-    # App finder
-    "${mod}+a" = "exec ${pkgs.xfce4-appfinder}/bin/xfce4-appfinder --collapsed";
   };
 
   # ─── Media keys ───────────────────────────────────────
@@ -242,9 +239,9 @@ in {
           command = "${pkgs.autotiling}/bin/autotiling";
           notification = false;
         }
-        # Lock screen on suspend (xfce4-power-manager handles idle lock)
+        # Lock before suspend with the LightDM greeter.
         {
-          command = "${pkgs.xss-lock}/bin/xss-lock -- ${pkgs.xfce4-screensaver}/bin/xfce4-screensaver-command --lock";
+          command = "${pkgs.xss-lock}/bin/xss-lock -- ${pkgs.lightdm}/bin/dm-tool lock";
           notification = false;
         }
         {
