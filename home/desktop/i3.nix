@@ -139,8 +139,6 @@ in {
     savePath=/home/vino/Pictures/Screenshots
     useX11LegacyScreenshot=true
   '';
-  home.file."Pictures/Screenshots/.keep".text = "";
-
   xsession.windowManager.i3 = {
     enable = true;
     config = {
@@ -284,110 +282,114 @@ in {
     };
   };
 
-  home.file = {
-    # ─── Shortcut cheatsheet launcher (Mod+F1) ───────────
-    ".local/bin/i3-cheatsheet-show" = {
-      executable = true;
-      text = ''
-        #!/usr/bin/env bash
-        exec kitty --title 'i3 Shortcuts' \
-          --override remember_window_size=no \
-          --override initial_window_width=800 \
-          --override initial_window_height=560 \
-          bash -c 'cat ~/.local/bin/i3-cheatsheet | less -R'
-      '';
+  home = {
+    file = {
+      "Pictures/Screenshots/.keep".text = "";
+
+      # ─── Shortcut cheatsheet launcher (Mod+F1) ───────────
+      ".local/bin/i3-cheatsheet-show" = {
+        executable = true;
+        text = ''
+          #!/usr/bin/env bash
+          exec kitty --title 'i3 Shortcuts' \
+            --override remember_window_size=no \
+            --override initial_window_width=800 \
+            --override initial_window_height=560 \
+            bash -c 'cat ~/.local/bin/i3-cheatsheet | less -R'
+        '';
+      };
+
+      # ─── Shortcut cheatsheet content ─────────────────────
+      ".local/bin/i3-cheatsheet" = {
+        executable = true;
+        text = ''
+          #!/usr/bin/env bash
+          cat <<'EOF'
+          ╔══════════════════════════════════════════════════════════╗
+          ║           i3 Shortcuts  (Mod = Super / Win key)          ║
+          ╚══════════════════════════════════════════════════════════╝
+
+          LAUNCH
+            Mod+Return          kitty (terminal)
+            Mod+Shift+W         firefox
+            Mod+D               rofi app launcher
+            Mod+Shift+V         copyq clipboard manager
+            Mod+A               XFCE app finder
+
+          WINDOWS
+            Mod+Shift+Q         kill focused window
+            Mod+F               fullscreen toggle
+            Mod+Shift+Space     toggle float/tile
+            Mod+Space           focus float ↔ tile
+            Mod+Shift+X         lock screen
+
+          FOCUS  (also works with arrow keys)
+            Mod+J               focus left
+            Mod+K               focus down
+            Mod+L               focus up
+            Mod+;               focus right
+
+          MOVE  (also works with arrow keys)
+            Mod+Shift+J         move left
+            Mod+Shift+K         move down
+            Mod+Shift+L         move up
+            Mod+Shift+;         move right
+
+          LAYOUT
+            Mod+H               split horizontal
+            Mod+V               split vertical
+            Mod+E               toggle split
+            Mod+S               stacking layout
+            Mod+W               tabbed layout
+            Mod+P / Shift+P     focus parent / child
+
+          RESIZE MODE  (Mod+R, then…)
+            J/K/L/; or Arrows   resize window
+            Return / Escape     exit resize mode
+
+          WORKSPACES
+            Mod+1…0             switch to workspace 1–10
+            Mod+Shift+1…0       move window to workspace
+
+          SCRATCHPAD
+            Mod+M               send to scratchpad
+            Mod+Shift+M         show scratchpad
+
+          NOTIFICATIONS (dunst)
+            Mod+`               show notification history
+            Mod+Shift+D         pause / resume notifications
+            Mod+Shift+.         close all notifications
+
+          SCREENSHOTS
+            Print / F11         flameshot GUI screenshot
+
+          MEDIA
+            XF86AudioRaise/Lower  volume ±5%
+            XF86AudioMute         mute toggle
+            XF86MonBrightness+/-  screen brightness
+            XF86AudioPlay/Next/Prev  media control
+
+          i3 CONFIG
+            Mod+Shift+C         reload config
+            Mod+Shift+R         restart i3
+            Mod+F1              this help screen
+
+          EOF
+        '';
+      };
     };
 
-    # ─── Shortcut cheatsheet content ─────────────────────
-    ".local/bin/i3-cheatsheet" = {
-      executable = true;
-      text = ''
-        #!/usr/bin/env bash
-        cat <<'EOF'
-        ╔══════════════════════════════════════════════════════════╗
-        ║           i3 Shortcuts  (Mod = Super / Win key)          ║
-        ╚══════════════════════════════════════════════════════════╝
-
-        LAUNCH
-          Mod+Return          kitty (terminal)
-          Mod+Shift+W         firefox
-          Mod+D               rofi app launcher
-          Mod+Shift+V         copyq clipboard manager
-          Mod+A               XFCE app finder
-
-        WINDOWS
-          Mod+Shift+Q         kill focused window
-          Mod+F               fullscreen toggle
-          Mod+Shift+Space     toggle float/tile
-          Mod+Space           focus float ↔ tile
-          Mod+Shift+X         lock screen
-
-        FOCUS  (also works with arrow keys)
-          Mod+J               focus left
-          Mod+K               focus down
-          Mod+L               focus up
-          Mod+;               focus right
-
-        MOVE  (also works with arrow keys)
-          Mod+Shift+J         move left
-          Mod+Shift+K         move down
-          Mod+Shift+L         move up
-          Mod+Shift+;         move right
-
-        LAYOUT
-          Mod+H               split horizontal
-          Mod+V               split vertical
-          Mod+E               toggle split
-          Mod+S               stacking layout
-          Mod+W               tabbed layout
-          Mod+P / Shift+P     focus parent / child
-
-        RESIZE MODE  (Mod+R, then…)
-          J/K/L/; or Arrows   resize window
-          Return / Escape     exit resize mode
-
-        WORKSPACES
-          Mod+1…0             switch to workspace 1–10
-          Mod+Shift+1…0       move window to workspace
-
-        SCRATCHPAD
-          Mod+M               send to scratchpad
-          Mod+Shift+M         show scratchpad
-
-        NOTIFICATIONS (dunst)
-          Mod+`               show notification history
-          Mod+Shift+D         pause / resume notifications
-          Mod+Shift+.         close all notifications
-
-        SCREENSHOTS
-          Print / F11         flameshot GUI screenshot
-
-        MEDIA
-          XF86AudioRaise/Lower  volume ±5%
-          XF86AudioMute         mute toggle
-          XF86MonBrightness+/-  screen brightness
-          XF86AudioPlay/Next/Prev  media control
-
-        i3 CONFIG
-          Mod+Shift+C         reload config
-          Mod+Shift+R         restart i3
-          Mod+F1              this help screen
-
-        EOF
-      '';
-    };
+    # ─── Required packages ────────────────────────────────
+    packages = with pkgs; [
+      flameshot
+      pcmanfm
+      xss-lock
+      copyq
+      playerctl
+      brightnessctl
+      networkmanagerapplet
+      autotiling
+      less
+    ];
   };
-
-  # ─── Required packages ────────────────────────────────
-  home.packages = with pkgs; [
-    flameshot
-    pcmanfm
-    xss-lock
-    copyq
-    playerctl
-    brightnessctl
-    networkmanagerapplet
-    autotiling
-    less
-  ];
 }

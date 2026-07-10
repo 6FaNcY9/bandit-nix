@@ -1,8 +1,4 @@
-{
-  pkgs,
-  lib,
-  ...
-}: let
+{pkgs, ...}: let
   repoDir = "/etc/nixos/bandit-nix";
 
   rebuildScript = pkgs.writeShellScript "auto-rebuild" ''
