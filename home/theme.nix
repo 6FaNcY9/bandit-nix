@@ -12,11 +12,26 @@ in {
   # (i3 focused border, kitty active tab). Patch just that one line in place
   # after Stylix writes the file, rather than shadowing the whole generated
   # config — this stays correct across future Stylix template changes.
-  home.activation.kvantumAccentOverride = lib.hm.dag.entryAfter ["writeBoundary"] ''
-    run ${pkgs.gnused}/bin/sed -i \
-      's/^highlight\.color=.*/highlight.color=#d79921/' \
-      "$HOME/.config/Kvantum/Base16Kvantum/Base16Kvantum.kvconfig"
-  '';
+  home = {
+    activation.kvantumAccentOverride = lib.hm.dag.entryAfter ["writeBoundary"] ''
+      run ${pkgs.gnused}/bin/sed -i \
+        's/^highlight\.color=.*/highlight.color=#d79921/' \
+        "$HOME/.config/Kvantum/Base16Kvantum/Base16Kvantum.kvconfig"
+    '';
+
+    # Stylix's HM cursor module (cascaded from nixos/theme.nix's stylix.cursor)
+    # plain-sets package/name/size on the NixOS-embedded config but never sets
+    # `enable` itself, which is what triggers its own deprecation warning.
+    # mkForce enable so the warning goes away everywhere; mkDefault the rest
+    # so Stylix's values win when present, falling back to the same values
+    # for the standalone homeConfigurations output where Stylix doesn't cascade.
+    pointerCursor = {
+      enable = lib.mkForce true;
+      package = lib.mkDefault pkgs.openzone-cursors;
+      name = lib.mkDefault "OpenZone_Black_Slim";
+      size = lib.mkDefault 30;
+    };
+  };
 
   stylix.targets = {
     fish.enable = true;
@@ -126,8 +141,6 @@ in {
       border-bottom: 2px solid #d79921;
     }
   '';
-
-  home.pointerCursor.enable = true;
 
   gtk = {
     gtk3.extraConfig = {
