@@ -1,0 +1,25 @@
+nixos:
+  - changed-files:
+      - any-glob-to-any-file: "nixos/**"
+
+home-manager:
+  - changed-files:
+      - any-glob-to-any-file: "home/**"
+
+hosts:
+  - changed-files:
+      - any-glob-to-any-file: "hosts/**"
+
+secrets:
+  - changed-files:
+      - any-glob-to-any-file: "secrets/**"
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file: ".github/**"
+
+flake:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "flake.nix"
+          - "flake.lock"
