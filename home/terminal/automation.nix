@@ -95,7 +95,7 @@ in {
     source = preCommitHook;
   };
 
-  programs.git.extraConfig.core.hooksPath = "~/.config/git/hooks";
+  programs.git.settings.core.hooksPath = "~/.config/git/hooks";
 
   # ── Nightly TODO scan ────────────────────────────────────────
   systemd.user.services.llm-todo-scan = {

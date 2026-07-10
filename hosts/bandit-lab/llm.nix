@@ -17,7 +17,7 @@
     user = "ollama";
     group = "ollama";
     home = "/srv/ollama";
-    models = "/srv/ollama/models";
+    modelsDir = "/srv/ollama/models";
     loadModels = [
       "qwen3-coder:30b"
       "dolphincoder:15b"
