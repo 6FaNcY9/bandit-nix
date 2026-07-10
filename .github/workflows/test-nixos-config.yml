@@ -153,6 +153,8 @@ jobs:
 
       - name: Test VM boots
         timeout-minutes: 5
+        env:
+          QEMU_OPTS: -nographic
         run: |
           timeout 90s result/bin/run-bandit-vm 2>&1 | tee /tmp/vm-boot.log &
           VM_PID=$!
