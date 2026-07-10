@@ -29,6 +29,7 @@
     stateVersion = "25.11";
     packages = with pkgs; [
       bitwarden-cli
+      gruvbox-plus-icons
     ];
   };
 }
