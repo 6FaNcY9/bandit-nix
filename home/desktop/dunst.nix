@@ -9,8 +9,8 @@ in {
     enable = true;
 
     iconTheme = {
-      package = pkgs.papirus-icon-theme;
-      name = "Papirus-Dark";
+      package = pkgs.gruvbox-plus-icons;
+      name = "Gruvbox Plus Dark";
       size = "32x32";
     };
 

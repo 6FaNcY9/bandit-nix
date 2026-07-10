@@ -10,7 +10,6 @@
     ./git.nix
     ./theme.nix
     ./qt.nix
-    ./desktop/kvantum-accent.nix
     ./desktop/i3.nix
     ./desktop/netmenu.nix
     ./desktop/dunst.nix
@@ -30,6 +29,7 @@
     stateVersion = "25.11";
     packages = with pkgs; [
       bitwarden-cli
+      gruvbox-plus-icons
     ];
   };
 }
