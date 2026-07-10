@@ -383,6 +383,8 @@ in {
     packages = with pkgs; [
       flameshot
       pcmanfm
+      viewnior
+      xarchiver
       xss-lock
       copyq
       playerctl
@@ -391,5 +393,33 @@ in {
       autotiling
       less
     ];
+  };
+
+  # ─── Default applications ──────────────────────────────
+  # PCManFM as file manager everywhere (Firefox downloads, xdg-open, etc.),
+  # viewnior for images, xarchiver for archives — classic lightweight
+  # LXDE-style companions that pair with PCManFM.
+  xdg.mimeApps = {
+    enable = true;
+    defaultApplications = {
+      "inode/directory" = ["pcmanfm.desktop"];
+
+      "image/png" = ["viewnior.desktop"];
+      "image/jpeg" = ["viewnior.desktop"];
+      "image/gif" = ["viewnior.desktop"];
+      "image/bmp" = ["viewnior.desktop"];
+      "image/webp" = ["viewnior.desktop"];
+      "image/tiff" = ["viewnior.desktop"];
+      "image/svg+xml" = ["viewnior.desktop"];
+
+      "application/zip" = ["xarchiver.desktop"];
+      "application/x-7z-compressed" = ["xarchiver.desktop"];
+      "application/x-rar" = ["xarchiver.desktop"];
+      "application/x-tar" = ["xarchiver.desktop"];
+      "application/gzip" = ["xarchiver.desktop"];
+      "application/x-bzip2" = ["xarchiver.desktop"];
+      "application/x-xz" = ["xarchiver.desktop"];
+      "application/x-zstd-compressed-tar" = ["xarchiver.desktop"];
+    };
   };
 }
