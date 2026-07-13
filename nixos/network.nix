@@ -14,7 +14,8 @@ _: {
     };
   };
 
-  # Strict DoT — fails if DoT unavailable rather than falling back to cleartext
+  # Opportunistic DoT/DNSSEC — encrypt+validate when upstream supports it,
+  # auto-fallback to cleartext/unsigned on captive portals instead of hard-failing DNS.
   services = {
     resolved = {
       enable = true;
@@ -29,9 +30,9 @@ _: {
             "1.0.0.1#cloudflare-dns.com"
             "149.112.112.112#dns.quad9.net"
           ];
-          DNSSEC = "true";
+          DNSSEC = "allow-downgrade";
           Domains = ["~."];
-          DNSOverTLS = "yes";
+          DNSOverTLS = "opportunistic";
         };
       };
     };
