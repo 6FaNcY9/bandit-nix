@@ -6,7 +6,7 @@
   ...
 }: let
   colors = config.lib.stylix.colors.withHashtag;
-  goldenKvantum = let
+  retroKvantum = let
     kvconfig = config.lib.stylix.colors {
       template = "${inputs.stylix}/modules/qt/kvconfig.mustache";
       extension = ".kvconfig";
@@ -16,14 +16,14 @@
       extension = ".svg";
     };
   in
-    pkgs.runCommandLocal "golden-base16-kvantum" {} ''
-      directory="$out/share/Kvantum/GoldenBase16Kvantum"
+    pkgs.runCommandLocal "bandit-retro-kvantum" {} ''
+      directory="$out/share/Kvantum/BanditRetroKvantum"
       mkdir --parents "$directory"
-      cp ${kvconfig} "$directory/GoldenBase16Kvantum.kvconfig"
+      cp ${kvconfig} "$directory/BanditRetroKvantum.kvconfig"
       ${pkgs.gnused}/bin/sed -i \
-        's/^highlight\.color=.*/highlight.color=#d79921/' \
-        "$directory/GoldenBase16Kvantum.kvconfig"
-      cp ${svg} "$directory/GoldenBase16Kvantum.svg"
+        's/^highlight\.color=.*/highlight.color=${colors.base0A}/' \
+        "$directory/BanditRetroKvantum.kvconfig"
+      cp ${svg} "$directory/BanditRetroKvantum.svg"
     '';
 in {
   home.pointerCursor.enable = true;
@@ -31,8 +31,8 @@ in {
   # Generate the custom theme in the Nix store so Home Manager can safely
   # manage it as a symlink.
   qt.kvantum = {
-    settings.General.theme = lib.mkForce "GoldenBase16Kvantum";
-    themes = [goldenKvantum];
+    settings.General.theme = lib.mkForce "BanditRetroKvantum";
+    themes = [retroKvantum];
   };
 
   stylix.targets = {
@@ -122,25 +122,24 @@ in {
     scrollbar.horizontal slider { min-height: 14px; }
     scrollbar.vertical   slider { min-width: 14px; }
 
-    /* Golden/teal retro-colorful accents — match i3 focused border (#d79921)
-       and teal secondary accent (#458588) used across i3/kitty. */
+    /* Amber primary and cyan secondary accents from Bandit Retro. */
     button:focus, entry:focus, textview:focus {
-      outline: 2px solid #d79921;
+      outline: 2px solid ${colors.base0A};
       outline-offset: -2px;
     }
     button:hover {
-      background-color: #458588;
+      background-color: ${colors.base0C};
       color: ${colors.base00};
     }
     selection, *:selected {
-      background-color: #d79921;
+      background-color: ${colors.base0A};
       color: ${colors.base00};
     }
     scrollbar slider:hover, scrollbar slider:active {
-      background-color: #d79921;
+      background-color: ${colors.base0A};
     }
     notebook > header tabs tab:checked {
-      border-bottom: 2px solid #d79921;
+      border-bottom: 2px solid ${colors.base0A};
     }
   '';
 

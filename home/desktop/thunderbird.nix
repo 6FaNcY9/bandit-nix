@@ -1,4 +1,16 @@
-{pkgs, ...}: {
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}: let
+  colors = config.lib.stylix.colors.withHashtag;
+  themedChrome =
+    lib.replaceStrings
+    ["#282828" "#1d2021" "#3c3836" "#504945" "#928374" "#d5c4a1" "#d79921" "#458588" "#cc241d" "#98971a"]
+    [colors.base00 colors.base01 colors.base01 colors.base02 colors.base03 colors.base05 colors.base0A colors.base0C colors.base08 colors.base0B]
+    (builtins.readFile ./thunderbird-userchrome.css);
+in {
   programs.thunderbird = {
     enable = true;
     package = pkgs.thunderbird;
@@ -33,7 +45,7 @@
         "mail.phishing.detection.enabled" = true;
         "mail.spam.manualMark.biffAtStartup" = false;
       };
-      userChrome = builtins.readFile ./thunderbird-userchrome.css;
+      userChrome = themedChrome;
     };
   };
 }

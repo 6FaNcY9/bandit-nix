@@ -4,7 +4,7 @@
   repoConfig,
   ...
 }: let
-  # Gruvbox-dark base16 palette — kept in sync with nixos/theme.nix scheme
+  # Bandit Retro base16 palette, shared with the workstation theme.
   c = repoConfig.serverPalette;
   zellijMenu = pkgs.writeShellScriptBin "zellij-menu" ''
     set -euo pipefail

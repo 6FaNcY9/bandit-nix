@@ -5,6 +5,7 @@
   repoConfig,
   ...
 }: let
+  colors = config.lib.stylix.colors.withHashtag;
   sharedAliases = import ./aliases.nix {inherit repoConfig;};
 in {
   programs = {
@@ -136,8 +137,8 @@ in {
           nixver=$(nixos-version 2>/dev/null | cut -d' ' -f1)
           kern=$(uname -r)
           print ""
-          print -P "%F{#d79921}  λ  bandit · NixOS $nixver%f"
-          print -P "%F{#928374}  kernel $kern  ·  zsh $ZSH_VERSION%f"
+          print -P "%F{${colors.base0A}}  λ  bandit · NixOS $nixver%f"
+          print -P "%F{${colors.base03}}  kernel $kern  ·  zsh $ZSH_VERSION%f"
           print ""
         fi
 
@@ -164,7 +165,7 @@ in {
             packages+=("nixpkgs#$package")
           done
 
-          nix shell "''${packages[@]}"
+          NIXPKGS_ALLOW_UNFREE=1 nix shell --impure "''${packages[@]}"
         }
 
         # ── cb: copy file/stdin to clipboard ──────────────────

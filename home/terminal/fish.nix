@@ -1,8 +1,10 @@
 {
+  config,
   pkgs,
   repoConfig,
   ...
 }: let
+  colors = config.lib.stylix.colors.withHashtag;
   sharedAliases = import ./aliases.nix {inherit repoConfig;};
 in {
   programs = {
@@ -95,9 +97,9 @@ in {
             set -l nixver (nixos-version 2>/dev/null | string split ' ' --max 2 --field 1)
             set -l kern (uname -r)
             echo ""
-            set_color d79921
+            set_color ${colors.base0A}
             echo "  λ  bandit · NixOS $nixver"
-            set_color 928374
+            set_color ${colors.base03}
             echo "  kernel $kern  ·  fish $version"
             set_color normal
             echo ""

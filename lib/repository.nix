@@ -17,22 +17,22 @@ in {
 
   # Shared with the headless shell and editor modules.
   serverPalette = {
-    base00 = "#282828";
-    base01 = "#3c3836";
-    base02 = "#504945";
-    base03 = "#928374";
-    base04 = "#a89984";
-    base05 = "#d5c4a1";
-    base06 = "#ebdbb2";
-    base07 = "#fbf1c7";
-    base08 = "#cc241d";
-    base09 = "#d65d0e";
-    base0A = "#d79921";
-    base0B = "#98971a";
-    base0C = "#689d6a";
-    base0D = "#458588";
-    base0E = "#b16286";
-    base0F = "#d65d0e";
+    base00 = "#111111";
+    base01 = "#1b1d1e";
+    base02 = "#2d2d2d";
+    base03 = "#6c7070";
+    base04 = "#a7a9a5";
+    base05 = "#d8d8c8";
+    base06 = "#eee8d5";
+    base07 = "#fff8dc";
+    base08 = "#f2777a";
+    base09 = "#f99157";
+    base0A = "#ffcc66";
+    base0B = "#99cc99";
+    base0C = "#66cccc";
+    base0D = "#6699cc";
+    base0E = "#cc99cc";
+    base0F = "#d27b53";
   };
 
   inherit unfreePackageNames;
@@ -48,8 +48,8 @@ in {
 
   mkStylixTheme = pkgs: {
     enable = true;
-    base16Scheme = "${pkgs.base16-schemes}/share/themes/gruvbox-dark.yaml";
-    image = ../hosts/bandit/wallpaper.png;
+    base16Scheme = ../home/bandit-retro.yaml;
+    image = ../hosts/bandit/wallpaper.jpg;
     fonts = {
       monospace = {
         package = pkgs.nerd-fonts.jetbrains-mono;

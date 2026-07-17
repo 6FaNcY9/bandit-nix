@@ -1,4 +1,15 @@
-{lib, ...}: {
+{
+  config,
+  lib,
+  ...
+}: let
+  colors = config.lib.stylix.colors.withHashtag;
+  themedChrome =
+    lib.replaceStrings
+    ["#282828" "#1d2021" "#3c3836" "#504945" "#928374" "#d5c4a1" "#d79921" "#458588" "#cc241d"]
+    [colors.base00 colors.base01 colors.base01 colors.base02 colors.base03 colors.base05 colors.base0A colors.base0C colors.base08]
+    (builtins.readFile ./userchrome.css);
+in {
   programs.firefox = {
     enable = true;
     configPath = ".mozilla/firefox";
@@ -15,7 +26,7 @@
         "network.trr.mode" = 5; # disable built-in DoH; use system resolver (enforces our DoT policy)
       };
 
-      userChrome = builtins.readFile ./userchrome.css;
+      userChrome = themedChrome;
     };
   };
 
