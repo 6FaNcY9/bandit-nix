@@ -51,18 +51,7 @@ in {
       treesitter = {
         enable = true;
         settings = {
-          ensure_installed = [
-            "markdown"
-            "markdown_inline"
-            "lua"
-            "vim"
-            "bash"
-            "python"
-            "json"
-            "yaml"
-            "rust"
-            "nix"
-          ];
+          ensure_installed = "all";
           incrementalSelection.enable = true;
           highlight.enable = true;
           indent.enable = true;
@@ -77,6 +66,12 @@ in {
           anti_conceal.enabled = true;
         };
       };
+
+      # Rainbow-colored matching brackets/delimiters by nesting depth
+      rainbow-delimiters.enable = true;
+
+      # Highlight other occurrences of the symbol under the cursor
+      illuminate.enable = true;
 
       glow.enable = true;
 
