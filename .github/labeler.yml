@@ -25,3 +25,7 @@ hosts:
       - any-glob-to-any-file:
           - "hosts/**"
           - "nixos/**"
+
+secrets:
+  - changed-files:
+      - any-glob-to-any-file: "secrets/**"
