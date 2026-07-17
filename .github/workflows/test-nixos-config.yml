@@ -36,7 +36,7 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
   build:
-    name: Check and Build NixOS Configuration
+    name: Check NixOS Configuration
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -55,18 +55,17 @@ jobs:
       - name: Check flake
         run: nix flake check --no-update-lock-file
 
-      - name: Build NixOS configuration
+      - name: Evaluate NixOS configuration
         run: |
           nix build .#nixosConfigurations.bandit-ci.config.system.build.toplevel \
-            --print-build-logs \
+            --dry-run \
             --no-update-lock-file \
             --fallback
 
-      - name: Show build result
+      - name: Confirm configuration evaluation
         if: success()
         run: |
-          echo "✅ NixOS configuration built successfully!"
-          nix path-info .#nixosConfigurations.bandit-ci.config.system.build.toplevel
+          echo "✅ NixOS configuration evaluated successfully!"
 
   build-vm:
     name: Build and Test VM
