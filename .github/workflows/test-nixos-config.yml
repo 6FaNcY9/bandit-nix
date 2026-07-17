@@ -94,15 +94,28 @@ jobs:
 
       - name: Scan for unapproved vulnerabilities
         run: |
-          set +e
-          nix run .#vulnix -- \
-            --whitelist ci/vulnix-whitelist.toml \
-            --json \
-            ./result > vulnix-report.json
-          status=$?
-          if [ ! -s vulnix-report.json ]; then
-            echo "[]" > vulnix-report.json
-          fi
+          for attempt in 1 2 3; do
+            set +e
+            nix run .#vulnix -- \
+              --whitelist ci/vulnix-whitelist.toml \
+              --json \
+              ./result > vulnix-report.json
+            status=$?
+            set -e
+
+            # A valid report means the scan completed. Preserve vulnix's
+            # status so genuine, unapproved findings still fail the job.
+            if python3 -m json.tool vulnix-report.json >/dev/null 2>&1; then
+              exit "$status"
+            fi
+
+            if [ "$attempt" -lt 3 ]; then
+              echo "Vulnerability database download failed; retrying ($attempt/3)..."
+              sleep $((attempt * 10))
+            fi
+          done
+
+          echo "[]" > vulnix-report.json
           exit "$status"
 
       - name: Show vulnerability summary
@@ -151,24 +164,31 @@ jobs:
 
       - name: Test VM boots
         timeout-minutes: 5
+        env:
+          QEMU_OPTS: -nographic
         run: |
-          timeout 90s result/bin/run-bandit-vm 2>&1 | tee /tmp/vm-boot.log &
+          timeout 90s result/bin/run-bandit-vm > /tmp/vm-boot.log 2>&1 &
           VM_PID=$!
-          for i in $(seq 1 18); do
+          trap 'kill "$VM_PID" 2>/dev/null || true' EXIT
+
+          for _ in {1..18}; do
             sleep 5
             if grep -qE "login:|Startup finished" /tmp/vm-boot.log 2>/dev/null; then
               echo "✅ VM reached login prompt"
-              kill "$VM_PID" 2>/dev/null || true
               exit 0
             fi
             if grep -qE "Kernel panic|kernel BUG at|OOPS:" /tmp/vm-boot.log 2>/dev/null; then
               echo "❌ VM kernel panic detected"
               tail -50 /tmp/vm-boot.log
-              kill "$VM_PID" 2>/dev/null || true
+              exit 1
+            fi
+            if ! kill -0 "$VM_PID" 2>/dev/null; then
+              echo "❌ VM exited before reaching the login prompt"
+              tail -50 /tmp/vm-boot.log
               exit 1
             fi
           done
-          kill "$VM_PID" 2>/dev/null || true
+
           echo "❌ VM did not reach login prompt within 90s"
           tail -50 /tmp/vm-boot.log
           exit 1
