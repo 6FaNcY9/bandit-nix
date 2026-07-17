@@ -51,26 +51,6 @@
     | ${pkgs.jq}/bin/jq -r .response
   '';
 
-  genPanelScript = pkgs.writeShellScriptBin "gen-panel-script" ''
-    # Usage: gen-panel-script <name> "<description>"
-    set -e
-    NAME="$1"
-    DESC="$2"
-    if [[ -z "$NAME" || -z "$DESC" ]]; then
-      echo "Usage: gen-panel-script <name> <description>" >&2
-      exit 1
-    fi
-    OUT="$HOME/.local/bin/panel-$NAME"
-    PROMPT="Write a bash script for XFCE genmon panel. Task: $DESC.
-    Rules: output only <txt>PANGO_MARKUP</txt>, bracket color #504945 (dim),
-    use nerd font icons, no deps beyond standard unix tools.
-    Shebang #!/usr/bin/env bash. Output the script only, no explanation."
-    echo "Generating panel-$NAME via ${"$"}{${ollamaModel}}..." >&2
-    ${llmQuery}/bin/llm "$PROMPT" > "$OUT"
-    chmod +x "$OUT"
-    echo "Written: $OUT" >&2
-  '';
-
   preCommitHook = pkgs.writeShellScript "llm-pre-commit" ''
     DIFF=$(git diff --cached --stat)
     [[ -z "$DIFF" ]] && exit 0
@@ -89,9 +69,8 @@
     exit 0  # never block the commit
   '';
 in {
-  # ── llm: one-shot prompt to bandit-coder ────────────────────
-  # ── gen-panel-script: generate XFCE genmon scripts via LLM ──
-  home.packages = [llmQuery genPanelScript fcScript llmWebScript];
+  # ── LLM and web helpers ──────────────────────────────────────
+  home.packages = [llmQuery fcScript llmWebScript];
 
   # ── Pre-commit LLM review (warns, never blocks) ─────────────
   home.file.".config/git/hooks/pre-commit" = {

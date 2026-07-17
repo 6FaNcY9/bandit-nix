@@ -112,7 +112,6 @@ in {
       qwen-log
       qwen-review
       qwen-summarize
-      pkgs.aider-chat
       pkgs.playwright-driver
       pkgs.python313
       pkgs.uv
