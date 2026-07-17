@@ -1,4 +1,8 @@
-{lib, ...}: {
+{
+  lib,
+  repoConfig,
+  ...
+}: {
   imports = [
     ./hardware.nix
     ./cockpit-theme.nix
@@ -11,6 +15,7 @@
     ./power.nix
     ./log-monitor.nix
     ./auto-rebuild.nix
+    ./health-check.nix
   ];
 
   networking.hostName = "bandit-lab";
@@ -21,7 +26,7 @@
     PermitRootLogin = "no";
   };
 
-  users.users.vino.openssh.authorizedKeys.keys = [
+  users.users.${repoConfig.workstation.username}.openssh.authorizedKeys.keys = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHOfT8hlUovvRJtHh5YKJzBhHZSK05WLGERQIq0H7GDt vino@bandit-homelab"
   ];
 

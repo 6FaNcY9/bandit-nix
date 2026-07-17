@@ -14,5 +14,6 @@ _: {
     ./audio.nix
     ./desktop.nix
     ./users.nix
+    ./health-check.nix
   ];
 }
