@@ -1,4 +1,4 @@
-_: {
+{repoConfig, ...}: {
   programs.ssh = {
     enable = true;
     enableDefaultConfig = false;
@@ -40,7 +40,7 @@ _: {
       };
       "bandit-lab" = {
         Hostname = "192.168.1.2";
-        User = "vino";
+        User = repoConfig.workstation.username;
         IdentityFile = "~/.ssh/homelabKey";
         IdentitiesOnly = true;
       };

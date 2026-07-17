@@ -43,45 +43,31 @@
     nixos-hardware,
     ...
   } @ inputs: let
-    system = "x86_64-linux";
+    repoConfig = import ./lib/repository.nix {inherit (nixpkgs) lib;};
+    inherit (repoConfig) system;
     pkgs = import nixpkgs {
       inherit system;
-      config.allowUnfree = true;
+      config.allowUnfreePredicate = repoConfig.allowUnfreePredicate;
     };
+    hmBackupCommand = pkgs.writeShellScript "home-manager-backup" ''
+      set -euo pipefail
+
+      target="$1"
+      backup="$target.hm-backup"
+      ${pkgs.coreutils}/bin/mv --backup=numbered --no-target-directory -- "$target" "$backup"
+      printf 'Home Manager: moved %s to %s (older copies use .~N~ suffixes)\n' "$target" "$backup"
+    '';
     standaloneStylix = {
-      stylix = {
-        enable = true;
-        base16Scheme = "${pkgs.base16-schemes}/share/themes/gruvbox-dark.yaml";
-        image = ./hosts/bandit/wallpaper.png;
-        fonts = {
-          monospace = {
-            package = pkgs.nerd-fonts.jetbrains-mono;
-            name = "JetBrainsMono Nerd Font Mono";
-          };
-          sansSerif = {
-            package = pkgs.nerd-fonts.jetbrains-mono;
-            name = "JetBrainsMono Nerd Font";
-          };
-          serif = {
-            package = pkgs.nerd-fonts.jetbrains-mono;
-            name = "JetBrainsMono Nerd Font";
-          };
-          sizes = {
-            terminal = 14;
-            applications = 14;
-            desktop = 14;
-            popups = 11;
-          };
-        };
-      };
+      stylix = repoConfig.mkStylixTheme pkgs;
     };
+    sharedArgs = {inherit inputs repoConfig;};
 
     hmBase = {
       useGlobalPkgs = true;
       useUserPackages = true;
-      backupFileExtension = "hm-backup";
-      extraSpecialArgs = {inherit inputs;};
-      users.vino = import ./home;
+      backupCommand = hmBackupCommand;
+      extraSpecialArgs = sharedArgs;
+      users.${repoConfig.workstation.username} = import ./home;
     };
   in {
     nixosConfigurations = let
@@ -97,17 +83,17 @@
       ];
     in {
       bandit = nixpkgs.lib.nixosSystem {
-        specialArgs = {inherit inputs;};
+        specialArgs = sharedArgs;
         modules = banditModules;
       };
 
       bandit-ci = nixpkgs.lib.nixosSystem {
-        specialArgs = {inherit inputs;};
+        specialArgs = sharedArgs;
         modules = banditModules ++ [./nixos/ci-overrides.nix];
       };
 
       bandit-lab = nixpkgs.lib.nixosSystem {
-        specialArgs = {inherit inputs;};
+        specialArgs = sharedArgs;
         modules = [
           inputs.nixvim.nixosModules.nixvim
           sops-nix.nixosModules.sops
@@ -119,7 +105,7 @@
 
     homeConfigurations.vino = home-manager.lib.homeManagerConfiguration {
       inherit pkgs;
-      extraSpecialArgs = {inherit inputs;};
+      extraSpecialArgs = sharedArgs;
       modules = [
         stylix.homeModules.stylix
         standaloneStylix

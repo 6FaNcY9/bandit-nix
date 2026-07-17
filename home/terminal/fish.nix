@@ -1,5 +1,9 @@
-{pkgs, ...}: let
-  sharedAliases = import ./aliases.nix;
+{
+  pkgs,
+  repoConfig,
+  ...
+}: let
+  sharedAliases = import ./aliases.nix {inherit repoConfig;};
 in {
   programs = {
     # ─── Fish ─────────────────────────────────────────────────

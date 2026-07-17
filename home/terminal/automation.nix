@@ -1,4 +1,8 @@
-{pkgs, ...}: let
+{
+  pkgs,
+  repoConfig,
+  ...
+}: let
   ollamaUrl = "http://192.168.1.2:11434";
   ollamaModel = "bandit-coder";
   firecrawlKeyFile = "/run/secrets/firecrawl-api-key";
@@ -95,7 +99,7 @@ in {
     source = preCommitHook;
   };
 
-  programs.git.extraConfig.core.hooksPath = "~/.config/git/hooks";
+  programs.git.settings.core.hooksPath = "~/.config/git/hooks";
 
   # ── Nightly TODO scan ────────────────────────────────────────
   systemd.user.services.llm-todo-scan = {
@@ -104,7 +108,7 @@ in {
       Type = "oneshot";
       ExecStart = let
         script = pkgs.writeShellScript "llm-todo-scan" ''
-          REPO="$HOME/src/bandit-nix"
+          REPO="${repoConfig.workstation.repoPath}"
           LOGDIR="$HOME/.local/share/llm-todo-scan"
           mkdir -p "$LOGDIR"
           LOG="$LOGDIR/$(date +%Y-%m-%d).log"

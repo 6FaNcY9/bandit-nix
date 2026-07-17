@@ -1,6 +1,7 @@
 {
   pkgs,
   config,
+  repoConfig,
   ...
 }: {
   programs.fish.enable = true;
@@ -8,7 +9,7 @@
 
   users = {
     mutableUsers = false;
-    users.vino = {
+    users.${repoConfig.workstation.username} = {
       isNormalUser = true;
       extraGroups = [
         "wheel"

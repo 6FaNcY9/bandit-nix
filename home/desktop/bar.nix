@@ -1,6 +1,7 @@
 {
   config,
   pkgs,
+  repoConfig,
   ...
 }: let
   colors = config.lib.stylix.colors.withHashtag;
@@ -16,6 +17,7 @@
   # Use one icon font selector so Nerd Font glyphs render at a consistent size.
   icon = glyph: "%{T2}${glyph}%{T-}";
   batteryIcon = icon;
+  localBin = "${repoConfig.workstation.homeDirectory}/.local/bin";
 in {
   services.polybar = {
     enable = true;
@@ -124,7 +126,7 @@ in {
       # ── Right: Network ────────────────────────────────────────────────
       "module/net" = {
         type = "custom/script";
-        exec = "/home/vino/.local/bin/bar-net";
+        exec = "${localBin}/bar-net";
         interval = 2;
       };
 
@@ -149,9 +151,9 @@ in {
       # ── Right: Battery ────────────────────────────────────────────────
       "module/bat" = {
         type = "custom/script";
-        exec = "/home/vino/.local/bin/bar-bat";
+        exec = "${localBin}/bar-bat";
         interval = 30;
-        click-left = "/home/vino/.local/bin/bar-bat-cycle";
+        click-left = "${localBin}/bar-bat-cycle";
       };
 
       # ── Right: System tray ────────────────────────────────────────────

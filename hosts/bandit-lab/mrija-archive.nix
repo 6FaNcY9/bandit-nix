@@ -1,14 +1,19 @@
-{pkgs, ...}: let
+{
+  pkgs,
+  repoConfig,
+  ...
+}: let
+  username = repoConfig.workstation.username;
   maildir = "/srv/containers/mrija-archive/maildir";
   data = "/srv/containers/mrija-archive/data";
   envFile = "/srv/containers/mrija-archive/deploy/.env";
 in {
   systemd = {
     tmpfiles.rules = [
-      "d /srv/containers/mrija-archive 0750 vino users -"
-      "d /srv/containers/mrija-archive/deploy 0750 vino users -"
-      "d ${maildir} 0750 vino users -"
-      "d ${data} 0750 vino users -"
+      "d /srv/containers/mrija-archive 0750 ${username} users -"
+      "d /srv/containers/mrija-archive/deploy 0750 ${username} users -"
+      "d ${maildir} 0750 ${username} users -"
+      "d ${data} 0750 ${username} users -"
     ];
 
     services.mrija-archive-sync = {
@@ -18,7 +23,7 @@ in {
       requires = ["docker.service"];
       serviceConfig = {
         Type = "oneshot";
-        User = "vino";
+        User = username;
         EnvironmentFile = envFile;
         ExecStart = pkgs.writeShellScript "mrija-sync" ''
           set -euo pipefail

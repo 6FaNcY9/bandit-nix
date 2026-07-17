@@ -1,6 +1,7 @@
 {
   lib,
   pkgs,
+  repoConfig,
   ...
 }: let
   context7Mcp = pkgs.writeShellScriptBin "context7-mcp" ''
@@ -19,21 +20,11 @@
       npx -y @upstash/context7-mcp@3.2.2 "$@"
   '';
 in {
-  nixpkgs.config.allowUnfreePredicate = pkg:
-    builtins.elem (lib.getName pkg) [
-      "cheatsheet.nvim"
-      "cuda_nvml_dev"
-      "nvidia-kernel-modules"
-      "nvidia-persistenced"
-      "nvidia-settings"
-      "nvidia-x11"
-    ];
+  nixpkgs.config.allowUnfreePredicate = repoConfig.allowUnfreePredicate;
   environment.systemPackages = with pkgs; [
     bubblewrap
     context7Mcp
   ];
-
-  nixpkgs.config.allowUnfree = true;
 
   i18n.defaultLocale = "en_US.UTF-8";
   time.timeZone = "Europe/Vienna";
@@ -47,7 +38,7 @@ in {
   nix = {
     settings = {
       experimental-features = ["nix-command" "flakes"];
-      allowed-users = ["vino"];
+      allowed-users = [repoConfig.workstation.username];
       trusted-users = ["root"];
     };
     gc = {

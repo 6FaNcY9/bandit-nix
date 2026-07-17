@@ -2,9 +2,10 @@
   config,
   pkgs,
   inputs,
+  repoConfig,
   ...
 }: let
-  sharedAliases = import ./aliases.nix;
+  sharedAliases = import ./aliases.nix {inherit repoConfig;};
 in {
   programs = {
     # ─── Zsh ──────────────────────────────────────────────────────

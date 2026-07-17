@@ -1,7 +1,13 @@
-{config, ...}: {
+{
+  config,
+  repoConfig,
+  ...
+}: let
+  username = repoConfig.workstation.username;
+in {
   systemd.tmpfiles.rules = [
-    "d /srv/containers/vaultwarden 0750 vino users -"
-    "d /srv/containers/vaultwarden/data 0750 vino users -"
+    "d /srv/containers/vaultwarden 0750 ${username} users -"
+    "d /srv/containers/vaultwarden/data 0750 ${username} users -"
   ];
 
   sops.templates."vaultwarden.env" = {

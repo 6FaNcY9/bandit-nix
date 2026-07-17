@@ -2,6 +2,7 @@
   config,
   pkgs,
   lib,
+  repoConfig,
   ...
 }: let
   colors = config.lib.stylix.colors.withHashtag;
@@ -136,7 +137,7 @@ in {
   xdg.configFile."flameshot/flameshot.ini".text = ''
     [General]
     drawColor=#ff0000
-    savePath=/home/vino/Pictures/Screenshots
+    savePath=${repoConfig.workstation.homeDirectory}/Pictures/Screenshots
     useX11LegacyScreenshot=true
   '';
   xsession.windowManager.i3 = {

@@ -1,4 +1,8 @@
-{pkgs, ...}: {
+{
+  pkgs,
+  repoConfig,
+  ...
+}: {
   # SSH server disabled — this machine only connects out, never accepts incoming.
   services.openssh.enable = false;
 
@@ -10,14 +14,22 @@
     virt-manager.enable = true;
     nh = {
       enable = true;
-      flake = "/home/vino/src/bandit-nix";
+      flake = repoConfig.workstation.repoPath;
     };
   };
 
   virtualisation = {
+    docker.rootless = {
+      enable = true;
+      # Point the Docker CLI at the per-user daemon. This provides sudo-less
+      # Docker without granting root-equivalent access through the docker group.
+      setSocketVariable = true;
+    };
     podman = {
       enable = true;
-      dockerCompat = false; # use rootless podman directly; system socket is a container-escape vector
+      # Keep the existing Podman storage/runtime available without shadowing
+      # the Docker CLI provided by rootless Docker.
+      dockerCompat = false;
       autoPrune.enable = true; # Clean up dangling images/containers
     };
     libvirtd = {
@@ -35,8 +47,8 @@
   };
 
   # docker-compose CLI plugin is wired user-side via home.file in
-  # home/shell.nix (~/.docker/cli-plugins/docker-compose). Docker CLI
-  # discovers user plugins there, so no /usr/local pollution needed.
+  # home/terminal/tools.nix (~/.config/docker/cli-plugins/docker-compose).
+  # Docker CLI discovers user plugins there, so no /usr/local pollution needed.
 
   environment.systemPackages = with pkgs; [
     docker-compose

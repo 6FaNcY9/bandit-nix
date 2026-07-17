@@ -3,7 +3,7 @@
 # fish.nix because zsh has no equivalent concept; per-shell aliases
 # (`reload`, `paths`) live in each respective file because their
 # implementations differ between shells.
-{
+{repoConfig}: {
   # ── Nix workflow ──────────────────────────────────────
   ns = "nh os switch";
   nt = "nh os test";
@@ -20,7 +20,7 @@
   cat = "bat";
   home = "cd ~";
   csrc = "cd ~/src";
-  cnix = "cd ~/src/bandit-nix";
+  cnix = "cd ${repoConfig.workstation.repoPath}";
   cconf = "cd ~/.config";
   cproj = "cd ~/Projects";
   cdocs = "cd ~/Documents";

@@ -1,6 +1,7 @@
 {
   config,
   pkgs,
+  repoConfig,
   ...
 }: let
   colors = config.lib.stylix.colors.withHashtag;
@@ -20,7 +21,7 @@ in {
         else
           echo "<txt><span color='${colors.base02}'>[</span><span color='${colors.base03}'>󰛳 net</span><span color='${colors.base02}'>]</span></txt>"
         fi
-        echo "<click>/home/vino/.local/bin/net-menu</click>"
+        echo "<click>${repoConfig.workstation.homeDirectory}/.local/bin/net-menu</click>"
       '';
     };
 

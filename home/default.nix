@@ -1,6 +1,7 @@
 {
   inputs,
   pkgs,
+  repoConfig,
   ...
 }: {
   imports = [
@@ -24,8 +25,7 @@
   ];
 
   home = {
-    username = "vino";
-    homeDirectory = "/home/vino";
+    inherit (repoConfig.workstation) username homeDirectory;
     stateVersion = "25.11";
     packages = with pkgs; [
       bitwarden-cli
