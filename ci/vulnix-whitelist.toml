@@ -1,0 +1,3 @@
+# Approved vulnerability exceptions belong here. Each entry must include a
+# package selector, CVE identifiers, an explanation, and a short expiry date.
+# The empty baseline means every current vulnix finding fails CI.

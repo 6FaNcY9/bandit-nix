@@ -53,15 +53,6 @@ jobs:
       - name: Check flake
         run: nix flake check --no-update-lock-file
 
-      - name: Check formatting
-        run: nix run nixpkgs#alejandra -- --check .
-
-      - name: Check for dead code
-        run: nix run nixpkgs#deadnix -- --fail .
-
-      - name: Check for antipatterns
-        run: nix run nixpkgs#statix -- check .
-
       - name: Build NixOS configuration
         run: |
           nix build .#nixosConfigurations.bandit-ci.config.system.build.toplevel \
@@ -81,7 +72,6 @@ jobs:
     needs: build
     permissions:
       contents: read
-      security-events: write
 
     steps:
       - name: Checkout repository
@@ -100,21 +90,27 @@ jobs:
             --no-update-lock-file \
             --fallback
 
-      - name: Scan for vulnerabilities
+      - name: Scan for unapproved vulnerabilities
         run: |
-          nix run nixpkgs#vulnix -- \
+          set +e
+          nix run .#vulnix -- \
+            --whitelist ci/vulnix-whitelist.toml \
             --json \
-            ./result > vulnix-report.json || true
+            ./result > vulnix-report.json
+          status=$?
           if [ ! -s vulnix-report.json ]; then
             echo "[]" > vulnix-report.json
           fi
+          exit "$status"
 
       - name: Show vulnerability summary
+        if: always()
         run: |
-          COUNT=$(cat vulnix-report.json | python3 -c "import sys,json; data=json.load(sys.stdin); print(len(data))" 2>/dev/null || echo "unknown")
+          COUNT=$(python3 -c "import json; print(len(json.load(open('vulnix-report.json'))))" 2>/dev/null || echo "unknown")
           echo "Vulnerabilities found: $COUNT"
 
       - name: Upload vulnerability report
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: vulnix-report

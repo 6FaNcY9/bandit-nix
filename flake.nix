@@ -33,6 +33,7 @@
   };
 
   outputs = {
+    self,
     nixpkgs,
     home-manager,
     sops-nix,
@@ -108,6 +109,64 @@
         standaloneStylix
         ./home
       ];
+    };
+
+    checks.${system} = {
+      repository =
+        pkgs.runCommand "bandit-nix-repository-checks" {
+          nativeBuildInputs = with pkgs; [alejandra bash deadnix gnugrep shellcheck statix];
+          src = ./.;
+        } ''
+          cp -r "$src" source
+          chmod -R u+w source
+          cd source
+          alejandra --check .
+          deadnix --fail .
+          statix check .
+          shellcheck install-nixos.sh install-bandit-lab.sh
+
+          bash ./install-nixos.sh --help | grep -q -- '--root-dev DEV'
+          bash ./install-bandit-lab.sh --help | grep -q -- '--boot-mount PATH'
+          if bash ./install-nixos.sh --not-a-real-option >installer-error 2>&1; then
+            echo 'install-nixos.sh accepted an unknown option' >&2
+            exit 1
+          fi
+          grep -q 'unknown argument: --not-a-real-option' installer-error
+          touch "$out"
+        '';
+
+      output-evaluation = let
+        evaluatedPath = builtins.unsafeDiscardStringContext;
+      in
+        pkgs.writeText "bandit-nix-output-evaluation.json" (builtins.toJSON {
+          bandit = evaluatedPath self.nixosConfigurations.bandit.config.system.build.toplevel.drvPath;
+          bandit-ci = evaluatedPath self.nixosConfigurations.bandit-ci.config.system.build.toplevel.drvPath;
+          bandit-lab = evaluatedPath self.nixosConfigurations.bandit-lab.config.system.build.toplevel.drvPath;
+          home = evaluatedPath self.homeConfigurations.vino.activationPackage.drvPath;
+        });
+
+      home-manager-backup = pkgs.runCommand "home-manager-backup-check" {} ''
+        mkdir work
+        printf first > work/config
+        ${hmBackupCommand} work/config
+        printf second > work/config
+        ${hmBackupCommand} work/config
+        test "$(cat work/config.hm-backup)" = second
+        test "$(cat work/config.hm-backup.~1~)" = first
+
+        mkdir work/source-dir work/source-dir.hm-backup
+        printf source > work/source-dir/file
+        printf prior > work/source-dir.hm-backup/file
+        ${hmBackupCommand} work/source-dir
+        test "$(cat work/source-dir.hm-backup/file)" = source
+        test "$(cat work/source-dir.hm-backup.~1~/file)" = prior
+        touch "$out"
+      '';
+    };
+
+    formatter.${system} = pkgs.alejandra;
+    packages.${system} = {
+      inherit (pkgs) cachix vulnix;
     };
   };
 }
