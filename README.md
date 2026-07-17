@@ -19,7 +19,7 @@ A personal NixOS configuration for the `bandit` laptop and `bandit-lab` homelab 
 - **Neovim Configuration**: Declarative Neovim setup with nixvim
 - **Theme Management**: System-wide theming with Stylix
 - **Desktop Environment**: i3 window manager with XFCE panel integration
-- **Developer Tooling**: OpenSSH, podman, libvirt, direnv, and local CI linters available system-wide
+- **Developer Tooling**: OpenSSH, rootless Docker, Podman, libvirt, direnv, and local CI linters available system-wide
 - **Modular Structure**: Clean separation of system and user configurations
 
 ## Flake Outputs
@@ -34,11 +34,14 @@ A personal NixOS configuration for the `bandit` laptop and `bandit-lab` homelab 
 .
 ├── flake.nix              # Main flake configuration and system entry point
 ├── flake.lock             # Locked dependency versions
+├── lib/repository.nix     # Shared host/user paths, package policy, and theme data
+├── ci/                    # CI policy files, including vulnerability exceptions
 ├── .sops.yaml             # Secrets encryption configuration
 ├── hosts/
-│   └── bandit/            # Host-specific configurations
+│   ├── bandit/            # Laptop host configuration
 │       ├── default.nix    # Host configuration
 │       └── hardware.nix   # Hardware-specific settings
+│   └── bandit-lab/        # Homelab services and host configuration
 ├── nixos/                 # System-level NixOS configurations
 │   ├── default.nix        # Main system module imports
 │   ├── core.nix           # Core system packages and settings
@@ -50,17 +53,20 @@ A personal NixOS configuration for the `bandit` laptop and `bandit-lab` homelab 
 │   ├── dev.nix            # Dev tooling, SSH, containers, virtualization
 │   ├── audio.nix          # Audio configuration
 │   ├── desktop.nix        # Desktop environment setup
+│   ├── health-check.nix   # Laptop activation health command
+│   ├── server.nix         # Headless server shell and module aggregator
+│   ├── server/            # Server-specific editor configuration
 │   └── users.nix          # User account definitions
 ├── home/                  # Home Manager user configurations
 │   ├── default.nix        # Main home configuration
 │   ├── terminal/          # Shells, prompt, terminal tools
-│   ├── editor.nix         # Text editor configuration
+│   ├── editor.nix         # Text editor module aggregator
+│   ├── editor/            # nixvim configuration
 │   ├── git.nix            # Git configuration
 │   ├── theme.nix          # User theme settings
 │   └── desktop/           # Desktop-specific home configs
 │       ├── i3.nix         # i3 window manager config
-│       └── xfce-panel.nix # XFCE panel configuration
-├── modules/               # Custom NixOS modules (if any)
+│       └── bar.nix        # i3 status bar configuration
 └── secrets/               # Encrypted secrets (sops)
     └── secrets.yaml       # Encrypted secrets file
 ```
@@ -74,16 +80,15 @@ From the NixOS live installer, connect to the network, clone this repo, and run:
 ```bash
 git clone https://github.com/6FaNcY9/bandit-nix.git
 cd bandit-nix
-sudo ./install-bandit-lab.sh --age-key /run/media/nixos/USB/key.txt
+sudo ./install-bandit-lab.sh \
+  --root-dev /dev/disk/by-id/<root-partition> \
+  --boot-dev /dev/disk/by-id/<efi-partition> \
+  --age-key /run/media/nixos/USB/key.txt
 ```
 
-Defaults match the current planned lab disk layout:
-
-- Root/NixOS target: `/dev/nvme0n1p5`
-- Existing EFI partition: `/dev/nvme0n1p1`
-- Host flake output: `.#bandit-lab`
-
-Override devices when needed:
+The wrapper fixes only the host output, EFI mount point, and filesystem label.
+It intentionally requires explicit root and EFI devices so a stale disk layout
+cannot be formatted by accident:
 
 ```bash
 sudo ./install-bandit-lab.sh \
@@ -103,6 +108,8 @@ phase:
 
 ```bash
 sudo ./install-bandit-lab.sh \
+  --root-dev /dev/disk/by-id/<root-partition> \
+  --boot-dev /dev/disk/by-id/<efi-partition> \
   --age-key /tmp/sops-age-key.txt \
   --mode install
 ```
@@ -112,10 +119,14 @@ then install:
 
 ```bash
 sudo ./install-bandit-lab.sh \
+  --root-dev /dev/disk/by-id/<root-partition> \
+  --boot-dev /dev/disk/by-id/<efi-partition> \
   --age-key /tmp/sops-age-key.txt \
   --mode mount
 
 sudo ./install-bandit-lab.sh \
+  --root-dev /dev/disk/by-id/<root-partition> \
+  --boot-dev /dev/disk/by-id/<efi-partition> \
   --age-key /tmp/sops-age-key.txt \
   --mode install
 ```
@@ -132,8 +143,7 @@ sudo ./install-nixos.sh \
 
 After first boot:
 
-- Cockpit server UI: `https://bandit-lab:9090`
-- Portainer container UI: `https://bandit-lab:9443`
+- Cockpit and Portainer: use the SSH/Tailscale tunnel documented below; both bind to loopback only
 - Tailscale: `sudo tailscale up`
 - Samba password for file storage: `sudo smbpasswd -a vino`
 - Shared storage path: `/srv/storage`
@@ -171,6 +181,27 @@ Then open:
 https://127.0.0.1:9090
 https://127.0.0.1:9443
 ```
+
+### bandit-lab Updates
+
+The server checks the public GitHub repository for changes every 10 minutes but
+never activates them automatically. After reviewing a reported revision, apply
+it manually on the server:
+
+```bash
+sudo lab-update apply
+```
+
+`lab-update apply` refuses dirty and non-fast-forward checkouts, builds the
+fetched commit without first moving the checkout, tests it, runs
+`bandit-lab-health`, switches it, and only then advances the checkout. A failed
+switch or health check restores the previous system profile.
+
+The updater has read-only public HTTPS access and needs no GitHub deploy key.
+See [the Cloudflare Access runbook](docs/runbooks/cloudflare-access.md) before
+placing Portainer or Vaultwarden behind public tunnel routes.
+Operational details and recovery commands are in the
+[bandit-lab update runbook](docs/runbooks/bandit-lab-updates.md).
 
 ### Prerequisites
 
@@ -245,14 +276,25 @@ sops secrets/secrets.yaml
 ### Modifying the Configuration
 
 1. Make your changes to the appropriate `.nix` files
-2. Test the configuration:
+2. Run the pinned repository checks:
+```bash
+nix flake check --no-update-lock-file
+```
+3. Test the configuration:
 ```bash
 sudo nixos-rebuild test --flake .#bandit
+bandit-health
 ```
-3. If everything works, make it permanent:
+4. If everything works, make it permanent:
 ```bash
 sudo nixos-rebuild switch --flake .#bandit
+bandit-health
 ```
+
+Home Manager keeps numbered backups when a managed file already exists, so a
+previous `.hm-backup` no longer blocks activation. See the
+[Home Manager activation runbook](docs/runbooks/home-manager-activation.md) for
+diagnosis and safe cleanup.
 
 ## 🔄 Updating
 
@@ -277,7 +319,8 @@ sudo nixos-rebuild switch --flake .#bandit
 - **Window Manager**: i3 configuration is in `home/desktop/i3.nix`
 - **Shell**: Customize shells and prompt under `home/terminal/`
 - **Git**: Git settings are in `home/git.nix`
-- **Editor**: Neovim/editor configs are in `home/editor.nix`
+- **Shared constants**: username, home/repository paths, unfree policy, and shared theme data are in `lib/repository.nix`
+- **Editor**: Neovim/editor configs are under `home/editor/`
 
 ## 🤝 Contributing
 

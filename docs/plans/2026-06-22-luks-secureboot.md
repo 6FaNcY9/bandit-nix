@@ -1,5 +1,10 @@
 # LUKS + Secure Boot Implementation Plan
 
+> **Status:** This is a separate, destructive maintenance migration. It has
+> not been applied to the current laptop configuration. Complete a tested
+> backup and recovery-USB drill before changing the disk layout or enrolling
+> Secure Boot keys.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace unencrypted BTRFS install with LUKS2-encrypted disk and sign the boot chain with lanzaboote (Secure Boot).

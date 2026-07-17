@@ -6,6 +6,8 @@
   # Outbound Cloudflare Tunnel — works through CGNAT.
   # All traffic for bandit-lab.mrija.org and *.bandit-lab.mrija.org
   # routes to Traefik on :80 for container-based routing via labels.
+  # Cloudflare Access policies are configured outside this repository; see
+  # docs/runbooks/cloudflare-access.md before publishing an admin service.
   services.cloudflared = {
     enable = true;
     tunnels."bandit-lab" = {

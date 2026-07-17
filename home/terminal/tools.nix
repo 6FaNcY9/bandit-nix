@@ -97,7 +97,7 @@ in {
       ".config/aider/model-settings.yml".source = ./aider-model-settings.yml;
 
       # Wire docker-compose as a Docker CLI plugin so `docker compose`
-      # works with podman-dockerCompat. User-level path keeps NixOS pure.
+      # works with the rootless Docker daemon. User-level path keeps NixOS pure.
       ".config/docker/cli-plugins/docker-compose".source = "${pkgs.docker-compose}/bin/docker-compose";
     };
 

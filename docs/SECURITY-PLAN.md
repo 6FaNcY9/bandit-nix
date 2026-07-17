@@ -14,7 +14,7 @@ This file tracks the security review work. Low-risk Phase 1/2 changes were start
 - [x] `nixos/network.nix`: changed DNSSEC from `allow-downgrade` to strict validation.
 - [x] `nixos/sops.nix`: changed `generateKey` to `false` so a missing SOPS age key fails loudly instead of silently generating an unusable key.
 - [x] `nixos/power.nix`: changed lid-close-on-AC from `ignore` to `suspend`.
-- [ ] `flake.nix`: keep `nixvim` on its own pinned `nixpkgs`; NixVim upstream recommends against `inputs.nixpkgs.follows` and `flake check` warns when using it.
+- [x] `flake.nix`: keep `nixvim` on its own pinned `nixpkgs`; NixVim upstream recommends against `inputs.nixpkgs.follows` and `flake check` warns when using it.
 
 ### Home-manager / user environment
 - [x] `home/editor.nix`: removed GitHub Copilot integration.
@@ -31,23 +31,21 @@ This file tracks the security review work. Low-risk Phase 1/2 changes were start
 
 These are still good ideas, but should not be rushed.
 
-### `allowUnfreePredicate`
-Current config uses a scoped predicate in `nixos/core.nix`:
+### Scoped unfree packages
+Completed through the shared policy in `lib/repository.nix`. NixOS and the
+standalone Home Manager package set both allow only the named packages and the
+CUDA runtime/toolchain closure needed by Ollama. Keep this scope exact unless
+evaluation proves another unfree package is required; do not return to global
+`allowUnfree = true`.
 
 ```nix
-nixpkgs.config.allowUnfreePredicate = pkg:
-  builtins.elem (lib.getName pkg) [
-    "cheatsheet.nvim"
-    "cuda_nvml_dev"
-    "nvidia-kernel-modules"
-    "nvidia-persistenced"
-    "nvidia-settings"
-    "nvidia-x11"
-  ];
+allowUnfreePredicate = pkg: let
+  name = lib.getName pkg;
+in
+  builtins.elem name unfreePackageNames
+  || lib.hasPrefix "cuda_" name
+  || lib.hasPrefix "libcu" name;
 ```
-
-Keep this exact unless evaluation proves another unfree package is required.
-Do not return to global `allowUnfree = true`.
 
 ### Strict DNS-over-TLS
 `DNSOverTLS = "yes"` gives stronger privacy than opportunistic mode, but port 853 is blocked on some hotel/café/airport networks. For now, keep `DNSOverTLS = "opportunistic"` unless broken DNS on restrictive networks is acceptable.
@@ -89,14 +87,20 @@ After the backup exists:
 3. Re-encrypt secrets with `sops rotate -i secrets/secrets.yaml secrets/github.yaml`.
 
 ### CI/CD cleanup
-Still pending:
-- Reorder `.github/workflows/nightly-build.yml` so `flake.lock` is committed only after checks/builds pass.
-- Fix `.gitlab-ci.yml` Cachix population: use `nix path-info --recursive ./result | cachix push ...`.
-- Fix `.gitlab-ci.yml` `update-flake` auth prefix: use `oauth2:${GITLAB_PUSH_TOKEN}` for PATs.
-- Keep `cachix authtoken` scoped to jobs that push artifacts.
-- Keep GitHub Actions and CI Docker images pinned to immutable digests/SHAs.
-- Tighten GitHub workflow `permissions` blocks.
-- Make the VM smoke test actually check for a login prompt.
+Completed:
+- [x] GitHub workflow permissions are limited to each job's required scope.
+- [x] Nix formatting is a read-only check; GitHub Actions no longer commits to the default branch.
+- [x] The VM smoke test checks for a login prompt or completed startup.
+- [x] GitHub and GitLab use `nix flake check` as the pinned formatter/linter/installer test entry point.
+- [x] CI evaluates all public NixOS outputs and the standalone Home Manager output.
+- [x] GitLab installs and authenticates Cachix only in the manual cache-push job.
+- [x] Cachix population pushes the full recursive result closure.
+- [x] The duplicate formatter workflow and GitLab branch-mutating auto-fix job were removed.
+- [x] Vulnix is pinned by `flake.lock`, publishes JSON reports, and fails on findings not present in `ci/vulnix-whitelist.toml`.
+
+Keep GitHub Actions and CI Docker images pinned to immutable digests/SHAs. Any
+vulnerability exception must name the affected CVE, explain why it is accepted,
+and have a short expiry date.
 
 ---
 
@@ -136,6 +140,6 @@ Decision needed: quick GRUB password first, or wait and do lanzaboote properly?
 ## Phase 5 — Later hardening
 
 - [ ] Add kernel/sysctl hardening after testing compatibility.
-- [ ] Disable Neovim persistent undo for secrets paths like `*/secrets/*`, `*.age`, and `*.env`.
-- [ ] Review CopyQ clipboard history and kitty `copy_on_select` behavior.
-- [ ] Set kitty `scrollback_pager_history_size = 0` or rely on LUKS/tmpfs for `/tmp`.
+- [x] Disable Neovim persistent undo, swap, and backups for secrets paths like `*/secrets/*`, `*.age`, and `*.env`.
+- [x] Keep CopyQ available for explicit clipboard use, but disable kitty's automatic `copy_on_select` behavior.
+- [x] Set kitty `scrollback_pager_history_size = 0` so terminal scrollback is not written to disk.
