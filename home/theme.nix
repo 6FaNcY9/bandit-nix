@@ -1,22 +1,39 @@
 {
   config,
+  inputs,
   pkgs,
   lib,
   ...
 }: let
   colors = config.lib.stylix.colors.withHashtag;
+  goldenKvantum = let
+    kvconfig = config.lib.stylix.colors {
+      template = "${inputs.stylix}/modules/qt/kvconfig.mustache";
+      extension = ".kvconfig";
+    };
+    svg = config.lib.stylix.colors {
+      template = "${inputs.stylix}/modules/qt/kvantum.svg.mustache";
+      extension = ".svg";
+    };
+  in
+    pkgs.runCommandLocal "golden-base16-kvantum" {} ''
+      directory="$out/share/Kvantum/GoldenBase16Kvantum"
+      mkdir --parents "$directory"
+      cp ${kvconfig} "$directory/GoldenBase16Kvantum.kvconfig"
+      ${pkgs.gnused}/bin/sed -i \
+        's/^highlight\.color=.*/highlight.color=#d79921/' \
+        "$directory/GoldenBase16Kvantum.kvconfig"
+      cp ${svg} "$directory/GoldenBase16Kvantum.svg"
+    '';
 in {
-  # Stylix generates ~/.config/Kvantum/Base16Kvantum/Base16Kvantum.kvconfig
-  # from the base16 scheme, but its accent color (highlight.color) comes out
-  # as base16 mauve (#b16286), not the golden #d79921 used everywhere else
-  # (i3 focused border, kitty active tab). Patch just that one line in place
-  # after Stylix writes the file, rather than shadowing the whole generated
-  # config — this stays correct across future Stylix template changes.
-  home.activation.kvantumAccentOverride = lib.hm.dag.entryAfter ["writeBoundary"] ''
-    run ${pkgs.gnused}/bin/sed -i \
-      's/^highlight\.color=.*/highlight.color=#d79921/' \
-      "$HOME/.config/Kvantum/Base16Kvantum/Base16Kvantum.kvconfig"
-  '';
+  home.pointerCursor.enable = true;
+
+  # Generate the custom theme in the Nix store so Home Manager can safely
+  # manage it as a symlink.
+  qt.kvantum = {
+    settings.General.theme = lib.mkForce "GoldenBase16Kvantum";
+    themes = [goldenKvantum];
+  };
 
   stylix.targets = {
     fish.enable = true;
