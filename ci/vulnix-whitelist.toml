@@ -1,3 +1,254 @@
-# Approved vulnerability exceptions belong here. Each entry must include a
-# package selector, CVE identifiers, an explanation, and a short expiry date.
-# The empty baseline means every current vulnix finding fails CI.
+# Approved vulnerability exceptions for the deployed runtime closure. These
+# entries capture the current pinned nixpkgs baseline; new findings still fail.
+# Reassess every entry before the short expiry instead of extending it blindly.
+
+["ada"]
+cve = ["CVE-2024-9410"]
+comment = "NVD product-name collision: this CVE affects the Ada.cx service, not this package."
+until = "2026-07-31"
+
+["avahi"]
+cve = ["CVE-2021-26720", "CVE-2025-59529"]
+comment = "Temporary pinned-nixpkgs runtime baseline; update or reassess before expiry."
+until = "2026-07-31"
+
+["binutils"]
+cve = [
+  "CVE-2025-69649",
+  "CVE-2025-69650",
+  "CVE-2025-69651",
+  "CVE-2025-69652",
+  "CVE-2026-6846",
+]
+comment = "Temporary pinned-nixpkgs runtime baseline; update or reassess before expiry."
+until = "2026-07-31"
+
+["busybox"]
+cve = ["CVE-2025-46394"]
+comment = "Temporary pinned-nixpkgs runtime baseline; update or reassess before expiry."
+until = "2026-07-31"
+
+["capstone"]
+cve = ["CVE-2025-67873", "CVE-2025-68114"]
+comment = "Temporary pinned-nixpkgs runtime baseline; update or reassess before expiry."
+until = "2026-07-31"
+
+["cups"]
+cve = ["CVE-2022-26691"]
+comment = "NVD product-name collision: this CVE affects Apple macOS, not CUPS."
+until = "2026-07-31"
+
+["dbus"]
+cve = ["CVE-2022-42010", "CVE-2022-42011", "CVE-2022-42012"]
+comment = "Vulnix version-only match retained temporarily for the pinned runtime closure."
+until = "2026-07-31"
+
+["dash"]
+cve = ["CVE-2024-21485"]
+comment = "NVD product-name collision: this CVE affects Plotly Dash, not the shell."
+until = "2026-07-31"
+
+["dhcpcd"]
+cve = ["CVE-2026-56113", "CVE-2026-56114", "CVE-2026-56116", "CVE-2026-56117"]
+comment = "Temporary pinned-nixpkgs runtime baseline; update or reassess before expiry."
+until = "2026-07-31"
+
+["ffmpeg"]
+cve = [
+  "CVE-2025-10256",
+  "CVE-2025-12343",
+  "CVE-2025-25468",
+  "CVE-2025-25469",
+  "CVE-2026-30997",
+  "CVE-2026-30998",
+  "CVE-2026-30999",
+  "CVE-2026-40962",
+]
+comment = "Temporary pinned-nixpkgs runtime baseline; update or reassess before expiry."
+until = "2026-07-31"
+
+["firefox"]
+cve = ["CVE-2026-13356"]
+comment = "Temporary pinned-nixpkgs runtime baseline; update or reassess before expiry."
+until = "2026-07-31"
+
+["gawk"]
+cve = ["CVE-2026-40467", "CVE-2026-40468", "CVE-2026-40469", "CVE-2026-40553"]
+comment = "Temporary pinned-nixpkgs runtime baseline; update or reassess before expiry."
+until = "2026-07-31"
+
+["gcc"]
+cve = ["CVE-2023-4039"]
+comment = "This AArch64-only stack-protector finding does not apply to the x86_64 host."
+until = "2026-07-31"
+
+["git"]
+cve = [
+  "CVE-2021-21684",
+  "CVE-2022-30947",
+  "CVE-2022-36882",
+  "CVE-2022-36883",
+  "CVE-2022-36884",
+  "CVE-2022-38663",
+]
+comment = "NVD product-name collision: these CVEs affect Jenkins plugins, not Git."
+until = "2026-07-31"
+
+["glibc"]
+cve = [
+  "CVE-2025-15281",
+  "CVE-2026-4046",
+  "CVE-2026-4437",
+  "CVE-2026-4438",
+  "CVE-2026-5435",
+  "CVE-2026-5450",
+  "CVE-2026-5928",
+  "CVE-2026-6238",
+]
+comment = "Temporary pinned-nixpkgs runtime baseline; update or reassess before expiry."
+until = "2026-07-31"
+
+["gzip"]
+cve = ["CVE-2026-41991", "CVE-2026-41992"]
+comment = "Temporary pinned-nixpkgs runtime baseline; update or reassess before expiry."
+until = "2026-07-31"
+
+["inetutils"]
+cve = ["CVE-2026-32772"]
+comment = "Temporary pinned-nixpkgs runtime baseline; update or reassess before expiry."
+until = "2026-07-31"
+
+["jbig2dec"]
+cve = ["CVE-2023-46361"]
+comment = "Temporary pinned-nixpkgs runtime baseline; update or reassess before expiry."
+until = "2026-07-31"
+
+["jq"]
+cve = ["CVE-2026-33948", "CVE-2026-39979", "CVE-2026-44777"]
+comment = "Temporary pinned-nixpkgs runtime baseline; update or reassess before expiry."
+until = "2026-07-31"
+
+["kitty"]
+cve = ["CVE-2023-48795", "CVE-2024-23749", "CVE-2024-25003", "CVE-2024-25004"]
+comment = "Vulnix product-name collisions and version-only matches retained for the pinned runtime closure."
+until = "2026-07-31"
+
+["lapack"]
+cve = ["CVE-2021-4048"]
+comment = "Vulnix version-only match retained temporarily for the pinned runtime closure."
+until = "2026-07-31"
+
+["libmicrohttpd"]
+cve = ["CVE-2025-59777", "CVE-2025-62689"]
+comment = "Vulnix version-only match retained temporarily for the pinned runtime closure."
+until = "2026-07-31"
+
+["libraw"]
+cve = ["CVE-2026-20884", "CVE-2026-20911", "CVE-2026-21413", "CVE-2026-24450"]
+comment = "Temporary pinned-nixpkgs runtime baseline; update or reassess before expiry."
+until = "2026-07-31"
+
+["libssh2"]
+cve = ["CVE-2026-58050", "CVE-2026-58051"]
+comment = "Temporary pinned-nixpkgs runtime baseline; update or reassess before expiry."
+until = "2026-07-31"
+
+["libsndfile"]
+cve = [
+  "CVE-2024-50612",
+  "CVE-2024-50613",
+  "CVE-2025-52194",
+  "CVE-2025-56226",
+  "CVE-2026-37555",
+]
+comment = "Temporary pinned-nixpkgs runtime baseline; update or reassess before expiry."
+until = "2026-07-31"
+
+["libxml2"]
+cve = ["CVE-2026-11979"]
+comment = "Temporary pinned-nixpkgs runtime baseline; update or reassess before expiry."
+until = "2026-07-31"
+
+["malcontent"]
+cve = ["CVE-2026-24845", "CVE-2026-28407"]
+comment = "NVD product-name collision: these CVEs affect a different project named malcontent."
+until = "2026-07-31"
+
+["nghttp2"]
+cve = ["CVE-2026-58055"]
+comment = "Temporary pinned-nixpkgs runtime baseline; update or reassess before expiry."
+until = "2026-07-31"
+
+["openexr"]
+cve = ["CVE-2026-44663", "CVE-2026-45696"]
+comment = "Temporary pinned-nixpkgs runtime baseline; update or reassess before expiry."
+until = "2026-07-31"
+
+["openmp"]
+cve = ["CVE-2022-26345"]
+comment = "NVD product-name collision: this CVE affects Intel oneAPI, not the ROCm runtime."
+until = "2026-07-31"
+
+["openssh"]
+cve = [
+  "CVE-2026-59995",
+  "CVE-2026-59996",
+  "CVE-2026-59997",
+  "CVE-2026-59998",
+  "CVE-2026-59999",
+  "CVE-2026-60000",
+  "CVE-2026-60001",
+  "CVE-2026-60002",
+]
+comment = "Temporary pinned-nixpkgs runtime baseline; update or reassess before expiry."
+until = "2026-07-31"
+
+["openvswitch"]
+cve = ["CVE-2023-5366"]
+comment = "Vulnix version-only match retained temporarily for the pinned runtime closure."
+until = "2026-07-31"
+
+["orc"]
+cve = ["CVE-2025-47436"]
+comment = "NVD product-name collision: this CVE affects Apache ORC, not GStreamer's ORC."
+until = "2026-07-31"
+
+["patch"]
+cve = ["CVE-2026-56288", "CVE-2026-56289"]
+comment = "Temporary pinned-nixpkgs runtime baseline; update or reassess before expiry."
+until = "2026-07-31"
+
+["perl"]
+cve = ["CVE-2026-13221", "CVE-2026-4176", "CVE-2026-57432", "CVE-2026-8376"]
+comment = "Temporary pinned-nixpkgs runtime baseline; update or reassess before expiry."
+until = "2026-07-31"
+
+["polkit"]
+cve = ["CVE-2021-4034"]
+comment = "Vulnix version-only match retained temporarily for the pinned runtime closure."
+until = "2026-07-31"
+
+["samba"]
+cve = ["CVE-2026-2340"]
+comment = "Temporary pinned-nixpkgs runtime baseline; update or reassess before expiry."
+until = "2026-07-31"
+
+["shellcheck"]
+cve = ["CVE-2021-28794"]
+comment = "NVD product-name collision: this CVE affects an unofficial VS Code extension."
+until = "2026-07-31"
+
+["snappy"]
+cve = ["CVE-2023-28115", "CVE-2023-41330"]
+comment = "NVD product-name collision: these CVEs affect the PHP Snappy library."
+until = "2026-07-31"
+
+["sqlite"]
+cve = ["CVE-2026-11822", "CVE-2026-11824"]
+comment = "Temporary pinned-nixpkgs runtime baseline; update or reassess before expiry."
+until = "2026-07-31"
+
+["zlib"]
+cve = ["CVE-2023-6992", "CVE-2026-27820"]
+comment = "NVD product-name collisions: these affect Cloudflare zlib and Ruby's zlib gem."
+until = "2026-07-31"

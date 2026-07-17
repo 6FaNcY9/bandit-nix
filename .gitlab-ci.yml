@@ -102,6 +102,7 @@ security-scan:
     - |
       set +e
       nix run .#vulnix -- \
+        --closure \
         --whitelist ci/vulnix-whitelist.toml \
         --json \
         ./result > vulnix-report.json

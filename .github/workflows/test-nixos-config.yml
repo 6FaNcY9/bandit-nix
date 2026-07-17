@@ -97,6 +97,7 @@ jobs:
           for attempt in 1 2 3; do
             set +e
             nix run .#vulnix -- \
+              --closure \
               --whitelist ci/vulnix-whitelist.toml \
               --json \
               ./result > vulnix-report.json
