@@ -105,6 +105,8 @@ in {
           lua_ls.enable = true;
           ts_ls.enable = true;
           marksman.enable = true;
+          jsonls.enable = true;
+          yamlls.enable = true;
           rust_analyzer = {
             enable = true;
             # Rust toolchain provided per-project via direnv/devenv.
@@ -130,6 +132,17 @@ in {
           };
         };
       };
+
+      # JSON Schema Store catalog — schema-validated completion/hover in
+      # jsonls and yamlls for package.json, GitHub Actions, docker-compose,
+      # and hundreds of other known formats. Auto-wires into the jsonls/
+      # yamlls settings above; no manual schema list needed.
+      schemastore.enable = true;
+
+      # Auto-detects which YAML schema applies from file content (e.g. a
+      # Kubernetes manifest vs a GitHub Actions workflow) without manual
+      # `# yaml-language-server: $schema=` comments.
+      yaml-schema-detect.enable = true;
 
       # Completion — dropdown menu
       cmp = {
