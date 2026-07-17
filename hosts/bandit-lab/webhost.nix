@@ -4,17 +4,20 @@
 {
   lib,
   pkgs,
+  repoConfig,
   ...
-}: {
+}: let
+  username = repoConfig.workstation.username;
+in {
   # bandit-lab: vino needs docker group for container management.
   # Keep server group scope tighter than the desktop laptop profile.
-  users.users.vino.extraGroups = lib.mkForce ["wheel" "networkmanager" "docker"];
+  users.users.${repoConfig.workstation.username}.extraGroups = lib.mkForce ["wheel" "networkmanager" "docker"];
 
   # ── Host paths ───────────────────────────────────────────────────────────
   systemd = {
     tmpfiles.rules = [
-      "d /srv/containers 0750 vino users -"
-      "d /srv/storage 0770 vino users -"
+      "d /srv/containers 0750 ${username} users -"
+      "d /srv/storage 0770 ${username} users -"
       "d /var/lib/portainer 0750 root root -"
     ];
 
@@ -64,7 +67,7 @@
           path = "/srv/storage";
           browseable = "yes";
           writable = "yes";
-          "valid users" = "vino";
+          "valid users" = username;
           "create mask" = "0660";
           "directory mask" = "0770";
         };
@@ -90,7 +93,7 @@
     };
   };
 
-  networking.firewall = {
+  networking.firewall.interfaces."enp44s0" = {
     # LAN file sharing is intentional; WAN service exposure stays behind Cloudflare Tunnel/Tailscale.
     allowedTCPPorts = [139 445 5357]; # SMB + WSDD
     allowedUDPPorts = [137 138 3702]; # NetBIOS + WSDD
