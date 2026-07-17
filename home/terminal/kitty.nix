@@ -17,7 +17,7 @@ in {
     settings = {
       # ── Scrollback ─────────────────────────────────────────
       scrollback_lines = 10000;
-      scrollback_pager_history_size = 4; # MB on disk for very long sessions
+      scrollback_pager_history_size = 0; # Keep terminal history in memory only.
 
       # ── Cursor ─────────────────────────────────────────────
       cursor_shape = "block";
@@ -31,7 +31,7 @@ in {
 
       # ── Mouse ──────────────────────────────────────────────
       mouse_hide_wait = "3.0";
-      copy_on_select = "clipboard"; # primary + clipboard on select
+      copy_on_select = "no"; # Copy explicitly to avoid persisting selected secrets.
       focus_follows_mouse = "yes";
 
       # ── Performance ────────────────────────────────────────
