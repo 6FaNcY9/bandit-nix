@@ -75,6 +75,17 @@ in {
 
       glow.enable = true;
 
+      # Copilot — inline suggestions surfaced through cmp (below), not its
+      # own ghost-text/panel, to avoid two competing suggestion UIs.
+      copilot-lua = {
+        enable = true;
+        settings = {
+          suggestion.enabled = false;
+          panel.enabled = false;
+        };
+      };
+      copilot-cmp.enable = true;
+
       # LSP — language servers
       lsp = {
         enable = true;
@@ -126,6 +137,7 @@ in {
         autoEnableSources = true;
         settings = {
           sources = [
+            {name = "copilot";}
             {name = "nvim_lsp";}
             {name = "luasnip";}
             {name = "path";}
