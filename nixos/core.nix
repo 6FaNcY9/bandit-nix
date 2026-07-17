@@ -39,7 +39,7 @@ in {
     settings = {
       experimental-features = ["nix-command" "flakes"];
       allowed-users = [repoConfig.workstation.username];
-      trusted-users = ["root"];
+      trusted-users = ["root" repoConfig.workstation.username];
     };
     gc = {
       automatic = true;
