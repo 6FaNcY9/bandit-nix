@@ -1,0 +1,27 @@
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+          - ".gitlab-ci.yml"
+          - "ci/**"
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file: "**/*.md"
+
+flake:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "flake.nix"
+          - "flake.lock"
+          - "lib/**"
+
+home-manager:
+  - changed-files:
+      - any-glob-to-any-file: "home/**"
+
+hosts:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "hosts/**"
+          - "nixos/**"
