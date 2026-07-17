@@ -48,7 +48,7 @@ in {
 
   mkStylixTheme = pkgs: {
     enable = true;
-    base16Scheme = ../home/bandit-retro.yaml;
+    base16Scheme = ../home/gruvbox-material.yaml;
     image = ../hosts/bandit/wallpaper.jpg;
     fonts = {
       monospace = {

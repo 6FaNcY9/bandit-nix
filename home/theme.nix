@@ -6,7 +6,7 @@
   ...
 }: let
   colors = config.lib.stylix.colors.withHashtag;
-  retroKvantum = let
+  gruvboxKvantum = let
     kvconfig = config.lib.stylix.colors {
       template = "${inputs.stylix}/modules/qt/kvconfig.mustache";
       extension = ".kvconfig";
@@ -16,14 +16,14 @@
       extension = ".svg";
     };
   in
-    pkgs.runCommandLocal "bandit-retro-kvantum" {} ''
-      directory="$out/share/Kvantum/BanditRetroKvantum"
+    pkgs.runCommandLocal "bandit-gruvbox-kvantum" {} ''
+      directory="$out/share/Kvantum/BanditGruvboxKvantum"
       mkdir --parents "$directory"
-      cp ${kvconfig} "$directory/BanditRetroKvantum.kvconfig"
+      cp ${kvconfig} "$directory/BanditGruvboxKvantum.kvconfig"
       ${pkgs.gnused}/bin/sed -i \
         's/^highlight\.color=.*/highlight.color=${colors.base0A}/' \
-        "$directory/BanditRetroKvantum.kvconfig"
-      cp ${svg} "$directory/BanditRetroKvantum.svg"
+        "$directory/BanditGruvboxKvantum.kvconfig"
+      cp ${svg} "$directory/BanditGruvboxKvantum.svg"
     '';
 in {
   home = {
@@ -44,8 +44,8 @@ in {
   # Generate the custom theme in the Nix store so Home Manager can safely
   # manage it as a symlink.
   qt.kvantum = {
-    settings.General.theme = lib.mkForce "BanditRetroKvantum";
-    themes = [retroKvantum];
+    settings.General.theme = lib.mkForce "BanditGruvboxKvantum";
+    themes = [gruvboxKvantum];
   };
 
   stylix.targets = {
@@ -53,24 +53,28 @@ in {
     gtk.enable = true;
     kitty.enable = true;
     nixvim.enable = true;
-    i3.enable = true;
+    hyprland.enable = true;
+    hyprlock.enable = true;
     firefox = {
       enable = true;
       firefoxGnomeTheme.enable = true;
       colorTheme.enable = true;
     };
     rofi.enable = false;
-    dunst.enable = false;
+    mako.enable = false;
     bat.enable = true;
     fzf.enable = true;
     starship.enable = true;
     btop.enable = true;
   };
 
-  # Retro dark aesthetic — square corners, beveled chrome, classic 90s feel
+  # Warm retro aesthetic — mostly-flat chrome with a gentle bevel, softened
+  # from the old high-contrast 90s look to match Gruvbox Material's mellower
+  # warmth. Headerbars/menus/scrollbars stay hard-edged; buttons/entries/
+  # popovers get a small radius and a lighter, blended-tone shadow.
   stylix.targets.gtk.extraCss = ''
     * {
-      border-radius: 0;
+      border-radius: 3px;
       transition: none;
     }
 
@@ -86,29 +90,29 @@ in {
     }
     .csd .titlebar { border-radius: 0; }
 
-    /* Beveled buttons — raised normal, sunken when pressed */
+    /* Softly beveled buttons — raised normal, sunken when pressed */
     button {
-      border-radius: 0;
+      border-radius: 3px;
       box-shadow:
-        inset -1px -1px 0 ${colors.base00},
-        inset  1px  1px 0 ${colors.base02};
+        inset -1px -1px 0 ${colors.base02},
+        inset  1px  1px 0 ${colors.base03};
     }
     button:active, button:checked {
       box-shadow:
-        inset  1px  1px 0 ${colors.base00},
-        inset -1px -1px 0 ${colors.base02};
+        inset  1px  1px 0 ${colors.base02},
+        inset -1px -1px 0 ${colors.base03};
     }
 
-    /* Sunken entries (text inputs inset into the surface) */
+    /* Gently sunken entries (text inputs inset into the surface) */
     entry, spinbutton, textview {
-      border-radius: 0;
+      border-radius: 3px;
       box-shadow:
-        inset 1px 1px 0 ${colors.base00},
-        inset -1px -1px 0 ${colors.base02};
+        inset 1px 1px 0 ${colors.base02},
+        inset -1px -1px 0 ${colors.base03};
     }
 
-    /* Popovers / menus — square + flat */
-    popover, popover.background, popover > contents { border-radius: 0; }
+    /* Popovers / menus — mostly square, softly flat */
+    popover, popover.background, popover > contents { border-radius: 3px; }
     .menu, menu, menuitem { border-radius: 0; }
     menubar { border-radius: 0; }
     menuitem:hover {
@@ -116,26 +120,26 @@ in {
       color: ${colors.base00};
     }
 
-    tooltip { border-radius: 0; }
+    tooltip { border-radius: 3px; }
 
     notebook > header tabs tab { border-radius: 0; }
     treeview.view { border-radius: 0; }
 
-    /* Chunky beveled scrollbars */
+    /* Chunky, softly beveled scrollbars */
     scrollbar { border-radius: 0; }
     scrollbar slider {
-      border-radius: 0;
+      border-radius: 3px;
       min-width: 14px;
       min-height: 14px;
       background-color: ${colors.base02};
       box-shadow:
-        inset -1px -1px 0 ${colors.base00},
+        inset -1px -1px 0 ${colors.base01},
         inset  1px  1px 0 ${colors.base03};
     }
     scrollbar.horizontal slider { min-height: 14px; }
     scrollbar.vertical   slider { min-width: 14px; }
 
-    /* Amber primary and cyan secondary accents from Bandit Retro. */
+    /* Warm amber primary and teal secondary accents from Gruvbox Material. */
     button:focus, entry:focus, textview:focus {
       outline: 2px solid ${colors.base0A};
       outline-offset: -2px;

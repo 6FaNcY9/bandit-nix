@@ -22,7 +22,6 @@
         gtk.enable = true;
         grub.enable = true;
         console.enable = true;
-        lightdm.enable = true;
         # kmscon target sets removed nixpkgs options (extraConfig/fonts) — disable
         # until Stylix updates its kmscon module for the new API.
         kmscon.enable = false;

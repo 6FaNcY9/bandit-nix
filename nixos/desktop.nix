@@ -1,33 +1,11 @@
 {pkgs, ...}: {
-  # X server
   services = {
-    displayManager.defaultSession = "none+i3";
-
-    xserver = {
-      displayManager.lightdm.enable = true;
+    greetd = {
       enable = true;
-
-      xkb = {
-        layout = "at"; # Austrian keyboard, matching the previous nixos-config repo
-        variant = "";
-      };
-
-      windowManager.i3 = {
-        enable = true;
-        extraPackages = [];
-      };
+      useTextGreeter = true;
+      settings.default_session.command = "${pkgs.tuigreet}/bin/tuigreet --time --remember --cmd Hyprland";
     };
 
-    # Input devices
-    libinput = {
-      enable = true;
-      touchpad = {
-        tapping = true;
-        naturalScrolling = true;
-        disableWhileTyping = true;
-        accelProfile = "adaptive";
-      };
-    };
     # For mounting/unmounting drives in file managers.
     udisks2.enable = true;
     gvfs.enable = true;
@@ -37,6 +15,14 @@
 
     blueman.enable = true;
   };
+
+  # programs.hyprland enables XWayland, registers the session with greetd,
+  # and wires xdg.portal (extraPortals + configPackages) automatically.
+  programs.hyprland = {
+    enable = true;
+    xwayland.enable = true;
+  };
+
   security.pam.services.greetd.enableGnomeKeyring = true;
 
   # Bluetooth
@@ -65,10 +51,10 @@
   programs.dconf.enable = true;
   hardware.acpilight.enable = true;
 
-  # XDG portals for sandboxed apps (flatpak, snap, etc.)
+  # XDG portals for sandboxed apps (flatpak, snap, etc.) — programs.hyprland
+  # adds xdg-desktop-portal-hyprland on top of this for screen sharing.
   xdg.portal = {
     enable = true;
-    wlr.enable = false;
     extraPortals = [pkgs.xdg-desktop-portal-gtk];
     config.common.default = "gtk";
   };
