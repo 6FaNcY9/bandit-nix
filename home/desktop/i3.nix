@@ -136,8 +136,10 @@ in {
   # flameshot's portal capture hangs 30s and fails. Force the X11 fallback.
   xdg.configFile."flameshot/flameshot.ini".text = ''
     [General]
-    drawColor=#ff0000
+    contrastUiColor=${colors.base0C}
+    drawColor=${colors.base08}
     savePath=${repoConfig.workstation.homeDirectory}/Pictures/Screenshots
+    uiColor=${colors.base0A}
     useX11LegacyScreenshot=true
   '';
   xsession.windowManager.i3 = {
@@ -270,7 +272,7 @@ in {
           command = "${pkgs.copyq}/bin/copyq";
           notification = false;
         }
-        # Polybar — replaces XFCE panel; restart on i3 reload
+        # Restart Polybar when i3 reloads.
         {
           command = "systemctl --user restart polybar";
           notification = false;
@@ -278,7 +280,7 @@ in {
         }
       ];
 
-      # No default i3bar since XFCE panel handles that
+      # Polybar is managed by its Home Manager systemd service.
       bars = [];
     };
   };
@@ -315,7 +317,7 @@ in {
             Mod+Shift+W         firefox
             Mod+D               rofi app launcher
             Mod+Shift+V         copyq clipboard manager
-            Mod+A               XFCE app finder
+            Mod+Shift+F         PCManFM file manager
 
           WINDOWS
             Mod+Shift+Q         kill focused window
@@ -383,7 +385,6 @@ in {
     # ─── Required packages ────────────────────────────────
     packages = with pkgs; [
       flameshot
-      pcmanfm
       xss-lock
       copyq
       playerctl
