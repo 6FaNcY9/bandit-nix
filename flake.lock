@@ -293,6 +293,23 @@
         "type": "github"
       }
     },
+    "pdfreader-nvim": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1773042057,
+        "narHash": "sha256-kvedUdaDvdJkfD7cG1AaezYWEeq9WNyui0EjBu/SrRQ=",
+        "owner": "r-pletnev",
+        "repo": "pdfreader.nvim",
+        "rev": "f8c067648b0c0d332a8d241111787a6b4d7ba061",
+        "type": "github"
+      },
+      "original": {
+        "owner": "r-pletnev",
+        "ref": "v0.1.7",
+        "repo": "pdfreader.nvim",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "fzf-tab-source": "fzf-tab-source",
@@ -300,6 +317,7 @@
         "nixos-hardware": "nixos-hardware",
         "nixpkgs": "nixpkgs",
         "nixvim": "nixvim",
+        "pdfreader-nvim": "pdfreader-nvim",
         "sops-nix": "sops-nix",
         "stylix": "stylix"
       }

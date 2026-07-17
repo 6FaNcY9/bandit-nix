@@ -30,6 +30,11 @@
       url = "github:Freed-Wu/fzf-tab-source";
       flake = false;
     };
+
+    pdfreader-nvim = {
+      url = "github:r-pletnev/pdfreader.nvim/v0.1.7";
+      flake = false;
+    };
   };
 
   outputs = {
