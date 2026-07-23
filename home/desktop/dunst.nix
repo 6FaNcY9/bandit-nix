@@ -44,7 +44,7 @@ in {
         progress_bar_corner_radius = 0;
 
         # ── Typography ──────────────────────────────────────────
-        font = "JetBrainsMono Nerd Font 10";
+        font = "${config.stylix.fonts.sansSerif.name} 10";
         line_height = 2;
         markup = "full";
         format = "<b>%s</b>\\n<span foreground='${colors.base03}'>%b</span>";

@@ -79,7 +79,6 @@ in {
       shellAliases =
         sharedAliases
         // {
-          nsn = "nix search nixpkgs#";
           # Fish-specific (different syntax from zsh)
           reload = "exec fish";
           paths = "string split : $PATH";

@@ -53,8 +53,8 @@ in {
         height = 38;
         background = "\${colors.bg}";
         foreground = "\${colors.fg}";
-        font-0 = "JetBrainsMono Nerd Font Mono:style=Bold:size=13;4";
-        font-1 = "JetBrainsMono Nerd Font Mono:style=Bold:size=15;4";
+        font-0 = "${config.stylix.fonts.monospace.name}:style=Bold:size=13;4";
+        font-1 = "${config.stylix.fonts.monospace.name}:style=Bold:size=15;4";
         locale = "en_US.UTF-8";
         line-size = 0;
         padding-left = 0;

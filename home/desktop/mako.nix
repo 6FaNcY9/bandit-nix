@@ -9,7 +9,7 @@ in {
     enable = true;
 
     settings = {
-      font = "JetBrainsMono Nerd Font 10";
+      font = "${config.stylix.fonts.sansSerif.name} 10";
       anchor = "top-right";
       layer = "overlay";
       width = 380;

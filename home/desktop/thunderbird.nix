@@ -20,10 +20,10 @@ in {
         "toolkit.legacyUserProfileCustomizations.stylesheets" = true;
         "ui.systemUsesDarkTheme" = 1;
 
-        # Fonts — match system JetBrainsMono config
-        "font.name.monospace.x-western" = "JetBrainsMono Nerd Font Mono";
-        "font.name.sans-serif.x-western" = "JetBrainsMono Nerd Font";
-        "font.name.serif.x-western" = "JetBrainsMono Nerd Font";
+        # Keep message rendering aligned with the system-wide Stylix fonts.
+        "font.name.monospace.x-western" = config.stylix.fonts.monospace.name;
+        "font.name.sans-serif.x-western" = config.stylix.fonts.sansSerif.name;
+        "font.name.serif.x-western" = config.stylix.fonts.serif.name;
         "font.size.variable.x-western" = 14;
         "font.size.fixed.x-western" = 14;
 

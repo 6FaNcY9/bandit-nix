@@ -35,6 +35,42 @@ in {
     base0F = "#d27b53";
   };
 
+  workstationTheme = {
+    name = "Chinatown Pixel";
+    colors = {
+      canvas = "#101915";
+      surface = "#1B2525";
+      raised = "#323B47";
+      structure = "#3B413B";
+      shadow = "#53556B";
+      foreground = "#F3AB8B";
+      muted = "#DB9673";
+      primary = "#E96B59";
+      active = "#D86531";
+      secondary = "#D37887";
+      critical = "#A4322E";
+      success = "#8B9A63";
+      info = "#6F849F";
+    };
+    geometry = {
+      unit = 4;
+      radius = 0;
+      divider = 1;
+      focus = 2;
+      structure = 3;
+    };
+    fonts = {
+      shell.name = "Departure Mono";
+      technical.name = "IosevkaTerm Nerd Font Mono";
+      interface.name = "Noto Sans";
+    };
+    icons.name = "Papirus-Dark";
+    cursor = {
+      name = "Bibata-Modern-Ice";
+      size = 28;
+    };
+  };
+
   inherit unfreePackageNames;
 
   allowUnfreePredicate = pkg: let
@@ -48,32 +84,36 @@ in {
 
   mkStylixTheme = pkgs: {
     enable = true;
-    base16Scheme = ../home/gruvbox-material.yaml;
-    image = ../hosts/bandit/wallpaper.jpg;
+    base16Scheme = ../home/chinatown-pixel.yaml;
+    polarity = "dark";
+    image = pkgs.fetchurl {
+      url = "https://raw.githubusercontent.com/AngelJumbo/gruvbox-wallpapers/main/wallpapers/pixelart/chinatown.png";
+      hash = "sha256-IaQZb24eLpY49z3k1HnLAmbpucE93yhWyH7W8d/WI8g=";
+    };
     fonts = {
       monospace = {
-        package = pkgs.nerd-fonts.jetbrains-mono;
-        name = "JetBrainsMono Nerd Font Mono";
+        package = pkgs.nerd-fonts.iosevka-term;
+        name = "IosevkaTerm Nerd Font Mono";
       };
       sansSerif = {
-        package = pkgs.nerd-fonts.jetbrains-mono;
-        name = "JetBrainsMono Nerd Font";
+        package = pkgs.noto-fonts;
+        name = "Noto Sans";
       };
       serif = {
-        package = pkgs.nerd-fonts.jetbrains-mono;
-        name = "JetBrainsMono Nerd Font";
+        package = pkgs.noto-fonts;
+        name = "Noto Sans";
       };
       sizes = {
-        terminal = 14;
-        applications = 14;
-        desktop = 14;
-        popups = 11;
+        terminal = 12;
+        applications = 12;
+        desktop = 12;
+        popups = 9;
       };
     };
     cursor = {
-      package = pkgs.openzone-cursors;
-      name = "OpenZone_Black_Slim";
-      size = 30;
+      package = pkgs.bibata-cursors;
+      name = "Bibata-Modern-Ice";
+      size = 28;
     };
   };
 }

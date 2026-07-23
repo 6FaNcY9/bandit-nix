@@ -140,6 +140,41 @@
           touch "$out"
         '';
 
+      theme-contract = let
+        inherit (nixpkgs) lib;
+        theme = repoConfig.workstationTheme;
+        actualColorKeys = lib.sort builtins.lessThan (builtins.attrNames theme.colors);
+        expectedColorKeys = lib.sort builtins.lessThan [
+          "active"
+          "canvas"
+          "critical"
+          "foreground"
+          "info"
+          "muted"
+          "primary"
+          "raised"
+          "secondary"
+          "shadow"
+          "structure"
+          "success"
+          "surface"
+        ];
+      in
+        assert repoConfig ? workstationTheme;
+        assert theme.name == "Chinatown Pixel";
+        assert actualColorKeys == expectedColorKeys;
+        assert theme.geometry.unit == 4;
+        assert theme.geometry.radius == 0;
+        assert (repoConfig.mkStylixTheme pkgs).base16Scheme == ./home/chinatown-pixel.yaml;
+        assert theme.fonts.shell.name == "Departure Mono";
+        assert theme.fonts.technical.name == "IosevkaTerm Nerd Font Mono";
+        assert theme.fonts.interface.name == "Noto Sans";
+        assert theme.icons.name == "Papirus-Dark";
+        assert theme.cursor.name == "Bibata-Modern-Ice";
+          pkgs.runCommand "bandit-nix-theme-contract" {} ''
+            touch "$out"
+          '';
+
       output-evaluation = let
         evaluatedPath = builtins.unsafeDiscardStringContext;
       in

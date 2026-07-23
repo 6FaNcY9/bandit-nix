@@ -53,7 +53,9 @@ in {
     gtk.enable = true;
     kitty.enable = true;
     nixvim.enable = true;
-    hyprland.enable = true;
+    # Hyprland's palette is owned by home/desktop/hyprland.nix so its orange
+    # borders do not conflict with Stylix's default teal border definitions.
+    hyprland.enable = false;
     hyprlock.enable = true;
     firefox = {
       enable = true;

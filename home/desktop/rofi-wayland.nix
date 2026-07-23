@@ -13,6 +13,7 @@
   blue = colors.base0D;
   red = colors.base08;
   cyan = colors.base0C;
+  interfaceFont = config.stylix.fonts.sansSerif.name;
 in {
   # ── Main launcher theme ───────────────────────────────────────
   xdg.configFile."rofi/themes/retro-eighties.rasi".text = ''
@@ -48,7 +49,7 @@ in {
     prompt {
         background-color: transparent;
         text-color:       ${cyan};
-        font:             "JetBrainsMono Nerd Font Bold 11";
+        font:             "${interfaceFont} Bold 11";
     }
 
     entry {
@@ -68,7 +69,7 @@ in {
 
     textbox {
         text-color: ${fg2};
-        font:       "JetBrainsMono Nerd Font 9";
+        font:       "${interfaceFont} 9";
     }
 
     listview {
@@ -175,7 +176,7 @@ in {
     prompt {
         background-color: transparent;
         text-color:       ${red};
-        font:             "JetBrainsMono Nerd Font Bold 11";
+        font:             "${interfaceFont} Bold 11";
     }
 
     listview {
@@ -190,7 +191,7 @@ in {
     element {
         padding:          8px 18px;
         spacing:          10px;
-        font:             "JetBrainsMono Nerd Font 11";
+        font:             "${interfaceFont} 11";
     }
 
     element.normal.normal {

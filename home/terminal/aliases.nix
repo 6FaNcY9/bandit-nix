@@ -51,4 +51,8 @@
 
   # ── Network ───────────────────────────────────────────
   myip = "curl -sf ifconfig.me";
+
+  # ── Framework Hardware Controll ───────────────────────
+  thermal = "sudo framework_tool --thermal";
+  autofan = "sudo framework_tool --autofanctrl";
 }

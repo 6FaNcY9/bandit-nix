@@ -40,6 +40,9 @@ in {
       experimental-features = ["nix-command" "flakes"];
       allowed-users = [repoConfig.workstation.username];
       trusted-users = ["root" repoConfig.workstation.username];
+      # Avoid multiplying memory-heavy builds across all 12 logical CPUs.
+      max-jobs = lib.mkDefault 1;
+      cores = lib.mkDefault 6;
     };
     gc = {
       automatic = true;

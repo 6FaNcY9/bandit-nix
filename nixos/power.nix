@@ -6,6 +6,18 @@ _: {
   };
 
   services = {
+    earlyoom = {
+      enable = true;
+      enableNotifications = true;
+      # Act while the desktop is still responsive and zram can absorb bursts.
+      freeMemThreshold = 15;
+      freeSwapThreshold = 15;
+      freeMemKillThreshold = 8;
+      freeSwapKillThreshold = 8;
+      # Kill the actual runaway process, not a smaller process with a higher
+      # kernel OOM score.
+      extraArgs = ["--sort-by-rss"];
+    };
     power-profiles-daemon.enable = true;
     fstrim.enable = true;
     btrfs.autoScrub = {

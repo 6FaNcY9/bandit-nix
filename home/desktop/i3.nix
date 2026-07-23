@@ -148,7 +148,7 @@ in {
       modifier = mod;
 
       fonts = {
-        names = lib.mkForce ["JetBrainsMono Nerd Font Mono"];
+        names = lib.mkForce [config.stylix.fonts.monospace.name];
         size = lib.mkForce 10.0;
       };
 

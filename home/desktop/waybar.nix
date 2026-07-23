@@ -1,11 +1,10 @@
 {
   config,
   pkgs,
-  repoConfig,
   ...
 }: let
   colors = config.lib.stylix.colors.withHashtag;
-  localBin = "${repoConfig.workstation.homeDirectory}/.local/bin";
+  monospaceFont = config.stylix.fonts.monospace.name;
 in {
   programs.waybar = {
     enable = true;
@@ -13,15 +12,27 @@ in {
     settings.mainBar = {
       layer = "top";
       position = "top";
-      height = 38;
+      height = 36;
       spacing = 0;
+      margin-top = 0;
+      margin-right = 0;
+      margin-bottom = 0;
+      margin-left = 0;
 
-      modules-left = ["custom/nix" "hyprland/workspaces"];
+      modules-left = ["custom/nix" "hyprland/workspaces" "hyprland/window"];
       modules-center = ["clock"];
-      modules-right = ["cpu" "memory" "custom/net" "pulseaudio" "custom/battery" "tray"];
+      modules-right = [
+        "cpu"
+        "memory"
+        "network"
+        "pulseaudio"
+        "power-profiles-daemon"
+        "battery"
+        "tray"
+      ];
 
       "custom/nix" = {
-        format = "󱄅 bandit";
+        format = "󱄅 BANDIT";
         on-click = "${pkgs.rofi}/bin/rofi -show drun";
         tooltip = false;
       };
@@ -31,8 +42,17 @@ in {
         on-click = "activate";
       };
 
+      "hyprland/window" = {
+        format = "󰣆  {title}";
+        max-length = 48;
+        separate-outputs = true;
+        rewrite = {
+          "^$" = "DESKTOP";
+        };
+      };
+
       clock = {
-        format = "{:%a %d  %H:%M}";
+        format = "{:%a %d  ▪  %H:%M}";
         interval = 10;
         tooltip-format = "{:%Y-%m-%d %H:%M:%S}";
       };
@@ -40,22 +60,36 @@ in {
       cpu = {
         format = "󰻠 {usage}%";
         interval = 2;
+        states = {
+          warning = 70;
+          critical = 90;
+        };
+        tooltip-format = "CPU load: {usage}%";
       };
 
       memory = {
         format = "󰍛 {percentage}%";
         interval = 3;
+        states = {
+          warning = 70;
+          critical = 90;
+        };
+        tooltip-format = "Memory: {used:0.1f} / {total:0.1f} GiB";
       };
 
-      "custom/net" = {
-        exec = "${localBin}/bar-net";
-        return-type = "json";
-        interval = 15;
+      network = {
+        format-wifi = "󰖩 {signalStrength}%";
+        format-ethernet = "󰈀 {ifname}";
+        format-linked = "󰈀 LINK";
+        format-disconnected = "󰖪 OFF";
+        tooltip-format-wifi = "{essid}\n{ipaddr}/{cidr}\n⇣ {bandwidthDownBytes}  ⇡ {bandwidthUpBytes}";
+        tooltip-format-ethernet = "{ifname}\n{ipaddr}/{cidr}\n⇣ {bandwidthDownBytes}  ⇡ {bandwidthUpBytes}";
+        interval = 2;
       };
 
       pulseaudio = {
         format = "{icon} {volume}%";
-        format-muted = "󰝟 mute";
+        format-muted = "󰝟 MUTE";
         format-icons = {
           default = ["󰕿" "󰖀" "󰕾"];
         };
@@ -65,196 +99,219 @@ in {
         on-scroll-down = "${pkgs.pipewire}/bin/pactl set-sink-volume @DEFAULT_SINK@ -5%";
       };
 
-      "custom/battery" = {
-        exec = "${localBin}/bar-bat";
-        return-type = "json";
+      "power-profiles-daemon" = {
+        format = "{icon}";
+        tooltip-format = "Power profile: {profile}";
+        format-icons = {
+          default = "󰾅";
+          performance = "󱐋";
+          balanced = "󰾅";
+          power-saver = "󰌪";
+        };
+      };
+
+      battery = {
+        states = {
+          warning = 30;
+          critical = 15;
+        };
+        format = "{icon} {capacity}%";
+        format-charging = "󰂄 {capacity}%";
+        format-plugged = "󰂄 {capacity}%";
+        format-full = "󰁹 {capacity}%";
+        format-icons = ["󰁺" "󰁻" "󰁼" "󰁽" "󰁾" "󰁿" "󰂀" "󰂁" "󰂂" "󰁹"];
+        tooltip-format = "{timeTo} · {power} W";
         interval = 30;
-        on-click = "${localBin}/bar-bat-cycle";
       };
 
       tray = {
-        spacing = 8;
-        "icon-size" = 18;
+        spacing = 6;
+        "icon-size" = 16;
       };
     };
 
-    # Retro bracket-and-rail look, carried over from the old Polybar config:
-    # every module reads as "[ content ]" with a dim connecting rail between
-    # groups, brackets in a muted tone and content in the module's accent.
+    # Flat Gruvbox rail: edge-to-edge, compact, and colorful without raised
+    # panels, shadows, or other three-dimensional effects.
     style = ''
       * {
-        font-family: "JetBrainsMono Nerd Font Mono";
-        font-size: 13px;
+        font-family: "${monospaceFont}";
+        font-size: 14px;
         font-weight: bold;
+        font-feature-settings: "tnum";
+        border: none;
         border-radius: 0;
+        box-shadow: none;
+        text-shadow: none;
         transition: none;
+        min-height: 0;
       }
 
       window#waybar {
-        background-color: ${colors.base00};
+        background-color: ${colors.base01};
         color: ${colors.base05};
-        border-bottom: 1px solid ${colors.base02};
+        border-bottom: 2px solid ${colors.base03};
+        box-shadow: none;
       }
 
-      #workspaces,
+      tooltip {
+        color: ${colors.base05};
+        background-color: ${colors.base01};
+        border: 1px solid ${colors.base03};
+        box-shadow: none;
+      }
+
+      tooltip label {
+        padding: 4px 6px;
+      }
+
       #custom-nix,
+      #window,
       #clock,
       #cpu,
       #memory,
-      #custom-net,
+      #network,
       #pulseaudio,
-      #custom-battery,
+      #power-profiles-daemon,
+      #battery,
       #tray {
-        margin: 0 2px;
+        margin: 0;
+        padding: 0 7px;
+        background-color: transparent;
+        border-left: 1px solid ${colors.base02};
+        box-shadow: none;
       }
 
-      #custom-nix,
-      #clock,
-      #cpu,
-      #memory,
-      #custom-net,
-      #pulseaudio,
-      #custom-battery {
-        padding: 0 10px;
+      #custom-nix {
+        padding-left: 9px;
+        color: ${colors.base05};
+        border-left: 0;
       }
 
-      #custom-nix::before,
-      #clock::before,
-      #cpu::before,
-      #memory::before,
-      #custom-net::before,
-      #pulseaudio::before,
-      #custom-battery::before {
-        content: "[ ";
-        color: ${colors.base02};
+      #workspaces {
+        margin: 0;
+        padding: 0;
+        background-color: transparent;
+        border-left: 1px solid ${colors.base02};
       }
-      #custom-nix::after,
-      #clock::after,
-      #cpu::after,
-      #memory::after,
-      #custom-net::after,
-      #pulseaudio::after,
-      #custom-battery::after {
-        content: " ]";
-        color: ${colors.base02};
-      }
-
-      #custom-nix { color: ${colors.base0D}; }
 
       #workspaces button {
+        min-width: 28px;
+        margin: 0;
         padding: 0 6px;
-        color: ${colors.base03};
+        color: ${colors.base04};
         background: transparent;
+        border: 0;
+        border-bottom: 2px solid transparent;
+        box-shadow: none;
+        text-shadow: none;
       }
-      #workspaces button::before { content: "["; color: ${colors.base02}; padding-right: 3px; }
-      #workspaces button::after { content: "]"; color: ${colors.base02}; padding-left: 3px; }
+
+      #workspaces button:hover {
+        color: ${colors.base05};
+        background-color: ${colors.base02};
+        box-shadow: none;
+      }
 
       #workspaces button.active {
-        color: ${colors.base0A};
+        color: ${colors.base05};
+        background-color: transparent;
+        border-bottom-color: ${colors.base03};
       }
 
       #workspaces button.urgent {
         color: ${colors.base08};
+        background-color: transparent;
+        border-bottom-color: ${colors.base08};
       }
 
-      #clock { color: ${colors.base0A}; }
-      #cpu { color: ${colors.base0B}; }
-      #memory { color: ${colors.base09}; }
-      #custom-net { color: ${colors.base0C}; }
-      #pulseaudio { color: ${colors.base0D}; }
-      #custom-battery { color: ${colors.base0E}; }
-      #custom-battery.critical { color: ${colors.base08}; }
+      #window {
+        color: ${colors.base04};
+      }
+
+      #window.empty {
+        padding: 0;
+      }
+
+      #clock {
+        padding: 0 12px;
+        color: ${colors.base05};
+        border-right: 1px solid ${colors.base02};
+      }
+
+      #cpu {
+        color: ${colors.base0C};
+      }
+
+      #memory {
+        color: ${colors.base0A};
+      }
+
+      #cpu.warning,
+      #memory.warning {
+        color: ${colors.base0E};
+      }
+
+      #cpu.critical,
+      #memory.critical {
+        color: ${colors.base08};
+      }
+
+      #network {
+        color: ${colors.base0B};
+      }
+
+      #network.disconnected {
+        color: ${colors.base08};
+      }
+
+      #pulseaudio {
+        color: ${colors.base0D};
+      }
+
+      #pulseaudio.muted {
+        color: ${colors.base04};
+      }
+
+      #power-profiles-daemon {
+        color: ${colors.base0E};
+      }
+
+      #power-profiles-daemon.power-saver {
+        color: ${colors.base0B};
+      }
+
+      #power-profiles-daemon.performance {
+        color: ${colors.base08};
+      }
+
+      #battery {
+        color: ${colors.base0E};
+      }
+
+      #battery.charging,
+      #battery.plugged,
+      #battery.full {
+        color: ${colors.base0B};
+      }
+
+      #battery.warning {
+        color: ${colors.base0A};
+      }
+
+      #battery.critical {
+        color: ${colors.base08};
+      }
 
       #tray {
-        background-color: ${colors.base00};
-        padding: 0 10px;
+        padding-right: 9px;
+      }
+
+      #tray > .passive {
+        -gtk-icon-effect: dim;
       }
     '';
 
     systemd.enable = true;
-  };
-
-  home.file = {
-    ".local/bin/bar-net" = {
-      executable = true;
-      text = ''
-        #!${pkgs.bash}/bin/bash
-        set -uo pipefail
-        IP_CACHE="$XDG_RUNTIME_DIR/public-ip-cache"
-
-        if [[ -r "$IP_CACHE" ]] && [[ $(find "$IP_CACHE" -mmin -10 -print 2>/dev/null) ]]; then
-          IPV4=$(tr -d '[:space:]' < "$IP_CACHE")
-        fi
-
-        if [[ -z "''${IPV4:-}" || "$IPV4" == "?.?.?.?" ]]; then
-          IPV4=$(curl -s https://api.ipify.org 2>/dev/null || echo "?.?.?.?")
-          echo "$IPV4" > "$IP_CACHE"
-        fi
-
-        IFACE=$(ip route show default 2>/dev/null | awk '/default/ {print $5; exit}')
-        if [[ -z "$IFACE" ]]; then
-          printf '{"text": "󰈀 %s", "tooltip": "no default route"}\n' "$IPV4"
-          exit 0
-        fi
-
-        [[ -d "/sys/class/net/''${IFACE}/wireless" ]] && ICON="󰖩" || ICON="󰈀"
-
-        PREV="$XDG_RUNTIME_DIR/bar-net-prev-$IFACE"
-        read -r prev_rx prev_tx < "$PREV" 2>/dev/null || true
-        RX=$(awk -v i="$IFACE:" '$1==i {print $2}' /proc/net/dev)
-        TX=$(awk -v i="$IFACE:" '$1==i {print $10}' /proc/net/dev)
-        echo "$RX $TX" > "$PREV"
-        if [[ -n "''${prev_rx:-}" && "$RX" -ge "$prev_rx" && "$TX" -ge "$prev_tx" ]]; then
-          DRX=$(( (RX - prev_rx) / 1024 ))
-          DTX=$(( (TX - prev_tx) / 1024 ))
-        else
-          DRX=0; DTX=0
-        fi
-
-        printf '{"text": "%s %s  ↑%sk ↓%sk", "tooltip": "%s"}\n' "$ICON" "$IPV4" "$DTX" "$DRX" "$IFACE"
-      '';
-    };
-
-    ".local/bin/bar-bat" = {
-      executable = true;
-      text = ''
-        #!${pkgs.bash}/bin/bash
-        set -uo pipefail
-        BAT_DIR=$(ls -d /sys/class/power_supply/BAT* 2>/dev/null | head -1)
-        if [[ -z "$BAT_DIR" ]]; then
-          printf '{"text": "󰾅 no battery", "class": "normal"}\n'
-          exit 0
-        fi
-        BAT=$(cat "$BAT_DIR/capacity" 2>/dev/null || echo "?")
-        STATUS=$(cat "$BAT_DIR/status" 2>/dev/null || echo "Unknown")
-        PROFILE=$(powerprofilesctl get 2>/dev/null || echo "balanced")
-        case "$PROFILE" in
-          performance) PI="󱐋" ;;
-          power-saver) PI="󰌪" ;;
-          *)           PI="󰾅" ;;
-        esac
-        if [[ "$STATUS" == "Charging" || "$STATUS" == "Full" ]]; then
-          BI="󰂄"; CLASS="normal"
-        elif [[ "$BAT" =~ ^[0-9]+$ && "$BAT" -le 15 ]]; then BI="󰁺"; CLASS="critical"
-        elif [[ "$BAT" =~ ^[0-9]+$ && "$BAT" -le 50 ]]; then BI="󰁽"; CLASS="normal"
-        else BI="󰂁"; CLASS="normal"; fi
-        printf '{"text": "%s  %s %s%%", "class": "%s"}\n' "$PI" "$BI" "$BAT" "$CLASS"
-      '';
-    };
-
-    ".local/bin/bar-bat-cycle" = {
-      executable = true;
-      text = ''
-        #!${pkgs.bash}/bin/bash
-        CURRENT=$(powerprofilesctl get 2>/dev/null || echo "balanced")
-        case "$CURRENT" in
-          performance) NEXT=balanced ;;
-          balanced)    NEXT=power-saver ;;
-          *)           NEXT=performance ;;
-        esac
-        powerprofilesctl set "$NEXT"
-      '';
-    };
   };
 
   home.packages = [pkgs.pavucontrol];
