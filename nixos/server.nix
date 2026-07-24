@@ -534,22 +534,6 @@ in {
 
   fonts.packages = [pkgs.nerd-fonts.jetbrains-mono];
 
-  # Blank the local console after 5 minutes without keyboard/mouse input.
-  boot.kernelParams = ["consoleblank=300"];
-
-  # ── TTY-only server surface ───────────────────────────────────────────────
-  services = {
-    kmscon = {
-      enable = true;
-      useXkbConfig = true;
-      config = {
-        "font-name" = "JetBrainsMono Nerd Font Mono";
-        "font-size" = 18;
-        hwaccel = false;
-      };
-    };
-  };
-
   services.openssh = {
     enable = true;
     openFirewall = true;
@@ -558,93 +542,6 @@ in {
       KbdInteractiveAuthentication = false;
       PermitRootLogin = "no";
     };
-  };
-
-  systemd.services.server-screen-idle = {
-    description = "Turn off the laptop panel backlight after local input idle";
-    wantedBy = ["multi-user.target"];
-    after = ["systemd-udevd.service"];
-    path = with pkgs; [
-      brightnessctl
-      coreutils
-      libinput
-    ];
-    serviceConfig = {
-      Type = "simple";
-      Restart = "always";
-      RestartSec = "5s";
-    };
-    script = ''
-      set -euo pipefail
-
-      idle_seconds=300
-      state_dir=/run/server-screen-idle
-      mkdir -p "$state_dir"
-
-      restore_screen() {
-        local saved name value dpms
-        for saved in "$state_dir"/*.dpms; do
-          [[ -e "$saved" ]] || continue
-          read -r dpms < "$saved" || continue
-          [[ -w "$dpms" ]] && printf 'On\n' > "$dpms" || true
-          rm -f "$saved"
-        done
-
-        for saved in "$state_dir"/*.brightness; do
-          [[ -e "$saved" ]] || continue
-          read -r name value < "$saved" || continue
-          brightnessctl -q -d "$name" set "$value" || true
-          rm -f "$saved"
-        done
-      }
-
-      dim_screen() {
-        local dev name current connector dpms status saved_name
-        for dpms in /sys/class/drm/card*-*/dpms; do
-          [[ -e "$dpms" && -w "$dpms" ]] || continue
-          connector="$(dirname "$dpms")"
-          status="$(cat "$connector/status" 2>/dev/null || true)"
-          [[ "$status" == "connected" ]] || continue
-          saved_name="$(basename "$connector")"
-          printf '%s\n' "$dpms" > "$state_dir/$saved_name.dpms"
-          printf 'Off\n' > "$dpms" || true
-        done
-
-        for dev in /sys/class/backlight/*; do
-          [[ -e "$dev" ]] || continue
-          name="$(basename "$dev")"
-          current="$(brightnessctl -d "$name" get 2>/dev/null || true)"
-          [[ -n "$current" && "$current" -gt 0 ]] || continue
-          printf '%s %s\n' "$name" "$current" > "$state_dir/$name.brightness"
-          brightnessctl -q -d "$name" set 0 || true
-        done
-      }
-
-      trap restore_screen EXIT
-
-      last_input="$(date +%s)"
-      screen_dimmed=0
-
-      while true; do
-        if read -r -t 5 _event; then
-          last_input="$(date +%s)"
-          if [[ "$screen_dimmed" -eq 1 ]]; then
-            restore_screen
-            screen_dimmed=0
-          fi
-
-          while read -r -t 0 _event; do
-            last_input="$(date +%s)"
-          done
-        fi
-
-        now="$(date +%s)"
-        if [[ "$screen_dimmed" -eq 0 && $((now - last_input)) -ge "$idle_seconds" ]]; then
-          dim_screen
-          screen_dimmed=1
-        fi
-      done < <(libinput debug-events --udev --show-keycodes)
-    '';
   };
 
   # ── Memory ────────────────────────────────────────────────────────────────
@@ -664,7 +561,7 @@ in {
 
   # ── Nix build capacity ────────────────────────────────────────────────────
   nix.settings = {
-    max-jobs = 16; # i9-14900HX: 24 physical / 32 logical cores; 16 is conservative, raise if builds are slow
-    cores = 0;
+    max-jobs = 2;
+    cores = 4;
   };
 }
