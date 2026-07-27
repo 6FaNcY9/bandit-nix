@@ -112,7 +112,7 @@ in {
     description = "Poll GitHub for bandit-lab configuration updates";
     wantedBy = ["timers.target"];
     timerConfig = {
-      OnBootSec = "2min";
+      OnActiveSec = "2min";
       OnUnitActiveSec = "10min";
       Persistent = true;
     };
