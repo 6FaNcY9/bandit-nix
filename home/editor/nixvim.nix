@@ -51,18 +51,7 @@ in {
       treesitter = {
         enable = true;
         settings = {
-          ensure_installed = [
-            "markdown"
-            "markdown_inline"
-            "lua"
-            "vim"
-            "bash"
-            "python"
-            "json"
-            "yaml"
-            "rust"
-            "nix"
-          ];
+          ensure_installed = "all";
           incrementalSelection.enable = true;
           highlight.enable = true;
           indent.enable = true;
@@ -78,7 +67,24 @@ in {
         };
       };
 
+      # Rainbow-colored matching brackets/delimiters by nesting depth
+      rainbow-delimiters.enable = true;
+
+      # Highlight other occurrences of the symbol under the cursor
+      illuminate.enable = true;
+
       glow.enable = true;
+
+      # Copilot — inline suggestions surfaced through cmp (below), not its
+      # own ghost-text/panel, to avoid two competing suggestion UIs.
+      copilot-lua = {
+        enable = true;
+        settings = {
+          suggestion.enabled = false;
+          panel.enabled = false;
+        };
+      };
+      copilot-cmp.enable = true;
 
       # LSP — language servers
       lsp = {
@@ -99,6 +105,8 @@ in {
           lua_ls.enable = true;
           ts_ls.enable = true;
           marksman.enable = true;
+          jsonls.enable = true;
+          yamlls.enable = true;
           rust_analyzer = {
             enable = true;
             # Rust toolchain provided per-project via direnv/devenv.
@@ -125,12 +133,24 @@ in {
         };
       };
 
+      # JSON Schema Store catalog — schema-validated completion/hover in
+      # jsonls and yamlls for package.json, GitHub Actions, docker-compose,
+      # and hundreds of other known formats. Auto-wires into the jsonls/
+      # yamlls settings above; no manual schema list needed.
+      schemastore.enable = true;
+
+      # Auto-detects which YAML schema applies from file content (e.g. a
+      # Kubernetes manifest vs a GitHub Actions workflow) without manual
+      # `# yaml-language-server: $schema=` comments.
+      yaml-schema-detect.enable = true;
+
       # Completion — dropdown menu
       cmp = {
         enable = true;
         autoEnableSources = true;
         settings = {
           sources = [
+            {name = "copilot";}
             {name = "nvim_lsp";}
             {name = "luasnip";}
             {name = "path";}
