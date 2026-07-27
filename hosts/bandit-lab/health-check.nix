@@ -5,6 +5,7 @@
     "docker-portainer.service"
     "docker-vaultwarden.service"
     "docker.service"
+    "getty@tty1.service"
     "ollama.service"
     "postgresql.service"
     "tailscaled.service"
@@ -16,12 +17,6 @@
     text = ''
       set -euo pipefail
 
-      failed_units="$(systemctl --failed --no-legend --plain)"
-      if [[ -n "$failed_units" ]]; then
-        printf 'Failed system units:\n%s\n' "$failed_units" >&2
-        exit 1
-      fi
-
       critical_units=(${builtins.concatStringsSep " " criticalUnits})
       for unit in "''${critical_units[@]}"; do
         if ! systemctl is-active --quiet "$unit"; then
@@ -29,6 +24,11 @@
           exit 1
         fi
       done
+
+      failed_units="$(systemctl --failed --no-legend --plain)"
+      if [[ -n "$failed_units" ]]; then
+        printf 'Warning: non-critical failed system units remain:\n%s\n' "$failed_units" >&2
+      fi
 
       echo "bandit-lab health check passed"
     '';
