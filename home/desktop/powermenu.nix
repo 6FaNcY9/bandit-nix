@@ -12,9 +12,9 @@
         "  Shutdown" \
         | ${pkgs.rofi}/bin/rofi -dmenu -i -p "session" -theme retro-power -no-show-icons -lines 5)
       case "$chosen" in
-        *Lock)     ${pkgs.lightdm}/bin/dm-tool lock ;;
-        *Logout)   ${pkgs.i3}/bin/i3-msg exit ;;
-        *Suspend)  ${pkgs.lightdm}/bin/dm-tool lock; systemctl suspend ;;
+        *Lock)     ${pkgs.hyprlock}/bin/hyprlock ;;
+        *Logout)   ${pkgs.hyprland}/bin/hyprctl dispatch exit ;;
+        *Suspend)  ${pkgs.hyprlock}/bin/hyprlock & systemctl suspend ;;
         *Reboot)   systemctl reboot ;;
         *Shutdown) systemctl poweroff ;;
       esac

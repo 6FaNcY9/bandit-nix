@@ -7,7 +7,7 @@
   fonts = {
     fontconfig.enable = true;
     packages = with pkgs; [
-      nerd-fonts.jetbrains-mono
+      nerd-fonts.iosevka-term
       noto-fonts
       noto-fonts-cjk-sans
       noto-fonts-color-emoji
@@ -22,7 +22,6 @@
         gtk.enable = true;
         grub.enable = true;
         console.enable = true;
-        lightdm.enable = true;
         # kmscon target sets removed nixpkgs options (extraConfig/fonts) — disable
         # until Stylix updates its kmscon module for the new API.
         kmscon.enable = false;

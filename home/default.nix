@@ -11,14 +11,14 @@
     ./git.nix
     ./theme.nix
     ./qt.nix
-    ./desktop/i3.nix
+    ./desktop/hyprland.nix
     ./desktop/files.nix
     ./desktop/netmenu.nix
-    ./desktop/dunst.nix
-    ./desktop/rofi.nix
+    ./desktop/mako.nix
+    ./desktop/rofi-wayland.nix
     ./desktop/firefox
     ./desktop/thunderbird.nix
-    ./desktop/bar.nix
+    ./desktop/waybar.nix
     ./desktop/powermenu.nix
     ./editor.nix
     ./terminal

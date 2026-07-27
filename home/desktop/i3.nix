@@ -148,7 +148,7 @@ in {
       modifier = mod;
 
       fonts = {
-        names = lib.mkForce ["JetBrainsMono Nerd Font Mono"];
+        names = lib.mkForce [config.stylix.fonts.monospace.name];
         size = lib.mkForce 10.0;
       };
 
@@ -205,7 +205,8 @@ in {
         inner = 6;
         outer = 0;
         smartGaps = true;
-        smartBorders = "no_gaps";
+        # A lone tiled window needs no frame; keep borders when windows share space.
+        smartBorders = "on";
       };
 
       window = {
@@ -394,5 +395,4 @@ in {
       less
     ];
   };
-
 }

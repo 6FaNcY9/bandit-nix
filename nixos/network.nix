@@ -1,7 +1,6 @@
 _: {
   networking = {
     hosts = {
-      "192.168.1.2" = ["bandit-lab"];
       "192.168.1.6" = ["fire-tv"];
     };
 
