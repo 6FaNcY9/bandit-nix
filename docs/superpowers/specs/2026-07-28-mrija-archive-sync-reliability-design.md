@@ -1,7 +1,7 @@
 # Mrija Archive Sync Reliability Design
 
 **Date:** 2026-07-28
-**Status:** Conversational design approved; written specification pending review
+**Status:** Reviewed design; implementation pending
 
 ## Problem
 
@@ -51,8 +51,8 @@ implementation or deployment may consume those changes implicitly.
 
 ## Worktree and source-of-truth boundaries
 
-Implementation will use isolated worktrees created from recorded committed
-revisions:
+Implementation will use isolated worktrees created from these design-time
+committed revisions:
 
 - application: `/home/vino/Projects/mrijaPageClean` at committed local `HEAD`
   `2c91592`; its existing uncommitted patch remains untouched;
@@ -117,6 +117,18 @@ Attachment rows are removed before parent email rows. Reconciliation is scoped
 to the mailbox being scanned. If rsync, parsing, or database work fails, the
 transaction rolls back and the previous index remains usable. A mailbox is
 never purged merely because its scan failed or returned an unreadable path.
+
+After rsync succeeds, the indexer records the authoritative mailbox set from a
+successful archive-root enumeration. Once every present mailbox has scanned
+and reconciled successfully, a final transaction:
+
+1. removes attachment rows belonging to mailboxes absent from that set;
+2. removes email rows belonging to mailboxes absent from that set;
+3. commits only after both deletions succeed.
+
+If rsync, archive-root enumeration, or any present-mailbox scan fails, this
+whole-mailbox purge is skipped. This distinguishes a confirmed upstream mailbox
+deletion from an incomplete or unreadable scan.
 
 The SQLite connection is checkpointed or closed cleanly before the application
 reloads the database.
@@ -190,9 +202,13 @@ reason:
 3. attachment upserts use the correct parent ID and relative stored path;
 4. a successful rescan deletes stale attachment and email rows only in the
    scanned mailbox;
-5. a failed scan rolls back upserts and deletions;
-6. the trigger returns a run ID before the worker proceeds;
-7. status cannot confuse two consecutive runs.
+5. removing an entire mailbox directory deletes its attachment and email rows
+   only after successful rsync, root enumeration, and all present-mailbox scans;
+6. rsync, root-enumeration, or present-mailbox scan failure skips whole-mailbox
+   deletion;
+7. a failed scan rolls back upserts and deletions;
+8. the trigger returns a run ID before the worker proceeds;
+9. status cannot confuse two consecutive runs.
 
 Infrastructure validation covers:
 
@@ -237,7 +253,8 @@ return to the recorded prior generation. No backup is removed during this task.
 
 - A real full sync completes through systemd and the API under the same run ID.
 - No code attempts to index or mutate `emails` or `attachments` views.
-- Deleted mirrored content is removed transactionally from canonical tables.
+- Deleted mirrored content, including an absent mailbox directory, is removed
+  transactionally from canonical tables only after authoritative enumeration.
 - The deployed SSH command uses a pinned server host key.
 - The live database passes `PRAGMA integrity_check`.
 - Existing unrelated changes in all three dirty checkouts remain untouched.
