@@ -10,6 +10,41 @@
     ["#282828" "#1d2021" "#3c3836" "#504945" "#928374" "#d5c4a1" "#d79921" "#458588" "#cc241d" "#98971a"]
     [colors.base00 colors.base01 colors.base01 colors.base02 colors.base03 colors.base05 colors.base0A colors.base0C colors.base08 colors.base0B]
     (builtins.readFile ./thunderbird-userchrome.css);
+  markdownHereTokens = [
+    "@canvas@"
+    "@surface@"
+    "@raised@"
+    "@structure@"
+    "@foreground@"
+    "@critical@"
+    "@active@"
+    "@primary@"
+    "@success@"
+    "@info@"
+    "@shadow@"
+    "@secondary@"
+    "@muted@"
+  ];
+  markdownHereColors = [
+    colors.base00
+    colors.base01
+    colors.base02
+    colors.base03
+    colors.base05
+    colors.base08
+    colors.base09
+    colors.base0A
+    colors.base0B
+    colors.base0C
+    colors.base0D
+    colors.base0E
+    colors.base0F
+  ];
+  themedMarkdownHere = file:
+    lib.replaceStrings
+    markdownHereTokens
+    markdownHereColors
+    (builtins.readFile file);
 in {
   programs.thunderbird = {
     enable = true;
@@ -47,5 +82,12 @@ in {
       };
       userChrome = themedChrome;
     };
+  };
+
+  xdg.configFile = {
+    "markdown-here-revival/chinatown-pixel-primary.css".text =
+      themedMarkdownHere ./markdown-here-chinatown-primary.css;
+    "markdown-here-revival/chinatown-pixel-syntax.css".text =
+      themedMarkdownHere ./markdown-here-chinatown-syntax.css;
   };
 }
