@@ -54,6 +54,8 @@
     candidate="git+file://$repo?rev=$after"
     echo "Building candidate $after"
     candidate_system="$(${pkgs.nix}/bin/nix build \
+      --max-jobs 2 \
+      --cores 4 \
       --no-link \
       --print-out-paths \
       "$candidate#nixosConfigurations.bandit-lab.config.system.build.toplevel")"
@@ -110,7 +112,7 @@ in {
     description = "Poll GitHub for bandit-lab configuration updates";
     wantedBy = ["timers.target"];
     timerConfig = {
-      OnBootSec = "2min";
+      OnActiveSec = "2min";
       OnUnitActiveSec = "10min";
       Persistent = true;
     };

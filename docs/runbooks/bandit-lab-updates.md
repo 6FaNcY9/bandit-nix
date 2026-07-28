@@ -13,9 +13,11 @@ sudo bandit-lab-health
 ```
 
 The apply path refuses a dirty checkout or a non-fast-forward change. It builds
-the fetched commit directly, runs a test activation and the lab health check,
-then switches and checks health again. The checkout advances only after those
-steps succeed. Public HTTPS is read-only and requires no deploy key.
+the fetched commit directly with at most two concurrent jobs and four cores per
+job. It then runs a test activation and the lab health check, switches, and
+checks health again. The checkout advances only after those steps succeed.
+The health check also requires the standard tty1 getty to remain active. Public
+HTTPS is read-only and requires no deploy key.
 
 ## Inspect failures
 
