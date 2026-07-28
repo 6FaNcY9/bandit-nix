@@ -104,9 +104,9 @@ in {
         name = "Noto Sans";
       };
       sizes = {
-        terminal = 12;
-        applications = 12;
-        desktop = 12;
+        terminal = 14;
+        applications = 14;
+        desktop = 14;
         popups = 9;
       };
     };
