@@ -1,0 +1,74 @@
+/*
+ * Chinatown Pixel Highlight.js palette for Markdown Here Revival.
+ * The extension applies this layer after the primary styling CSS.
+ */
+
+.markdown-here-wrapper .hljs {
+  display: block;
+  overflow-x: auto;
+  background-color: @surface@;
+  color: @foreground@;
+}
+
+.markdown-here-wrapper .hljs-comment,
+.markdown-here-wrapper .hljs-quote {
+  color: @muted@;
+}
+
+.markdown-here-wrapper .hljs-keyword,
+.markdown-here-wrapper .hljs-selector-tag,
+.markdown-here-wrapper .hljs-subst,
+.markdown-here-wrapper .hljs-built_in,
+.markdown-here-wrapper .hljs-builtin-name {
+  color: @secondary@;
+}
+
+.markdown-here-wrapper .hljs-string,
+.markdown-here-wrapper .hljs-doctag,
+.markdown-here-wrapper .hljs-regexp,
+.markdown-here-wrapper .hljs-attribute,
+.markdown-here-wrapper .hljs-addition {
+  color: @success@;
+}
+
+.markdown-here-wrapper .hljs-number,
+.markdown-here-wrapper .hljs-literal,
+.markdown-here-wrapper .hljs-symbol,
+.markdown-here-wrapper .hljs-bullet {
+  color: @active@;
+}
+
+.markdown-here-wrapper .hljs-title,
+.markdown-here-wrapper .hljs-section,
+.markdown-here-wrapper .hljs-function,
+.markdown-here-wrapper .hljs-selector-id,
+.markdown-here-wrapper .hljs-selector-class {
+  color: @info@;
+}
+
+.markdown-here-wrapper .hljs-variable,
+.markdown-here-wrapper .hljs-template-variable,
+.markdown-here-wrapper .hljs-template-tag,
+.markdown-here-wrapper .hljs-name,
+.markdown-here-wrapper .hljs-tag {
+  color: @primary@;
+}
+
+.markdown-here-wrapper .hljs-meta,
+.markdown-here-wrapper .hljs-meta-keyword,
+.markdown-here-wrapper .hljs-type,
+.markdown-here-wrapper .hljs-params {
+  color: @shadow@;
+}
+
+.markdown-here-wrapper .hljs-deletion {
+  color: @critical@;
+}
+
+.markdown-here-wrapper .hljs-emphasis {
+  font-style: italic;
+}
+
+.markdown-here-wrapper .hljs-strong {
+  font-weight: 700;
+}

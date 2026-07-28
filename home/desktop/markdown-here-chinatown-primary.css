@@ -1,0 +1,174 @@
+/*
+ * Chinatown Pixel for Markdown Here Revival.
+ * Colors are semantic tokens resolved by Home Manager.
+ */
+
+.markdown-here-wrapper {
+  margin: 0;
+  padding: 16px;
+  border: 1px solid @structure@;
+  background-color: @canvas@;
+  color: @foreground@;
+  font-family: "Noto Sans", Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.markdown-here-wrapper h1,
+.markdown-here-wrapper h2,
+.markdown-here-wrapper h3,
+.markdown-here-wrapper h4,
+.markdown-here-wrapper h5,
+.markdown-here-wrapper h6 {
+  margin: 20px 0 8px;
+  color: @primary@;
+  font-family: "Noto Sans", Arial, sans-serif;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.markdown-here-wrapper h1 {
+  padding-bottom: 6px;
+  border-bottom: 3px solid @primary@;
+  font-size: 24px;
+}
+
+.markdown-here-wrapper h2 {
+  padding-bottom: 4px;
+  border-bottom: 1px solid @primary@;
+  font-size: 20px;
+}
+
+.markdown-here-wrapper h3 {
+  font-size: 17px;
+}
+
+.markdown-here-wrapper h4,
+.markdown-here-wrapper h5,
+.markdown-here-wrapper h6 {
+  color: @muted@;
+  font-size: 14px;
+  text-transform: uppercase;
+}
+
+.markdown-here-wrapper p {
+  margin: 8px 0 12px;
+}
+
+.markdown-here-wrapper a {
+  color: @info@;
+  text-decoration: underline;
+}
+
+.markdown-here-wrapper strong {
+  color: @active@;
+  font-weight: 700;
+}
+
+.markdown-here-wrapper em {
+  color: @muted@;
+}
+
+.markdown-here-wrapper del {
+  color: @critical@;
+}
+
+.markdown-here-wrapper ul,
+.markdown-here-wrapper ol {
+  margin: 8px 0 12px;
+  padding-left: 28px;
+}
+
+.markdown-here-wrapper li {
+  margin: 3px 0;
+}
+
+.markdown-here-wrapper blockquote {
+  margin: 12px 0;
+  padding: 8px 12px;
+  border-left: 4px solid @secondary@;
+  background-color: @surface@;
+  color: @muted@;
+}
+
+.markdown-here-wrapper blockquote p {
+  margin: 4px 0;
+}
+
+.markdown-here-wrapper code,
+.markdown-here-wrapper kbd,
+.markdown-here-wrapper samp {
+  border: 1px solid @structure@;
+  background-color: @raised@;
+  color: @foreground@;
+  font-family: "IosevkaTerm Nerd Font Mono", "Courier New", monospace;
+  font-size: 0.92em;
+}
+
+.markdown-here-wrapper code {
+  padding: 1px 4px;
+}
+
+.markdown-here-wrapper pre {
+  margin: 12px 0;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid @structure@;
+  background-color: @surface@;
+  color: @foreground@;
+  line-height: 1.45;
+}
+
+.markdown-here-wrapper pre code {
+  padding: 0;
+  border: 0;
+  background-color: @surface@;
+  color: inherit;
+  font-size: 13px;
+}
+
+.markdown-here-wrapper table {
+  width: 100%;
+  margin: 12px 0;
+  border-collapse: collapse;
+  background-color: @canvas@;
+  color: @foreground@;
+}
+
+.markdown-here-wrapper th,
+.markdown-here-wrapper td {
+  padding: 6px 8px;
+  border: 1px solid @structure@;
+  text-align: left;
+}
+
+.markdown-here-wrapper th {
+  background-color: @raised@;
+  color: @primary@;
+  font-weight: 700;
+}
+
+.markdown-here-wrapper tr:nth-child(even) td {
+  background-color: @surface@;
+}
+
+.markdown-here-wrapper hr {
+  height: 1px;
+  margin: 18px 0;
+  border-top: 1px solid @structure@;
+  border-right: 0;
+  border-bottom: 1px solid @structure@;
+  border-left: 0;
+  background-color: @primary@;
+  color: @primary@;
+}
+
+.markdown-here-wrapper img {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid @structure@;
+}
+
+.markdown-here-wrapper small {
+  color: @muted@;
+}
