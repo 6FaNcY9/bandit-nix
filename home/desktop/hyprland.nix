@@ -10,7 +10,7 @@
   rgb = color: "rgb(${lib.removePrefix "#" color})";
 
   # ─── Helpers ──────────────────────────────────────────
-  pactlBin = "${pkgs.pipewire}/bin/pactl";
+  pactlBin = "${pkgs.pulseaudio}/bin/pactl";
   brightnessctlBin = "${pkgs.brightnessctl}/bin/brightnessctl";
   playerctlBin = "${pkgs.playerctl}/bin/playerctl";
 
