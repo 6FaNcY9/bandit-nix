@@ -14,6 +14,14 @@
       credentialsFile = config.sops.secrets."cloudflare-tunnel-credentials".path;
       default = "http_status:404";
       ingress = {
+        # SSH must live outside the *.bandit-lab.mrija.org wildcard. The module
+        # emits ingress rules via lib.attrNames (alphabetical), so "*" sorts
+        # first and would match ssh.bandit-lab.mrija.org before any exact rule,
+        # routing SSH to the Traefik HTTP origin. The hyphen keeps this
+        # hostname out of the wildcard's suffix entirely.
+        # Requires a Cloudflare Access application + policy in front of it;
+        # see docs/runbooks/cloudflare-access.md.
+        "ssh-bandit-lab.mrija.org" = "ssh://localhost:22";
         "bandit-lab.mrija.org" = "http://localhost:80";
         "*.bandit-lab.mrija.org" = "http://localhost:80";
       };
