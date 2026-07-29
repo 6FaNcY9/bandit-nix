@@ -49,7 +49,7 @@
       "bandit-lab" = {
         Hostname = "192.168.1.2";
         User = repoConfig.workstation.username;
-        IdentityFile = "~/.ssh/homelabKey";
+        IdentityFile = "~/.ssh/homelab";
         IdentitiesOnly = true;
       };
       # WAN path — same host, same key, tunnelled via Cloudflare Access.
@@ -59,7 +59,7 @@
       "bandit-lab-wan" = {
         Hostname = "ssh-bandit-lab.mrija.org";
         User = repoConfig.workstation.username;
-        IdentityFile = "~/.ssh/homelabKey";
+        IdentityFile = "~/.ssh/homelab";
         IdentitiesOnly = true;
         ProxyCommand = "${pkgs.cloudflared}/bin/cloudflared access ssh --hostname %h";
       };
