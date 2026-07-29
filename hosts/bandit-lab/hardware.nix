@@ -58,9 +58,14 @@ in {
     };
 
     nvidia = {
+      # Runs without a graphical session, but that is not the same as having no
+      # display: the built-in eDP panel is wired to this GPU, which is the only
+      # DRM device on the host (there is no usable iGPU). It drives the local
+      # console, so modesetting must stay enabled — turning it off strips KMS
+      # from the sole driver for that panel.
       modesetting.enable = true;
       open = false;
-      nvidiaSettings = false; # headless server
+      nvidiaSettings = false; # no graphical session — settings GUI is dead weight
       package = config.boot.kernelPackages.nvidiaPackages.stable;
       powerManagement.enable = false; # server: no suspend/resume; use nvidia-persistenced instead
       powerManagement.finegrained = false;
@@ -68,7 +73,7 @@ in {
     };
   };
 
-  # NixOS' NVIDIA module keys off this option even on a headless host; keep X disabled in server.nix.
+  # NixOS' NVIDIA module keys off this option even with no X server running; keep X disabled in server.nix.
   services.xserver.videoDrivers = ["nvidia"];
 
   environment.systemPackages = with pkgs; [
