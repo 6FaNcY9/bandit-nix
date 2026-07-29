@@ -10,6 +10,12 @@ from the Internet.
    exact hostname:
    - `vaultwarden.bandit-lab.mrija.org`
    - `portainer.bandit-lab.mrija.org`
+   - `ssh-bandit-lab.mrija.org` — required for `ssh bandit-lab-wan`
+     (`cloudflared access ssh`). A plain Self-hosted app covering the hostname
+     is enough; browser-rendered SSH is optional. The tunnel ingress rule in
+     `hosts/bandit-lab/wan.nix` only forwards traffic that already passed an
+     Access application, so without this app the connection fails with
+     `websocket: bad handshake`.
 2. Add an Allow policy for the intended identity group or email addresses.
    Do not add a bypass policy for these hostnames.
 3. Set an intentional session duration and require the chosen identity
