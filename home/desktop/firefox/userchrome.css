@@ -13,14 +13,16 @@
   --blue:    #458588;
   --red:     #cc241d;
 
-  /* Compact metrics */
-  --tab-min-height: 24px !important;
+  /* Compact metrics — 30px chrome bars: tall enough to read on the
+     Framework 13's 2256x1504 panel (scale 1) without giving up the
+     dense retro look. All chrome text below is 14px, one size only. */
+  --tab-min-height: 30px !important;
   --tab-block-margin: 0 !important;
-  --urlbar-min-height: 24px !important;
-  --urlbar-height: 24px !important;
-  --toolbarbutton-inner-padding: 3px !important;
+  --urlbar-min-height: 30px !important;
+  --urlbar-height: 30px !important;
+  --toolbarbutton-inner-padding: 4px !important;
   --toolbarbutton-outer-padding: 1px !important;
-  --arrowpanel-menuitem-padding: 3px 6px !important;
+  --arrowpanel-menuitem-padding: 4px 8px !important;
 }
 
 /* Kill rounded corners + transitions everywhere in chrome */
@@ -31,16 +33,16 @@
 
 /* === Tab bar — square, beveled, compact === */
 #TabsToolbar {
-  --tab-min-height: 24px !important;
+  --tab-min-height: 30px !important;
   background-color: var(--bg1) !important;
 }
 #tabbrowser-tabs {
   background-color: var(--bg1) !important;
-  --tab-min-height: 24px !important;
-  min-height: 24px !important;
+  --tab-min-height: 30px !important;
+  min-height: 30px !important;
 }
 .tabbrowser-tab {
-  min-height: 24px !important;
+  min-height: 30px !important;
   padding-block: 0 !important;
 }
 .tabbrowser-tab .tab-background {
@@ -65,7 +67,9 @@
 }
 .tab-label {
   color: var(--fg2) !important;
-  font-size: 12px !important;
+  /* Single chrome font size (14px) shared with #urlbar-input and
+     .bookmark-item — see the :root metrics comment above. */
+  font-size: 14px !important;
 }
 .tabbrowser-tab[selected] .tab-label {
   color: var(--fg) !important;
@@ -107,7 +111,7 @@
 /* === URL bar — sunken inset === */
 #urlbar,
 #urlbar-background {
-  min-height: 24px !important;
+  min-height: 30px !important;
 }
 #urlbar-background {
   background-color: var(--bg1) !important;
@@ -124,7 +128,10 @@
 }
 #urlbar-input {
   color: var(--fg) !important;
-  font-size: 12px !important;
+  /* Match the tab-label size so the whole chrome uses one font size;
+     previously 12px here clashed with Stylix's 18pt app font and any
+     per-site page zoom. */
+  font-size: 14px !important;
 }
 
 /* === Bookmarks bar — tight === */
@@ -135,8 +142,9 @@
   --bookmark-block-padding: 2px !important;
 }
 #PersonalToolbar .bookmark-item {
-  padding: 1px 4px !important;
-  font-size: 12px !important;
+  padding: 2px 6px !important;
+  /* Keep in sync with .tab-label / #urlbar-input (14px). */
+  font-size: 14px !important;
 }
 
 /* === Menus / popovers — square, flat, retro === */

@@ -12,7 +12,9 @@ in {
     settings.mainBar = {
       layer = "top";
       position = "top";
-      height = 36;
+      # Framework 13's 2256x1504 panel runs at scale 1, so keep the bar
+      # tall enough to read comfortably; font-size below tracks this.
+      height = 44;
       spacing = 0;
       margin-top = 0;
       margin-right = 0;
@@ -126,7 +128,7 @@ in {
 
       tray = {
         spacing = 6;
-        "icon-size" = 16;
+        "icon-size" = 18;
       };
     };
 
@@ -135,7 +137,9 @@ in {
     style = ''
       * {
         font-family: "${monospaceFont}";
-        font-size: 14px;
+        /* Slightly larger than the old 14px so module text stays legible
+           at the panel's native resolution; keep in sync with `height`. */
+        font-size: 16px;
         font-weight: bold;
         font-feature-settings: "tnum";
         border: none;
@@ -195,7 +199,7 @@ in {
       }
 
       #workspaces button {
-        min-width: 28px;
+        min-width: 34px;
         margin: 0;
         padding: 0 6px;
         color: ${colors.base04};

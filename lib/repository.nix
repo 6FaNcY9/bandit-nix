@@ -67,7 +67,7 @@ in {
     icons.name = "Papirus-Dark";
     cursor = {
       name = "Bibata-Modern-Ice";
-      size = 28;
+      size = 20;
     };
   };
 
@@ -104,10 +104,12 @@ in {
         name = "Noto Sans";
       };
       sizes = {
-        terminal = 14;
-        applications = 14;
-        desktop = 14;
-        popups = 9;
+        terminal = 18;
+        applications = 18;
+        desktop = 18;
+        # Was 10 — rofi/mako/tooltip text was barely readable on the
+        # Framework 13's high-DPI panel at scale 1.
+        popups = 14;
       };
     };
     cursor = {

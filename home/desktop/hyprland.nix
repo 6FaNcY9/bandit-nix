@@ -186,9 +186,12 @@ in {
         groupbar = {
           enabled = true;
           font_family = config.stylix.fonts.monospace.name;
-          font_size = 10;
+          # Was 10px/20px — unreadable on the Framework 13 panel and
+          # visually disconnected from Waybar. 13px/26px lands between
+          # Waybar's 16px text and the window content scale.
+          font_size = 13;
           gradients = false;
-          height = 20;
+          height = 26;
           indicator_height = 3;
           stacked = false;
           render_titles = true;
