@@ -34,7 +34,12 @@ in {
 
   dconf.settings = {
     "org/gnome/desktop/interface" = {
-      color-scheme = lib.mkForce "prefer-dark";
+      # Follow Stylix polarity so the light specialisation gets prefer-light.
+      color-scheme = lib.mkForce (
+        if config.stylix.polarity == "dark"
+        then "prefer-dark"
+        else "prefer-light"
+      );
     };
   };
 }

@@ -162,18 +162,26 @@ in {
     }
   '';
 
-  gtk = {
+  gtk = let
+    # Follow the Stylix polarity so the light boot specialisation gets a
+    # light GTK hint and light icons instead of the dark holdouts.
+    isDark = config.stylix.polarity == "dark";
+    gruvboxIcons =
+      if isDark
+      then "Gruvbox Plus Dark"
+      else "Gruvbox Plus Light";
+  in {
     gtk3.extraConfig = {
-      gtk-application-prefer-dark-theme = true;
+      gtk-application-prefer-dark-theme = isDark;
       gtk-enable-animations = false;
       gtk-button-images = true;
       gtk-menu-images = true;
-      gtk-icon-theme-name = "Gruvbox Plus Dark";
+      gtk-icon-theme-name = gruvboxIcons;
     };
 
     gtk4.extraConfig = {
-      gtk-application-prefer-dark-theme = true;
-      gtk-icon-theme-name = "Gruvbox Plus Dark";
+      gtk-application-prefer-dark-theme = isDark;
+      gtk-icon-theme-name = gruvboxIcons;
     };
   };
 }

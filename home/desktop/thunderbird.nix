@@ -53,7 +53,11 @@ in {
       isDefault = true;
       settings = {
         "toolkit.legacyUserProfileCustomizations.stylesheets" = true;
-        "ui.systemUsesDarkTheme" = 1;
+        # Follow Stylix polarity (1 = dark, 0 = light).
+        "ui.systemUsesDarkTheme" =
+          if config.stylix.polarity == "dark"
+          then 1
+          else 0;
 
         # Keep message rendering aligned with the system-wide Stylix fonts.
         "font.name.monospace.x-western" = config.stylix.fonts.monospace.name;

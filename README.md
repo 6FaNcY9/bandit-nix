@@ -20,7 +20,7 @@ declarative system and user environment.
 - **sops-nix** secret management with age encryption.
 - **Framework 13 AMD** optimizations via `nixos-hardware`.
 - **Hyprland/Wayland** desktop on `bandit` with Waybar, Mako, and Rofi.
-- **Stylix** system-wide theming using the custom **Chinatown Pixel** palette.
+- **Stylix** system-wide theming using the **Gruvbox** (morhetz) palette, dark by default with a light boot specialisation.
 - **nixvim** declarative Neovim setup with LSP, DAP, and completions.
 - **Fish + Zsh** shells sharing aliases from `home/terminal/aliases.nix`.
 - **Rootless Docker + Podman** for container workflows.
@@ -203,8 +203,10 @@ loudly.
 
 ## 📝 Customization
 
-- **Theme**: `lib/repository.nix` and `home/chinatown-pixel.yaml` define the
-  Chinatown Pixel Stylix theme.
+- **Theme**: `lib/repository.nix` and `themes/gruvbox-dark.yaml` /
+  `themes/gruvbox-light.yaml` define the Gruvbox (morhetz) Stylix theme;
+  the light variant is the `light` boot specialisation in
+  `hosts/bandit/default.nix`.
 - **Window manager**: `home/desktop/hyprland.nix`.
 - **Status bar / notifications**: `home/desktop/waybar.nix` and
   `home/desktop/mako.nix`.
