@@ -101,6 +101,7 @@ The repo is a Nix Flake built on `nixos-unstable`. It declares NixOS system conf
 ├── ci/
 │   └── vulnix-whitelist.toml # CVE allowlist for security scanning
 ├── script/                   # Local, gitignored helper scripts
+├── themes/                   # Gruvbox base16 schemes (dark/light) + wallpaper
 ├── install-nixos.sh          # Generic live-ISO installer
 ├── install-bandit-lab.sh     # bandit-lab-specific installer wrapper
 └── .github/workflows/         # GitHub Actions CI
@@ -173,7 +174,7 @@ lab-update apply         # build, test, health-check, and switch to latest
 - **Group options under a single attrset** per file. Avoid repeating top-level keys like `services`, `programs`, etc.
 - **Imports rule:** `flake.nix` imports only host roots and aggregators (`./hosts/bandit`, `./nixos`, `./home`, `./hosts/bandit-lab`, `./nixos/server.nix`, `nixos/ci-overrides.nix`). Do **not** import individual leaf modules from `flake.nix`.
 - **Shared constants** live in `lib/repository.nix`: `system`, `workstation.username`, `workstation.homeDirectory`, `workstation.repoPath`, `workstationTheme`, `serverPalette`, `allowUnfreePredicate`.
-- **Theme files** are in `home/*.yaml`: `chinatown-pixel.yaml`, `gruvbox-material.yaml`, `bandit-retro.yaml`.
+- **Theme files** are in `themes/`: `gruvbox-dark.yaml` (default), `gruvbox-light.yaml` (used by the `light` boot specialisation in `hosts/bandit/default.nix`), and the wallpaper `gruvbox_minimal_space.png`.
 - **stateVersion** is pinned to `25.11` in `hosts/bandit/default.nix` and `home/default.nix`. Do not change it unless you understand the migration implications.
 - **Unfree packages** are scoped by `lib/repository.nix::allowUnfreePredicate`. Only the named unfree packages and CUDA/libcu prefixes are allowed. Avoid global `allowUnfree = true`.
 - **Shell aliases** shared between Fish and Zsh live in `home/terminal/aliases.nix`. Shell-specific aliases (`reload`, `paths`) and abbreviations live in their respective files.
@@ -312,7 +313,7 @@ Resume modes (`--mode prepare|mount|install`) exist to recover from network fail
 
 ## 11. Common Pitfalls
 
-- **Outdated documentation:** `README.md` and `docs/codebase-review.md` still describe the previous XFCE+i3 stack and `tomorrow-night-eighties` theme in places. The current workstation stack is **Hyprland/Wayland** with the **Chinatown Pixel** Stylix theme.
+- **Outdated documentation:** `README.md` and `docs/codebase-review.md` still describe the previous XFCE+i3 stack and `tomorrow-night-eighties` theme in places. The current workstation stack is **Hyprland/Wayland** with the **Gruvbox** (morhetz) Stylix theme — dark by default, light via the `light` boot specialisation.
 - **SOPS host keys:** If `nix flake check` or `nixos-rebuild` fails with sops validation errors, the host age key is likely missing or wrong. The CI output `.#bandit-ci` bypasses this.
 - **NixVim follows:** Do **not** add `inputs.nixpkgs.follows = "nixpkgs"` to the `nixvim` input. NixVim upstream tests against its own pinned nixpkgs and warns when overridden.
 - **Flake imports:** Do not import individual leaf `.nix` files directly from `flake.nix`; import host roots and aggregator modules only.
