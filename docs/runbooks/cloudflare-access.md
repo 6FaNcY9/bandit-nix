@@ -35,3 +35,15 @@ Some native clients cannot complete an interactive Cloudflare Access login; do
 not create a broad bypass to work around that limitation. Use a documented,
 least-privilege service-authentication approach or keep those clients on
 Tailscale instead.
+
+## Avoiding remote lockout on ingress changes
+
+The tunnel's running `cloudflared` daemon only serves the ingress rules from
+the configuration it was started with. Adding a new ingress rule (such as
+`ssh-bandit-lab.mrija.org`) to `hosts/bandit-lab/wan.nix` does nothing until
+the server rebuilds and the daemon reconnects. A new hostname with no published
+ingress fails with `websocket: bad handshake`, and an HTTP probe returns 404.
+
+Always apply tunnel ingress changes on the server while you still have local
+or console access (`sudo lab-update apply`). Never merge an ingress change that
+is your only remote access path before it is live on the daemon.
