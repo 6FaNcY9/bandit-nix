@@ -36,21 +36,21 @@ in {
   };
 
   workstationTheme = {
-    name = "Chinatown Pixel";
+    name = "Gruvbox";
     colors = {
-      canvas = "#101915";
-      surface = "#1B2525";
-      raised = "#323B47";
-      structure = "#3B413B";
-      shadow = "#53556B";
-      foreground = "#F3AB8B";
-      muted = "#DB9673";
-      primary = "#E96B59";
-      active = "#D86531";
-      secondary = "#D37887";
-      critical = "#A4322E";
-      success = "#8B9A63";
-      info = "#6F849F";
+      canvas = "#282828";
+      surface = "#3c3836";
+      raised = "#504945";
+      structure = "#665c54";
+      shadow = "#7c6f64";
+      foreground = "#ebdbb2";
+      muted = "#bdae93";
+      primary = "#fe8019";
+      active = "#d65d0e";
+      secondary = "#d3869b";
+      critical = "#fb4934";
+      success = "#b8bb26";
+      info = "#83a598";
     };
     geometry = {
       unit = 4;
@@ -84,12 +84,9 @@ in {
 
   mkStylixTheme = pkgs: {
     enable = true;
-    base16Scheme = ../home/chinatown-pixel.yaml;
+    base16Scheme = ../themes/gruvbox-dark.yaml;
     polarity = "dark";
-    image = pkgs.fetchurl {
-      url = "https://raw.githubusercontent.com/AngelJumbo/gruvbox-wallpapers/main/wallpapers/pixelart/chinatown.png";
-      hash = "sha256-IaQZb24eLpY49z3k1HnLAmbpucE93yhWyH7W8d/WI8g=";
-    };
+    image = ../themes/gruvbox_minimal_space.png;
     fonts = {
       monospace = {
         package = pkgs.nerd-fonts.jetbrains-mono;

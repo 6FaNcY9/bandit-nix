@@ -161,11 +161,12 @@
         ];
       in
         assert repoConfig ? workstationTheme;
-        assert theme.name == "Chinatown Pixel";
+        assert theme.name == "Gruvbox";
+        assert builtins.pathExists ./themes/gruvbox-light.yaml;
         assert actualColorKeys == expectedColorKeys;
         assert theme.geometry.unit == 4;
         assert theme.geometry.radius == 0;
-        assert (repoConfig.mkStylixTheme pkgs).base16Scheme == ./home/chinatown-pixel.yaml;
+        assert (repoConfig.mkStylixTheme pkgs).base16Scheme == ./themes/gruvbox-dark.yaml;
         assert theme.fonts.shell.name == "Departure Mono";
         assert theme.fonts.technical.name == "JetBrainsMono Nerd Font Mono";
         assert theme.fonts.interface.name == "Noto Sans";
