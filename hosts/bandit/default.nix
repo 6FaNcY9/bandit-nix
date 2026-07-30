@@ -15,6 +15,15 @@
     ${repoConfig.workstation.username} ALL=(root) NOPASSWD: /run/current-system/sw/bin/nixos-rebuild
   '';
 
+  # Gruvbox light variant — pick "light" from the GRUB menu, or switch live:
+  # sudo /run/current-system/specialisation/light/bin/switch-to-configuration switch
+  # mkForce: stylix options are plain-priority in nixos/theme.nix, so the
+  # specialisation must win the definition conflict explicitly.
+  specialisation.light.configuration = {
+    stylix.base16Scheme = lib.mkForce ../../themes/gruvbox-light.yaml;
+    stylix.polarity = lib.mkForce "light";
+  };
+
   # ── Bootloader (GRUB + EFI) ───────────────────────────────────────────────
   boot.loader = {
     grub = {
