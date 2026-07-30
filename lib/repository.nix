@@ -61,7 +61,7 @@ in {
     };
     fonts = {
       shell.name = "Departure Mono";
-      technical.name = "IosevkaTerm Nerd Font Mono";
+      technical.name = "JetBrainsMono Nerd Font Mono";
       interface.name = "Noto Sans";
     };
     icons.name = "Papirus-Dark";
@@ -92,8 +92,8 @@ in {
     };
     fonts = {
       monospace = {
-        package = pkgs.nerd-fonts.iosevka-term;
-        name = "IosevkaTerm Nerd Font Mono";
+        package = pkgs.nerd-fonts.jetbrains-mono;
+        name = "JetBrainsMono Nerd Font Mono";
       };
       sansSerif = {
         package = pkgs.noto-fonts;

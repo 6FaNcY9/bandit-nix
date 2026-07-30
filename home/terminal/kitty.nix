@@ -15,6 +15,10 @@ in {
     };
 
     settings = {
+      # ── Ligatures ────────────────────────────────────────────
+      # JetBrains Mono's programming ligatures (=>, !=, >=) stay enabled.
+      disable_ligatures = "never";
+
       # ── Scrollback ─────────────────────────────────────────
       scrollback_lines = 10000;
       scrollback_pager_history_size = 0; # Keep terminal history in memory only.
