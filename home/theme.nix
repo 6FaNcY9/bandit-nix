@@ -37,7 +37,7 @@ in {
       enable = lib.mkForce true;
       package = lib.mkDefault pkgs.openzone-cursors;
       name = lib.mkDefault "OpenZone_Black_Slim";
-      size = lib.mkDefault 30;
+      size = lib.mkDefault 20;
     };
   };
 
@@ -71,7 +71,7 @@ in {
   };
 
   # Warm retro aesthetic — mostly-flat chrome with a gentle bevel, softened
-  # from the old high-contrast 90s look to match Gruvbox Material's mellower
+  # from the old high-contrast 90s look to match Gruvbox's mellower
   # warmth. Headerbars/menus/scrollbars stay hard-edged; buttons/entries/
   # popovers get a small radius and a lighter, blended-tone shadow.
   stylix.targets.gtk.extraCss = ''
@@ -141,7 +141,7 @@ in {
     scrollbar.horizontal slider { min-height: 14px; }
     scrollbar.vertical   slider { min-width: 14px; }
 
-    /* Warm amber primary and teal secondary accents from Gruvbox Material. */
+    /* Warm amber primary and teal secondary accents from Gruvbox. */
     button:focus, entry:focus, textview:focus {
       outline: 2px solid ${colors.base0A};
       outline-offset: -2px;
