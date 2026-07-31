@@ -22,7 +22,6 @@
     ./desktop/waybar.nix
     ./desktop/powermenu.nix
     ./desktop/obsidian.nix
-    ./desktop/obsidian.nix
     ./editor.nix
     ./terminal
     ./node.nix
