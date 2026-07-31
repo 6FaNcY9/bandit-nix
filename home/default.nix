@@ -7,6 +7,7 @@
   imports = [
     inputs.nixvim.homeModules.nixvim
     ./xdg-cleanup.nix
+    ./xdg-shims.nix
     ./ssh.nix
     ./git.nix
     ./theme.nix

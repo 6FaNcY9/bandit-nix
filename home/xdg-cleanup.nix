@@ -75,7 +75,7 @@ in {
   xdg.enable = true;
 
   home = {
-    packages = [homeAudit cacheClean];
+    packages = [homeAudit cacheClean pkgs.xdg-ninja];
 
     # Default homes for installers that respect the XDG base-directory spec.
     # For new top-level dotdirs, first audit with:
@@ -115,6 +115,7 @@ in {
       PARALLEL_HOME = "${config.xdg.configHome}/parallel";
       SQLITE_HISTORY = "${config.xdg.stateHome}/sqlite/history";
       WGETRC = "${config.xdg.configHome}/wgetrc";
+      ANSIBLE_HOME = "${config.xdg.configHome}/ansible";
     };
 
     # Binaries from user-level installers should resolve without adding dotdirs
