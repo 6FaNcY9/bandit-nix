@@ -107,6 +107,11 @@ in {
         # ── Silence you-should-use for git shorthand aliases ──
         set -gx YSU_IGNORED_GLOBAL_ALIASES '^(g|ga|gc|gca|gp|gl|gs|gd|glog)$'
 
+        # ── Context7 API key from sops (read by MCP clients via bearerTokenEnvVar) ──
+        if test -r /run/secrets/context7_api_key
+          set -gx CONTEXT7_API_KEY (cat /run/secrets/context7_api_key)
+        end
+
         # ── Cachix — token from sops secret, never global ─────
         function cachix
           if test -r /run/secrets/cachix-secret

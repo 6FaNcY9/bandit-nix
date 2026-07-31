@@ -151,6 +151,11 @@ in {
           fi
         }
 
+        # ── Context7 API key from sops (read by MCP clients via bearerTokenEnvVar) ──
+        if [[ -r /run/secrets/context7_api_key ]]; then
+          export CONTEXT7_API_KEY="$(< /run/secrets/context7_api_key)"
+        fi
+
         # ── nsp: open a nix shell with nixpkgs packages ──────
         nsp() {
           if [[ $# -eq 0 ]]; then
