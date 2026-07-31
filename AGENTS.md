@@ -71,6 +71,7 @@ The repo is a Nix Flake built on `nixos-unstable`. It declares NixOS system conf
 │   ├── firmware.nix          # fwupd, fprintd, AMD microcode, redistributable firmware
 │   ├── power.nix             # zram, earlyoom, TLP, fstrim, btrfs scrub, battery threshold
 │   ├── dev.nix               # direnv, nh, virt-manager, rootless Docker, Podman
+│   ├── security-tools.nix    # Pentest/RE/privacy toolkit (bandit only) + Wireshark group
 │   ├── audio.nix             # PipeWire low-latency config
 │   ├── desktop.nix           # greetd/tuigreet, Hyprland, Bluetooth, polkit
 │   ├── theme.nix             # Fonts and Stylix system targets
@@ -104,6 +105,7 @@ The repo is a Nix Flake built on `nixos-unstable`. It declares NixOS system conf
 ├── themes/                   # Gruvbox base16 schemes (dark/light) + wallpaper
 ├── install-nixos.sh          # Generic live-ISO installer
 ├── install-bandit-lab.sh     # bandit-lab-specific installer wrapper
+├── install-bandit.sh         # bandit laptop reinstall: wipe disk, LUKS2, generate hardware.nix
 └── .github/workflows/         # GitHub Actions CI
 ```
 
@@ -242,6 +244,7 @@ CI uses `nixos/nix` image with pinned digest. The build job uses `--dry-run` by 
 | Display / greetd / Hyprland | `nixos/desktop.nix` |
 | Users / sudo | `nixos/users.nix` |
 | Dev tooling / containers / VMs | `nixos/dev.nix` |
+| Pentest / RE / privacy toolkit | `nixos/security-tools.nix` |
 | Firmware / fwupd / fprintd | `nixos/firmware.nix` |
 | Power / zram / trim / scrub | `nixos/power.nix` |
 | Secrets wiring | `nixos/sops.nix` |
@@ -253,6 +256,7 @@ CI uses `nixos/nix` image with pinned digest. The build job uses `--dry-run` by 
 | Rofi | `home/desktop/rofi-wayland.nix` |
 | Mako | `home/desktop/mako.nix` |
 | Firefox / Thunderbird | `home/desktop/firefox/`, `home/desktop/thunderbird.nix` |
+| Obsidian vaults | `home/desktop/obsidian.nix` |
 | nixvim | `home/editor/nixvim.nix` |
 | Fish / Zsh / Kitty / Starship | `home/terminal/` |
 | Git / GPG | `home/git.nix` |
@@ -272,7 +276,7 @@ CI uses `nixos/nix` image with pinned digest. The build job uses `--dry-run` by 
 
 - **SSH:** `bandit` has no SSH server. `bandit-lab` has SSH with password auth disabled, root login disabled, and an authorized Ed25519 key only.
 - **Sudo:** `wheelNeedsPassword = true`. On `bandit`, the user has passwordless `nixos-rebuild` only.
-- **User groups:** `vino` is explicitly **not** in `input`, `storage`, or `podman` groups to reduce privilege surface.
+- **User groups:** `vino` is explicitly **not** in `input`, `storage`, or `podman` groups to reduce privilege surface. The `wireshark` group (added in `nixos/security-tools.nix`) is the deliberate exception — it grants packet capture without root via setcap `dumpcap`.
 - **Trusted Nix users:** Only `root` and `vino` are `trusted-users` on the laptop; the security plan removed `vino` from trusted-users in some phases, but current `nixos/core.nix` keeps both. Check `docs/SECURITY-PLAN.md` for pending hardening decisions.
 - **Secrets:** sops-nix with age, no plaintext in repo, scoped file permissions.
 - **GPG agent:** Cache TTL defaults to 1 hour, max 4 hours.
@@ -303,6 +307,26 @@ The installer:
 - Runs `nixos-install --flake .#bandit-lab --no-root-passwd`.
 
 Resume modes (`--mode prepare|mount|install`) exist to recover from network failures without reformatting. For other hosts, use the generic `install-nixos.sh`.
+
+### bandit Live ISO Reinstall (LUKS)
+
+```bash
+git clone https://github.com/6FaNcY9/bandit-nix.git
+cd bandit-nix
+sudo ./install-bandit.sh \
+  --disk /dev/nvme0n1 \
+  --age-key /run/media/nixos/USB/key.txt
+```
+
+The installer:
+
+- **Erases the whole disk.** GPT layout: 1 GiB EFI partition + one LUKS2 (argon2id) container.
+- Creates BTRFS subvolumes inside LUKS: `@`, `@home`, `@nix`, `@log`, `@snapshots` (same layout as bandit-lab; the old `@var` layout was replaced during the encryption reinstall).
+- Generates `hosts/bandit/hardware.nix` with the real disk UUIDs and `boot.initrd.luks` config.
+- Defers to `install-nixos.sh` for format/mount/install, so the same `--mode prepare|mount|install` resume modes apply (LUKS is re-opened automatically).
+
+Post-install: commit the generated `hosts/bandit/hardware.nix`, then optionally enroll the TPM2 (`systemd-cryptenroll --tpm2-device=auto /dev/nvme0n1p2`) once Secure Boot (lanzaboote) is in place.
+
 
 ### Post-Install (bandit-lab)
 

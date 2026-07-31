@@ -88,20 +88,38 @@ After the backup exists:
 
 ---
 
-## Phase 3 — Pending decision: Full-disk encryption with LUKS
+## Phase 3 — Full-disk encryption with LUKS — DECIDED (2026-07-30)
 
-### Option A — In-place re-encryption
+**Decision: Option B — clean reinstall with LUKS.** Rationale: the system is
+fully declarative, so a reinstall costs only data-restore time; it avoids the
+in-place data-shift risk, the SSD wear-leveling plaintext caveat, and the
+initrd-config sequencing trap.
+
+Implemented as `install-bandit.sh`: one command from the live ISO wipes the
+disk, creates a 1 GiB ESP + LUKS2 (argon2id) container, generates
+`hosts/bandit/hardware.nix` with the real UUIDs, and hands off to
+`install-nixos.sh`. The BTRFS layout changes to match bandit-lab
+(`@`, `@home`, `@nix`, `@log`, `@snapshots`); the old `@var` and nested
+snapshot subvolumes are gone.
+
+Pre-reinstall checklist for the user (full step-by-step:
+`docs/runbooks/bandit-luks-reinstall.md`):
+- Full backup of `/home` (encrypted backup medium).
+- Export and back up: sops age key (`/var/lib/sops-nix/key.txt`), GPG secret
+  key, SSH keys.
+- After first boot: commit the generated `hosts/bandit/hardware.nix`, then
+  consider TPM2 enrollment (`systemd-cryptenroll`) once Secure Boot lands.
+
+### Option A — In-place re-encryption (rejected)
 - Boot from a live USB.
 - Make a full backup first.
 - Run `cryptsetup reencrypt` on the existing BTRFS partition.
 - Keep the laptop on AC; the process can take 1–3 hours.
 - Risk is low with a full backup, but not zero.
 
-### Option B — Reinstall with LUKS
+### Option B — Reinstall with LUKS (chosen)
 - Safest and cleanest layout.
 - Requires backing up/restoring `/home`, the SOPS age key, SSH keys, and any other local state.
-
-Decision needed: in-place re-encryption or clean reinstall?
 
 ---
 
