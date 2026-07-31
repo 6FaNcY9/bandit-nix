@@ -7,6 +7,9 @@ _: {
     networkmanager = {
       enable = true;
       dns = "systemd-resolved";
+      # Random MAC per network, stable per SSID: defeats cross-network
+      # tracking without breaking captive portals or per-network DHCP leases.
+      wifi.macAddress = "stable";
     };
     useDHCP = false; # NetworkManager handles this
     firewall = {
