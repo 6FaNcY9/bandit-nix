@@ -1,9 +1,11 @@
 {lib}: let
   unfreePackageNames = [
+    "burpsuite"
     "cheatsheet.nvim"
     "nvidia-kernel-modules"
     "nvidia-persistenced"
     "nvidia-settings"
+    "obsidian"
     "nvidia-x11"
   ];
 in {

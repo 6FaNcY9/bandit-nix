@@ -11,6 +11,7 @@ _: {
     ./firmware.nix
     ./power.nix
     ./dev.nix
+    ./security-tools.nix
     ./audio.nix
     ./desktop.nix
     ./users.nix
