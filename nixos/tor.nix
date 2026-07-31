@@ -1,4 +1,8 @@
-{pkgs, ...}: let
+{
+  lib,
+  pkgs,
+  ...
+}: let
   ipt = "${pkgs.iptables}/bin/iptables";
   ip6t = "${pkgs.iptables}/bin/ip6tables";
 
@@ -82,6 +86,12 @@ in {
       ExecStop = disableScript;
     };
   };
+
+  # The tor daemon does not autostart: running 24/7 it maintains circuits
+  # (background traffic + CPU) even when nothing uses it. Starting the
+  # routing toggle above pulls tor in via `requires`. For plain torsocks,
+  # start it manually first: sudo systemctl start tor
+  systemd.services.tor.wantedBy = lib.mkForce [];
 
   # ── Polkit: wheel can toggle routing without password prompt ─────────────
   security.polkit.extraConfig = ''
