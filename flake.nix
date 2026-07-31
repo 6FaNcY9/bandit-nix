@@ -128,10 +128,11 @@
           alejandra --check .
           deadnix --fail .
           statix check .
-          shellcheck install-nixos.sh install-bandit-lab.sh
+          shellcheck install-nixos.sh install-bandit-lab.sh install-bandit.sh
 
           bash ./install-nixos.sh --help | grep -q -- '--root-dev DEV'
           bash ./install-bandit-lab.sh --help | grep -q -- '--boot-mount PATH'
+          bash ./install-bandit.sh --help | grep -q -- '--disk DEV'
           if bash ./install-nixos.sh --not-a-real-option >installer-error 2>&1; then
             echo 'install-nixos.sh accepted an unknown option' >&2
             exit 1
