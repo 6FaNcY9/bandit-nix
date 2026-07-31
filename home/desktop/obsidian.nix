@@ -82,14 +82,18 @@ in {
 
       # Serialized into .obsidian/appearance.json. The module merges in
       # enabledCssSnippets and the active theme automatically.
+      # Stylix's obsidian target already contributes interfaceFontFamily,
+      # monospaceFontFamily, baseFontSize, and a "Stylix Config" CSS snippet
+      # with the base16 palette — do not redeclare those keys here.
       appearance = {
         # Stylix polarity follows the light boot specialisation.
         theme =
           if config.stylix.polarity == "dark"
           then "obsidian" # built-in dark
           else "moonstone"; # built-in light
-        accentColor = colors.base09; # gruvbox orange
-        baseFontSize = 16;
+        # Orange accent to match the Hyprland borders; overrides Stylix's
+        # purple --color-accent for interactive elements.
+        accentColor = colors.base09;
         nativeMenus = false;
         translucency = false;
       };
@@ -127,38 +131,8 @@ in {
         copilot
       ];
 
-      # Gruvbox from the Stylix base16 palette, same approach as the Firefox
-      # userChrome module. Registered as an enabled snippet automatically.
-      cssSnippets = [
-        {
-          name = "stylix-gruvbox";
-          text = ''
-            /* Generated from the Stylix base16 palette — do not edit in Obsidian. */
-            .theme-dark, .theme-light {
-              --background-primary: ${colors.base00};
-              --background-primary-alt: ${colors.base01};
-              --background-secondary: ${colors.base01};
-              --background-secondary-alt: ${colors.base00};
-              --background-modifier-border: ${colors.base02};
-              --background-modifier-hover: ${colors.base02};
-              --text-normal: ${colors.base05};
-              --text-muted: ${colors.base04};
-              --text-faint: ${colors.base03};
-              --text-accent: ${colors.base09};
-              --text-accent-hover: ${colors.base0A};
-              --text-error: ${colors.base08};
-              --text-success: ${colors.base0B};
-              --interactive-accent: ${colors.base09};
-              --interactive-accent-hover: ${colors.base0A};
-              --link-color: ${colors.base0C};
-              --link-color-hover: ${colors.base0D};
-              --code-background: ${colors.base01};
-              --graph-line: ${colors.base02};
-              --graph-node: ${colors.base09};
-            }
-          '';
-        }
-      ];
+      # No custom cssSnippets: Stylix's obsidian target injects a
+      # "Stylix Config" snippet with the full base16 palette already.
 
       hotkeys = {
         "daily-notes" = [
