@@ -1,0 +1,217 @@
+/* Gruvbox dark theme for the Vaultwarden web vault.
+ *
+ * Deployed via Vaultwarden's TEMPLATES_FOLDER hook:
+ *   templates/scss/user.vaultwarden.scss.hbs
+ * Vaultwarden compiles this into the vaultwarden.css it serves to the
+ * web vault, so it loads same-origin (no CSP/proxy rewriting needed).
+ *
+ * Palette: themes/gruvbox-dark.yaml (morhetz, medium)
+ *   bg  #282828 / #3c3836 / #504945   fg  #ebdbb2 / #fbf1c7
+ *   orange #fe8019  red #fb4934  yellow #fabd2f  green #b8bb26
+ *   aqua #8ec07c   blue #83a598  purple #d3869b
+ *
+ * Targets two variable layers of the Bitwarden web vault:
+ *   1. legacy RGB triplets (--color-background, --color-primary-*, ...)
+ *      used by the 2023+ Tailwind redesign components
+ *   2. palette hexes (--color-gray-*, --color-brand-*, ...) consumed by the
+ *      newer semantic --color-bg/fg/border-* variables
+ * Unknown variables are inert on older web vault builds.
+ */
+
+.theme_dark {
+  /* ── Gruvbox palette ramps (050 light → 950 dark) ─────────────────────── */
+
+  /* Grays = gruvbox bg/fg ramp */
+  --color-gray-050: #fbf1c7;
+  --color-gray-100: #ebdbb2;
+  --color-gray-200: #d5c4a1;
+  --color-gray-300: #bdae93;
+  --color-gray-400: #a89984;
+  --color-gray-400-rgb: 168, 152, 132;
+  --color-gray-500: #928374;
+  --color-gray-600: #665c54;
+  --color-gray-700: #504945;
+  --color-gray-800: #3c3836;
+  --color-gray-900: #282828;
+  --color-gray-950: #1d2021;
+  --color-gray-950-rgb: 29, 32, 33;
+
+  /* Brand = gruvbox orange (#fe8019 anchor) */
+  --color-brand-050: #fdf0d9;
+  --color-brand-100: #fbddb0;
+  --color-brand-200: #f9c47d;
+  --color-brand-300: #fca650;
+  --color-brand-400: #fe9127;
+  --color-brand-500: #fe8019;
+  --color-brand-600: #ec700d;
+  --color-brand-700: #d65d0e;
+  --color-brand-800: #af3a03;
+  --color-brand-900: #7c2a02;
+  --color-brand-950: #4a1a01;
+  --color-brand-950-rgb: 74, 26, 1;
+
+  /* Green = gruvbox green (#b8bb26 anchor) */
+  --color-green-050: #f4f5c9;
+  --color-green-100: #e7ea9b;
+  --color-green-200: #d8dc6f;
+  --color-green-300: #c8cc4a;
+  --color-green-400: #b8bb26;
+  --color-green-500: #a8ab20;
+  --color-green-600: #98971a;
+  --color-green-700: #79740e;
+  --color-green-800: #5c570a;
+  --color-green-900: #3f3b06;
+  --color-green-950: #242204;
+
+  /* Red = gruvbox red (#fb4934 anchor) */
+  --color-red-050: #ffe4de;
+  --color-red-100: #ffc9c0;
+  --color-red-200: #fda698;
+  --color-red-300: #fc7366;
+  --color-red-400: #fb4934;
+  --color-red-500: #e8331f;
+  --color-red-600: #cc241d;
+  --color-red-700: #b01d17;
+  --color-red-800: #9d0006;
+  --color-red-900: #6e0004;
+  --color-red-950: #400002;
+
+  /* Orange (warning) = gruvbox orange, darker bias */
+  --color-orange-050: #fdf0d9;
+  --color-orange-100: #fbddb0;
+  --color-orange-200: #f9c47d;
+  --color-orange-300: #fca650;
+  --color-orange-400: #fe8019;
+  --color-orange-500: #ec700d;
+  --color-orange-600: #d65d0e;
+  --color-orange-700: #c04c08;
+  --color-orange-800: #af3a03;
+  --color-orange-900: #7c2a02;
+  --color-orange-950: #4a1a01;
+
+  /* Yellow = gruvbox yellow (#fabd2f anchor) */
+  --color-yellow-050: #fdf3d0;
+  --color-yellow-100: #fbe6a3;
+  --color-yellow-200: #f9d676;
+  --color-yellow-300: #fbc952;
+  --color-yellow-400: #fabd2f;
+  --color-yellow-500: #e8ab26;
+  --color-yellow-600: #d79921;
+  --color-yellow-700: #c6871a;
+  --color-yellow-800: #b57614;
+  --color-yellow-900: #83520e;
+  --color-yellow-950: #4f3108;
+
+  /* Teal = gruvbox aqua (#8ec07c anchor) */
+  --color-teal-050: #e3f2dd;
+  --color-teal-100: #c9e5c0;
+  --color-teal-200: #aed7a2;
+  --color-teal-300: #9dcb8f;
+  --color-teal-400: #8ec07c;
+  --color-teal-500: #7bae73;
+  --color-teal-600: #689d6a;
+  --color-teal-700: #558c61;
+  --color-teal-800: #427b58;
+  --color-teal-900: #2e563c;
+  --color-teal-950: #1b3123;
+
+  /* Coral = gruvbox red family */
+  --color-coral-050: #ffe4de;
+  --color-coral-100: #ffc9c0;
+  --color-coral-200: #fda698;
+  --color-coral-300: #fc7366;
+  --color-coral-400: #fb4934;
+  --color-coral-500: #e8331f;
+  --color-coral-600: #cc241d;
+  --color-coral-700: #b01d17;
+  --color-coral-800: #9d0006;
+  --color-coral-900: #6e0004;
+  --color-coral-950: #400002;
+
+  /* Purple = gruvbox purple (#d3869b anchor) */
+  --color-purple-050: #f7e3ec;
+  --color-purple-100: #eec7d7;
+  --color-purple-200: #e5aac1;
+  --color-purple-300: #dc98ae;
+  --color-purple-400: #d3869b;
+  --color-purple-500: #c27490;
+  --color-purple-600: #b16286;
+  --color-purple-700: #a0507d;
+  --color-purple-800: #8f3f71;
+  --color-purple-900: #632c4f;
+  --color-purple-950: #3a192e;
+
+  /* Pink = gruvbox purple family */
+  --color-pink-050: #f7e3ec;
+  --color-pink-100: #eec7d7;
+  --color-pink-200: #e5aac1;
+  --color-pink-300: #dc98ae;
+  --color-pink-400: #d3869b;
+  --color-pink-500: #c27490;
+  --color-pink-600: #b16286;
+  --color-pink-700: #a0507d;
+  --color-pink-800: #8f3f71;
+  --color-pink-900: #632c4f;
+  --color-pink-950: #3a192e;
+
+  /* Focus ring = gruvbox orange instead of white */
+  --color-border-focus: #fe8019;
+
+  /* ── Legacy RGB triplets (Tailwind redesign components) ────────────────── */
+
+  --color-background: 40 40 40; /* #282828 */
+  --color-background-alt: 29 32 33; /* #1d2021 */
+  --color-background-alt2: 60 56 54; /* #3c3836 */
+  --color-background-alt3: 80 73 69; /* #504945 */
+  --color-background-alt4: 29 32 33;
+
+  --color-primary-100: 74 26 1;
+  --color-primary-300: 214 93 14; /* #d65d0e */
+  --color-primary-600: 254 128 25; /* #fe8019 */
+  --color-primary-700: 249 196 125;
+
+  --color-secondary-100: 60 56 54;
+  --color-secondary-300: 102 92 84;
+  --color-secondary-500: 146 131 116; /* #928374 */
+  --color-secondary-600: 168 152 132; /* #a89984 */
+  --color-secondary-700: 189 174 147; /* #bdae93 */
+
+  --color-success-100: 36 34 4;
+  --color-success-600: 184 187 38; /* #b8bb26 */
+  --color-success-700: 216 220 111;
+
+  --color-danger-100: 64 0 2;
+  --color-danger-600: 251 73 52; /* #fb4934 */
+  --color-danger-700: 253 166 152;
+
+  --color-warning-100: 74 26 1;
+  --color-warning-600: 250 189 47; /* #fabd2f */
+  --color-warning-700: 253 243 208;
+
+  --color-info-100: 27 49 35;
+  --color-info-600: 142 192 124; /* #8ec07c */
+  --color-info-700: 201 229 192;
+
+  --color-notification-100: 58 25 46;
+  --color-notification-600: 211 134 155; /* #d3869b */
+
+  --color-text-main: 235 219 178; /* #ebdbb2 */
+  --color-text-muted: 168 152 132; /* #a89984 */
+  --color-text-contrast: 29 32 33; /* #1d2021 */
+  --color-text-alt2: 251 241 199; /* #fbf1c7 */
+  --color-text-code: 211 134 155; /* #d3869b */
+
+  --color-hover-default: rgb(254 128 25 / 0.12);
+
+  --color-marketing-logo: 235 219 178;
+  --color-bw-blue: 254 128 25;
+
+  --tw-ring-offset-color: #282828;
+
+  --color-illustration-outline: 254 128 25;
+  --color-illustration-bg-primary: 249 196 125;
+  --color-illustration-bg-secondary: 254 128 25;
+  --color-illustration-bg-tertiary: 235 219 178;
+  --color-illustration-tertiary: 250 189 47;
+  --color-illustration-logo: 235 219 178;
+}

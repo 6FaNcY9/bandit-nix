@@ -55,7 +55,8 @@ The repo is a Nix Flake built on `nixos-unstable`. It declares NixOS system conf
 │       ├── wan.nix           # Cloudflare Tunnel ingress
 │       ├── webhost.nix       # Static web hosting / Caddy-adjacent services
 │       ├── traefik.nix       # Reverse proxy + Docker service labels
-│       ├── vaultwarden.nix   # Password manager container
+│       ├── vaultwarden.nix   # Password manager container (+ Gruvbox web-vault theme)
+│       ├── vaultwarden/      # gruvbox.scss.hbs theme source (TEMPLATES_FOLDER hook)
 │       ├── llm.nix           # Ollama service
 │       ├── mrija-archive.nix # Backup/archive service
 │       ├── log-monitor.nix   # Log-based alerting

@@ -1,9 +1,14 @@
 {
   config,
+  pkgs,
   repoConfig,
   ...
 }: let
   username = repoConfig.workstation.username;
+  # Compiled by Vaultwarden into the vaultwarden.css served to the web vault.
+  vaultwardenTemplates = pkgs.writeTextDir "scss/user.vaultwarden.scss.hbs" (
+    builtins.readFile ./vaultwarden/gruvbox.scss.hbs
+  );
 in {
   systemd.tmpfiles.rules = [
     "d /srv/containers/vaultwarden 0750 ${username} users -"
@@ -23,9 +28,13 @@ in {
 
   virtualisation.oci-containers.containers.vaultwarden = {
     image = "vaultwarden/server@sha256:d626d04934cd1192ad8ced1adb975099fca78cec33ab467d2d3c923cde7f3b0c";
-    volumes = ["/srv/containers/vaultwarden/data:/data"];
+    volumes = [
+      "/srv/containers/vaultwarden/data:/data"
+      "${vaultwardenTemplates}:/templates:ro"
+    ];
     environment = {
       WEBSOCKET_ENABLED = "true";
+      TEMPLATES_FOLDER = "/templates";
     };
     environmentFiles = [config.sops.templates."vaultwarden.env".path];
     extraOptions = [
