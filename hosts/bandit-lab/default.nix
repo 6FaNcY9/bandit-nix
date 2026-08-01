@@ -11,6 +11,7 @@
     ./llm.nix
     ./traefik.nix
     ./mrija-archive.nix
+    ./monitoring.nix
     ./vaultwarden.nix
     ./power.nix
     ./log-monitor.nix

@@ -60,6 +60,7 @@ The repo is a Nix Flake built on `nixos-unstable`. It declares NixOS system conf
 │       ├── llm.nix           # Ollama service
 │       ├── mrija-archive.nix # Backup/archive service
 │       ├── log-monitor.nix   # Log-based alerting
+│       ├── monitoring.nix    # Grafana+Prometheus host files/secrets for the Portainer stack
 │       ├── power.nix         # Server power settings
 │       └── cockpit-theme.nix # Cockpit admin UI theming
 ├── nixos/                    # System-level NixOS modules
@@ -251,6 +252,7 @@ CI uses `nixos/nix` image with pinned digest. The build job uses `--dry-run` by 
 | Secrets wiring | `nixos/sops.nix` |
 | Server base / SSH / Zellij | `nixos/server.nix`, `nixos/server/editor.nix` |
 | Homelab services | `hosts/bandit-lab/*.nix` |
+| Monitoring stack host files | `hosts/bandit-lab/monitoring.nix` |
 | Hardware / filesystems | `hosts/<host>/hardware.nix` |
 | Hyprland config | `home/desktop/hyprland.nix` |
 | Waybar | `home/desktop/waybar.nix` |
