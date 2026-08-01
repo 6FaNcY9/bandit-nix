@@ -115,7 +115,7 @@ in {
   virtualisation.oci-containers = {
     backend = "docker";
     containers.portainer = {
-      image = "portainer/portainer-ce@sha256:5f9b4bda5582fc72c07d730f86168205f4042d82c9cde011c9146b12496e4625";
+      image = "portainer/portainer-ce:2.39.5@sha256:f6bc23d1695530a609563fd65c180aaafec0fc02e019d5fc63d16b6fbe83addd";
       ports = ["127.0.0.1:9443:9443"];
       volumes = [
         "/var/run/docker.sock:/var/run/docker.sock"
