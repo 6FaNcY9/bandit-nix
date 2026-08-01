@@ -193,7 +193,7 @@ Secrets are managed with **sops-nix** and **age**.
   - Must be provisioned before secrets work.
   - `sops-nix` is configured with `generateKey = false` so a missing key fails loudly.
 
-Active secrets referenced in `nixos/sops.nix` include:
+Active secrets referenced in `nixos/sops.nix` (plus the host-specific one noted) include:
 
 | Secret | Purpose |
 |--------|---------|
@@ -205,6 +205,7 @@ Active secrets referenced in `nixos/sops.nix` include:
 | `vaultwarden-admin-token` | Vaultwarden admin token |
 | `thehost-sshkey` | SSH key → `~/.ssh/thehost_mrija` |
 | `firecrawl-api-key` | Firecrawl API key |
+| `grafana-admin-password` | Declared in `hosts/bandit-lab/monitoring.nix` (mode 0400, uid 472); consumed by the Portainer monitoring stack via bind mount |
 
 **Security rule:** Never commit plaintext secrets. Never modify `.sops.yaml` age/GPG keys without a backup and re-encryption plan.
 

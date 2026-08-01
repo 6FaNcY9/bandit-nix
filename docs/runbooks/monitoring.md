@@ -89,9 +89,18 @@ services:
 ## Verify
 
 - `docker ps` shows grafana, prometheus, node-exporter, cadvisor up.
-- Prometheus targets: `ssh -L 9090:localhost:9090 bandit-lab`, then
-  http://localhost:9090/targets — all jobs `up`. (Prometheus is not exposed
-  via Traefik by design.)
+- Prometheus targets — the container publishes no host port, so query its
+  API in place instead of port-forwarding:
+
+  ```bash
+  ssh bandit-lab "docker exec prometheus wget -qO- http://localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {job: .labels.job, health}'"
+  ```
+
+  All jobs should report `health: "up"`. The Prometheus UI is intentionally
+  not exposed (no Traefik, no published port). If a UI is wanted, forward
+  the container IP — obtain it via
+  `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' prometheus` —
+  instead of localhost.
 - https://grafana.bandit-lab.mrija.org loads behind Cloudflare Access;
   log in as `admin` with the password from
   `sudo cat /run/secrets/grafana-admin-password`; the Prometheus datasource
@@ -101,5 +110,9 @@ services:
 
 - Only Grafana joins the `proxy` network; never add Traefik labels to the
   other services.
+- cadvisor runs `privileged: true` with read-only host mounts: container
+  metrics need broad `/sys` and `docker.sock` access, which makes cadvisor
+  host-root-equivalent. This is acceptable only because it is stack-internal —
+  never give it Traefik labels or a host port.
 - Config changes (scrape config, provisioning) require a bandit-lab rebuild
   **and** a stack restart in Portainer — Nix does not manage these containers.
