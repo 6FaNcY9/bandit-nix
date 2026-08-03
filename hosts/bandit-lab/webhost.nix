@@ -16,7 +16,10 @@ in {
   # ── Host paths ───────────────────────────────────────────────────────────
   systemd = {
     tmpfiles.rules = [
-      "d /srv/containers 0750 ${username} users -"
+      # Root-owned: tmpfiles refuses to manage child dirs whose owner differs
+      # from a non-root parent ("unsafe path transition"), which broke the
+      # monitoring stack setup. Subdirs stay user-owned where declared.
+      "d /srv/containers 0755 root root -"
       "d /srv/storage 0770 ${username} users -"
       "d /var/lib/portainer 0750 root root -"
     ];
