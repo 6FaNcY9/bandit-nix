@@ -33,6 +33,7 @@ services:
     volumes:
       - /srv/containers/monitoring/grafana:/var/lib/grafana
       - /srv/containers/monitoring/grafana-provisioning:/etc/grafana/provisioning:ro
+      - /srv/containers/monitoring/grafana-dashboards:/var/lib/grafana-dashboards:ro
       - /run/secrets/grafana-admin-password:/run/secrets/grafana-admin-password:ro
     labels:
       traefik.enable: "true"
@@ -50,10 +51,21 @@ services:
       - monitoring
     command:
       - --config.file=/etc/prometheus/prometheus.yml
-      - --storage.tsdb.retention.time=15d
+      - --storage.tsdb.retention.time=30d
     volumes:
       - /srv/containers/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - /srv/containers/monitoring/prometheus:/prometheus
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.28.0
+    container_name: blackbox-exporter
+    restart: unless-stopped
+    networks:
+      - monitoring
+    command:
+      - --config.file=/etc/blackbox_exporter/config.yml
+    volumes:
+      - /srv/containers/monitoring/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
 
   node-exporter:
     image: prom/node-exporter:v1.12.1
@@ -64,8 +76,13 @@ services:
       - monitoring
     command:
       - --path.rootfs=/host
+      # Per-unit up/down for the services bandit-lab-health cares about.
+      # Needs the host D-Bus socket (mounted below) to talk to systemd.
+      - --collector.systemd
+      - --collector.systemd.unit-include=(sshd|docker|containerd|traefik|cloudflared.*|postgresql|smbd|nmbd|ollama|tailscaled|lab-update-.*)\.service
     volumes:
       - /:/host:ro,rslave
+      - /run/dbus:/run/dbus:ro
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.55.1
@@ -100,7 +117,8 @@ services:
 
 ## Verify
 
-- `docker ps` shows grafana, prometheus, node-exporter, cadvisor up.
+- `docker ps` shows grafana, prometheus, blackbox-exporter, node-exporter,
+  cadvisor up.
 - LAN: `curl http://192.168.1.2:3000/api/health` returns `200` from any LAN
   machine.
 - Prometheus targets — the container publishes no host port, so query its
@@ -119,6 +137,13 @@ services:
   log in as `admin` with the password from
   `sudo cat /run/secrets/grafana-admin-password`; the Prometheus datasource
   is pre-configured and green.
+- Dashboards are file-provisioned from `hosts/bandit-lab/monitoring.nix`:
+  "Node Exporter Full" (host CPU/RAM/disk/network), "Cadvisor exporter"
+  (per-container), and "WAN Probes" (end-to-end HTTPS checks of the four
+  tunnel hostnames, incl. TLS expiry). Alert rules (target down, WAN probe
+  failing, disk <15% free, memory <10% available) live under
+  Alerting → Alert rules in the `bandit-lab` group; they are UI-only until a
+  contact point is configured.
 
 ## Notes
 
