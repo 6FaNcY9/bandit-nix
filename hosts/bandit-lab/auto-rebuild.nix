@@ -45,9 +45,14 @@
       echo "Refusing to update a dirty checkout: $repo" >&2
       exit 1
     fi
+    # The checkout is a clean read-only mirror — all changes are authored on
+    # the laptop — so rewritten upstream history (rebase/force-push) must not
+    # wedge the updater. Warn now and reset the mirror to the deployed commit
+    # once the candidate system has been activated successfully.
+    non_ff=0
     if ! "$git" -c safe.directory="$repo" -C "$repo" merge-base --is-ancestor "$before" "$after"; then
-      echo "Refusing non-fast-forward update: $before -> $after" >&2
-      exit 1
+      echo "Warning: non-fast-forward update $before -> $after; will hard-reset the mirror checkout after a successful switch" >&2
+      non_ff=1
     fi
 
     current_system="$(readlink -f /run/current-system)"
@@ -87,7 +92,12 @@
       exit 1
     fi
 
-    if ! "$git" -c safe.directory="$repo" -C "$repo" merge --ff-only "$after"; then
+    if [[ "$non_ff" == "1" ]]; then
+      if ! "$git" -c safe.directory="$repo" -C "$repo" reset --hard "$after"; then
+        restore_current
+        exit 1
+      fi
+    elif ! "$git" -c safe.directory="$repo" -C "$repo" merge --ff-only "$after"; then
       restore_current
       exit 1
     fi
@@ -96,25 +106,60 @@
 in {
   environment.systemPackages = [labUpdate];
 
-  systemd.services.lab-update-check = {
-    description = "Check bandit-lab for available configuration updates";
-    wants = ["network-online.target"];
-    after = ["network-online.target" "sops-nix.service"];
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = "${labUpdate}/bin/lab-update check";
-      User = "root";
-      Environment = ["HOME=/root"];
-    };
-  };
+  systemd = {
+    services = {
+      lab-update-check = {
+        description = "Check bandit-lab for available configuration updates";
+        wants = ["network-online.target"];
+        after = ["network-online.target" "sops-nix.service"];
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = "${labUpdate}/bin/lab-update check";
+          User = "root";
+          Environment = ["HOME=/root"];
+        };
+      };
 
-  systemd.timers.lab-update-check = {
-    description = "Poll GitHub for bandit-lab configuration updates";
-    wantedBy = ["timers.target"];
-    timerConfig = {
-      OnActiveSec = "2min";
-      OnUnitActiveSec = "10min";
-      Persistent = true;
+      # Unattended apply: the lab-update script builds the candidate,
+      # activates it with switch-to-configuration test, gates on
+      # bandit-lab-health, and rolls back on any failure, so running it from
+      # a timer is safe. Disable with
+      # `systemctl disable --now lab-update-apply.timer` if manual control is
+      # needed.
+      lab-update-apply = {
+        description = "Apply available bandit-lab configuration updates";
+        wants = ["network-online.target"];
+        after = ["network-online.target" "sops-nix.service"];
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = "${labUpdate}/bin/lab-update apply";
+          User = "root";
+          Environment = ["HOME=/root"];
+        };
+      };
+    };
+
+    timers = {
+      lab-update-check = {
+        description = "Poll GitHub for bandit-lab configuration updates";
+        wantedBy = ["timers.target"];
+        timerConfig = {
+          OnActiveSec = "2min";
+          OnUnitActiveSec = "10min";
+          Persistent = true;
+        };
+      };
+
+      lab-update-apply = {
+        description = "Automatically apply bandit-lab configuration updates";
+        wantedBy = ["timers.target"];
+        timerConfig = {
+          OnActiveSec = "10min";
+          OnUnitActiveSec = "1h";
+          RandomizedDelaySec = "10min";
+          Persistent = true;
+        };
+      };
     };
   };
 }
