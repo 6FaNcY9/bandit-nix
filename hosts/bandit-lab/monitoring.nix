@@ -30,13 +30,22 @@
         isDefault: true
   '';
 in {
+  # Host-side grafana system user so sops-install-secrets can resolve the
+  # secret owner by name (a bare numeric uid fails activation: "failed to
+  # lookup user '472'"). uid/gid match the grafana container user so the
+  # bind-mounted files stay readable inside the container.
+  users.users.grafana = {
+    isSystemUser = true;
+    uid = 472;
+    group = "grafana";
+  };
+  users.groups.grafana.gid = 472;
+
   # Consumed by the Portainer "monitoring" stack via bind mount
-  # (GF_SECURITY_ADMIN_PASSWORD__FILE). Owner 472 = grafana container user.
+  # (GF_SECURITY_ADMIN_PASSWORD__FILE).
   sops.secrets."grafana-admin-password" = {
-    owner = "472";
-    # sops-nix derives `group` from users.users.${owner} by default; pin it
-    # explicitly so a numeric (container-only) uid does not fail evaluation.
-    group = "472";
+    owner = "grafana";
+    group = "grafana";
     mode = "0400";
   };
 

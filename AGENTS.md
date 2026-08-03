@@ -206,7 +206,7 @@ Active secrets referenced in `nixos/sops.nix` (plus the host-specific one noted)
 | `vaultwarden-admin-token` | Vaultwarden admin token |
 | `thehost-sshkey` | SSH key → `~/.ssh/thehost_mrija` |
 | `firecrawl-api-key` | Firecrawl API key |
-| `grafana-admin-password` | Declared in `hosts/bandit-lab/monitoring.nix` (mode 0400, uid 472); consumed by the Portainer monitoring stack via bind mount |
+| `grafana-admin-password` | Declared in `hosts/bandit-lab/monitoring.nix` (mode 0400, owner `grafana` system user uid/gid 472); consumed by the Portainer monitoring stack via bind mount |
 
 **Security rule:** Never commit plaintext secrets. Never modify `.sops.yaml` age/GPG keys without a backup and re-encryption plan.
 
