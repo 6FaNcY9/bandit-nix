@@ -13,6 +13,8 @@ design (see below).
    - `grafana.bandit-lab.mrija.org`
    - `mail.bandit-lab.mrija.org` — mrija-archive has its own login, but the
      archived email behind it warrants the extra Access gate.
+   - `portainer.bandit-lab.mrija.org` — Docker admin UI; never publish it
+     without this gate.
    - `ssh-bandit-lab.mrija.org` — required for `ssh bandit-lab-wan`
      (`cloudflared access ssh`). A plain Self-hosted app covering the hostname
      is enough; browser-rendered SSH is optional. The tunnel ingress rule in
@@ -24,11 +26,12 @@ design (see below).
    policy for these hostnames.
 3. Set an intentional session duration and require the chosen identity
    provider's MFA policy.
-4. Keep admin services off the WAN entirely. Portainer has no Traefik labels
-   and Cockpit's socket is loopback-only; reach both through SSH tunnels:
-   `ssh -L 9443:localhost:9443 bandit-lab` → `https://localhost:9443`
-   (Portainer), `ssh -L 9090:localhost:9090 bandit-lab` →
-   `https://localhost:9090` (Cockpit). Tailscale works too.
+4. Keep admin services without an Access app off the WAN entirely. Cockpit's
+   socket is loopback-only; reach it through an SSH tunnel:
+   `ssh -L 9090:localhost:9090 bandit-lab` → `https://localhost:9090`.
+   Portainer is WAN-published behind its Access app, and also remains
+   reachable via `ssh -L 9443:localhost:9443 bandit-lab` →
+   `https://localhost:9443` as a fallback. Tailscale works too.
 5. `vault.bandit-lab.mrija.org` (Vaultwarden) intentionally has **no** Access
    application: native Bitwarden clients cannot complete an interactive
    Access login. It is hardened at the app level instead

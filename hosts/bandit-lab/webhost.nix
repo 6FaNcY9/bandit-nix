@@ -32,6 +32,10 @@ in {
         "127.0.0.1:9090"
       ];
     };
+    services.docker-portainer = {
+      after = ["docker-network-proxy.service"];
+      requires = ["docker-network-proxy.service"];
+    };
   };
 
   # ── Server GUI ───────────────────────────────────────────────────────────
@@ -114,12 +118,20 @@ in {
     backend = "docker";
     containers.portainer = {
       image = "portainer/portainer-ce:2.39.5@sha256:f6bc23d1695530a609563fd65c180aaafec0fc02e019d5fc63d16b6fbe83addd";
-      # Admin UI: loopback-only, no Traefik labels — same model as Cockpit.
-      # Access via: ssh -L 9443:localhost:9443 bandit-lab → https://localhost:9443
+      # WAN-published through Traefik + Cloudflare Tunnel, gated by a
+      # Cloudflare Access application (docs/runbooks/cloudflare-access.md).
+      # Loopback HTTPS stays available: ssh -L 9443:localhost:9443 bandit-lab.
       ports = ["127.0.0.1:9443:9443"];
       volumes = [
         "/var/run/docker.sock:/var/run/docker.sock"
         "/var/lib/portainer:/data"
+      ];
+      extraOptions = [
+        "--network=proxy"
+        "--label=traefik.enable=true"
+        "--label=traefik.http.routers.portainer.rule=Host(`portainer.bandit-lab.mrija.org`)"
+        "--label=traefik.http.routers.portainer.entrypoints=web"
+        "--label=traefik.http.services.portainer.loadbalancer.server.port=9000"
       ];
     };
   };
