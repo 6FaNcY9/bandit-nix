@@ -10,6 +10,7 @@ from the Internet.
    exact hostname:
    - `vaultwarden.bandit-lab.mrija.org`
    - `portainer.bandit-lab.mrija.org`
+   - `grafana.bandit-lab.mrija.org`
    - `ssh-bandit-lab.mrija.org` — required for `ssh bandit-lab-wan`
      (`cloudflared access ssh`). A plain Self-hosted app covering the hostname
      is enough; browser-rendered SSH is optional. The tunnel ingress rule in

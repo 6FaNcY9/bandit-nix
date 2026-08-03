@@ -19,6 +19,11 @@ services:
     image: grafana/grafana-oss:13.0.2
     container_name: grafana
     restart: unless-stopped
+    ports:
+      # LAN access at http://<bandit-lab-lan-ip>:3000 — matches how the other
+      # LAN services are exposed (Docker NAT, no extra firewall rule needed).
+      # WAN access goes through Traefik + Cloudflare Tunnel, not this port.
+      - "3000:3000"
     networks:
       - proxy
       - monitoring
@@ -79,16 +84,25 @@ services:
 
 ## Deploy / update
 
-1. `sudo nixos-rebuild switch --flake .#bandit-lab` on bandit-lab (creates
-   `/srv/containers/monitoring/*` and the sops secret).
-2. Deploy or redeploy the stack in Portainer.
-3. Cloudflare dashboard: confirm DNS covers `grafana.bandit-lab.mrija.org`
+1. Deploy the current config on bandit-lab (`sudo lab-update apply` or
+   `sudo nixos-rebuild switch --flake .#bandit-lab`) — this creates the
+   `grafana` host user, `/srv/containers/monitoring/*`, and the sops secret.
+2. **Remove the legacy `grafan` stack first** (Portainer → Stacks): it
+   publishes host port 3000, which the new stack also needs, and it carries
+   a plaintext admin password in its container env. Its named volume
+   (`grafan_grafana_data`) can be deleted afterwards if nothing in it is
+   worth keeping.
+3. Deploy or redeploy the `monitoring` stack in Portainer (paste the YAML
+   above).
+4. Cloudflare dashboard: confirm DNS covers `grafana.bandit-lab.mrija.org`
    (the `*.bandit-lab.mrija.org` CNAME should) and add a Cloudflare Access
    application per `docs/runbooks/cloudflare-access.md`.
 
 ## Verify
 
 - `docker ps` shows grafana, prometheus, node-exporter, cadvisor up.
+- LAN: `curl http://192.168.1.2:3000/api/health` returns `200` from any LAN
+  machine.
 - Prometheus targets — the container publishes no host port, so query its
   API in place instead of port-forwarding:
 
