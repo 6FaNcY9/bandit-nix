@@ -50,7 +50,7 @@ The repo is a Nix Flake built on `nixos-unstable`. It declares NixOS system conf
 │   └── bandit-lab/
 │       ├── default.nix       # Hostname, SSH hardening, authorized keys
 │       ├── hardware.nix      # Server filesystems/hardware
-│       ├── auto-rebuild.nix  # lab-update tooling: poll GitHub, build, test, switch
+│       ├── auto-rebuild.nix  # lab-update tooling: poll GitHub, auto-apply timer, build, test, switch
 │       ├── health-check.nix  # bandit-lab-health critical-unit check
 │       ├── wan.nix           # Cloudflare Tunnel ingress
 │       ├── webhost.nix       # Static web hosting / Caddy-adjacent services
@@ -105,9 +105,9 @@ The repo is a Nix Flake built on `nixos-unstable`. It declares NixOS system conf
 │   └── vulnix-whitelist.toml # CVE allowlist for security scanning
 ├── script/                   # Local, gitignored helper scripts
 ├── themes/                   # Gruvbox base16 schemes (dark/light) + wallpaper
-├── install-nixos.sh          # Generic live-ISO installer
-├── install-bandit-lab.sh     # bandit-lab-specific installer wrapper
-├── install-bandit.sh         # bandit laptop reinstall: wipe disk, LUKS2, generate hardware.nix
+├── script/install-nixos.sh   # Generic live-ISO installer (gitignored, local-only)
+├── script/install-bandit-lab.sh # bandit-lab-specific installer wrapper (gitignored)
+├── script/install-bandit.sh  # bandit laptop reinstall: wipe disk, LUKS2, generate hardware.nix (gitignored)
 └── .github/workflows/         # GitHub Actions CI
 ```
 
@@ -119,7 +119,7 @@ The repo is a Nix Flake built on `nixos-unstable`. It declares NixOS system conf
 | `.#bandit-ci` | Same as `.#bandit` but with `nixos/ci-overrides.nix` so SOPS files do not need host keys during CI evaluation. |
 | `.#bandit-lab` | Homelab server: headless shell, Docker services, Traefik, Cloudflare Tunnel, Tailscale, Samba, PostgreSQL. |
 | `.#homeConfigurations.vino` | Standalone Home Manager configuration (useful for non-NixOS installs). |
-| `.#checks.x86_64-linux.repository` | Formatter, linter, dead-code, statix, shellcheck, installer smoke tests. |
+| `.#checks.x86_64-linux.repository` | Formatter, linter, dead-code, statix. (Installer shellcheck/smoke tests were dropped when the installers moved to the gitignored `script/` directory.) |
 | `.#checks.x86_64-linux.theme-contract` | Assertions that `lib/repository.nix` theme data matches the expected shape. |
 | `.#checks.x86_64-linux.output-evaluation` | Records derivation paths of all public outputs. |
 | `.#checks.x86_64-linux.home-manager-backup` | Tests the HM backup command used when files collide. |
@@ -170,6 +170,7 @@ bandit-lab-health        # on bandit-lab
 # Homelab auto-updater
 lab-update check         # poll GitHub for new commits
 lab-update apply         # build, test, health-check, and switch to latest
+# bandit-lab also auto-applies via the hourly lab-update-apply.timer (rolls back on failure)
 ```
 
 ## 5. Code Style and Conventions
@@ -218,6 +219,7 @@ Active secrets referenced in `nixos/sops.nix` (plus the host-specific one noted)
 - **build:** Runs `nix flake check`, then dry-runs `.#bandit-ci`.
 - **build-vm:** Builds `.#bandit-ci.config.system.build.vm` and runs a 90-second boot smoke test.
 - **security-scan:** Not present in the single workflow file currently; vulnix scanning is handled in GitLab CI.
+- **populate-cache:** On push to main + manual. Builds the bandit-lab closure and pushes it to the `github-bandit-nix` Cachix cache (feeds the lab's hourly auto-apply). Requires the `CACHIX_AUTH_TOKEN` repository secret (same value as sops `cachix-secret` — re-sync after every token rotation).
 - **update-flake:** Manually triggered workflow that runs `nix flake update` and opens a PR.
 
 ### GitLab CI (`.gitlab-ci.yml`)
@@ -297,7 +299,7 @@ See `docs/SECURITY-PLAN.md` for the active security roadmap (LUKS, Secure Boot, 
 ```bash
 git clone https://github.com/6FaNcY9/bandit-nix.git
 cd bandit-nix
-sudo ./install-bandit-lab.sh \
+sudo ./script/install-bandit-lab.sh \
   --root-dev /dev/disk/by-id/<root-partition> \
   --boot-dev /dev/disk/by-id/<efi-partition> \
   --age-key /run/media/nixos/USB/key.txt
@@ -317,7 +319,7 @@ Resume modes (`--mode prepare|mount|install`) exist to recover from network fail
 ```bash
 git clone https://github.com/6FaNcY9/bandit-nix.git
 cd bandit-nix
-sudo ./install-bandit.sh \
+sudo ./script/install-bandit.sh \
   --disk /dev/nvme0n1 \
   --age-key /run/media/nixos/USB/key.txt
 ```
