@@ -1,28 +1,39 @@
 # Cloudflare Access for bandit-lab
 
-Cloudflare Tunnel provides transport only. Protect the public Vaultwarden and
-Portainer hostnames with Cloudflare Zero Trust Access before relying on them
-from the Internet.
+Cloudflare Tunnel provides transport only, and the ingress in
+`hosts/bandit-lab/wan.nix` is an explicit per-hostname allowlist (no wildcard).
+Protect the published hostnames with Cloudflare Zero Trust Access before
+relying on them from the Internet — except Vaultwarden, which stays public by
+design (see below).
 
 ## Configure
 
 1. In Cloudflare Zero Trust, create one **Self-hosted** application for each
    exact hostname:
-   - `vaultwarden.bandit-lab.mrija.org`
-   - `portainer.bandit-lab.mrija.org`
    - `grafana.bandit-lab.mrija.org`
+   - `mail.bandit-lab.mrija.org` — mrija-archive has its own login, but the
+     archived email behind it warrants the extra Access gate.
    - `ssh-bandit-lab.mrija.org` — required for `ssh bandit-lab-wan`
      (`cloudflared access ssh`). A plain Self-hosted app covering the hostname
      is enough; browser-rendered SSH is optional. The tunnel ingress rule in
      `hosts/bandit-lab/wan.nix` only forwards traffic that already passed an
      Access application, so without this app the connection fails with
      `websocket: bad handshake`.
-2. Add an Allow policy for the intended identity group or email addresses.
-   Do not add a bypass policy for these hostnames.
+2. Add an Allow policy for the intended identity group or email addresses
+   (the existing `vino-allow` policy can be reused). Do not add a bypass
+   policy for these hostnames.
 3. Set an intentional session duration and require the chosen identity
    provider's MFA policy.
-4. Keep Cockpit, Samba, Ollama, and direct Traefik ports off the WAN. Cockpit
-   and Portainer also remain reachable through SSH or Tailscale tunnels.
+4. Keep admin services off the WAN entirely. Portainer has no Traefik labels
+   and Cockpit's socket is loopback-only; reach both through SSH tunnels:
+   `ssh -L 9443:localhost:9443 bandit-lab` → `https://localhost:9443`
+   (Portainer), `ssh -L 9090:localhost:9090 bandit-lab` →
+   `https://localhost:9090` (Cockpit). Tailscale works too.
+5. `vault.bandit-lab.mrija.org` (Vaultwarden) intentionally has **no** Access
+   application: native Bitwarden clients cannot complete an interactive
+   Access login. It is hardened at the app level instead
+   (`SIGNUPS_ALLOWED=false`, `ADMIN_TOKEN` from sops). Do not put an Access
+   app in front of it unless all clients are moved to Tailscale first.
 
 ## Verify
 
