@@ -129,6 +129,53 @@ jobs:
           tail -50 /tmp/vm-boot.log
           exit 1
 
+  populate-cache:
+    name: Populate Cachix binary cache
+    runs-on: ubuntu-latest
+    # Runs on every push to main (and manually). Builds the bandit-lab
+    # closure — the host that auto-applies hourly — and pushes it to the
+    # github-bandit-nix Cachix cache so the lab substitutes instead of
+    # compiling. Requires the CACHIX_AUTH_TOKEN repository secret
+    # (Settings > Secrets and variables > Actions).
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+    env:
+      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+        with:
+          # The cachix substituter makes repeated runs incremental: paths
+          # pushed by earlier runs are substituted instead of rebuilt.
+          extra-conf: |
+            substituters = https://cache.nixos.org https://github-bandit-nix.cachix.org
+            trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= github-bandit-nix.cachix.org-1:iaqre/ibQyXnNT8oRzHQHJ4UQfzvGAaFooRXs8v+Hks=
+
+      - name: Install cachix CLI
+        run: nix profile install nixpkgs#cachix
+
+      - name: Authenticate to Cachix
+        run: cachix authtoken "${CACHIX_AUTH_TOKEN}"
+
+      - name: Build bandit-lab closure
+        run: |
+          nix build .#nixosConfigurations.bandit-lab.config.system.build.toplevel \
+            --print-build-logs \
+            --out-link result \
+            --no-update-lock-file \
+            --keep-going \
+            --fallback \
+            --max-jobs 1 \
+            --cores 2
+
+      - name: Push closure to Cachix
+        run: nix path-info --recursive ./result | cachix push github-bandit-nix
+
   update-flake:
     name: Update flake.lock
     runs-on: ubuntu-latest
