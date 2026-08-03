@@ -4,8 +4,10 @@
   };
 
   # Outbound Cloudflare Tunnel — works through CGNAT.
-  # All traffic for bandit-lab.mrija.org and *.bandit-lab.mrija.org
-  # routes to Traefik on :80 for container-based routing via labels.
+  # Explicit per-hostname allowlist (default-deny): only the services below
+  # reach Traefik on :80; every other subdomain under bandit-lab.mrija.org
+  # falls through to the 404 default. Do NOT reintroduce a wildcard rule —
+  # it would instantly publish any container that gets Traefik labels.
   # Cloudflare Access policies are configured outside this repository; see
   # docs/runbooks/cloudflare-access.md before publishing an admin service.
   services.cloudflared = {
@@ -14,16 +16,15 @@
       credentialsFile = config.sops.secrets."cloudflare-tunnel-credentials".path;
       default = "http_status:404";
       ingress = {
-        # SSH must live outside the *.bandit-lab.mrija.org wildcard. The module
-        # emits ingress rules via lib.attrNames (alphabetical), so "*" sorts
-        # first and would match ssh.bandit-lab.mrija.org before any exact rule,
-        # routing SSH to the Traefik HTTP origin. The hyphen keeps this
-        # hostname out of the wildcard's suffix entirely.
+        "bandit-lab.mrija.org" = "http://localhost:80";
+        "grafana.bandit-lab.mrija.org" = "http://localhost:80";
+        "mail.bandit-lab.mrija.org" = "http://localhost:80";
         # Requires a Cloudflare Access application + policy in front of it;
         # see docs/runbooks/cloudflare-access.md.
         "ssh-bandit-lab.mrija.org" = "ssh://localhost:22";
-        "bandit-lab.mrija.org" = "http://localhost:80";
-        "*.bandit-lab.mrija.org" = "http://localhost:80";
+        # Vaultwarden stays without an Access app: native Bitwarden clients
+        # cannot complete an interactive Access login.
+        "vault.bandit-lab.mrija.org" = "http://localhost:80";
       };
     };
   };
