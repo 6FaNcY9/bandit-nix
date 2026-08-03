@@ -156,6 +156,9 @@ in {
           export CONTEXT7_API_KEY="$(< /run/secrets/context7_api_key)"
         fi
 
+        # ── Kimi Code — route subagents to the cheaper secondary model ──
+        export KIMI_CODE_EXPERIMENTAL_SECONDARY_MODEL=1
+
         # ── nsp: open a nix shell with nixpkgs packages ──────
         nsp() {
           if [[ $# -eq 0 ]]; then

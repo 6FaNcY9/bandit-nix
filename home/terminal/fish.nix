@@ -112,6 +112,9 @@ in {
           set -gx CONTEXT7_API_KEY (cat /run/secrets/context7_api_key)
         end
 
+        # ── Kimi Code — route subagents to the cheaper secondary model ──
+        set -gx KIMI_CODE_EXPERIMENTAL_SECONDARY_MODEL 1
+
         # ── Cachix — token from sops secret, never global ─────
         function cachix
           if test -r /run/secrets/cachix-secret
