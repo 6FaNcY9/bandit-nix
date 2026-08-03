@@ -78,11 +78,14 @@ services:
       - --path.rootfs=/host
       # Per-unit up/down for the services bandit-lab-health cares about.
       # Needs the host D-Bus socket (mounted below) to talk to systemd.
+      # NOTE: node-exporter hard-codes /var/run/dbus — inside the container
+      # /var/run is NOT a symlink to /run like on the NixOS host, so the
+      # mount must target /var/run/dbus explicitly.
       - --collector.systemd
       - --collector.systemd.unit-include=(sshd|docker|containerd|traefik|cloudflared.*|postgresql|smbd|nmbd|ollama|tailscaled|lab-update-.*)\.service
     volumes:
       - /:/host:ro,rslave
-      - /run/dbus:/run/dbus:ro
+      - /run/dbus:/var/run/dbus:ro
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.55.1
@@ -111,7 +114,20 @@ services:
    worth keeping.
 3. Deploy or redeploy the `monitoring` stack in Portainer (paste the YAML
    above).
-4. Cloudflare dashboard: confirm DNS covers `grafana.bandit-lab.mrija.org`
+4. **Upgrading from the pre-dashboards provisioning?** The datasource was
+   first provisioned without a `uid` and now pins `uid: prometheus`; Grafana
+   cannot re-key the old row and crash-loops with
+   `Datasource provisioning error: data source not found`. Clear the stale
+   row once (provisioning recreates it; all content is provisioned, nothing
+   is lost):
+
+   ```bash
+   docker stop grafana
+   docker run --rm -v /srv/containers/monitoring/grafana:/db alpine \
+     sh -c "apk add --quiet --no-cache sqlite && sqlite3 /db/grafana.db 'DELETE FROM data_source;'"
+   docker start grafana
+   ```
+5. Cloudflare dashboard: confirm DNS covers `grafana.bandit-lab.mrija.org`
    (the `*.bandit-lab.mrija.org` CNAME should) and add a Cloudflare Access
    application per `docs/runbooks/cloudflare-access.md`.
 
