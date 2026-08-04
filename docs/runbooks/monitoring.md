@@ -94,6 +94,13 @@ services:
     privileged: true
     networks:
       - monitoring
+    # dockerd uses the containerd snapshotter and spawns its own containerd
+    # at /var/run/docker/containerd/containerd.sock (not the cadvisor default
+    # /run/containerd/containerd.sock). Without this flag the Docker factory
+    # never registers and cadvisor exports only host cgroups — dashboards
+    # filtering on name=~".+" stay empty.
+    command:
+      - --containerd=/var/run/docker/containerd/containerd.sock
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
