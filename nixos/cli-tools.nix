@@ -23,6 +23,7 @@
     nix-output-monitor
     nvd
     sops
+    systemctl-tui
     cachix
   ];
 }
