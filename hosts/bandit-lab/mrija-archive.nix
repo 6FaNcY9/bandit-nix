@@ -1,4 +1,5 @@
 {
+  config,
   pkgs,
   repoConfig,
   ...
@@ -6,8 +7,25 @@
   username = repoConfig.workstation.username;
   maildir = "/srv/containers/mrija-archive/maildir";
   data = "/srv/containers/mrija-archive/data";
-  envFile = "/srv/containers/mrija-archive/deploy/.env";
+  envFile = config.sops.templates."mrija-archive.env".path;
 in {
+  sops = {
+    secrets = {
+      "mrija-api-key" = {};
+      "mrija-password" = {};
+    };
+
+    templates."mrija-archive.env" = {
+      owner = username;
+      group = "users";
+      mode = "0400";
+      content = ''
+        MRIJA_API_KEY=${config.sops.placeholder."mrija-api-key"}
+        MRIJA_PASSWORD=${config.sops.placeholder."mrija-password"}
+      '';
+    };
+  };
+
   systemd = {
     tmpfiles.rules = [
       "d /srv/containers/mrija-archive 0750 ${username} users -"
