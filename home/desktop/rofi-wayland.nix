@@ -208,6 +208,7 @@ in {
 
   programs.rofi = {
     enable = true;
+    # rofi-wayland has been merged into the main rofi package in this nixpkgs.
     package = pkgs.rofi;
     theme = "retro-eighties";
 

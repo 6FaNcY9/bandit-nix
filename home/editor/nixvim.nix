@@ -42,7 +42,7 @@ in {
     # ─── Clipboard Manager ──────────────────────────────────────────
     clipboard = {
       register = "unnamedplus";
-      providers.xclip.enable = true;
+      providers.wl-copy.enable = true;
     };
 
     # ─── Plugins ──────────────────────────────────────────
@@ -113,6 +113,7 @@ in {
             installCargo = false;
             installRustc = false;
           };
+          gopls.enable = true;
         };
         keymaps = {
           silent = true;
@@ -344,6 +345,15 @@ in {
 
       # DAP virtual text — variable values inline while debugging
       dap-virtual-text.enable = true;
+
+      # Python DAP adapter (pulls debugpy)
+      dap-python.enable = true;
+
+      # C/C++/Rust DAP adapter via CodeLLDB
+      dap-lldb = {
+        enable = true;
+        settings.codelldb_path = "${pkgs.vscode-extensions.vadimcn.vscode-lldb}/bin/codelldb";
+      };
 
       # Statusline
       lualine = {

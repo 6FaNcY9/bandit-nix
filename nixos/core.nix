@@ -33,7 +33,7 @@
     FIRECRAWL_API_KEY="$(< "$secret")"
 
     exec ${lib.getExe pkgs.nix} shell nixpkgs#nodejs --command \
-      npx -y firecrawl-mcp "$@"
+      npx -y firecrawl-mcp@3.23.3 "$@"
   '';
 in {
   nixpkgs.config.allowUnfreePredicate = repoConfig.allowUnfreePredicate;

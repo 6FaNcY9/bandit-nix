@@ -24,6 +24,21 @@ in {
         "browser.compactmode.show" = true;
         "browser.uidensity" = 1;
         "network.trr.mode" = 5; # disable built-in DoH; use system resolver (enforces our DoT policy)
+
+        # Telemetry / studies / pocket / firefox-view shutdown
+        "datareporting.healthreport.uploadEnabled" = false;
+        "datareporting.policy.dataSubmissionEnabled" = false;
+        "app.shield.optoutstudies.enabled" = false;
+        "extensions.pocket.enabled" = false;
+        "browser.tabs.firefox-view" = false;
+        "browser.newtabpage.activity-stream.feeds.telemetry" = false;
+        "browser.ping-centre.telemetry" = false;
+        "toolkit.telemetry.unified" = false;
+        "toolkit.telemetry.enabled" = false;
+        "toolkit.telemetry.server" = "data:,";
+        "toolkit.telemetry.archive.enabled" = false;
+        "toolkit.coverage.opt-out" = true;
+        "toolkit.coverage.endpoint.base" = "";
       };
 
       userChrome = themedChrome;

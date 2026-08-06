@@ -81,8 +81,8 @@
     "${mod} SHIFT, w, exec, ${pkgs.firefox}/bin/firefox"
     "${mod} SHIFT, e, exec, ${pkgs.thunderbird}/bin/thunderbird"
     "${mod} SHIFT, f, exec, ${pkgs.pcmanfm}/bin/pcmanfm"
-    "${mod}, d, exec, ${pkgs.rofi}/bin/rofi -show drun"
-    "${mod} SHIFT, v, exec, ${pkgs.copyq}/bin/copyq toggle"
+    "${mod}, d, exec, ${config.programs.rofi.package}/bin/rofi -show drun"
+    "${mod} SHIFT, v, exec, ${pkgs.cliphist}/bin/cliphist list | ${config.programs.rofi.package}/bin/rofi -dmenu | ${pkgs.cliphist}/bin/cliphist decode | ${pkgs.wl-clipboard}/bin/wl-copy"
 
     "${mod} SHIFT, q, killactive"
     "${mod} SHIFT, c, exec, hyprctl reload"
@@ -249,18 +249,29 @@ in {
         "${pkgs.networkmanagerapplet}/bin/nm-applet"
         "${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1"
         "${pkgs.blueman}/bin/blueman-applet"
-        "${pkgs.copyq}/bin/copyq"
+        "${pkgs.wl-clipboard}/bin/wl-paste --type text --watch ${pkgs.cliphist}/bin/cliphist store"
+        "${pkgs.wl-clipboard}/bin/wl-paste --type image --watch ${pkgs.cliphist}/bin/cliphist store"
       ];
 
-      windowrule = [
-        "match:class ^(Pavucontrol)$, float on, center on, size 900 600"
-        "match:class ^(Blueman-manager)$, float on, center on, size 720 520"
-        "match:class ^(copyq)$, float on, center on, size 800 600"
-        "match:title ^(Picture-in-Picture)$, float on, pin on"
-        "match:title ^(Hyprland Shortcuts)$, float on, center on, size 800 560"
-        "match:class ^(firefox)$, workspace 1"
-        "match:class ^(thunderbird)$, workspace 4"
-        "match:class ^(Pcmanfm)$, workspace 3"
+      windowrulev2 = [
+        "float, class:^(pavucontrol|org.pulseaudio.pavucontrol)$"
+        "size 900 600, class:^(pavucontrol|org.pulseaudio.pavucontrol)$"
+        "center, class:^(pavucontrol|org.pulseaudio.pavucontrol)$"
+
+        "float, class:^(blueman-manager)$"
+        "size 720 520, class:^(blueman-manager)$"
+        "center, class:^(blueman-manager)$"
+
+        "float, title:^(Picture-in-Picture)$"
+        "pin, title:^(Picture-in-Picture)$"
+
+        "float, title:^(Hyprland Shortcuts)$"
+        "size 800 560, title:^(Hyprland Shortcuts)$"
+        "center, title:^(Hyprland Shortcuts)$"
+
+        "workspace 1, class:^(firefox)$"
+        "workspace 3, class:^(pcmanfm)$"
+        "workspace 4, class:^(thunderbird)$"
       ];
     };
 
@@ -359,7 +370,7 @@ in {
               Mod+Return          kitty (terminal)
               Mod+Shift+W         firefox
               Mod+D               rofi app launcher
-              Mod+Shift+V         copyq clipboard manager
+              Mod+Shift+V         cliphist clipboard picker
               Mod+Shift+F         PCManFM file manager
 
             WINDOWS

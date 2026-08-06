@@ -19,8 +19,7 @@
         "$cache_root/npm" \
         "$cache_root/python" \
         "$cache_root/thumbnails" \
-        "$cache_root/uv" \
-        "$cache_root/yarn"
+        "$cache_root/uv"
       do
         if [ -e "$path" ]; then
           du -sh "$path"
@@ -64,8 +63,7 @@
         "${config.xdg.cacheHome}/npm" \
         "${config.xdg.cacheHome}/python" \
         "${config.xdg.cacheHome}/thumbnails" \
-        "${config.xdg.cacheHome}/uv" \
-        "${config.xdg.cacheHome}/yarn"
+        "${config.xdg.cacheHome}/uv"
       do
         clean_contents "$path"
       done

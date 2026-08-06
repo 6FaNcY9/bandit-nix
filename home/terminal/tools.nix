@@ -42,6 +42,9 @@
       pkgs.playwright-driver
       pkgs.python313
       pkgs.uv
+      pkgs.rustup
+      pkgs.go
+      pkgs.gopls
     ];
   };
 }

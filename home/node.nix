@@ -15,7 +15,7 @@
   home.packages = with pkgs; [
     bun # required by claude-mem worker runtime
     unzip # required by bun installer scripts
-    uv # python package runner (replaces foreign binary at ~/.local/bin/uvx)
+    pnpm
   ];
 
   # Make npm-global bins (e.g. from npm install -g) available in PATH

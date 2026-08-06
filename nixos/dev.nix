@@ -51,9 +51,7 @@
   # Docker CLI discovers user plugins there, so no /usr/local pollution needed.
 
   environment.systemPackages = with pkgs; [
-    docker-compose
     gcc
-    xclip
     comma
     lazygit
     grc # fzf-tab-source: colorized ip/network output in previews

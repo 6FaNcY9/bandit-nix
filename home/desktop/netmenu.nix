@@ -7,7 +7,7 @@
   colors = config.lib.stylix.colors.withHashtag;
 in {
   home.packages = with pkgs; [
-    xclip # for "copy public IP" action
+    wl-clipboard # for "copy public IP" action
   ];
 
   home.file = {
@@ -80,7 +80,7 @@ in {
 
         # ── Show menu ────────────────────────────────────────────────────
         CHOICE=$(printf '%s' "$ITEMS" \
-          | ${pkgs.rofi}/bin/rofi -dmenu -p "  network" \
+          | ${config.programs.rofi.package}/bin/rofi -dmenu -p "  network" \
               -theme "$THEME" \
               -no-custom \
               -i)
@@ -103,7 +103,7 @@ in {
             ${pkgs.xdg-utils}/bin/xdg-open "https://check.torproject.org" &
             ;;
           *"Copy public IP"*)
-            echo -n "$PUBLIC_IP" | ${pkgs.xclip}/bin/xclip -selection clipboard
+            echo -n "$PUBLIC_IP" | ${pkgs.wl-clipboard}/bin/wl-copy
             ;;
           *"Connect"*|*"manage WiFi"*)
             ${pkgs.networkmanagerapplet}/bin/nm-connection-editor &
@@ -114,5 +114,15 @@ in {
         esac
       '';
     };
+  };
+
+  systemd.user.services.public-ip-refresh = {
+    Unit.Description = "Refresh public IP cache";
+    Service = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.curl}/bin/curl -s https://ifconfig.me";
+      StandardOutput = "file:%t/public-ip-cache";
+    };
+    Install.WantedBy = ["default.target"];
   };
 }

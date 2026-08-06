@@ -8,6 +8,7 @@
     inputs.nixvim.homeModules.nixvim
     ./xdg-cleanup.nix
     ./xdg-shims.nix
+    ./dotfiles.nix
     ./ssh.nix
     ./git.nix
     ./theme.nix
