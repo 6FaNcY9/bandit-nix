@@ -6,6 +6,7 @@ _: {
     ./core.nix
     ./theme.nix
     ./boot.nix
+    ./hardening.nix
     ./network.nix
     ./graphics.nix
     ./firmware.nix

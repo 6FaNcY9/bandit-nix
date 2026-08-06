@@ -107,6 +107,7 @@ in {
     ./cli-tools.nix
     ./core.nix
     ./boot.nix
+    ./hardening.nix
     ./network.nix
     ./firmware.nix
     ./users.nix

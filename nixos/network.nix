@@ -1,4 +1,9 @@
-_: {
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}: {
   networking = {
     hosts = {
       "192.168.1.6" = ["fire-tv"];
@@ -7,9 +12,13 @@ _: {
     networkmanager = {
       enable = true;
       dns = "systemd-resolved";
+      plugins = [pkgs.networkmanager-openvpn];
       # Random MAC per network, stable per SSID: defeats cross-network
       # tracking without breaking captive portals or per-network DHCP leases.
-      wifi.macAddress = "stable";
+      # Laptop-only: bandit-lab is headless and has no Wi-Fi use case.
+      wifi = lib.mkIf (config.networking.hostName == "bandit") {
+        macAddress = "stable";
+      };
     };
     useDHCP = false; # NetworkManager handles this
     firewall = {
