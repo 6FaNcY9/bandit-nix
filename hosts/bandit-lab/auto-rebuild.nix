@@ -137,6 +137,10 @@ in {
         description = "Check bandit-lab for available configuration updates";
         wants = ["network-online.target"];
         after = ["network-online.target" "sops-nix.service"];
+        # Activation must never (re)start these units: a mid-switch start
+        # races the in-flight update for the configuration lock and makes
+        # switch-to-configuration fail. Only timers or manual runs start them.
+        restartIfChanged = false;
         serviceConfig = {
           Type = "oneshot";
           ExecStart = "${labUpdate}/bin/lab-update check";
@@ -155,6 +159,8 @@ in {
         description = "Apply available bandit-lab configuration updates";
         wants = ["network-online.target"];
         after = ["network-online.target" "sops-nix.service"];
+        # See lab-update-check: never start on unit-file change.
+        restartIfChanged = false;
         serviceConfig = {
           Type = "oneshot";
           ExecStart = "${labUpdate}/bin/lab-update apply";
