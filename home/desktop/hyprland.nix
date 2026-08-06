@@ -253,25 +253,26 @@ in {
         "${pkgs.wl-clipboard}/bin/wl-paste --type image --watch ${pkgs.cliphist}/bin/cliphist store"
       ];
 
-      windowrulev2 = [
-        "float, class:^(pavucontrol|org.pulseaudio.pavucontrol)$"
-        "size 900 600, class:^(pavucontrol|org.pulseaudio.pavucontrol)$"
-        "center, class:^(pavucontrol|org.pulseaudio.pavucontrol)$"
+      # Hyprland 0.56 syntax: windowrulev2 is deprecated; effects + match: props
+      windowrule = [
+        "float on, match:class ^(pavucontrol|org.pulseaudio.pavucontrol)$"
+        "size 900 600, match:class ^(pavucontrol|org.pulseaudio.pavucontrol)$"
+        "center on, match:class ^(pavucontrol|org.pulseaudio.pavucontrol)$"
 
-        "float, class:^(blueman-manager)$"
-        "size 720 520, class:^(blueman-manager)$"
-        "center, class:^(blueman-manager)$"
+        "float on, match:class ^(blueman-manager)$"
+        "size 720 520, match:class ^(blueman-manager)$"
+        "center on, match:class ^(blueman-manager)$"
 
-        "float, title:^(Picture-in-Picture)$"
-        "pin, title:^(Picture-in-Picture)$"
+        "float on, match:title ^(Picture-in-Picture)$"
+        "pin on, match:title ^(Picture-in-Picture)$"
 
-        "float, title:^(Hyprland Shortcuts)$"
-        "size 800 560, title:^(Hyprland Shortcuts)$"
-        "center, title:^(Hyprland Shortcuts)$"
+        "float on, match:title ^(Hyprland Shortcuts)$"
+        "size 800 560, match:title ^(Hyprland Shortcuts)$"
+        "center on, match:title ^(Hyprland Shortcuts)$"
 
-        "workspace 1, class:^(firefox)$"
-        "workspace 3, class:^(pcmanfm)$"
-        "workspace 4, class:^(thunderbird)$"
+        "workspace 1, match:class ^(firefox)$"
+        "workspace 3, match:class ^(pcmanfm)$"
+        "workspace 4, match:class ^(thunderbird)$"
       ];
     };
 
