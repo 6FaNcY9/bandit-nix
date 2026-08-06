@@ -46,7 +46,7 @@ The repo is a Nix Flake built on `nixos-unstable`. It declares NixOS system conf
 ├── hosts/                    # Host-specific hardware + host-level config
 │   ├── bandit/
 │   │   ├── default.nix       # Hostname, stateVersion, GRUB, kernel params
-│   │   └── hardware.nix      # Filesystems, LUKS, kernel modules, Framework tweaks
+│   │   └── hardware.nix      # Filesystems, kernel modules, Framework tweaks (LUKS layout planned; see docs/runbooks/bandit-luks-reinstall.md)
 │   └── bandit-lab/
 │       ├── default.nix       # Hostname, SSH hardening, authorized keys
 │       ├── hardware.nix      # Server filesystems/hardware
@@ -71,7 +71,7 @@ The repo is a Nix Flake built on `nixos-unstable`. It declares NixOS system conf
 │   ├── network.nix           # NetworkManager, firewall, DNS-over-TLS
 │   ├── graphics.nix          # AMD graphics, ROCm, Vulkan RADV
 │   ├── firmware.nix          # fwupd, fprintd, AMD microcode, redistributable firmware
-│   ├── power.nix             # zram, earlyoom, TLP, fstrim, btrfs scrub, battery threshold
+│   ├── power.nix             # zram, earlyoom, power-profiles-daemon, fstrim, btrfs scrub, battery threshold
 │   ├── dev.nix               # direnv, nh, virt-manager, rootless Docker, Podman
 │   ├── security-tools.nix    # Pentest/RE/privacy toolkit (bandit only) + Wireshark group
 │   ├── audio.nix             # PipeWire low-latency config
@@ -277,6 +277,7 @@ CI uses `nixos/nix` image with pinned digest. The build job uses `--dry-run` by 
 - **DNS-over-TLS is opportunistic** (`DNSOverTLS = "opportunistic"`) so captive portals do not hard-fail.
 - **Docker is rootless** on `bandit` (`virtualisation.docker.rootless.enable`). `docker-compose` is wired as a user-level Docker CLI plugin in `home/terminal/tools.nix`.
 - **PipeWire config uses flat dot-notation keys** (`"default.clock.rate"`) because nested Nix attrsets produce JSON that PipeWire silently ignores.
+- **Spacebar hardware workaround:** `hosts/bandit/hardware.nix` enables `services.keyd` (scoped to the internal keyboard `0001:0001`) to disable the misbehaving spacebar (`space = noop`) and map Caps Lock and Right Ctrl (`rightcontrol`) to space. Note: hwdb keymaps from earlier generations persist in the atkbd driver until reboot or `sudo setkeycodes 39 57; sudo setkeycodes 3a 58` — a "dead" Caps Lock was a stale hwdb keymap, not hardware. The physical root cause is still a TODO; inspect the key mechanism, contact, and keyboard ribbon before replacing the input cover, then remove the workaround.
 
 ## 9. Security Considerations
 
@@ -314,7 +315,9 @@ The installer:
 
 Resume modes (`--mode prepare|mount|install`) exist to recover from network failures without reformatting. For other hosts, use the generic `install-nixos.sh`.
 
-### bandit Live ISO Reinstall (LUKS)
+### bandit Live ISO Reinstall (LUKS) — PLANNED
+
+> **Current state:** `bandit` is **not** LUKS-encrypted and still uses the old `@var` BTRFS layout. The procedure below is the **planned** reinstall; see `docs/runbooks/bandit-luks-reinstall.md` for the full runbook. `hosts/bandit/hardware.nix` will be regenerated with LUKS UUIDs and the `@log` layout at that time.
 
 ```bash
 git clone https://github.com/6FaNcY9/bandit-nix.git
@@ -324,12 +327,12 @@ sudo ./script/install-bandit.sh \
   --age-key /run/media/nixos/USB/key.txt
 ```
 
-The installer:
+The installer would:
 
-- **Erases the whole disk.** GPT layout: 1 GiB EFI partition + one LUKS2 (argon2id) container.
-- Creates BTRFS subvolumes inside LUKS: `@`, `@home`, `@nix`, `@log`, `@snapshots` (same layout as bandit-lab; the old `@var` layout was replaced during the encryption reinstall).
-- Generates `hosts/bandit/hardware.nix` with the real disk UUIDs and `boot.initrd.luks` config.
-- Defers to `install-nixos.sh` for format/mount/install, so the same `--mode prepare|mount|install` resume modes apply (LUKS is re-opened automatically).
+- **Erase the whole disk.** GPT layout: 1 GiB EFI partition + one LUKS2 (argon2id) container.
+- Create BTRFS subvolumes inside LUKS: `@`, `@home`, `@nix`, `@log`, `@snapshots` (same layout as bandit-lab; the current `hardware.nix` still uses the old `@var` layout until the reinstall).
+- Generate `hosts/bandit/hardware.nix` with the real disk UUIDs and `boot.initrd.luks` config.
+- Defer to `install-nixos.sh` for format/mount/install, so the same `--mode prepare|mount|install` resume modes apply (LUKS is re-opened automatically).
 
 Post-install: commit the generated `hosts/bandit/hardware.nix`, then optionally enroll the TPM2 (`systemd-cryptenroll --tpm2-device=auto /dev/nvme0n1p2`) once Secure Boot (lanzaboote) is in place.
 
@@ -358,3 +361,143 @@ nix flake check --no-update-lock-file
 ```
 
 Run this before any commit. CI runs the same check plus dry-run builds and VM smoke tests.
+
+<!-- rtk-instructions v2 -->
+# RTK (Rust Token Killer) - Token-Optimized Commands
+
+## Golden Rule
+
+**Always prefix commands with `rtk`**. If RTK has a dedicated filter, it uses it. If not, it passes through unchanged. This means RTK is always safe to use.
+
+**Important**: Even in command chains with `&&`, use `rtk`:
+```bash
+# ❌ Wrong
+git add . && git commit -m "msg" && git push
+
+# ✅ Correct
+rtk git add . && rtk git commit -m "msg" && rtk git push
+```
+
+## RTK Commands by Workflow
+
+### Build & Compile (80-90% savings)
+```bash
+rtk cargo build         # Cargo build output
+rtk cargo check         # Cargo check output
+rtk cargo clippy        # Clippy warnings grouped by file (80%)
+rtk tsc                 # TypeScript errors grouped by file/code (83%)
+rtk lint                # ESLint/Biome violations grouped (84%)
+rtk prettier --check    # Files needing format only (70%)
+rtk next build          # Next.js build with route metrics (87%)
+```
+
+### Test (60-99% savings)
+```bash
+rtk cargo test          # Cargo test failures only (90%)
+rtk go test             # Go test failures only (90%)
+rtk jest                # Jest failures only (99.5%)
+rtk vitest              # Vitest failures only (99.5%)
+rtk playwright test     # Playwright failures only (94%)
+rtk pytest              # Python test failures only (90%)
+rtk rake test           # Ruby test failures only (90%)
+rtk rspec               # RSpec test failures only (60%)
+rtk test <cmd>          # Generic test wrapper - failures only
+```
+
+### Git (59-80% savings)
+```bash
+rtk git status          # Compact status
+rtk git log             # Compact log (works with all git flags)
+rtk git diff            # Compact diff (80%)
+rtk git show            # Compact show (80%)
+rtk git add             # Ultra-compact confirmations (59%)
+rtk git commit          # Ultra-compact confirmations (59%)
+rtk git push            # Ultra-compact confirmations
+rtk git pull            # Ultra-compact confirmations
+rtk git branch          # Compact branch list
+rtk git fetch           # Compact fetch
+rtk git stash           # Compact stash
+rtk git worktree        # Compact worktree
+```
+
+Note: Git passthrough works for ALL subcommands, even those not explicitly listed.
+
+### GitHub (26-87% savings)
+```bash
+rtk gh pr view <num>    # Compact PR view (87%)
+rtk gh pr checks        # Compact PR checks (79%)
+rtk gh run list         # Compact workflow runs (82%)
+rtk gh issue list       # Compact issue list (80%)
+rtk gh api              # Compact API responses (26%)
+```
+
+### JavaScript/TypeScript Tooling (70-90% savings)
+```bash
+rtk pnpm list           # Compact dependency tree (70%)
+rtk pnpm outdated       # Compact outdated packages (80%)
+rtk pnpm install        # Compact install output (90%)
+rtk npm run <script>    # Compact npm script output
+rtk npx <cmd>           # Compact npx command output
+rtk prisma              # Prisma without ASCII art (88%)
+rtk uv run <cmd>        # Compact uv project command output
+```
+
+### Files & Search (60-75% savings)
+```bash
+rtk ls <path>           # Tree format, compact (65%)
+rtk read <file>         # Code reading with filtering (60%)
+rtk grep <pattern>      # Search grouped by file (75%). Format flags (-c, -l, -L, -o, -Z) run raw.
+rtk find <pattern>      # Find grouped by directory (70%)
+```
+
+### Analysis & Debug (70-90% savings)
+```bash
+rtk err <cmd>           # Filter errors only from any command
+rtk log <file>          # Deduplicated logs with counts
+rtk json <file>         # JSON structure without values
+rtk deps                # Dependency overview
+rtk env                 # Environment variables compact
+rtk summary <cmd>       # Smart summary of command output
+rtk diff                # Ultra-compact diffs
+```
+
+### Infrastructure (85% savings)
+```bash
+rtk docker ps           # Compact container list
+rtk docker images       # Compact image list
+rtk docker logs <c>     # Deduplicated logs
+rtk kubectl get         # Compact resource list
+rtk kubectl logs        # Deduplicated pod logs
+```
+
+### Network (65-70% savings)
+```bash
+rtk curl <url>          # Compact HTTP responses (70%)
+rtk wget <url>          # Compact download output (65%)
+```
+
+### Meta Commands
+```bash
+rtk gain                # View token savings statistics
+rtk gain --history      # View command history with savings
+rtk discover            # Analyze Claude Code sessions for missed RTK usage
+rtk proxy <cmd>         # Run command without filtering (for debugging)
+rtk init                # Add RTK instructions to CLAUDE.md
+rtk init --global       # Add RTK to ~/.claude/CLAUDE.md
+```
+
+## Token Savings Overview
+
+| Category | Commands | Typical Savings |
+|----------|----------|-----------------|
+| Tests | vitest, playwright, cargo test | 90-99% |
+| Build | next, tsc, lint, prettier | 70-87% |
+| Git | status, log, diff, add, commit | 59-80% |
+| GitHub | gh pr, gh run, gh issue | 26-87% |
+| Package Managers | pnpm, npm, npx | 70-90% |
+| Files | ls, read, grep, find | 60-75% |
+| Infrastructure | docker, kubectl | 85% |
+| Network | curl, wget | 65-70% |
+
+Overall average: **60-90% token reduction** on common development operations.
+<!-- /rtk-instructions -->
