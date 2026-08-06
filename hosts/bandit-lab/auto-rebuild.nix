@@ -1,6 +1,7 @@
 {pkgs, ...}: let
   repoDir = "/etc/nixos/bandit-nix";
   repositoryUrl = "https://github.com/6FaNcY9/bandit-nix.git";
+  signingKeyFingerprint = "4D8770567A65FE1369E2BCC1611871842A8C1619";
 
   labUpdate = pkgs.writeShellScriptBin "lab-update" ''
     set -euo pipefail
@@ -43,6 +44,20 @@
     if ! "$git" -c safe.directory="$repo" -C "$repo" diff --quiet \
       || ! "$git" -c safe.directory="$repo" -C "$repo" diff --cached --quiet; then
       echo "Refusing to update a dirty checkout: $repo" >&2
+      exit 1
+    fi
+
+    # The apply timer runs unattended as root, so only commits signed by the
+    # owner's GPG key may be built and activated — a compromised GitHub
+    # account alone must not be able to push code that runs here.
+    export PATH="${pkgs.gnupg}/bin:$PATH"
+    export GNUPGHOME
+    GNUPGHOME="$(${pkgs.coreutils}/bin/mktemp -d)"
+    trap '${pkgs.coreutils}/bin/rm -rf "$GNUPGHOME"' EXIT
+    ${pkgs.gnupg}/bin/gpg --batch --quiet --import ${./lab-update-signing-key.asc}
+    echo "${signingKeyFingerprint}:6:" | ${pkgs.gnupg}/bin/gpg --batch --quiet --import-ownertrust
+    if ! "$git" -c safe.directory="$repo" -C "$repo" verify-commit "$after"; then
+      echo "Refusing commit $after: not signed by ${signingKeyFingerprint}" >&2
       exit 1
     fi
     # The checkout is a clean read-only mirror — all changes are authored on
