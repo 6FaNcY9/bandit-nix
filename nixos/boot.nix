@@ -6,8 +6,8 @@
 
   # Disable NixOS documentation — large closure not needed on a desktop.
   documentation = {
-    enable = false;
-    nixos.enable = false;
+    enable = true;
+    nixos.enable = true;
     man.enable = true;
   };
 }
