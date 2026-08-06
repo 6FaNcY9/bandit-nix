@@ -11,7 +11,10 @@
   services.ollama = {
     enable = true;
     package = pkgs.ollama-cuda;
-    host = "0.0.0.0";
+    # Bind to the LAN address explicitly so Ollama is unreachable from the WAN
+    # even if the firewall were accidentally loosened. Address is DHCP-reserved
+    # on the 192.168.1.0/24 LAN for bandit-lab.
+    host = "192.168.1.2";
     port = 11434;
     openFirewall = false;
     user = "ollama";

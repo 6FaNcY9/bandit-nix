@@ -79,6 +79,7 @@ in {
     samba-wsdd = {
       enable = true;
       openFirewall = false;
+      interface = "enp44s0";
     };
 
     # ── PostgreSQL ─────────────────────────────────────────────────────────

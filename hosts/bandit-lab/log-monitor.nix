@@ -1,4 +1,11 @@
-{pkgs, ...}: let
+{
+  pkgs,
+  config,
+  ...
+}: let
+  logMonitorUser = "llm-log-monitor";
+  logMonitorGroup = "llm-log-monitor";
+
   logMonitorScript = pkgs.writeShellScript "llm-log-monitor" ''
     set -e
     LOGDIR="/var/log/llm-anomaly"
@@ -26,26 +33,41 @@
     ${pkgs.jq}/bin/jq -n --arg p "$PROMPT" \
       '{"model":"qwen3-coder:30b","prompt":$p,"stream":false}' \
     | ${pkgs.curl}/bin/curl -sf --max-time 120 \
-        http://127.0.0.1:11434/api/generate -d @- \
+        http://${config.services.ollama.host}:${toString config.services.ollama.port}/api/generate -d @- \
     | ${pkgs.jq}/bin/jq -r .response >> "$LOG" 2>/dev/null \
     || echo "LLM unavailable" >> "$LOG"
   '';
 in {
-  systemd.services.llm-log-monitor = {
-    description = "LLM-powered log anomaly detector";
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = "${logMonitorScript}";
-      User = "root";
-    };
+  users.groups.${logMonitorGroup} = {};
+  users.users.${logMonitorUser} = {
+    description = "LLM log anomaly monitor";
+    isSystemUser = true;
+    group = logMonitorGroup;
+    extraGroups = ["systemd-journal"];
   };
 
-  systemd.timers.llm-log-monitor = {
-    description = "Nightly LLM log scan";
-    wantedBy = ["timers.target"];
-    timerConfig = {
-      OnCalendar = "02:30";
-      Persistent = true;
+  systemd = {
+    tmpfiles.rules = [
+      "d /var/log/llm-anomaly 0750 ${logMonitorUser} ${logMonitorGroup} -"
+    ];
+
+    services.llm-log-monitor = {
+      description = "LLM-powered log anomaly detector";
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${logMonitorScript}";
+        User = logMonitorUser;
+        Group = logMonitorGroup;
+      };
+    };
+
+    timers.llm-log-monitor = {
+      description = "Nightly LLM log scan";
+      wantedBy = ["timers.target"];
+      timerConfig = {
+        OnCalendar = "02:30";
+        Persistent = true;
+      };
     };
   };
 }

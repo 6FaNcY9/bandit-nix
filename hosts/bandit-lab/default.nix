@@ -21,10 +21,14 @@
 
   networking.hostName = "bandit-lab";
 
-  services.openssh.settings = {
-    PasswordAuthentication = lib.mkForce false;
-    KbdInteractiveAuthentication = lib.mkForce false;
-    PermitRootLogin = "no";
+  services = {
+    fail2ban.enable = true;
+
+    openssh.settings = {
+      PasswordAuthentication = lib.mkForce false;
+      KbdInteractiveAuthentication = lib.mkForce false;
+      PermitRootLogin = "no";
+    };
   };
 
   users.users.${repoConfig.workstation.username}.openssh.authorizedKeys.keys = [
