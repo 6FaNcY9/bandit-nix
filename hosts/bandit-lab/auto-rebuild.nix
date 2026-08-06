@@ -18,6 +18,16 @@
         ;;
     esac
 
+    # Concurrent runs must be a harmless no-op, never a failure: the apply
+    # timer can fire while a manual apply (or an activation-started unit) is
+    # mid-switch, and a failing second instance makes switch-to-configuration
+    # return non-zero, which aborts the in-flight update.
+    exec 9>/run/lab-update.lock
+    if ! ${pkgs.util-linux}/bin/flock -n 9; then
+      echo "another lab-update run is in progress; nothing to do"
+      exit 0
+    fi
+
     if [[ ! -d "$repo/.git" ]]; then
       install -d -m 0755 "$(dirname "$repo")"
       "$git" clone ${repositoryUrl} "$repo"
