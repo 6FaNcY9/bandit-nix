@@ -22,7 +22,10 @@
     arp-scan # LAN discovery
 
     # ── AD / Windows ─────────────────────────────────────────────────────
-    netexec # maintained fork of CrackMapExec
+    # NOTE: netexec is intentionally NOT here — its nixpkgs dependency
+    # bloodhound-py 1.9.0 fails the pythonMetadataCheckPhase upstream, and
+    # netexec's private python312 cannot be patched via overlays. Use the
+    # netexec from the pentest devenv (~/p/pentest `ad` profile) instead.
     enum4linux-ng # Windows/Samba enumeration
     responder # LLMNR/NBT-NS/MDNS poisoner
     bloodhound # AD attack path management
