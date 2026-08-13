@@ -63,6 +63,14 @@
         IdentitiesOnly = true;
         ProxyCommand = "${pkgs.cloudflared}/bin/cloudflared access ssh --hostname %h";
       };
+      # Tailnet path — same host, same key, over Tailscale. Works from any
+      # network once tailscaled is up; no Cloudflare browser flow needed.
+      "bandit-lab-ts" = {
+        Hostname = "100.125.161.81";
+        User = repoConfig.workstation.username;
+        IdentityFile = "~/.ssh/homelabKey";
+        IdentitiesOnly = true;
+      };
     };
   };
 }

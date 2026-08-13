@@ -50,5 +50,10 @@
         };
       };
     };
+
+    # Laptop-only tailnet access: reach bandit-lab (100.125.161.81) from any
+    # network without the Cloudflare Access browser flow. The lab enables its
+    # own tailscaled in hosts/bandit-lab/webhost.nix.
+    tailscale.enable = lib.mkIf (config.networking.hostName == "bandit") true;
   };
 }
