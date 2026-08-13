@@ -121,7 +121,7 @@ in {
   virtualisation.oci-containers = {
     backend = "docker";
     containers.portainer = {
-      image = "portainer/portainer-ce:2.39.5@sha256:f6bc23d1695530a609563fd65c180aaafec0fc02e019d5fc63d16b6fbe83addd";
+      image = "portainer/portainer-ce:2.39.6@sha256:3fa8750ac2b98ce56784ca292df1adc3ec38f0062fd572811ea4b2221beee310";
       # WAN-published through Traefik + Cloudflare Tunnel, gated by a
       # Cloudflare Access application (docs/runbooks/cloudflare-access.md).
       # Loopback HTTPS stays available: ssh -L 9443:localhost:9443 bandit-lab.
