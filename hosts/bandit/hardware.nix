@@ -42,25 +42,4 @@ in {
   };
 
   swapDevices = [];
-
-  # Temporary workaround for the reported spacebar phantom presses and partial
-  # backlight failure. Root cause is not confirmed: inspect the key mechanism,
-  # contact, and keyboard ribbon before deciding whether to replace the input
-  # cover. Until then, keyd drops the spacebar and maps both Caps Lock and
-  # Right Ctrl to space. Scoped to the internal keyboard only, so external
-  # keyboards keep their spacebar. NOTE: hwdb keymaps from earlier generations
-  # persist in the atkbd driver until reboot or `setkeycodes`; if Caps Lock
-  # appears dead after changing this, run `sudo setkeycodes 39 57; sudo
-  # setkeycodes 3a 58` (or reboot) to restore the default scancode map.
-  services.keyd = {
-    enable = true;
-    keyboards.internal = {
-      ids = ["0001:0001"];
-      settings.main = {
-        space = "noop";
-        capslock = "space";
-        rightcontrol = "space";
-      };
-    };
-  };
 }
