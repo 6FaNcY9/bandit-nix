@@ -33,6 +33,17 @@
     };
   };
 
+  # The reserved LAN address may not exist until NetworkManager finishes
+  # bringing the interface online. Retry as a fallback for transient races.
+  systemd.services.ollama = {
+    wants = ["network-online.target"];
+    after = ["network-online.target"];
+    serviceConfig = {
+      Restart = "on-failure";
+      RestartSec = "5s";
+    };
+  };
+
   # Allow ollama only on LAN interface — WAN stays blocked.
   networking.firewall.interfaces."enp44s0".allowedTCPPorts = [11434];
 
