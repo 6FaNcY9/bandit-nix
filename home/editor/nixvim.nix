@@ -12,7 +12,10 @@ in {
     defaultEditor = true;
     viAlias = true;
     vimAlias = true;
-    nixpkgs.source = inputs.nixpkgs;
+    nixpkgs = {
+      source = inputs.nixpkgs;
+      config.allowUnfreePredicate = repoConfig.allowUnfreePredicate;
+    };
 
     # ─── Core options ─────────────────────────────────────
     globals.mapleader = " ";

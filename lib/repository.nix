@@ -6,6 +6,7 @@
     "nvidia-settings"
     "obsidian"
     "nvidia-x11"
+    "copilot-language-server"
   ];
 in {
   system = "x86_64-linux";
