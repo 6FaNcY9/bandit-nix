@@ -2,6 +2,7 @@
   repoDir = "/etc/nixos/bandit-nix";
   repositoryUrl = "https://github.com/6FaNcY9/bandit-nix.git";
   signingKeyFingerprint = "4D8770567A65FE1369E2BCC1611871842A8C1619";
+  phoneSigningKeyFingerprint = "6FC0F17CBA83E7BA06D7C929EE5EB15A5F02387A";
 
   labUpdate = pkgs.writeShellScriptBin "lab-update" ''
     set -euo pipefail
@@ -64,12 +65,15 @@
     export GNUPGHOME
     GNUPGHOME="$(${pkgs.coreutils}/bin/mktemp -d)"
     trap '${pkgs.coreutils}/bin/rm -rf "$GNUPGHOME"' EXIT
-    ${pkgs.gnupg}/bin/gpg --batch --quiet --import ${./lab-update-signing-key.asc}
-    echo "${signingKeyFingerprint}:6:" | ${pkgs.gnupg}/bin/gpg --batch --quiet --import-ownertrust
+    ${pkgs.gnupg}/bin/gpg --batch --quiet --import ${./lab-update-signing-key.asc} ${./lab-update-phone-signing-key.asc}
+
+    printf '%s\n' "${signingKeyFingerprint}:6:" "${phoneSigningKeyFingerprint}:6:" | ${pkgs.gnupg}/bin/gpg --batch --quiet --import-ownertrust
+
     if ! "$git" -c safe.directory="$repo" -C "$repo" verify-commit "$after"; then
-      echo "Refusing commit $after: not signed by ${signingKeyFingerprint}" >&2
+      echo "Refusing commit $after: not signed by a trusted deployment key" >&2
       exit 1
     fi
+
     # The checkout is a clean read-only mirror — all changes are authored on
     # the laptop — so rewritten upstream history (rebase/force-push) must not
     # wedge the updater. Warn now and reset the mirror to the deployed commit
