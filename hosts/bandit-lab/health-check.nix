@@ -1,7 +1,9 @@
 {pkgs, ...}: let
   criticalUnits = [
     "cloudflared-tunnel-bandit-lab.service"
+    "docker-network-portainer-control.service"
     "docker-network-proxy.service"
+    "docker-portainer-agent.service"
     "docker-portainer.service"
     "docker-vaultwarden.service"
     "docker.service"
