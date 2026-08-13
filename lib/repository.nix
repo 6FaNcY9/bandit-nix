@@ -1,6 +1,5 @@
 {lib}: let
   unfreePackageNames = [
-    "burpsuite"
     "cheatsheet.nvim"
     "nvidia-kernel-modules"
     "nvidia-persistenced"
