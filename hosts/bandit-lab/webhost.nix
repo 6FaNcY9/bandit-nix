@@ -53,7 +53,10 @@ in {
     };
 
     # ── VPN ────────────────────────────────────────────────────────────────
-    tailscale.enable = true;
+    tailscale = {
+      enable = true;
+      extraSetFlags = ["--ssh"];
+    };
 
     # ── File storage ───────────────────────────────────────────────────────
     samba = {
