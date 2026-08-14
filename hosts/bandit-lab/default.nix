@@ -17,7 +17,8 @@
     ./log-monitor.nix
     ./auto-rebuild.nix
     ./health-check.nix
-    ./anisette.nix
+    # Sideloading is on hold (cable/hardware issues) — anisette.nix stays in
+    # the repo but is not imported, so the service is not installed.
   ];
 
   networking.hostName = "bandit-lab";
