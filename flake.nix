@@ -31,9 +31,19 @@
       flake = false;
     };
 
+    zsh-kimi-cli = {
+      url = "github:MoonshotAI/zsh-kimi-cli";
+      flake = false;
+    };
+
     pdfreader-nvim = {
       url = "github:r-pletnev/pdfreader.nvim/v0.1.7";
       flake = false;
+    };
+
+    nur-szanko = {
+      url = "github:SZanko/nur-packages";
+      flake = true;
     };
   };
 
