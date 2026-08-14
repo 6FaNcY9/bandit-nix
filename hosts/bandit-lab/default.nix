@@ -17,6 +17,7 @@
     ./log-monitor.nix
     ./auto-rebuild.nix
     ./health-check.nix
+    ./anisette.nix
   ];
 
   networking.hostName = "bandit-lab";
