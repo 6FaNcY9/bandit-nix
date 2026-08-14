@@ -18,7 +18,7 @@ in {
   users.users.anisette = {
     isSystemUser = true;
     group = "anisette";
-
+    description = "Anisette v3 service account";
     home = "/var/lib/anisette-v3";
     createHome = true;
   };

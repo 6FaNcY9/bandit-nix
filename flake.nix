@@ -43,7 +43,6 @@
 
     nur-szanko = {
       url = "github:SZanko/nur-packages";
-      flake = true;
     };
   };
 
