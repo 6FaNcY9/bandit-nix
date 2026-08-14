@@ -7,6 +7,8 @@
     "obsidian"
     "nvidia-x11"
     "copilot-language-server"
+    # Vendored in pkgs/anisette-v3-server; upstream ships no LICENSE file.
+    "anisette-v3-server"
   ];
 in {
   system = "x86_64-linux";

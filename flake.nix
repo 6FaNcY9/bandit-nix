@@ -40,10 +40,6 @@
       url = "github:r-pletnev/pdfreader.nvim/v0.1.7";
       flake = false;
     };
-
-    nur-szanko = {
-      url = "github:SZanko/nur-packages";
-    };
   };
 
   outputs = {
