@@ -43,6 +43,8 @@ The repo is a Nix Flake built on `nixos-unstable`. It declares NixOS system conf
 ├── flake.nix                 # Entry point: inputs, outputs, CI checks, formatter
 ├── flake.lock                # Pinned dependency graph
 ├── lib/repository.nix        # Shared constants: username, paths, theme, unfree policy
+├── pkgs/                     # Vendored packages (e.g. anisette-v3-server; the NUR
+│                             #   package pinned a stale dub dependency hash)
 ├── hosts/                    # Host-specific hardware + host-level config
 │   ├── bandit/
 │   │   ├── default.nix       # Hostname, stateVersion, GRUB, kernel params
