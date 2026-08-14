@@ -24,8 +24,8 @@
     always_show_tabs=0
     close_on_unmount=1
     side_pane_mode=places
-    view_mode=icon
-    show_hidden=0
+    view_mode=list
+    show_hidden=1
     show_thumbnail=1
     thumbnail_max=2048
     big_icon_size=64
