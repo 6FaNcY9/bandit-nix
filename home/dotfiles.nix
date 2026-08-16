@@ -67,8 +67,13 @@
       src="$HOME/.$name"
       dst="$root/$name"
       if [ -L "$src" ]; then
-        echo "$src is already a symlink (shim active): $(readlink "$src")" >&2
-        exit 0
+        link_target="$(readlink "$src")"
+        if [ "$link_target" = "$dst" ]; then
+          echo "$src already links to $dst (shim active)" >&2
+          exit 0
+        fi
+        echo "$src is a symlink to $link_target, not $dst — refusing to adopt manually" >&2
+        exit 2
       fi
       if [ ! -d "$src" ]; then
         echo "$src is not a real directory; nothing to adopt" >&2
