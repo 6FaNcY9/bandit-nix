@@ -6,6 +6,16 @@
   # SSH server disabled — this machine only connects out, never accepts incoming.
   services.openssh.enable = false;
 
+  # Laptop-only user groups (VMs, audio, adb) — declared next to the tooling
+  # that needs them; see nixos/users.nix for the base set shared with
+  # bandit-lab.
+  users.users.${repoConfig.workstation.username}.extraGroups = [
+    "audio"
+    "video"
+    "libvirtd"
+    "adbusers"
+  ];
+
   programs = {
     direnv = {
       enable = true;

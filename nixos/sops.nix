@@ -35,9 +35,6 @@ in {
         owner = username;
         mode = "0400";
       };
-      "vaultwarden-admin-token" = {
-        mode = "0400";
-      };
       "thehost-sshkey" = {
         owner = username;
         path = "${homeDirectory}/.ssh/thehost_mrija";
@@ -45,7 +42,6 @@ in {
       };
       "firecrawl-api-key" = {
         owner = username;
-        path = "/run/secrets/firecrawl-api-key";
         mode = "0400";
       };
     };

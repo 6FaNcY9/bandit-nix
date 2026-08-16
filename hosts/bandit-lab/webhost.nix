@@ -186,7 +186,11 @@ in {
         volumes = [
           "/var/run/docker.sock:/var/run/docker.sock"
           "/srv/containers/docker/volumes:/var/lib/docker/volumes"
-          "/:/host"
+          # Host filesystem view for the Portainer "host overview" — strictly
+          # read-only: this container also holds the docker socket, so a
+          # writable rootfs mount would be root-equivalent on the host
+          # (including /etc, /nix/store and the sops age key).
+          "/:/host:ro"
         ];
         # Only Portainer shares this internal network with the Agent; no host
         # or firewall port is exposed.

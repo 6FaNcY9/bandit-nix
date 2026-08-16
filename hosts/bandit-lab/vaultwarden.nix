@@ -15,6 +15,12 @@ in {
     "d /srv/containers/vaultwarden/data 0750 ${username} users -"
   ];
 
+  # Declared here instead of nixos/sops.nix so the token is only decrypted on
+  # bandit-lab — the laptop never uses it and should never hold it.
+  sops.secrets."vaultwarden-admin-token" = {
+    mode = "0400";
+  };
+
   sops.templates."vaultwarden.env" = {
     mode = "0400";
     content = ''

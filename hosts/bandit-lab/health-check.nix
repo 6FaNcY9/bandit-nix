@@ -7,7 +7,8 @@
     "docker-portainer.service"
     "docker-vaultwarden.service"
     "docker.service"
-    "getty@tty1.service"
+    # No getty@tty1 here: a headless server does not depend on a virtual
+    # console, and a spurious getty failure would roll back a good deploy.
     "ollama.service"
     "postgresql.service"
     "tailscaled.service"
