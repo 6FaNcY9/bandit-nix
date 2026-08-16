@@ -1,5 +1,6 @@
 {
   config,
+  lib,
   pkgs,
   inputs,
   repoConfig,
@@ -86,7 +87,7 @@ in {
           paths = "echo $PATH | tr ':' '\n'";
         };
 
-      initContent = ''
+      initContent = lib.mkAfter ''
         # ── Extra completions (~150 tools) ───────────────────
         fpath+=(${pkgs.zsh-completions}/share/zsh/site-functions)
 
@@ -156,7 +157,7 @@ in {
           export CONTEXT7_API_KEY="$(< /run/secrets/context7_api_key)"
         fi
 
-        # ── Kimi Code — route subagents to the cheaper secondary model ──
+        # ── Kimi Code — TokenRouter secondary model ───────────────
         export KIMI_CODE_EXPERIMENTAL_SECONDARY_MODEL=1
 
         # ── nsp: open a nix shell with nixpkgs packages ──────
@@ -187,6 +188,9 @@ in {
             return 1
           fi
         }
+
+        # Load after nix-index so Kimi can wrap its command-not-found handler.
+        source ${inputs.zsh-kimi-cli}/kimi-cli.plugin.zsh
       '';
     };
 

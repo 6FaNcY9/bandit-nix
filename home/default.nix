@@ -37,6 +37,7 @@
     packages = with pkgs; [
       bitwarden-cli
       gruvbox-plus-icons
+      chromium
     ];
   };
 }
