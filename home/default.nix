@@ -21,6 +21,7 @@
     ./desktop/firefox
     ./desktop/thunderbird.nix
     ./desktop/waybar.nix
+    ./desktop/libreoffice.nix
     ./desktop/powermenu.nix
     ./desktop/obsidian.nix
     ./editor.nix
