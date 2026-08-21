@@ -7,7 +7,7 @@
   fonts = {
     fontconfig.enable = true;
     packages = with pkgs; [
-      nerd-fonts.iosevka-term
+      nerd-fonts.fira-code
       nerd-fonts.jetbrains-mono
       noto-fonts
       noto-fonts-cjk-sans
