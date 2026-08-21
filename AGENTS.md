@@ -275,6 +275,7 @@ CI uses `nixos/nix` image with pinned digest. The build job uses `--dry-run` by 
 ### Important Design Notes
 
 - **Hyprland is installed system-wide** in `nixos/desktop.nix` via `programs.hyprland.enable`. In `home/desktop/hyprland.nix`, `package = null` and `portalPackage = null` to avoid reinstalling it as a user package.
+- **Hyprland configuration is native Lua.** `home/desktop/hyprland.nix` is the source of truth and Home Manager generates `~/.config/hypr/hyprland.lua`. Lua mode skips legacy string entries in bindings, rules, and submaps, so keep those values structured with `_args` and `lib.generators.mkLuaInline` dispatchers. Do not edit the generated file.
 - **Stylix's Hyprland target is disabled** in `home/theme.nix` so `home/desktop/hyprland.nix` owns the border colors (orange accent) without merge conflicts.
 - **Rofi and Mako targets are also disabled** in `home/theme.nix` because they have hand-tuned themes in their own modules.
 - **Laptop SSH server is disabled** (`services.openssh.enable = false` in `nixos/dev.nix`); the machine only initiates outbound connections.
@@ -355,6 +356,7 @@ Post-install: commit the generated `hosts/bandit/hardware.nix`, then optionally 
 - **NixVim follows:** Do **not** add `inputs.nixpkgs.follows = "nixpkgs"` to the `nixvim` input. NixVim upstream tests against its own pinned nixpkgs and warns when overridden.
 - **Flake imports:** Do not import individual leaf `.nix` files directly from `flake.nix`; import host roots and aggregator modules only.
 - **Wayland vs X11:** Many desktop modules assume Wayland (e.g. `wl-clipboard`, `grim`, `slurp`, `hyprlock`). Do not blindly copy them into an X11 host.
+- **Hyprland activation:** Repository evaluation does not modify the running desktop. After validation, `sudo nixos-rebuild switch --flake .#bandit` is the privileged activation step; restart Hyprland or log out and back in before judging the native Lua configuration.
 
 ## 12. Verification
 

@@ -207,7 +207,10 @@ loudly.
   `themes/gruvbox-light.yaml` define the Gruvbox (morhetz) Stylix theme;
   the light variant is the `light` boot specialisation in
   `hosts/bandit/default.nix`.
-- **Window manager**: `home/desktop/hyprland.nix`.
+- **Window manager**: `home/desktop/hyprland.nix` is the source of truth. Home
+  Manager renders it as native Lua at `~/.config/hypr/hyprland.lua`; do not edit
+  that generated file. Lua-mode bindings, rules, and submaps must use structured
+  entries because legacy Hyprland configuration strings are not rendered.
 - **Status bar / notifications**: `home/desktop/waybar.nix` and
   `home/desktop/mako.nix`.
 - **Shells**: `home/terminal/fish.nix`, `home/terminal/zsh.nix`, and shared
@@ -215,6 +218,17 @@ loudly.
 - **Editor**: `home/editor/nixvim.nix`.
 - **Shared constants**: `lib/repository.nix` holds `system`, username,
   home/repository paths, the unfree package policy, and theme helpers.
+
+After changing the Hyprland module, validate the flake before activating it:
+
+```bash
+nix flake check --no-update-lock-file
+sudo nixos-rebuild switch --flake .#bandit
+```
+
+The rebuild is the privileged boundary that installs the generated Lua file.
+Restart Hyprland or log out and back in afterward so the running compositor uses
+the new configuration.
 
 ## 📄 License
 

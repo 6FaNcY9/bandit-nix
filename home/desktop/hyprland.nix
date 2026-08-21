@@ -9,6 +9,19 @@
   colors = config.lib.stylix.colors.withHashtag;
   rgb = color: "rgb(${lib.removePrefix "#" color})";
 
+  # Home Manager's Lua renderer requires structured call arguments. Inline
+  # values are limited to dispatcher callbacks that must remain Lua code.
+  lua = lib.generators.mkLuaInline;
+  bind = keyCombo: dispatcher: {
+    _args = [keyCombo (lua dispatcher)];
+  };
+  bindWithOptions = keyCombo: dispatcher: options: {
+    _args = [keyCombo (lua dispatcher) options];
+  };
+  execBinding = keyCombo: command:
+    bind keyCombo "hl.dsp.exec_cmd(${builtins.toJSON command})";
+  windowRule = spec: {_args = [spec];};
+
   # ─── Helpers ──────────────────────────────────────────
   pactlBin = "${pkgs.pulseaudio}/bin/pactl";
   brightnessctlBin = "${pkgs.brightnessctl}/bin/brightnessctl";
@@ -19,26 +32,26 @@
 
   # ─── Directional focus (vim + arrows) ─────────────────
   directionalFocus = [
-    "${mod}, j, movefocus, l"
-    "${mod}, k, movefocus, d"
-    "${mod}, l, movefocus, u"
-    "${mod}, semicolon, movefocus, r"
-    "${mod}, Left, movefocus, l"
-    "${mod}, Down, movefocus, d"
-    "${mod}, Up, movefocus, u"
-    "${mod}, Right, movefocus, r"
+    (bind "${mod} + j" ''hl.dsp.focus({ direction = "left" })'')
+    (bind "${mod} + k" ''hl.dsp.focus({ direction = "down" })'')
+    (bind "${mod} + l" ''hl.dsp.focus({ direction = "up" })'')
+    (bind "${mod} + semicolon" ''hl.dsp.focus({ direction = "right" })'')
+    (bind "${mod} + Left" ''hl.dsp.focus({ direction = "left" })'')
+    (bind "${mod} + Down" ''hl.dsp.focus({ direction = "down" })'')
+    (bind "${mod} + Up" ''hl.dsp.focus({ direction = "up" })'')
+    (bind "${mod} + Right" ''hl.dsp.focus({ direction = "right" })'')
   ];
 
   # ─── Directional move (Shift + vim/arrows) ────────────
   directionalMove = [
-    "${mod} SHIFT, j, movewindoworgroup, l"
-    "${mod} SHIFT, k, movewindoworgroup, d"
-    "${mod} SHIFT, l, movewindoworgroup, u"
-    "${mod} SHIFT, semicolon, movewindoworgroup, r"
-    "${mod} SHIFT, Left, movewindoworgroup, l"
-    "${mod} SHIFT, Down, movewindoworgroup, d"
-    "${mod} SHIFT, Up, movewindoworgroup, u"
-    "${mod} SHIFT, Right, movewindoworgroup, r"
+    (bind "${mod} + SHIFT + j" ''hl.dsp.window.move({ direction = "left", group_aware = true })'')
+    (bind "${mod} + SHIFT + k" ''hl.dsp.window.move({ direction = "down", group_aware = true })'')
+    (bind "${mod} + SHIFT + l" ''hl.dsp.window.move({ direction = "up", group_aware = true })'')
+    (bind "${mod} + SHIFT + semicolon" ''hl.dsp.window.move({ direction = "right", group_aware = true })'')
+    (bind "${mod} + SHIFT + Left" ''hl.dsp.window.move({ direction = "left", group_aware = true })'')
+    (bind "${mod} + SHIFT + Down" ''hl.dsp.window.move({ direction = "down", group_aware = true })'')
+    (bind "${mod} + SHIFT + Up" ''hl.dsp.window.move({ direction = "up", group_aware = true })'')
+    (bind "${mod} + SHIFT + Right" ''hl.dsp.window.move({ direction = "right", group_aware = true })'')
   ];
 
   # ─── Layout management (dwindle) ──────────────────────
@@ -46,86 +59,156 @@
   # Hyprland's flat dwindle model, so those bindings are dropped rather than
   # faked; see the cheatsheet for exactly what's bound.
   layoutBindings = [
-    "${mod}, f, fullscreen, 0"
-    "${mod} CTRL, f, fullscreenstate, 2 0"
-    "${mod}, e, layoutmsg, togglesplit"
-    "${mod} CTRL, e, layoutmsg, swapsplit"
-    "${mod}, s, togglegroup"
-    "${mod}, Tab, changegroupactive, f"
-    "${mod} SHIFT, Tab, changegroupactive, b"
-    "${mod} CTRL, Tab, movegroupwindow, f"
-    "${mod} CTRL SHIFT, Tab, movegroupwindow, b"
-    "${mod} CTRL, o, moveoutofgroup"
-    "${mod} SHIFT, s, lockactivegroup, toggle"
-    "${mod}, p, pseudo"
-    "${mod} SHIFT, SPACE, togglefloating"
-    "${mod} CTRL, SPACE, pin"
-    "${mod}, a, focuscurrentorlast"
-    "${mod}, g, togglespecialworkspace, scratchpad"
-    "${mod} SHIFT, g, movetoworkspace, special:scratchpad"
+    (bind "${mod} + f" "hl.dsp.window.fullscreen()")
+    (bind "${mod} + CTRL + f" ''hl.dsp.window.fullscreen_state({ internal = 2, client = 0, action = "toggle" })'')
+    (bind "${mod} + e" ''hl.dsp.layout("togglesplit")'')
+    (bind "${mod} + CTRL + e" ''hl.dsp.layout("swapsplit")'')
+    (bind "${mod} + s" "hl.dsp.group.toggle()")
+    (bind "${mod} + Tab" "hl.dsp.group.next()")
+    (bind "${mod} + SHIFT + Tab" "hl.dsp.group.prev()")
+    (bind "${mod} + CTRL + Tab" "hl.dsp.group.move_window({ forward = true })")
+    (bind "${mod} + CTRL + SHIFT + Tab" "hl.dsp.group.move_window({ forward = false })")
+    (bind "${mod} + CTRL + o" "hl.dsp.window.move({ out_of_group = true })")
+    (bind "${mod} + SHIFT + s" ''hl.dsp.group.lock_active({ action = "toggle" })'')
+    (bind "${mod} + p" "hl.dsp.window.pseudo()")
+    (bind "${mod} + SHIFT + SPACE" ''hl.dsp.window.float({ action = "toggle" })'')
+    (bind "${mod} + CTRL + SPACE" ''hl.dsp.window.pin({ action = "toggle" })'')
+    (bind "${mod} + a" "hl.dsp.focus({ last = true })")
+    (bind "${mod} + g" ''hl.dsp.workspace.toggle_special("scratchpad")'')
+    (bind "${mod} + SHIFT + g" ''hl.dsp.window.move({ workspace = "special:scratchpad" })'')
   ];
 
   mouseBindings = [
-    "${mod}, mouse:272, movewindow"
-    "${mod}, mouse:273, resizewindow"
+    (bindWithOptions "${mod} + mouse:272" "hl.dsp.window.drag()" {mouse = true;})
+    (bindWithOptions "${mod} + mouse:273" "hl.dsp.window.resize()" {mouse = true;})
   ];
 
   workspaceScroll = [
-    "${mod}, mouse_down, workspace, e+1"
-    "${mod}, mouse_up, workspace, e-1"
+    (bind "${mod} + mouse_down" ''hl.dsp.focus({ workspace = "e+1" })'')
+    (bind "${mod} + mouse_up" ''hl.dsp.focus({ workspace = "e-1" })'')
   ];
 
   # ─── System / app launchers ────────────────────────────
   systemBindings = [
-    "${mod}, Return, exec, ${pkgs.kitty}/bin/kitty"
-    "${mod} SHIFT, w, exec, ${pkgs.firefox}/bin/firefox"
-    "${mod} SHIFT, e, exec, ${pkgs.thunderbird}/bin/thunderbird"
-    "${mod} SHIFT, f, exec, ${pkgs.pcmanfm}/bin/pcmanfm"
-    "${mod}, d, exec, ${config.programs.rofi.package}/bin/rofi -show drun"
-    "${mod} SHIFT, v, exec, ${pkgs.cliphist}/bin/cliphist list | ${config.programs.rofi.package}/bin/rofi -dmenu | ${pkgs.cliphist}/bin/cliphist decode | ${pkgs.wl-clipboard}/bin/wl-copy"
+    (execBinding "${mod} + Return" "${pkgs.kitty}/bin/kitty")
+    (execBinding "${mod} + SHIFT + w" "${pkgs.firefox}/bin/firefox")
+    (execBinding "${mod} + SHIFT + e" "${pkgs.thunderbird}/bin/thunderbird")
+    (execBinding "${mod} + SHIFT + f" "${pkgs.pcmanfm}/bin/pcmanfm")
+    (execBinding "${mod} + d" "${config.programs.rofi.package}/bin/rofi -show drun")
+    (execBinding "${mod} + SHIFT + v" "${pkgs.cliphist}/bin/cliphist list | ${config.programs.rofi.package}/bin/rofi -dmenu | ${pkgs.cliphist}/bin/cliphist decode | ${pkgs.wl-clipboard}/bin/wl-copy")
 
-    "${mod} SHIFT, q, killactive"
-    "${mod} SHIFT, c, exec, hyprctl reload"
-    "${mod}, r, submap, resize"
-    "${mod} SHIFT, x, exec, ${pkgs.hyprlock}/bin/hyprlock"
+    (bind "${mod} + SHIFT + q" "hl.dsp.window.close()")
+    (execBinding "${mod} + SHIFT + c" "hyprctl reload")
+    (bind "${mod} + r" ''hl.dsp.submap("resize")'')
+    (execBinding "${mod} + SHIFT + x" "${pkgs.hyprlock}/bin/hyprlock")
 
-    ", XF86PowerOff, exec, ~/.local/bin/powermenu"
-    "${mod}, Escape, exec, ~/.local/bin/powermenu"
+    (execBinding "XF86PowerOff" "~/.local/bin/powermenu")
+    (execBinding "${mod} + Escape" "~/.local/bin/powermenu")
 
-    "${mod}, F1, exec, ~/.local/bin/hyprland-cheatsheet-show"
+    (execBinding "${mod} + F1" "~/.local/bin/hyprland-cheatsheet-show")
 
-    ", Print, exec, ~/.local/bin/hypr-screenshot"
-    ", F11, exec, ~/.local/bin/hypr-screenshot"
+    (execBinding "Print" "~/.local/bin/hypr-screenshot")
+    (execBinding "F11" "~/.local/bin/hypr-screenshot")
 
     # Mako notification controls
-    "${mod}, grave, exec, ${pkgs.mako}/bin/makoctl restore"
-    "${mod} SHIFT, d, exec, ${pkgs.mako}/bin/makoctl mode -t dnd"
-    "${mod} SHIFT, period, exec, ${pkgs.mako}/bin/makoctl dismiss --all"
+    (execBinding "${mod} + grave" "${pkgs.mako}/bin/makoctl restore")
+    (execBinding "${mod} + SHIFT + d" "${pkgs.mako}/bin/makoctl mode -t dnd")
+    (execBinding "${mod} + SHIFT + period" "${pkgs.mako}/bin/makoctl dismiss --all")
   ];
 
   # ─── Media keys ────────────────────────────────────────
   mediaKeys = [
-    ", XF86AudioRaiseVolume, exec, ${pactlBin} set-sink-volume @DEFAULT_SINK@ +5%"
-    ", XF86AudioLowerVolume, exec, ${pactlBin} set-sink-volume @DEFAULT_SINK@ -5%"
-    ", XF86AudioMute, exec, ${pactlBin} set-sink-mute @DEFAULT_SINK@ toggle"
-    ", XF86AudioMicMute, exec, ${pactlBin} set-source-mute @DEFAULT_SOURCE@ toggle"
-    ", XF86MonBrightnessUp, exec, ${brightnessctlBin} set +10%"
-    ", XF86MonBrightnessDown, exec, ${brightnessctlBin} set 10%-"
-    ", XF86AudioPlay, exec, ${playerctlBin} play-pause"
-    ", XF86AudioNext, exec, ${playerctlBin} next"
-    ", XF86AudioPrev, exec, ${playerctlBin} previous"
+    (execBinding "XF86AudioRaiseVolume" "${pactlBin} set-sink-volume @DEFAULT_SINK@ +5%")
+    (execBinding "XF86AudioLowerVolume" "${pactlBin} set-sink-volume @DEFAULT_SINK@ -5%")
+    (execBinding "XF86AudioMute" "${pactlBin} set-sink-mute @DEFAULT_SINK@ toggle")
+    (execBinding "XF86AudioMicMute" "${pactlBin} set-source-mute @DEFAULT_SOURCE@ toggle")
+    (execBinding "XF86MonBrightnessUp" "${brightnessctlBin} set +10%")
+    (execBinding "XF86MonBrightnessDown" "${brightnessctlBin} set 10%-")
+    (execBinding "XF86AudioPlay" "${playerctlBin} play-pause")
+    (execBinding "XF86AudioNext" "${playerctlBin} next")
+    (execBinding "XF86AudioPrev" "${playerctlBin} previous")
   ];
 
   # ─── Workspaces (explicit, no helper) ─────────────────
   workspaceSwitch = builtins.genList (i: let
     n = i + 1;
-  in "${mod}, ${toString (lib.mod n 10)}, workspace, ${toString n}")
+  in
+    bind "${mod} + ${toString (lib.mod n 10)}" "hl.dsp.focus({ workspace = ${toString n} })")
   10;
 
   workspaceMove = builtins.genList (i: let
     n = i + 1;
-  in "${mod} SHIFT, ${toString (lib.mod n 10)}, movetoworkspace, ${toString n}")
+  in
+    bind "${mod} + SHIFT + ${toString (lib.mod n 10)}" "hl.dsp.window.move({ workspace = ${toString n} })")
   10;
+
+  resizeBindings = [
+    (bindWithOptions "j" "hl.dsp.window.resize({ x = -10, y = 0, relative = true })" {repeating = true;})
+    (bindWithOptions "k" "hl.dsp.window.resize({ x = 0, y = 10, relative = true })" {repeating = true;})
+    (bindWithOptions "l" "hl.dsp.window.resize({ x = 0, y = -10, relative = true })" {repeating = true;})
+    (bindWithOptions "semicolon" "hl.dsp.window.resize({ x = 10, y = 0, relative = true })" {repeating = true;})
+    (bindWithOptions "Left" "hl.dsp.window.resize({ x = -10, y = 0, relative = true })" {repeating = true;})
+    (bindWithOptions "Down" "hl.dsp.window.resize({ x = 0, y = 10, relative = true })" {repeating = true;})
+    (bindWithOptions "Up" "hl.dsp.window.resize({ x = 0, y = -10, relative = true })" {repeating = true;})
+    (bindWithOptions "Right" "hl.dsp.window.resize({ x = 10, y = 0, relative = true })" {repeating = true;})
+    (bind "Return" ''hl.dsp.submap("reset")'')
+    (bind "Escape" ''hl.dsp.submap("reset")'')
+    (bind "${mod} + r" ''hl.dsp.submap("reset")'')
+  ];
+
+  startupCommands = [
+    "${pkgs.networkmanagerapplet}/bin/nm-applet"
+    "${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1"
+    "${pkgs.blueman}/bin/blueman-applet"
+    "${pkgs.wl-clipboard}/bin/wl-paste --type text --watch ${pkgs.cliphist}/bin/cliphist store"
+    "${pkgs.wl-clipboard}/bin/wl-paste --type image --watch ${pkgs.cliphist}/bin/cliphist store"
+  ];
+  startupHandler = lib.concatMapStringsSep "\n" (command: "  hl.exec_cmd(${builtins.toJSON command})") startupCommands;
+
+  windowRules = map windowRule [
+    {
+      name = "pavucontrol";
+      match.class = "^(pavucontrol|org.pulseaudio.pavucontrol)$";
+      float = true;
+      size = "900 600";
+      center = true;
+    }
+    {
+      name = "blueman-manager";
+      match.class = "^(blueman-manager)$";
+      float = true;
+      size = "720 520";
+      center = true;
+    }
+    {
+      name = "picture-in-picture";
+      match.title = "^(Picture-in-Picture)$";
+      float = true;
+      pin = true;
+    }
+    {
+      name = "hyprland-shortcuts";
+      match.title = "^(Hyprland Shortcuts)$";
+      float = true;
+      size = "800 560";
+      center = true;
+    }
+    {
+      name = "firefox-workspace";
+      match.class = "^(firefox)$";
+      workspace = "1";
+    }
+    {
+      name = "pcmanfm-workspace";
+      match.class = "^(pcmanfm)$";
+      workspace = "3";
+    }
+    {
+      name = "thunderbird-workspace";
+      match.class = "^(thunderbird)$";
+      workspace = "4";
+    }
+  ];
 in {
   wayland.windowManager.hyprland = {
     enable = true;
@@ -133,104 +216,124 @@ in {
     package = null;
     portalPackage = null;
     xwayland.enable = true;
-    configType = "hyprlang";
+    # Hyprland 0.57 removes the legacy .conf format. Keep Nix as the source of
+    # truth while Home Manager renders the supported native Lua configuration.
+    configType = "lua";
 
     settings = {
-      "$mod" = mod;
-
-      monitor = ",preferred,auto,1";
-
-      general = {
-        gaps_in = 6;
-        gaps_out = 0;
-        border_size = 3;
-        layout = "dwindle";
-        resize_on_border = true;
-        extend_border_grab_area = 10;
-        hover_icon_on_border = true;
-        "col.active_border" = rgb colors.base09;
-        "col.inactive_border" = rgb colors.base03;
-        "col.nogroup_border" = rgb colors.base08;
-        "col.nogroup_border_active" = rgb colors.base0A;
-
-        snap = {
-          enabled = true;
-          window_gap = 8;
-          monitor_gap = 8;
-          respect_gaps = true;
-        };
+      monitor = {
+        _args = [
+          {
+            output = "";
+            mode = "preferred";
+            position = "auto";
+            scale = 1;
+          }
+        ];
       };
 
-      decoration = {
-        rounding = 0;
-        blur.enabled = false;
-        shadow.enabled = false;
-      };
-
-      dwindle = {
-        preserve_split = true;
-      };
-
-      group = {
-        auto_group = true;
-        insert_after_current = true;
-        focus_removed_window = true;
-        drag_into_group = 2;
-        merge_groups_on_drag = true;
-        merge_groups_on_groupbar = true;
-        "col.border_active" = rgb colors.base09;
-        "col.border_inactive" = rgb colors.base03;
-        "col.border_locked_active" = rgb colors.base0A;
-        "col.border_locked_inactive" = rgb colors.base02;
-
-        groupbar = {
-          enabled = true;
-          font_family = config.stylix.fonts.monospace.name;
-          # Was 10px/20px — unreadable on the Framework 13 panel and
-          # visually disconnected from Waybar. 13px/26px lands between
-          # Waybar's 16px text and the window content scale.
-          font_size = 13;
-          gradients = false;
-          height = 26;
-          indicator_height = 3;
-          stacked = false;
-          render_titles = true;
-          scrolling = true;
-          rounding = 0;
-          gradient_rounding = 0;
-          gaps_in = 1;
+      config = {
+        general = {
+          gaps_in = 6;
           gaps_out = 0;
-          text_color = rgb colors.base00;
-          text_color_inactive = rgb colors.base05;
-          text_color_locked_active = rgb colors.base00;
-          text_color_locked_inactive = rgb colors.base04;
-          "col.active" = rgb colors.base09;
-          "col.inactive" = rgb colors.base02;
-          "col.locked_active" = rgb colors.base0A;
-          "col.locked_inactive" = rgb colors.base03;
+          border_size = 3;
+          layout = "dwindle";
+          resize_on_border = true;
+          extend_border_grab_area = 10;
+          hover_icon_on_border = true;
+
+          col = {
+            active_border = rgb colors.base09;
+            inactive_border = rgb colors.base03;
+            nogroup_border = rgb colors.base08;
+            nogroup_border_active = rgb colors.base0A;
+          };
+
+          snap = {
+            enabled = true;
+            window_gap = 8;
+            monitor_gap = 8;
+            respect_gaps = true;
+          };
         };
-      };
 
-      misc = {
-        background_color = rgb colors.base00;
-        disable_hyprland_logo = true;
-      };
-
-      # Flat, snappy, retro aesthetic — no window-open/close/move animation.
-      animations.enabled = false;
-
-      input = {
-        # Hyprland does not inherit the virtual-console keymap. Keep the
-        # graphical session on the Austrian layout used by the previous i3
-        # configuration instead of falling back to XKB's US default.
-        kb_layout = "at";
-
-        touchpad = {
-          natural_scroll = true;
-          disable_while_typing = true;
-          tap-to-click = true;
+        decoration = {
+          rounding = 0;
+          blur.enabled = false;
+          shadow.enabled = false;
         };
-        accel_profile = "adaptive";
+
+        dwindle = {
+          preserve_split = true;
+        };
+
+        group = {
+          auto_group = true;
+          insert_after_current = true;
+          focus_removed_window = true;
+          drag_into_group = 2;
+          merge_groups_on_drag = true;
+          merge_groups_on_groupbar = true;
+
+          col = {
+            border_active = rgb colors.base09;
+            border_inactive = rgb colors.base03;
+            border_locked_active = rgb colors.base0A;
+            border_locked_inactive = rgb colors.base02;
+          };
+
+          groupbar = {
+            enabled = true;
+            font_family = config.stylix.fonts.monospace.name;
+            # Was 10px/20px — unreadable on the Framework 13 panel and
+            # visually disconnected from Waybar. 13px/26px lands between
+            # Waybar's 16px text and the window content scale.
+            font_size = 13;
+            gradients = false;
+            height = 26;
+            indicator_height = 3;
+            stacked = false;
+            render_titles = true;
+            scrolling = true;
+            rounding = 0;
+            gradient_rounding = 0;
+            gaps_in = 1;
+            gaps_out = 0;
+            text_color = rgb colors.base00;
+            text_color_inactive = rgb colors.base05;
+            text_color_locked_active = rgb colors.base00;
+            text_color_locked_inactive = rgb colors.base04;
+
+            col = {
+              active = rgb colors.base09;
+              inactive = rgb colors.base02;
+              locked_active = rgb colors.base0A;
+              locked_inactive = rgb colors.base03;
+            };
+          };
+        };
+
+        misc = {
+          background_color = rgb colors.base00;
+          disable_hyprland_logo = true;
+        };
+
+        # Flat, snappy, retro aesthetic — no window-open/close/move animation.
+        animations.enabled = false;
+
+        input = {
+          # Hyprland does not inherit the virtual-console keymap. Keep the
+          # graphical session on the Austrian layout used by the previous i3
+          # configuration instead of falling back to XKB's US default.
+          kb_layout = "at";
+
+          touchpad = {
+            natural_scroll = true;
+            disable_while_typing = true;
+            tap_to_click = true;
+          };
+          accel_profile = "adaptive";
+        };
       };
 
       bind =
@@ -241,61 +344,27 @@ in {
         ++ mediaKeys
         ++ workspaceSwitch
         ++ workspaceMove
-        ++ workspaceScroll;
+        ++ workspaceScroll
+        ++ mouseBindings;
 
-      bindm = mouseBindings;
+      on = {
+        _args = [
+          "hyprland.start"
+          (lua ''
+            function()
+            ${startupHandler}
+            end
+          '')
+        ];
+      };
 
-      exec-once = [
-        "${pkgs.networkmanagerapplet}/bin/nm-applet"
-        "${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1"
-        "${pkgs.blueman}/bin/blueman-applet"
-        "${pkgs.wl-clipboard}/bin/wl-paste --type text --watch ${pkgs.cliphist}/bin/cliphist store"
-        "${pkgs.wl-clipboard}/bin/wl-paste --type image --watch ${pkgs.cliphist}/bin/cliphist store"
-      ];
-
-      # Hyprland 0.56 syntax: windowrulev2 is deprecated; effects + match: props
-      windowrule = [
-        "float on, match:class ^(pavucontrol|org.pulseaudio.pavucontrol)$"
-        "size 900 600, match:class ^(pavucontrol|org.pulseaudio.pavucontrol)$"
-        "center on, match:class ^(pavucontrol|org.pulseaudio.pavucontrol)$"
-
-        "float on, match:class ^(blueman-manager)$"
-        "size 720 520, match:class ^(blueman-manager)$"
-        "center on, match:class ^(blueman-manager)$"
-
-        "float on, match:title ^(Picture-in-Picture)$"
-        "pin on, match:title ^(Picture-in-Picture)$"
-
-        "float on, match:title ^(Hyprland Shortcuts)$"
-        "size 800 560, match:title ^(Hyprland Shortcuts)$"
-        "center on, match:title ^(Hyprland Shortcuts)$"
-
-        "workspace 1, match:class ^(firefox)$"
-        "workspace 3, match:class ^(pcmanfm)$"
-        "workspace 4, match:class ^(thunderbird)$"
-      ];
+      window_rule = windowRules;
     };
 
     submaps = {
       resize = {
         onDispatch = "reset";
-        settings = {
-          binde = [
-            ", j, resizeactive, -10 0"
-            ", k, resizeactive, 0 10"
-            ", l, resizeactive, 0 -10"
-            ", semicolon, resizeactive, 10 0"
-            ", Left, resizeactive, -10 0"
-            ", Down, resizeactive, 0 10"
-            ", Up, resizeactive, 0 -10"
-            ", Right, resizeactive, 10 0"
-          ];
-          bind = [
-            ", Return, submap, reset"
-            ", Escape, submap, reset"
-            "${mod}, r, submap, reset"
-          ];
-        };
+        settings.bind = resizeBindings;
       };
     };
   };
