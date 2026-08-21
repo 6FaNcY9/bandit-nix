@@ -8,15 +8,16 @@
     ./cockpit-theme.nix
     ./wan.nix
     ./webhost.nix
-    ./llm.nix
     ./traefik.nix
     ./mrija-archive.nix
     ./monitoring.nix
     ./vaultwarden.nix
     ./power.nix
-    ./log-monitor.nix
     ./auto-rebuild.nix
     ./health-check.nix
+    # Ollama is temporarily parked. Keep llm.nix and its dependent
+    # log-monitor.nix in the repo so the service can be restored later without
+    # deleting /srv/ollama or its models.
     # Sideloading is on hold (cable/hardware issues) — anisette.nix stays in
     # the repo but is not imported, so the service is not installed.
   ];

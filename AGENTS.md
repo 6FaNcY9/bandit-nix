@@ -24,7 +24,7 @@ The repo is a Nix Flake built on `nixos-unstable`. It declares NixOS system conf
 | Shells | Fish + Zsh | Both are enabled and share aliases from `home/terminal/aliases.nix` |
 | Version control | Git + GPG signing | Commit signing and GitHub CLI |
 | Containers | Rootless Docker + Podman | Dev tooling on `bandit`; Docker-backed services on `bandit-lab` |
-| Server services | Traefik, Cloudflared, Tailscale, Samba, PostgreSQL, Ollama, Vaultwarden, Portainer, Cockpit | Homelab stack on `bandit-lab` |
+| Server services | Traefik, Cloudflared, Tailscale, Samba, PostgreSQL, Vaultwarden, Portainer, Cockpit | Homelab stack on `bandit-lab`; Ollama is temporarily parked |
 
 ### Key Inputs (see `flake.nix`)
 
@@ -59,9 +59,9 @@ The repo is a Nix Flake built on `nixos-unstable`. It declares NixOS system conf
 │       ├── traefik.nix       # Reverse proxy + Docker service labels
 │       ├── vaultwarden.nix   # Password manager container (+ Gruvbox web-vault theme)
 │       ├── vaultwarden/      # gruvbox.scss.hbs theme source (TEMPLATES_FOLDER hook)
-│       ├── llm.nix           # Ollama service
+│       ├── llm.nix           # Parked Ollama service (not imported)
 │       ├── mrija-archive.nix # Backup/archive service
-│       ├── log-monitor.nix   # Log-based alerting
+│       ├── log-monitor.nix   # Parked Ollama-dependent log alerting
 │       ├── monitoring.nix    # Grafana+Prometheus host files/secrets for the Portainer stack
 │       ├── power.nix         # Server power settings
 │       └── cockpit-theme.nix # Cockpit admin UI theming

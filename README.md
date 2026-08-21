@@ -153,15 +153,20 @@ Then open `https://127.0.0.1:9090` and `https://127.0.0.1:9443`.
 
 ### bandit-lab Updates
 
-`bandit-lab` polls the public GitHub repository for changes but never activates
-them automatically. After reviewing a reported revision, apply it manually:
+`bandit-lab` polls the public GitHub repository every ten minutes. Its guarded
+apply timer also attempts signed updates hourly; disable
+`lab-update-apply.timer` when manual-only control is needed. To apply a reviewed
+revision immediately:
 
 ```bash
 sudo lab-update apply
 ```
 
-`lab-update apply` builds the fetched commit, runs `bandit-lab-health`, switches
-only on success, and rolls back on failure. See
+`lab-update apply` verifies the commit signature, builds and test-activates the
+candidate, runs `bandit-lab-health` before and after the final switch, and
+restores the previous configuration on failure. Ollama and its dependent LLM
+log monitor are temporarily parked, with their modules and `/srv/ollama` data
+preserved for later reactivation. See
 [docs/runbooks/bandit-lab-updates.md](docs/runbooks/bandit-lab-updates.md) for
 operational details.
 

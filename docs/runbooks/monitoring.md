@@ -82,7 +82,7 @@ services:
       # /var/run is NOT a symlink to /run like on the NixOS host, so the
       # mount must target /var/run/dbus explicitly.
       - --collector.systemd
-      - --collector.systemd.unit-include=(sshd|docker|containerd|traefik|cloudflared.*|postgresql|smbd|nmbd|ollama|tailscaled|lab-update-.*)\.service
+      - --collector.systemd.unit-include=(sshd|docker|containerd|traefik|cloudflared.*|postgresql|smbd|nmbd|tailscaled|lab-update-.*)\.service
     volumes:
       - /:/host:ro,rslave
       - /run/dbus:/var/run/dbus:ro
