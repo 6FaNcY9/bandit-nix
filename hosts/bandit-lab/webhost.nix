@@ -2,12 +2,48 @@
 # Provides: server UI, PostgreSQL, Docker + Portainer, Tailscale VPN, SMB storage.
 # HTTP routing handled by Traefik (traefik.nix). TLS terminated by Cloudflare.
 {
+  config,
   lib,
   pkgs,
   repoConfig,
   ...
 }: let
   username = repoConfig.workstation.username;
+  canonicalDockerSocket = "/run/docker.sock";
+  normalizeRunPath = path: let
+    trimmedPath =
+      if path != "/"
+      then lib.removeSuffix "/" path
+      else path;
+  in
+    if trimmedPath == "/var/run"
+    then "/run"
+    else if lib.hasPrefix "/var/run/" trimmedPath
+    then "/run/${lib.removePrefix "/var/run/" trimmedPath}"
+    else trimmedPath;
+  volumePaths = volume: let
+    parts = lib.splitString ":" volume;
+  in {
+    source = normalizeRunPath (builtins.head parts);
+    target =
+      if builtins.length parts > 1
+      then normalizeRunPath (builtins.elemAt parts 1)
+      else "";
+  };
+  exposesDockerSocket = lib.any (volume: let
+    inherit (volumePaths volume) source;
+  in
+    source
+    == canonicalDockerSocket
+    || source == "/"
+    || (lib.hasPrefix "/" source
+      && lib.hasPrefix "${source}/" canonicalDockerSocket));
+  mountsDockerSocket = lib.any (volume: let
+    paths = volumePaths volume;
+  in
+    paths.source
+    == canonicalDockerSocket
+    && paths.target == canonicalDockerSocket);
   ensurePortainerControlNetwork = pkgs.writeShellScript "ensure-portainer-control-network" ''
     set -euo pipefail
 
@@ -24,6 +60,17 @@
     esac
   '';
 in {
+  assertions = [
+    {
+      assertion = !exposesDockerSocket config.virtualisation.oci-containers.containers.portainer.volumes;
+      message = "Portainer Server must not mount the Docker socket or a parent host path; use the dedicated Portainer Agent";
+    }
+    {
+      assertion = mountsDockerSocket config.virtualisation.oci-containers.containers."portainer-agent".volumes;
+      message = "Portainer Agent must retain /var/run/docker.sock to manage the local Docker environment";
+    }
+  ];
+
   # bandit-lab: vino needs docker group for container management.
   # Keep server group scope tighter than the desktop laptop profile.
   users.users.${repoConfig.workstation.username}.extraGroups = lib.mkForce ["wheel" "networkmanager" "docker"];
@@ -166,9 +213,6 @@ in {
         # Loopback HTTPS stays available: ssh -L 9443:localhost:9443 bandit-lab.
         ports = ["127.0.0.1:9443:9443"];
         volumes = [
-          # Keep the direct socket only until the local environment is migrated
-          # to the Agent, then remove it in a follow-up deployment.
-          "/var/run/docker.sock:/var/run/docker.sock"
           "/var/lib/portainer:/data"
         ];
         extraOptions = [
