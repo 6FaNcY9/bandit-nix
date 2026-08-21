@@ -49,23 +49,23 @@ systemd, Alejandra, deadnix, statix
 
 **Live host:** `bandit-lab`
 
-- [ ] Read-only inspect `portainer`, `portainer-agent`, and
+- [x] Read-only inspect `portainer`, `portainer-agent`, and
   `portainer-control`.
-- [ ] Confirm both containers are running and attached to the private network.
-- [ ] Confirm `portainer` can resolve `portainer-agent` and record any probe
+- [x] Confirm both containers are running and attached to the private network.
+- [x] Confirm `portainer` can resolve `portainer-agent` and record any probe
   limitation honestly.
-- [ ] Stop and report if the Agent path is not ready.
+- [x] Stop and report if the Agent path is not ready.
 
 ## Task 3: Migrate Portainer environment metadata
 
 **Live UI:** existing Portainer instance
 
-- [ ] Remove the legacy socket-connected environment in Portainer.
-- [ ] Add a Docker Standalone Agent environment at
+- [x] Remove the legacy socket-connected environment in Portainer.
+- [x] Add a Docker Standalone Agent environment at
   `portainer-agent:9001` (no URL scheme).
-- [ ] Use **Show all orphaned stacks** and associate every prior stack.
-- [ ] Verify containers, volumes, networks, stack actions, and monitoring.
-- [ ] Obtain explicit user confirmation before changing Nix configuration.
+- [x] Use **Show all orphaned stacks** and associate every prior stack.
+- [x] Verify containers, volumes, networks, stack actions, and monitoring.
+- [x] Obtain explicit user confirmation before changing Nix configuration.
 
 ## Task 4: Add the evaluated socket-ownership contract
 
@@ -73,15 +73,15 @@ systemd, Alejandra, deadnix, statix
 
 - Modify: `hosts/bandit-lab/webhost.nix`
 
-- [ ] Add an assertion that fails while Portainer Server still mounts the
+- [x] Add an assertion that fails while Portainer Server still mounts the
   Docker socket.
-- [ ] Run a focused `bandit-lab` evaluation and capture the expected failure
+- [x] Run a focused `bandit-lab` evaluation and capture the expected failure
   (RED).
-- [ ] Add an assertion that Agent must retain the Docker socket.
-- [ ] Remove only Server's Docker socket mount and its temporary migration
+- [x] Add an assertion that Agent must retain the Docker socket.
+- [x] Remove only Server's Docker socket mount and its temporary migration
   comment.
-- [ ] Re-run the focused evaluation and confirm success (GREEN).
-- [ ] Mutation-check both assertions by temporarily violating each condition,
+- [x] Re-run the focused evaluation and confirm success (GREEN).
+- [x] Mutation-check both assertions by temporarily violating each condition,
   then restore the intended source.
 
 ## Task 5: Update operational documentation
@@ -93,26 +93,26 @@ systemd, Alejandra, deadnix, statix
 - Modify: `docs/runbooks/monitoring.md`
 - Modify: `docs/runbooks/bandit-lab-updates.md`
 
-- [ ] Explain the final trust boundary and link the runbook from README.
-- [ ] Document official UI migration, verification, and rollback steps.
-- [ ] Document monitoring-stack reassociation and data-preservation checks.
-- [ ] Document post-`lab-update apply` socket and service checks.
+- [x] Explain the final trust boundary and link the runbook from README.
+- [x] Document official UI migration, verification, and rollback steps.
+- [x] Document monitoring-stack reassociation and data-preservation checks.
+- [x] Document post-`lab-update apply` socket and service checks.
 
 ## Task 6: Validate the repository
 
-- [ ] Run `rtk nix run nixpkgs#alejandra -- --check` on changed Nix files.
-- [ ] Run `rtk nix run nixpkgs#deadnix -- --fail .`.
-- [ ] Run `rtk nix run nixpkgs#statix -- check .`.
-- [ ] Run `rtk nix flake check --no-update-lock-file`.
-- [ ] Run a dry build of the `bandit-lab` toplevel without updating the lock.
-- [ ] Run `rtk git diff --check` and review the final diff.
+- [x] Run `rtk nix run nixpkgs#alejandra -- --check` on changed Nix files.
+- [x] Run `rtk nix run nixpkgs#deadnix -- --fail .`.
+- [x] Run `rtk nix run nixpkgs#statix -- check .`.
+- [x] Run `rtk nix flake check --no-update-lock-file`.
+- [x] Run a dry build of the `bandit-lab` toplevel without updating the lock.
+- [x] Run `rtk git diff --check` and review the final diff.
 
 ## Task 7: Create reviewable atomic commits
 
-- [ ] Read and apply the `caveman-commit` skill.
-- [ ] Stage only files owned by this migration; force-add the ignored
+- [x] Read and apply the `caveman-commit` skill.
+- [x] Stage only files owned by this migration; force-add the ignored
   Superpowers plan/spec explicitly.
-- [ ] Split commits by coherent concern if the final diff supports it.
+- [x] Split commits by coherent concern if the final diff supports it.
 - [ ] Show commit subjects, changed files, validation evidence, and clean
   branch status.
 - [ ] Push only after the user's explicit approval.

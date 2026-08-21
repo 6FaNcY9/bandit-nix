@@ -151,6 +151,13 @@ ssh -L 9090:127.0.0.1:9090 -L 9443:127.0.0.1:9443 vino@bandit-lab.mrija.org
 
 Then open `https://127.0.0.1:9090` and `https://127.0.0.1:9443`.
 
+Portainer manages the local Docker engine through `portainer-agent:9001` on
+the private `portainer-control` network. Portainer Server does not mount the
+Docker socket; the Agent is the only Portainer component with that
+host-root-equivalent access and is not published on a host port. See the
+[Portainer Agent runbook](docs/runbooks/portainer-agent.md) for the trust
+boundary, verification, environment reassociation, and rollback procedures.
+
 ### bandit-lab Updates
 
 `bandit-lab` polls the public GitHub repository every ten minutes. Its guarded

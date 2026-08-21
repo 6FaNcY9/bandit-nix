@@ -4,6 +4,32 @@ The stack is managed in **Portainer** (Stacks → `monitoring`). Host-side files
 and secrets are declared in `hosts/bandit-lab/monitoring.nix`; edit them there
 and rebuild bandit-lab, then restart the stack in Portainer.
 
+## Portainer environment reassociation
+
+Changing the saved Portainer environment from the local socket to
+`portainer-agent:9001` changes Portainer metadata, not the Docker engine or its
+containers. Before removing the old environment, record the `monitoring` stack
+and its containers and confirm the persistent bind-mount directories exist:
+
+```bash
+sudo test -d /srv/containers/monitoring/grafana
+sudo test -d /srv/containers/monitoring/prometheus
+docker ps --filter name=grafana --filter name=prometheus \
+  --filter name=blackbox-exporter --filter name=node-exporter \
+  --filter name=cadvisor
+```
+
+After adding the Agent environment, open **Stacks**, select **Show all orphaned
+stacks**, and associate `monitoring` with the new environment. Do not redeploy
+the stack or delete its containers, networks, or data directories merely to
+perform this metadata migration. Verify that the stack page opens, lists the
+existing containers, and exposes its normal stack actions. A Portainer summary
+showing zero Docker volumes is expected here: the monitoring data uses host
+bind mounts under `/srv/containers/monitoring`, not named Docker volumes.
+
+The complete migration and rollback procedure is in
+[Portainer Agent](portainer-agent.md).
+
 ## Stack definition
 
 Paste into Portainer → Stacks → Add stack (name: `monitoring`):
@@ -140,6 +166,10 @@ services:
 
 ## Verify
 
+- Portainer shows `bandit-lab` as **Up**, with connection type **Agent** and
+  URL `portainer-agent:9001`; the `monitoring` stack opens and controls its
+  existing containers. The separate **Disconnected** live-connect indicator
+  is not the environment health status.
 - `docker ps` shows grafana, prometheus, blackbox-exporter, node-exporter,
   cadvisor up.
 - LAN: `curl http://192.168.1.2:3000/api/health` returns `200` from any LAN
