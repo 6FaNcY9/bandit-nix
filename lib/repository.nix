@@ -81,10 +81,9 @@ in {
     name = lib.getName pkg;
   in
     builtins.elem name unfreePackageNames
-    # Ollama requires the CUDA runtime/toolchain closure, whose package names
-    # are versioned independently by nixpkgs.
-    || lib.hasPrefix "cuda_" name
-    || lib.hasPrefix "libcu" name;
+    # The NVIDIA driver closure needs cuda_nvml_dev, whose package name is
+    # versioned independently by nixpkgs.
+    || lib.hasPrefix "cuda_" name;
 
   mkStylixTheme = pkgs: {
     enable = true;

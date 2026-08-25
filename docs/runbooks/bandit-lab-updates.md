@@ -31,10 +31,7 @@ checkout advances only after those steps succeed. A signed non-fast-forward
 update is permitted with a warning and recorded only after successful
 activation. Public HTTPS is read-only and requires no deploy key.
 
-The headless health policy intentionally excludes `getty@tty1.service`. Ollama
-and its dependent LLM log monitor are also temporarily parked: their Nix modules
-and `/srv/ollama` data remain available for later reactivation, but they are not
-installed or treated as deployment gates.
+The headless health policy intentionally excludes `getty@tty1.service`.
 
 ## Post-apply Portainer checks
 
@@ -87,8 +84,3 @@ sudo nix-env --profile /nix/var/nix/profiles/system --list-generations
 
 For a later manual rollback, choose a known-good generation with
 `sudo nixos-rebuild switch --rollback`, then rerun `bandit-lab-health`.
-
-After deploying the parked-Ollama configuration, an old failed unit may remain
-in systemd's failure history even though it is no longer installed. Clear only
-that stale marker with `sudo systemctl reset-failed ollama.service`, then rerun
-`systemctl --failed` and `sudo bandit-lab-health`.

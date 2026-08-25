@@ -7,9 +7,14 @@
     "docker-portainer.service"
     "docker-vaultwarden.service"
     "docker.service"
+    # Access path and brute-force protection: a config that silently kills
+    # SSH or fail2ban must roll back, not deploy.
+    "fail2ban.service"
     # No getty@tty1 here: a headless server does not depend on a virtual
     # console, and a spurious getty failure would roll back a good deploy.
     "postgresql.service"
+    "samba-smbd.service"
+    "sshd.service"
     "tailscaled.service"
     "traefik.service"
   ];

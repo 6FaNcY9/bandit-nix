@@ -171,9 +171,7 @@ sudo lab-update apply
 
 `lab-update apply` verifies the commit signature, builds and test-activates the
 candidate, runs `bandit-lab-health` before and after the final switch, and
-restores the previous configuration on failure. Ollama and its dependent LLM
-log monitor are temporarily parked, with their modules and `/srv/ollama` data
-preserved for later reactivation. See
+restores the previous configuration on failure. See
 [docs/runbooks/bandit-lab-updates.md](docs/runbooks/bandit-lab-updates.md) for
 operational details.
 

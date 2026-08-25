@@ -44,6 +44,22 @@ in {
         User = username;
         EnvironmentFile = envFile;
         TimeoutStartSec = "35min";
+        # Sandboxing: the job only curls 127.0.0.1:8081 and needs nothing else.
+        NoNewPrivileges = true;
+        CapabilityBoundingSet = "";
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        PrivateTmp = true;
+        ProtectKernelTunables = true;
+        ProtectKernelModules = true;
+        ProtectControlGroups = true;
+        ProtectClock = true;
+        LockPersonality = true;
+        RestrictRealtime = true;
+        RestrictSUIDSGID = true;
+        RestrictAddressFamilies = ["AF_UNIX" "AF_INET" "AF_INET6"];
+        IPAddressAllow = ["localhost"];
+        IPAddressDeny = ["any"];
         ExecStart = pkgs.writeShellScript "mrija-sync" ''
           set -euo pipefail
           : "''${MRIJA_API_KEY:?missing MRIJA_API_KEY in ${envFile}}"

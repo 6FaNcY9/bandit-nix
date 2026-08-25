@@ -45,9 +45,11 @@
         IdentityFile = "~/.ssh/thehost_mrija";
         IdentitiesOnly = true;
       };
-      # LAN path — direct, fastest. Only reachable on the home network.
+      # Default path — tailnet address, reachable from any network without
+      # the Cloudflare browser flow. The old direct-LAN IP was dropped when
+      # the lab moved networks; re-add a LAN alias if a reservation returns.
       "bandit-lab" = {
-        Hostname = "192.168.1.2";
+        Hostname = "100.125.161.81";
         User = repoConfig.workstation.username;
         IdentityFile = "~/.ssh/homelabKey";
         IdentitiesOnly = true;

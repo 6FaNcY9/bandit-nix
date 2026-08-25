@@ -20,9 +20,11 @@ in `hosts/bandit-lab/default.nix` (key-auth-only SSH) and the WAN runbooks.
   portals do not hard-fail.
 - [x] `nixos/sops.nix`: `generateKey = false` so a missing SOPS age key fails
   loudly instead of silently generating an unusable key.
-- [x] `nixos/core.nix`: `trusted-users` currently includes `root` and `vino`.
-  Removing `vino` would require escalating every local rebuild to root; this is
-  accepted as a convenience/security trade-off for a single-user laptop.
+- [x] `nixos/core.nix`: `trusted-users` includes `root` and `vino` on the
+  laptop; removing `vino` there would require escalating every local rebuild to
+  root, an accepted convenience/security trade-off for a single-user laptop.
+  On `bandit-lab`, `hosts/bandit-lab/default.nix` forces `trusted-users` to
+  `root` only — `lab-update` runs as root, so `vino` needs no privilege.
 - [x] `flake.nix`: `nixvim` is kept on its own pinned `nixpkgs`; upstream
   recommends against `inputs.nixpkgs.follows = "nixpkgs"`.
 
@@ -45,16 +47,15 @@ in `hosts/bandit-lab/default.nix` (key-auth-only SSH) and the WAN runbooks.
 
 ## Scoped unfree packages
 
-The shared policy in `lib/repository.nix` allows only the named unfree packages
-and the CUDA runtime/toolchain closure needed by Ollama:
+The shared policy in `lib/repository.nix` allows only the named unfree
+packages plus the `cuda_nvml_dev` dependency of the NVIDIA driver closure:
 
 ```nix
 allowUnfreePredicate = pkg: let
   name = lib.getName pkg;
 in
   builtins.elem name unfreePackageNames
-  || lib.hasPrefix "cuda_" name
-  || lib.hasPrefix "libcu" name;
+  || lib.hasPrefix "cuda_" name;
 ```
 
 Keep this scope exact unless evaluation proves another unfree package is
@@ -141,6 +142,8 @@ Decision needed: quick GRUB password first, or wait and do lanzaboote properly?
 
 ## Phase 5 — Later hardening
 
-- [ ] Add kernel/sysctl hardening after testing compatibility.
-- [ ] Periodically review `vino` in `nix.settings.trusted-users` once local
-  rebuild workflows no longer need it.
+- [x] Add kernel/sysctl hardening after testing compatibility (`nixos/hardening.nix`;
+  `kernel.unprivileged_bpf_disabled` is enabled on bandit-lab only,
+  `net.core.bpf_jit_harden` remains off pending workload testing).
+- [x] Review `vino` in `nix.settings.trusted-users`: kept on the laptop,
+  removed on bandit-lab (`hosts/bandit-lab/default.nix`).

@@ -152,6 +152,14 @@ in {
           security = "user";
           "server string" = "bandit-lab";
           "map to guest" = "Bad User";
+          # Legacy SMB1 has known remote-code-execution history; every
+          # supported client speaks SMB2+.
+          "server min protocol" = "SMB2";
+          # Defense in depth behind the per-interface firewall: even if the
+          # enp44s0 rule ever misses, only loopback, private LAN ranges, and
+          # the tailnet may talk SMB.
+          "hosts allow" = "127.0.0.1 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10";
+          "hosts deny" = "0.0.0.0/0";
         };
         storage = {
           path = "/srv/storage";

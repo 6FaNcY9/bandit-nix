@@ -5,10 +5,6 @@
   ...
 }: {
   networking = {
-    hosts = {
-      "192.168.1.6" = ["fire-tv"];
-    };
-
     networkmanager = {
       enable = true;
       dns = "systemd-resolved";

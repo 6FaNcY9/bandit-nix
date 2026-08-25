@@ -24,7 +24,7 @@ The repo is a Nix Flake built on `nixos-unstable`. It declares NixOS system conf
 | Shells | Fish + Zsh | Both are enabled and share aliases from `home/terminal/aliases.nix` |
 | Version control | Git + GPG signing | Commit signing and GitHub CLI |
 | Containers | Rootless Docker + Podman | Dev tooling on `bandit`; Docker-backed services on `bandit-lab` |
-| Server services | Traefik, Cloudflared, Tailscale, Samba, PostgreSQL, Vaultwarden, Portainer, Cockpit | Homelab stack on `bandit-lab`; Ollama is temporarily parked |
+| Server services | Traefik, Cloudflared, Tailscale, Samba, PostgreSQL, Vaultwarden, Portainer, Cockpit | Homelab stack on `bandit-lab` |
 
 ### Key Inputs (see `flake.nix`)
 
@@ -59,9 +59,7 @@ The repo is a Nix Flake built on `nixos-unstable`. It declares NixOS system conf
 │       ├── traefik.nix       # Reverse proxy + Docker service labels
 │       ├── vaultwarden.nix   # Password manager container (+ Gruvbox web-vault theme)
 │       ├── vaultwarden/      # gruvbox.scss.hbs theme source (TEMPLATES_FOLDER hook)
-│       ├── llm.nix           # Parked Ollama service (not imported)
 │       ├── mrija-archive.nix # Backup/archive service
-│       ├── log-monitor.nix   # Parked Ollama-dependent log alerting
 │       ├── monitoring.nix    # Grafana+Prometheus host files/secrets for the Portainer stack
 │       ├── power.nix         # Server power settings
 │       └── cockpit-theme.nix # Cockpit admin UI theming
@@ -286,10 +284,12 @@ CI uses `nixos/nix` image with pinned digest. The build job uses `--dry-run` by 
 
 ## 9. Security Considerations
 
-- **SSH:** `bandit` has no SSH server. `bandit-lab` has SSH with password auth disabled, root login disabled, and an authorized Ed25519 key only.
+- **SSH:** `bandit` has no SSH server. `bandit-lab` has SSH with password auth disabled, root login disabled, `AllowUsers` restricted to `vino`, and authorized Ed25519 keys only (`hosts/bandit-lab/default.nix`). fail2ban guards it with 1 h escalating bans (up to 1 week, maxretry 3); the Tailscale range `100.64.0.0/10` is exempt.
+- **Samba:** SMB2 minimum protocol and `hosts allow` restricted to loopback, private LAN ranges, and the tailnet, on top of the per-interface (`enp44s0`) firewall openings (`hosts/bandit-lab/webhost.nix`).
+- **Health gate:** `bandit-lab-health` (`hosts/bandit-lab/health-check.nix`) treats `sshd`, `fail2ban`, and `samba-smbd` as critical units, so a config that kills remote access rolls back instead of deploying.
 - **Sudo:** `wheelNeedsPassword = true`. On `bandit`, the user has passwordless `nixos-rebuild` only.
 - **User groups:** `vino` is explicitly **not** in `input`, `storage`, or `podman` groups to reduce privilege surface. The `wireshark` group (added in `nixos/security-tools.nix`) is the deliberate exception — it grants packet capture without root via setcap `dumpcap`.
-- **Trusted Nix users:** Only `root` and `vino` are `trusted-users` on the laptop; the security plan removed `vino` from trusted-users in some phases, but current `nixos/core.nix` keeps both. Check `docs/SECURITY-PLAN.md` for pending hardening decisions.
+- **Trusted Nix users:** `root` and `vino` are `trusted-users` on the laptop (`nixos/core.nix`); on `bandit-lab`, `hosts/bandit-lab/default.nix` forces `trusted-users = ["root"]` since `lab-update` runs as root. See `docs/SECURITY-PLAN.md` for pending hardening decisions.
 - **Secrets:** sops-nix with age, no plaintext in repo, scoped file permissions.
 - **GPG agent:** Cache TTL defaults to 1 hour, max 4 hours.
 - **Neovim:** Persistent undo/swap/backup are disabled for `*/secrets/*`, `*.age`, `*.env*` files.
