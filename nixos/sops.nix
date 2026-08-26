@@ -44,6 +44,10 @@ in {
         owner = username;
         mode = "0400";
       };
+      "shodan-api-key" = {
+        owner = username;
+        mode = "0400";
+      };
     };
   };
 }

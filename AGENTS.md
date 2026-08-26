@@ -209,6 +209,7 @@ Active secrets referenced in `nixos/sops.nix` (plus the host-specific one noted)
 | `vaultwarden-admin-token` | Vaultwarden admin token |
 | `thehost-sshkey` | SSH key → `~/.ssh/thehost_mrija` |
 | `firecrawl-api-key` | Firecrawl API key |
+| `shodan-api-key` | Shodan Membership API key; the fish/zsh `shodan` wrapper runs `shodan init` from it on first use |
 | `grafana-admin-password` | Declared in `hosts/bandit-lab/monitoring.nix` (mode 0400, owner `grafana` system user uid/gid 472); consumed by the Portainer monitoring stack via bind mount |
 | `mrija-api-key` | mrija-archive admin API key; rendered by `hosts/bandit-lab/mrija-archive.nix` into `/run/secrets/rendered/mrija-archive.env` (container `env_file:` + sync service `EnvironmentFile`) |
 | `mrija-password` | mrija-archive web login password; same rendered env file as above |

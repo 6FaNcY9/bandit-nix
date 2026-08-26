@@ -152,6 +152,15 @@ in {
           fi
         }
 
+        # ── shodan: init from sops secret on first use; the CLI only ──────
+        # ── reads ~/.config/shodan/api_key (no env-var support) ───────────
+        shodan() {
+          if [[ ! -s ~/.shodan/api_key && ! -s ~/.config/shodan/api_key && -r /run/secrets/shodan-api-key ]]; then
+            command shodan init "$(< /run/secrets/shodan-api-key)"
+          fi
+          command shodan "$@"
+        }
+
         # ── Context7 API key from sops (read by MCP clients via bearerTokenEnvVar) ──
         if [[ -r /run/secrets/context7_api_key ]]; then
           export CONTEXT7_API_KEY="$(< /run/secrets/context7_api_key)"

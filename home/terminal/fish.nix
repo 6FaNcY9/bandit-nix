@@ -124,6 +124,16 @@ in {
             command cachix $argv
           end
         end
+
+        # ── Shodan — init from sops secret on first use; the CLI only ─────
+        # ── reads ~/.config/shodan/api_key (no env-var support), and ──────
+        # ── enforces mode 0600 on it itself ───────────────────────────────
+        function shodan
+          if not test -s ~/.shodan/api_key; and not test -s ~/.config/shodan/api_key; and test -r /run/secrets/shodan-api-key
+            command shodan init (cat /run/secrets/shodan-api-key)
+          end
+          command shodan $argv
+        end
       '';
     };
 

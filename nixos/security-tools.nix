@@ -26,6 +26,7 @@
     maigret # collect account details by username across thousands of sites
     sherlock # hunt social-media accounts by username
     theharvester # emails, subdomains, and names from public sources
+    python3Packages.shodan # Shodan CLI (API key from sops, see shell wrapper)
 
     # ── Small standalone tools not provided by the pentest devenv ────────
     thc-hydra # network logon cracker
