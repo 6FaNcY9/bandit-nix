@@ -153,12 +153,14 @@ in {
         }
 
         # ── shodan: init from sops secret on first use; the CLI only ──────
-        # ── reads ~/.config/shodan/api_key (no env-var support) ───────────
+        # ── reads ~/.config/shodan/api_key (no env-var support). ──────────
+        # ── PYTHONWARNINGS hides the pkg_resources deprecation warning ────
+        # ── from the setuptools_80 pin ────────────────────────────────────
         shodan() {
           if [[ ! -s ~/.shodan/api_key && ! -s ~/.config/shodan/api_key && -r /run/secrets/shodan-api-key ]]; then
             command shodan init "$(< /run/secrets/shodan-api-key)"
           fi
-          command shodan "$@"
+          PYTHONWARNINGS="ignore::UserWarning" command shodan "$@"
         }
 
         # ── Context7 API key from sops (read by MCP clients via bearerTokenEnvVar) ──

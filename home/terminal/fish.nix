@@ -127,11 +127,13 @@ in {
 
         # ── Shodan — init from sops secret on first use; the CLI only ─────
         # ── reads ~/.config/shodan/api_key (no env-var support), and ──────
-        # ── enforces mode 0600 on it itself ───────────────────────────────
+        # ── enforces mode 0600 on it itself. PYTHONWARNINGS hides the ─────
+        # ── pkg_resources deprecation warning from the setuptools_80 pin ──
         function shodan
           if not test -s ~/.shodan/api_key; and not test -s ~/.config/shodan/api_key; and test -r /run/secrets/shodan-api-key
             command shodan init (cat /run/secrets/shodan-api-key)
           end
+          set -lx PYTHONWARNINGS "ignore::UserWarning"
           command shodan $argv
         end
       '';
