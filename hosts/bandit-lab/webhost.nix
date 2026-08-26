@@ -155,8 +155,8 @@ in {
           # Legacy SMB1 has known remote-code-execution history; every
           # supported client speaks SMB2+.
           "server min protocol" = "SMB2";
-          # Defense in depth behind the per-interface firewall: even if the
-          # enp44s0 rule ever misses, only loopback, private LAN ranges, and
+          # Defense in depth behind the per-interface firewall: even if a
+          # LAN rule ever misses, only loopback, private LAN ranges, and
           # the tailnet may talk SMB.
           "hosts allow" = "127.0.0.1 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10";
           "hosts deny" = "0.0.0.0/0";
@@ -175,7 +175,9 @@ in {
     samba-wsdd = {
       enable = true;
       openFirewall = false;
-      interface = "enp44s0";
+      # No interface pin (default null = all): the lab runs on Wi-Fi (wlo1)
+      # since the location change and enp44s0 is unplugged; the per-interface
+      # firewall below gates actual reachability either way.
     };
 
     # ── PostgreSQL ─────────────────────────────────────────────────────────
@@ -192,10 +194,18 @@ in {
     };
   };
 
-  networking.firewall.interfaces."enp44s0" = {
+  # LAN file sharing on both uplinks: the server runs on Wi-Fi (wlo1) since
+  # the location change and enp44s0 is unplugged; rules on a down interface
+  # are inert, and everything returns when the cable comes back.
+  networking.firewall.interfaces = let
     # LAN file sharing is intentional; WAN service exposure stays behind Cloudflare Tunnel/Tailscale.
-    allowedTCPPorts = [139 445 5357]; # SMB + WSDD
-    allowedUDPPorts = [137 138 3702]; # NetBIOS + WSDD
+    smbPorts = {
+      allowedTCPPorts = [139 445 5357]; # SMB + WSDD
+      allowedUDPPorts = [137 138 3702]; # NetBIOS + WSDD
+    };
+  in {
+    enp44s0 = smbPorts;
+    wlo1 = smbPorts;
   };
 
   # ── Docker ────────────────────────────────────────────────────────────────

@@ -8,7 +8,11 @@
   virtualisation.oci-containers.containers.watchyourlan = {
     image = "aceberg/watchyourlan@sha256:f77532ca7c3c9a4398cb094df7674013a3d7fcf4699386f1e456c24df6fef00e";
     environment = {
-      IFACES = "enp44s0";
+      # wlo1 is the active LAN uplink since the location change (Wi-Fi);
+      # enp44s0 is unplugged but stays listed so scanning follows the cable
+      # when Ethernet returns (arp-scan errors on a dead interface are
+      # cosmetic log noise meanwhile).
+      IFACES = "wlo1 enp44s0";
       TZ = config.time.timeZone;
       HOST = "127.0.0.1"; # loopback-only GUI; Traefik proxies it
       PORT = "8840";

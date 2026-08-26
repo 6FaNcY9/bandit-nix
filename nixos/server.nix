@@ -359,7 +359,7 @@ in {
           symbol = "nix:";
         };
 
-        "custom.net" = {
+        custom.net = {
           command = ''
             IFACE=$(ip route show default 2>/dev/null | awk '/default/ {print $5; exit}')
             [[ -z "$IFACE" ]] && exit 1
