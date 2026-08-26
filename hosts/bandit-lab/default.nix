@@ -12,6 +12,8 @@
     ./mrija-archive.nix
     ./monitoring.nix
     ./vaultwarden.nix
+    ./searxng.nix
+    ./changedetection.nix
     ./power.nix
     ./auto-rebuild.nix
     ./health-check.nix
