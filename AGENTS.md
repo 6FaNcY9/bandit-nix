@@ -24,7 +24,7 @@ The repo is a Nix Flake built on `nixos-unstable`. It declares NixOS system conf
 | Shells | Fish + Zsh | Both are enabled and share aliases from `home/terminal/aliases.nix` |
 | Version control | Git + GPG signing | Commit signing and GitHub CLI |
 | Containers | Rootless Docker + Podman | Dev tooling on `bandit`; Docker-backed services on `bandit-lab` |
-| Server services | Traefik, Cloudflared, Tailscale, Samba, PostgreSQL, Vaultwarden, Portainer, Cockpit, SearXNG, changedetection.io, WatchYourLAN | Homelab stack on `bandit-lab` |
+| Server services | Traefik, Cloudflared, Tailscale, Samba, PostgreSQL, Vaultwarden, Portainer, Cockpit, SearXNG, WatchYourLAN | Homelab stack on `bandit-lab` |
 
 ### Key Inputs (see `flake.nix`)
 
@@ -59,7 +59,6 @@ The repo is a Nix Flake built on `nixos-unstable`. It declares NixOS system conf
 │       ├── traefik.nix       # Reverse proxy + Docker service labels
 │       ├── vaultwarden.nix   # Password manager container (+ Gruvbox web-vault theme)
 │       ├── searxng.nix       # Private metasearch container (stateless)
-│       ├── changedetection.nix # Website change-monitoring container
 │       ├── watchyourlan.nix  # LAN device-discovery container (host network, loopback GUI)
 │       ├── vaultwarden/      # gruvbox.scss.hbs theme source (TEMPLATES_FOLDER hook)
 │       ├── mrija-archive.nix # Backup/archive service

@@ -22,8 +22,6 @@ public by design (see below).
      without this gate.
    - `search.bandit-lab.mrija.org` — SearXNG has no login of its own, and a
      public metasearch instance is scraped/abused by bots within hours.
-   - `changes.bandit-lab.mrija.org` — changedetection.io; the watched-URL
-     list itself is sensitive metadata.
    - `devices.bandit-lab.mrija.org` — WatchYourLAN network inventory. It has
      no built-in auth, and the LAN host list (names, MACs, vendors, online
      history) is exactly what an attacker wants for reconnaissance.

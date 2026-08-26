@@ -31,11 +31,10 @@
         # Admin UI — must have a Cloudflare Access application in front of it
         # (docs/runbooks/cloudflare-access.md); never expose it directly.
         "portainer.bandit-lab.mrija.org" = "http://localhost:80";
-        # Metasearch and change monitoring — both need a Cloudflare Access
-        # application (docs/runbooks/cloudflare-access.md). A public SearXNG
-        # instance gets scraped/abused by bots within hours.
+        # Metasearch — needs a Cloudflare Access application
+        # (docs/runbooks/cloudflare-access.md). A public SearXNG instance
+        # gets scraped/abused by bots within hours.
         "search.bandit-lab.mrija.org" = "http://localhost:80";
-        "changes.bandit-lab.mrija.org" = "http://localhost:80";
         # Requires a Cloudflare Access application + policy in front of it;
         # see docs/runbooks/cloudflare-access.md.
         "ssh-bandit-lab.mrija.org" = "ssh://localhost:22";
