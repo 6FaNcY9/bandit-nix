@@ -26,7 +26,10 @@
     maigret # collect account details by username across thousands of sites
     sherlock # hunt social-media accounts by username
     theharvester # emails, subdomains, and names from public sources
-    python3Packages.shodan # Shodan CLI (API key from sops, see shell wrapper)
+    # Shodan CLI (API key from sops, see shell wrapper). nixpkgs builds it
+    # against setuptools >= 81, which removed pkg_resources — the CLI still
+    # imports it for plugin entry points, so pin the setuptools_80 fallback.
+    (python3Packages.shodan.override {setuptools = python3Packages.setuptools_80;})
 
     # ── Small standalone tools not provided by the pentest devenv ────────
     thc-hydra # network logon cracker
