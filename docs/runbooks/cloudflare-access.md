@@ -11,10 +11,15 @@ design (see below).
 1. In Cloudflare Zero Trust, create one **Self-hosted** application for each
    exact hostname:
    - `grafana.bandit-lab.mrija.org`
-   - `mail.bandit-lab.mrija.org` — mrija-archive has its own login, but the
-     archived email behind it warrants the extra Access gate.
+   - `mail-archive.bandit-lab.mrija.org` — mrija-archive has its own login,
+     but the archived email behind it warrants the extra Access gate. (The
+     bare `mail.` prefix is reserved for a future real mail server.)
    - `portainer.bandit-lab.mrija.org` — Docker admin UI; never publish it
      without this gate.
+   - `search.bandit-lab.mrija.org` — SearXNG has no login of its own, and a
+     public metasearch instance is scraped/abused by bots within hours.
+   - `changes.bandit-lab.mrija.org` — changedetection.io; the watched-URL
+     list itself is sensitive metadata.
    - `ssh-bandit-lab.mrija.org` — required for `ssh bandit-lab-wan`
      (`cloudflared access ssh`). A plain Self-hosted app covering the hostname
      is enough; browser-rendered SSH is optional. The tunnel ingress rule in

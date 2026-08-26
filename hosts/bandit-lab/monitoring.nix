@@ -29,7 +29,7 @@
           - targets:
               - https://vault.bandit-lab.mrija.org
               - https://grafana.bandit-lab.mrija.org
-              - https://mail.bandit-lab.mrija.org
+              - https://mail-archive.bandit-lab.mrija.org
               - https://portainer.bandit-lab.mrija.org
         relabel_configs:
           - source_labels: [__address__]

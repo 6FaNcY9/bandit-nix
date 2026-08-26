@@ -18,7 +18,7 @@
       ingress = {
         "bandit-lab.mrija.org" = "http://localhost:80";
         "grafana.bandit-lab.mrija.org" = "http://localhost:80";
-        "mail.bandit-lab.mrija.org" = "http://localhost:80";
+        "mail-archive.bandit-lab.mrija.org" = "http://localhost:80";
         # Admin UI — must have a Cloudflare Access application in front of it
         # (docs/runbooks/cloudflare-access.md); never expose it directly.
         "portainer.bandit-lab.mrija.org" = "http://localhost:80";
