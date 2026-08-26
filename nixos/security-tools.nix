@@ -22,6 +22,11 @@
     whois
     arp-scan # LAN discovery
 
+    # ── OSINT ────────────────────────────────────────────────────────────
+    maigret # collect account details by username across thousands of sites
+    sherlock # hunt social-media accounts by username
+    theharvester # emails, subdomains, and names from public sources
+
     # ── Small standalone tools not provided by the pentest devenv ────────
     thc-hydra # network logon cracker
     # seclists + rockyou instead of the `wordlists` wrapper: it drags in

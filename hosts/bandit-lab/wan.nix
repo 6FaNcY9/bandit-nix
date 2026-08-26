@@ -4,10 +4,15 @@
   };
 
   # Outbound Cloudflare Tunnel — works through CGNAT.
-  # Explicit per-hostname allowlist (default-deny): only the services below
-  # reach Traefik on :80; every other subdomain under bandit-lab.mrija.org
-  # falls through to the 404 default. Do NOT reintroduce a wildcard rule —
-  # it would instantly publish any container that gets Traefik labels.
+  # IMPORTANT: this tunnel is REMOTELY MANAGED. The running cloudflared daemon
+  # pulls its ingress config from the Zero Trust dashboard (Networks → Tunnels
+  # → Public Hostnames) and ignores the local config file — it logged
+  # "Updated to new configuration ... version=8" straight from the dashboard.
+  # The ingress attrset below is a DOCUMENTATION MIRROR of the dashboard
+  # routes, not the source of truth: to add/remove a hostname, edit the
+  # dashboard (no rebuild needed, the daemon picks it up within seconds),
+  # then update this list to match. Keep it default-deny: no wildcard route,
+  # or any container with Traefik labels would be published instantly.
   # Cloudflare Access policies are configured outside this repository; see
   # docs/runbooks/cloudflare-access.md before publishing an admin service.
   services.cloudflared = {
@@ -17,6 +22,10 @@
       default = "http_status:404";
       ingress = {
         "bandit-lab.mrija.org" = "http://localhost:80";
+        # WatchYourLAN device inventory — must have a Cloudflare Access
+        # application (docs/runbooks/cloudflare-access.md); it has no auth
+        # of its own and the host list is sensitive network metadata.
+        "devices.bandit-lab.mrija.org" = "http://localhost:80";
         "grafana.bandit-lab.mrija.org" = "http://localhost:80";
         "mail-archive.bandit-lab.mrija.org" = "http://localhost:80";
         # Admin UI — must have a Cloudflare Access application in front of it

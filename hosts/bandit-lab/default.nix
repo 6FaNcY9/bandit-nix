@@ -14,6 +14,7 @@
     ./vaultwarden.nix
     ./searxng.nix
     ./changedetection.nix
+    ./watchyourlan.nix
     ./power.nix
     ./auto-rebuild.nix
     ./health-check.nix

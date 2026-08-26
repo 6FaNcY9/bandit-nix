@@ -24,7 +24,7 @@ The repo is a Nix Flake built on `nixos-unstable`. It declares NixOS system conf
 | Shells | Fish + Zsh | Both are enabled and share aliases from `home/terminal/aliases.nix` |
 | Version control | Git + GPG signing | Commit signing and GitHub CLI |
 | Containers | Rootless Docker + Podman | Dev tooling on `bandit`; Docker-backed services on `bandit-lab` |
-| Server services | Traefik, Cloudflared, Tailscale, Samba, PostgreSQL, Vaultwarden, Portainer, Cockpit, SearXNG, changedetection.io | Homelab stack on `bandit-lab` |
+| Server services | Traefik, Cloudflared, Tailscale, Samba, PostgreSQL, Vaultwarden, Portainer, Cockpit, SearXNG, changedetection.io, WatchYourLAN | Homelab stack on `bandit-lab` |
 
 ### Key Inputs (see `flake.nix`)
 
@@ -54,12 +54,13 @@ The repo is a Nix Flake built on `nixos-unstable`. It declares NixOS system conf
 │       ├── hardware.nix      # Server filesystems/hardware
 │       ├── auto-rebuild.nix  # lab-update tooling: poll GitHub, auto-apply timer, build, test, switch
 │       ├── health-check.nix  # bandit-lab-health critical-unit check
-│       ├── wan.nix           # Cloudflare Tunnel ingress
+│       ├── wan.nix           # Cloudflare Tunnel (remotely managed — see docs/runbooks/cloudflare-access.md)
 │       ├── webhost.nix       # Static web hosting / Caddy-adjacent services
 │       ├── traefik.nix       # Reverse proxy + Docker service labels
 │       ├── vaultwarden.nix   # Password manager container (+ Gruvbox web-vault theme)
 │       ├── searxng.nix       # Private metasearch container (stateless)
 │       ├── changedetection.nix # Website change-monitoring container
+│       ├── watchyourlan.nix  # LAN device-discovery container (host network, loopback GUI)
 │       ├── vaultwarden/      # gruvbox.scss.hbs theme source (TEMPLATES_FOLDER hook)
 │       ├── mrija-archive.nix # Backup/archive service
 │       ├── monitoring.nix    # Grafana+Prometheus host files/secrets for the Portainer stack
@@ -296,7 +297,7 @@ CI uses `nixos/nix` image with pinned digest. The build job uses `--dry-run` by 
 - **GPG agent:** Cache TTL defaults to 1 hour, max 4 hours.
 - **Neovim:** Persistent undo/swap/backup are disabled for `*/secrets/*`, `*.age`, `*.env*` files.
 - **Cachix token:** Provided via sops secret and injected only for the duration of a `cachix` call, never exported globally.
-- **Homelab WAN access:** Only via Cloudflare Tunnel. Admin services (Cockpit, Portainer, Samba) are not port-forwarded; access them via SSH/Tailscale tunnels.
+- **Homelab WAN access:** Only via Cloudflare Tunnel. Admin services (Cockpit, Portainer, Samba) are not port-forwarded; access them via SSH/Tailscale tunnels. The tunnel is **remotely managed** — the dashboard's Public Hostnames are authoritative and applied within seconds; `hosts/bandit-lab/wan.nix` is a documentation mirror to keep in sync (see `docs/runbooks/cloudflare-access.md`).
 
 See `docs/SECURITY-PLAN.md` for the active security roadmap (LUKS, Secure Boot, further hardening).
 

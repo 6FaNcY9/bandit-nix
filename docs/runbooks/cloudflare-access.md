@@ -1,10 +1,14 @@
 # Cloudflare Access for bandit-lab
 
-Cloudflare Tunnel provides transport only, and the ingress in
-`hosts/bandit-lab/wan.nix` is an explicit per-hostname allowlist (no wildcard).
-Protect the published hostnames with Cloudflare Zero Trust Access before
-relying on them from the Internet — except Vaultwarden, which stays public by
-design (see below).
+Cloudflare Tunnel provides transport only. The tunnel is **remotely managed**:
+the authoritative per-hostname allowlist lives in the Zero Trust dashboard
+(Networks → Tunnels → `bandit-lab` → Public Hostnames, all pointing at
+`http://localhost:80`, no wildcard), and the running daemon picks up dashboard
+edits within seconds — no rebuild required. `hosts/bandit-lab/wan.nix` carries
+a documentation mirror of those routes; keep it in sync when you change the
+dashboard. Protect the published hostnames with Cloudflare Zero Trust Access
+before relying on them from the Internet — except Vaultwarden, which stays
+public by design (see below).
 
 ## Configure
 
@@ -20,12 +24,13 @@ design (see below).
      public metasearch instance is scraped/abused by bots within hours.
    - `changes.bandit-lab.mrija.org` — changedetection.io; the watched-URL
      list itself is sensitive metadata.
+   - `devices.bandit-lab.mrija.org` — WatchYourLAN network inventory. It has
+     no built-in auth, and the LAN host list (names, MACs, vendors, online
+     history) is exactly what an attacker wants for reconnaissance.
    - `ssh-bandit-lab.mrija.org` — required for `ssh bandit-lab-wan`
      (`cloudflared access ssh`). A plain Self-hosted app covering the hostname
-     is enough; browser-rendered SSH is optional. The tunnel ingress rule in
-     `hosts/bandit-lab/wan.nix` only forwards traffic that already passed an
-     Access application, so without this app the connection fails with
-     `websocket: bad handshake`.
+     is enough; browser-rendered SSH is optional. Without an Access app the
+     connection fails with `websocket: bad handshake`.
 2. Add an Allow policy for the intended identity group or email addresses
    (the existing `vino-allow` policy can be reused). Do not add a bypass
    policy for these hostnames.
@@ -58,12 +63,16 @@ Tailscale instead.
 
 ## Avoiding remote lockout on ingress changes
 
-The tunnel's running `cloudflared` daemon only serves the ingress rules from
-the configuration it was started with. Adding a new ingress rule (such as
-`ssh-bandit-lab.mrija.org`) to `hosts/bandit-lab/wan.nix` does nothing until
-the server rebuilds and the daemon reconnects. A new hostname with no published
-ingress fails with `websocket: bad handshake`, and an HTTP probe returns 404.
+Ingress rules live in the dashboard, not in this repository: the running
+`cloudflared` daemon fetches its configuration from Cloudflare and applies
+dashboard edits within seconds, so adding or removing a Public Hostname takes
+effect immediately without a NixOS rebuild. A hostname with no published
+route fails with `websocket: bad handshake`, and an HTTP probe returns 404
+from the catch-all rule.
 
-Always apply tunnel ingress changes on the server while you still have local
-or console access (`sudo lab-update apply`). Never merge an ingress change that
-is your only remote access path before it is live on the daemon.
+Because changes are instant, the lockout risk is fat-fingering the dashboard
+itself: never delete or repoint the route you are currently connected through
+(`ssh-bandit-lab.mrija.org` or a Tailscale/Access path) without a second
+working way in. After every dashboard edit, mirror it in the `ingress`
+attrset in `hosts/bandit-lab/wan.nix` so the repo stays an accurate map of
+what is exposed.
