@@ -15,6 +15,7 @@
     ./searxng.nix
     ./watchyourlan.nix
     ./power.nix
+    ./aiia.nix
     ./auto-rebuild.nix
     ./health-check.nix
     # Sideloading is on hold (cable/hardware issues) — anisette.nix stays in

@@ -22,6 +22,11 @@
       default = "http_status:404";
       ingress = {
         "bandit-lab.mrija.org" = "http://localhost:80";
+        # AiiA AI T-shirt shop (Ghost fork) — deliberately public, like
+        # vault.bandit-lab.mrija.org: a storefront cannot sit behind a
+        # Cloudflare Access login. The Ghost /ghost/ admin should get an
+        # Access app if it ever needs hardening (docs/runbooks/cloudflare-access.md).
+        "aiia.bandit-lab.mrija.org" = "http://localhost:80";
         # WatchYourLAN device inventory — must have a Cloudflare Access
         # application (docs/runbooks/cloudflare-access.md); it has no auth
         # of its own and the host list is sensitive network metadata.

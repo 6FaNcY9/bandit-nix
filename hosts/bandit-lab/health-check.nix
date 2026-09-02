@@ -1,6 +1,11 @@
 {pkgs, ...}: let
   criticalUnits = [
     "cloudflared-tunnel-bandit-lab.service"
+    # docker-aiia-ghost deliberately stays out until the image transfer onto
+    # the host is confirmed — the private GHCR image is docker-loaded by hand,
+    # so the unit fails (and would roll back deploys) until then.
+    "docker-aiia-mysql.service"
+    "docker-network-aiia.service"
     "docker-network-portainer-control.service"
     "docker-network-proxy.service"
     "docker-portainer-agent.service"
