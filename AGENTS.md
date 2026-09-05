@@ -205,6 +205,7 @@ Active secrets referenced in `nixos/sops.nix` (plus the host-specific one noted)
 | `github_ssh_key` | SSH key → `~/.ssh/github` |
 | `github_ssh_key_banditstudent` | SSH key → `~/.ssh/github-banditstudent` |
 | `cachix-secret` | Cachix auth token |
+| `cloudflare-api-key` | Cloudflare API token → `CLOUDFLARE_API_TOKEN` env var (zsh/fish) for REST API curl calls |
 | `context7_api_key` | Context7 MCP API key |
 | `vaultwarden-admin-token` | Vaultwarden admin token |
 | `thehost-sshkey` | SSH key → `~/.ssh/thehost_mrija` |

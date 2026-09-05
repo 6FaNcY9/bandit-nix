@@ -168,6 +168,11 @@ in {
           export CONTEXT7_API_KEY="$(< /run/secrets/context7_api_key)"
         fi
 
+        # ── Cloudflare API token from sops (REST API via curl) ──
+        if [[ -r /run/secrets/cloudflare-api-key ]]; then
+          export CLOUDFLARE_API_TOKEN="$(< /run/secrets/cloudflare-api-key)"
+        fi
+
         # ── Kimi Code — TokenRouter secondary model ───────────────
         export KIMI_CODE_EXPERIMENTAL_SECONDARY_MODEL=1
 

@@ -48,6 +48,10 @@ in {
         owner = username;
         mode = "0400";
       };
+      "cloudflare-api-key" = {
+        owner = username;
+        mode = "0400";
+      };
     };
   };
 }
