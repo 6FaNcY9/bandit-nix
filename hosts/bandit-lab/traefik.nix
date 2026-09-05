@@ -53,7 +53,11 @@ in {
         ProtectHome = true;
         PrivateTmp = true;
         PrivateDevices = true;
-        RestrictAddressFamilies = ["AF_UNIX"];
+        # AF_UNIX covers the actual sockets; AF_INET/AF_INET6 are required
+        # because HAProxy >= 3.1 probes QUIC socket options at startup and
+        # exits fatally when the INET families are blocked. No inet sockets
+        # are bound or connected by the config.
+        RestrictAddressFamilies = ["AF_UNIX" "AF_INET" "AF_INET6"];
         CapabilityBoundingSet = "";
       };
     };
