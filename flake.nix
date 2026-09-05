@@ -122,6 +122,24 @@
     };
 
     checks.${system} = {
+      docker-discovery-proxy =
+        pkgs.runCommand "docker-discovery-proxy-regressions" {
+          nativeBuildInputs = [pkgs.python3];
+        } ''
+          python3 ${./ci/test-docker-discovery-proxy.py} ${pkgs.lib.escapeShellArg self.nixosConfigurations.bandit-lab.config.systemd.services.traefik-docker-proxy.serviceConfig.ExecStart}
+          touch "$out"
+        '';
+
+      lab-update = let
+        updater = builtins.head (builtins.filter (p: p.name == "lab-update") self.nixosConfigurations.bandit-lab.config.environment.systemPackages);
+      in
+        pkgs.runCommand "lab-update-regressions" {
+          nativeBuildInputs = [pkgs.python3 pkgs.git pkgs.bash pkgs.coreutils];
+        } ''
+          python3 ${./ci/test-lab-update.py} ${updater}/bin/lab-update
+          touch "$out"
+        '';
+
       repository =
         pkgs.runCommand "bandit-nix-repository-checks" {
           nativeBuildInputs = with pkgs; [alejandra deadnix statix];

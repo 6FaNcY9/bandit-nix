@@ -42,13 +42,12 @@
     "$git" -c safe.directory="$repo" -C "$repo" fetch origin main --quiet
     after=$("$git" -c safe.directory="$repo" -C "$repo" rev-parse origin/main)
 
-    if [[ "$before" == "$after" ]]; then
-      echo "bandit-lab is already at $before"
-      exit 0
-    fi
-
-    echo "bandit-lab update available: $before -> $after"
     if [[ "$mode" == "check" ]]; then
+      if [[ "$before" == "$after" ]]; then
+        echo "Checkout matches $after; activation status is checked by lab-update apply"
+      else
+        echo "Checkout update available: $before -> $after"
+      fi
       exit 0
     fi
 
@@ -64,7 +63,29 @@
     export PATH="${pkgs.gnupg}/bin:$PATH"
     export GNUPGHOME
     GNUPGHOME="$(${pkgs.coreutils}/bin/mktemp -d)"
-    trap '${pkgs.coreutils}/bin/rm -rf "$GNUPGHOME"' EXIT
+    rollback_needed=0
+    cleanup() {
+      status=$?
+      trap - EXIT
+      if [[ "$rollback_needed" == 1 ]]; then
+        echo "Restoring previous boot profile and running configuration" >&2
+        if ! ${pkgs.nix}/bin/nix-env --profile /nix/var/nix/profiles/system --set "$previous_profile"; then
+          echo "ERROR: could not restore the system profile" >&2
+        fi
+        if ! "$previous_profile/bin/switch-to-configuration" boot; then
+          echo "ERROR: could not restore the boot configuration" >&2
+        fi
+        if ! "$current_system/bin/switch-to-configuration" test; then
+          echo "ERROR: could not restore the running configuration" >&2
+        fi
+        status=1
+      fi
+      ${pkgs.coreutils}/bin/rm -rf "$GNUPGHOME"
+      exit "$status"
+    }
+    trap cleanup EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
     ${pkgs.gnupg}/bin/gpg --batch --quiet --import ${./lab-update-signing-key.asc} ${./lab-update-phone-signing-key.asc}
 
     printf '%s\n' "${signingKeyFingerprint}:6:" "${phoneSigningKeyFingerprint}:6:" | ${pkgs.gnupg}/bin/gpg --batch --quiet --import-ownertrust
@@ -85,6 +106,7 @@
     fi
 
     current_system="$(readlink -f /run/current-system)"
+    previous_profile="$(readlink -f /nix/var/nix/profiles/system)"
     candidate="git+file://$repo?rev=$after"
     echo "Building candidate $after"
     candidate_system="$(${pkgs.nix}/bin/nix build \
@@ -94,42 +116,31 @@
       --print-out-paths \
       "$candidate#nixosConfigurations.bandit-lab.config.system.build.toplevel")"
 
-    restore_current() {
-      echo "Restoring $current_system" >&2
-      ${pkgs.nix}/bin/nix-env --profile /nix/var/nix/profiles/system --set "$current_system"
-      "$current_system/bin/switch-to-configuration" switch
-    }
+    if [[ "$candidate_system" == "$current_system" && "$candidate_system" == "$previous_profile" ]]; then
+      echo "Candidate is already running and selected for boot"
+      "$candidate_system/sw/bin/bandit-lab-health"
+    else
+      # From the first test onward, every exit (including signals and a
+      # failed profile update) must restore both pre-update states.
+      rollback_needed=1
+      echo "Testing candidate configuration"
+      "$candidate_system/bin/switch-to-configuration" test
+      "$candidate_system/sw/bin/bandit-lab-health"
 
-    echo "Testing candidate configuration"
-    if ! "$candidate_system/bin/switch-to-configuration" test; then
-      "$current_system/bin/switch-to-configuration" test || true
-      exit 1
-    fi
-    if ! "$candidate_system/sw/bin/bandit-lab-health"; then
-      "$current_system/bin/switch-to-configuration" test || true
-      exit 1
-    fi
-
-    echo "Activating candidate configuration"
-    ${pkgs.nix}/bin/nix-env --profile /nix/var/nix/profiles/system --set "$candidate_system"
-    if ! "$candidate_system/bin/switch-to-configuration" switch; then
-      restore_current
-      exit 1
-    fi
-    if ! "$candidate_system/sw/bin/bandit-lab-health"; then
-      restore_current
-      exit 1
+      echo "Activating candidate configuration"
+      ${pkgs.nix}/bin/nix-env --profile /nix/var/nix/profiles/system --set "$candidate_system"
+      "$candidate_system/bin/switch-to-configuration" switch
+      "$candidate_system/sw/bin/bandit-lab-health"
     fi
 
     if [[ "$non_ff" == "1" ]]; then
       if ! "$git" -c safe.directory="$repo" -C "$repo" reset --hard "$after"; then
-        restore_current
         exit 1
       fi
     elif ! "$git" -c safe.directory="$repo" -C "$repo" merge --ff-only "$after"; then
-      restore_current
       exit 1
     fi
+    rollback_needed=0
     echo "bandit-lab activated and recorded at $after"
   '';
 in {

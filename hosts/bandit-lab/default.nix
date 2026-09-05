@@ -33,6 +33,18 @@
   boot.kernel.sysctl."kernel.unprivileged_bpf_disabled" = 1;
 
   services = {
+    # Stable server uplink: fail closed if the configured public resolvers
+    # cannot use TLS. Tailscale's per-link split DNS is configured separately.
+    resolved.settings.Resolve.DNSOverTLS = lib.mkForce "true";
+
+    # Local recovery copies only; off-host backups still need a destination.
+    # The native module retains the current and previous successful dump.
+    postgresqlBackup = {
+      enable = true;
+      backupAll = true;
+      startAt = "*-*-* 03:15:00";
+    };
+
     # Hardened defaults: longer escalating bans for repeat offenders.
     # The tailnet is exempt — Tailscale devices are already authenticated,
     # and a mistyped key there should never lock out the admin path.

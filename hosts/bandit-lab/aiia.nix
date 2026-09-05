@@ -16,7 +16,7 @@
   '';
 in {
   # Internal service network for ghost <-> mysql <-> redis. The ghost container
-  # additionally joins the `proxy` network (postStart below) so Traefik can
+  # additionally joins the `proxy` network at creation so Traefik can
   # reach it; mysql and redis stay off `proxy` on purpose.
   systemd = {
     tmpfiles.rules = [
@@ -53,11 +53,6 @@ in {
       docker-aiia-ghost = {
         after = ["docker-network-aiia.service" "docker-network-proxy.service"];
         requires = ["docker-network-aiia.service" "docker-network-proxy.service"];
-        # Traefik only watches the `proxy` network; connect it after container
-        # start (docker create accepts exactly one --network).
-        postStart = ''
-          ${pkgs.docker}/bin/docker network connect proxy aiia-ghost 2>/dev/null || true
-        '';
       };
     };
   };
@@ -111,24 +106,25 @@ in {
       image = "mysql:8.4@sha256:b3b90af2a6552ae30c266fdb7d5dd55f3afb72404bb78d37fe8a23eb857fd3fb";
       volumes = ["/srv/containers/aiia/mysql:/var/lib/mysql"];
       environmentFiles = [config.sops.templates."aiia-mysql.env".path];
-      extraOptions = ["--network=aiia"];
+      networks = ["aiia"];
     };
 
     aiia-redis = {
       image = "redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf";
-      extraOptions = ["--network=aiia"];
+      networks = ["aiia"];
     };
 
     # Custom Ghost 6 fork build (github.com/6FaNcY9/AiiA). The image is loaded
     # onto the host from the CI `docker-image-production` workflow artifact
     # (gh run download + ssh docker load) because the GHCR package is private
-    # and the host holds no registry credentials. `pull = "missing"` keeps
+    # and the host holds no registry credentials. `pull = "never"` keeps
     # docker from contacting GHCR; updates repeat the artifact transfer and
     # restart docker-aiia-ghost.service.
     aiia-ghost = {
       image = "ghcr.io/6fancy9/aiia:main";
-      pull = "missing";
+      pull = "never";
       dependsOn = ["aiia-mysql" "aiia-redis"];
+      networks = ["aiia" "proxy"];
       # Persist only the mutable content subdirs. The app root in this image
       # is /home/ghost (not the upstream /var/lib/ghost), and themes — the
       # aiia theme included — ship inside the image, so a whole-content mount
@@ -155,7 +151,6 @@ in {
       };
       environmentFiles = [config.sops.templates."aiia.env".path];
       extraOptions = [
-        "--network=aiia"
         "--label=traefik.enable=true"
         "--label=traefik.docker.network=proxy"
         "--label=traefik.http.routers.aiia.rule=Host(`aiia.bandit-lab.mrija.org`)"
