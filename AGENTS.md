@@ -75,6 +75,7 @@ The repo is a Nix Flake built on `nixos-unstable`. It declares NixOS system conf
 │   ├── firmware.nix          # fwupd, fprintd, AMD microcode, redistributable firmware
 │   ├── power.nix             # zram, earlyoom, power-profiles-daemon, fstrim, btrfs scrub, battery threshold
 │   ├── dev.nix               # direnv, nh, virt-manager, rootless Docker, Podman
+│   ├── gaming.nix            # Steam, Proton-GE, gamescope, gamemode, MangoHud (bandit only)
 │   ├── security-tools.nix    # Pentest/RE/privacy toolkit (bandit only) + Wireshark group
 │   ├── audio.nix             # PipeWire low-latency config
 │   ├── desktop.nix           # greetd/tuigreet, Hyprland, Bluetooth, polkit
@@ -254,6 +255,7 @@ CI uses `nixos/nix` image with pinned digest. The build job uses `--dry-run` by 
 | Display / greetd / Hyprland | `nixos/desktop.nix` |
 | Users / sudo | `nixos/users.nix` |
 | Dev tooling / containers / VMs | `nixos/dev.nix` |
+| Gaming / Steam / Proton | `nixos/gaming.nix` |
 | Pentest / RE / privacy toolkit | `nixos/security-tools.nix` |
 | Firmware / fwupd / fprintd | `nixos/firmware.nix` |
 | Power / zram / trim / scrub | `nixos/power.nix` |
@@ -265,6 +267,7 @@ CI uses `nixos/nix` image with pinned digest. The build job uses `--dry-run` by 
 | Hyprland config | `home/desktop/hyprland.nix` |
 | Waybar | `home/desktop/waybar.nix` |
 | Rofi | `home/desktop/rofi-wayland.nix` |
+| Keybinding browser (SUPER+F2) | `home/desktop/keybinds-menu.nix` |
 | Mako | `home/desktop/mako.nix` |
 | Firefox / Thunderbird | `home/desktop/firefox/`, `home/desktop/thunderbird.nix` |
 | Obsidian vaults | `home/desktop/obsidian.nix` |

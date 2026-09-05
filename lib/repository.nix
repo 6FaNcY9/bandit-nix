@@ -7,6 +7,10 @@
     "obsidian"
     "nvidia-x11"
     "copilot-language-server"
+    "steam"
+    "steam-original"
+    "steam-unwrapped"
+    "steam-run"
     # Vendored in pkgs/anisette-v3-server; upstream ships no LICENSE file.
     "anisette-v3-server"
   ];

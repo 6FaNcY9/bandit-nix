@@ -23,6 +23,7 @@
     ./desktop/waybar.nix
     ./desktop/libreoffice.nix
     ./desktop/powermenu.nix
+    ./desktop/keybinds-menu.nix
     ./desktop/obsidian.nix
     ./editor.nix
     ./terminal

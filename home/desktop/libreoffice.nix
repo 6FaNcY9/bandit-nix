@@ -23,11 +23,11 @@ in {
   # The registry file is declarative: Home Manager replaces it on every
   # activation, so options flipped in the GUI survive only until the next
   # rebuild. That trade-off is deliberate — GUI drift resets automatically.
-  # NOTE: libreoffice-still + dictionaries add ~1.5 GB to the home profile.
+  # NOTE: libreoffice-stable + dictionaries add ~1.5 GB to the home profile.
 
   home = {
     packages = [
-      pkgs.libreoffice-still
+      pkgs.libreoffice-stable
       pkgs.hunspell
       # German spell-checking for the de-DE document locale (igerman98 ships
       # hyph_de_DE patterns, so hyphenation and thesauri come along); English
