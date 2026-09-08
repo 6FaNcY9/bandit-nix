@@ -71,6 +71,9 @@ in {
     };
 
     templates = {
+      # No automatic restart: this template also contains the SQL password.
+      # Coordinate the persisted MySQL account first; see
+      # docs/runbooks/secret-rotation.md for database and provider-only rotation.
       # Sandbox deployment: AIIA_ORDER_MODE=draft pins Stripe test keys and
       # Gelato review-only drafts. Flip to `live` together with live Stripe
       # keys for real charges and fulfilment (the app refuses to boot on a
@@ -89,6 +92,8 @@ in {
         '';
       };
 
+      # Initialization inputs only: changing these does not rotate existing
+      # accounts in the persistent /srv/containers/aiia/mysql database.
       "aiia-mysql.env" = {
         mode = "0400";
         content = ''

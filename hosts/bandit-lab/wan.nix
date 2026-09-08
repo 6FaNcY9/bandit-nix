@@ -1,6 +1,8 @@
 {config, ...}: {
   sops.secrets."cloudflare-tunnel-credentials" = {
     mode = "0400";
+    # cloudflared reads its tunnel credentials when the process starts.
+    restartUnits = ["cloudflared-tunnel-bandit-lab.service"];
   };
 
   # Outbound Cloudflare Tunnel — works through CGNAT.

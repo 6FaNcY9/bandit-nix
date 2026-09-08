@@ -23,6 +23,8 @@ in {
 
   sops.templates."vaultwarden.env" = {
     mode = "0400";
+    # Docker reads this environment file when the container is created.
+    restartUnits = ["docker-vaultwarden.service"];
     content = ''
       ADMIN_TOKEN=${config.sops.placeholder."vaultwarden-admin-token"}
       SIGNUPS_ALLOWED=false
