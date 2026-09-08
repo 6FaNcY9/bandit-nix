@@ -126,9 +126,8 @@ security-scan:
 # the cache is fully populated. Once populated, build-system can be
 # switched back to a full build.
 #
-# --keep-going ensures partial builds are pushed to Cachix even if
-# some derivations fail due to disk space limits, so each run makes
-# progress and eventually the full closure is cached.
+# watch-exec uploads completed store paths while the build runs, including
+# partial progress if the build fails. --keep-going continues independent builds.
 populate-cache:
   stage: cache
   # when: manual — only runs when you explicitly trigger it from the UI.
@@ -142,7 +141,9 @@ populate-cache:
     - cachix use "${CACHIX_CACHE_NAME}"
     - cachix authtoken "${CACHIX_AUTH_TOKEN}"
     - |
-      nix build .#nixosConfigurations.bandit.config.system.build.toplevel \
+      set -e
+      cachix watch-exec "${CACHIX_CACHE_NAME}" -- \
+        nix build .#nixosConfigurations.bandit.config.system.build.toplevel \
         --print-build-logs \
         --out-link result \
         --no-update-lock-file \
@@ -150,5 +151,6 @@ populate-cache:
         --fallback \
         --max-jobs 1 \
         --cores 2
+      # Also upload closure paths that already existed before watch-exec started.
       nix path-info --recursive ./result | cachix push "${CACHIX_CACHE_NAME}"
-    - echo "✅ Pushed whatever was built to Cachix — run again if needed"
+    - echo "✅ Built system closure and pushed it to Cachix"
