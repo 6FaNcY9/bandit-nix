@@ -1,8 +1,9 @@
 # Monitoring stack (Grafana + Prometheus) on bandit-lab
 
 The stack is managed in **Portainer** (Stacks → `monitoring`). Host-side files
-and secrets are declared in `hosts/bandit-lab/monitoring.nix`; edit them there
-and rebuild bandit-lab, then restart the stack in Portainer.
+and secrets are declared in `hosts/bandit-lab/monitoring.nix`, with probe modules
+in `hosts/bandit-lab/blackbox.yml`. Rebuild bandit-lab after editing them, then
+redeploy the stack in Portainer, recreating containers to refresh bind mounts.
 
 ## Portainer environment reassociation
 
@@ -88,6 +89,7 @@ services:
     restart: unless-stopped
     networks:
       - monitoring
+      - proxy
     command:
       - --config.file=/etc/blackbox_exporter/config.yml
     volumes:
@@ -146,7 +148,9 @@ services:
    (`grafan_grafana_data`) can be deleted afterwards if nothing in it is
    worth keeping.
 3. Deploy or redeploy the `monitoring` stack in Portainer (paste the YAML
-   above).
+   above), ensuring containers are recreated. Preserve the persistent Grafana
+   and Prometheus data directories. The exporter now also joins `proxy` to
+   reach Vaultwarden directly; it has no published port or Traefik route.
 4. **Upgrading from the pre-dashboards provisioning?** The datasource was
    first provisioned without a `uid` and now pins `uid: prometheus`; Grafana
    cannot re-key the old row and crash-loops with
@@ -187,24 +191,56 @@ services:
   `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' prometheus` —
   instead of localhost.
 - https://grafana.bandit-lab.mrija.org loads behind Cloudflare Access;
-  log in as `admin` with the password from
-  `sudo cat /run/secrets/grafana-admin-password`; the Prometheus datasource
+  on first initialization, log in as `admin` with the provisioned password.
+  Existing databases retain the stored account password; see
+  [secret rotation](secret-rotation.md#grafanas-stored-admin-password).
+  The Prometheus datasource
   is pre-configured and green.
 - Dashboards are file-provisioned from `hosts/bandit-lab/monitoring.nix`:
   "Node Exporter Full" (host CPU/RAM/disk/network), "Cadvisor exporter"
-  (per-container), and "WAN Probes" (end-to-end HTTPS checks of the four
-  tunnel hostnames, incl. TLS expiry). Alert rules (target down, WAN probe
-  failing, disk <15% free, memory <10% available) live under
+  (per-container), and "Public Endpoint Probes" (public HTTPS reachability of
+  the four tunnel hostnames, including TLS expiry), plus "Direct Origin Probes"
+  (Vaultwarden and Grafana health endpoints). Alert rules (target down,
+  public endpoint probe failing, direct origin probe failing after 3 minutes,
+  disk <15% free, memory <10% available) live under
   Alerting → Alert rules in the `bandit-lab` group; they are UI-only until a
   contact point is configured.
+- `probe_success{job="blackbox-wan"}` accepts HTTP 200, 302, or 303 without
+  following redirects. Cloudflare Access may answer before contacting the
+  tunnel, Traefik, or application, so a successful probe does not establish
+  origin health. The `up` metric only confirms that Prometheus scraped the
+  exporter successfully.
+- `probe_success{job="blackbox-origin"}` requires HTTP 200 without following
+  redirects from `http://vaultwarden:80/alive` and
+  `http://grafana:3000/api/health`. These are the container health endpoints:
+  [Vaultwarden's healthcheck](https://github.com/dani-garcia/vaultwarden/blob/main/docker/healthcheck.sh)
+  uses `/alive`; [Grafana's HTTP server](https://github.com/grafana/grafana/blob/main/pkg/api/http_server.go)
+  provides `/api/health`. Query both independently in Grafana Explore. A healthy
+  public redirect can coexist with a failed origin probe and must not suppress
+  the origin alert. These probes cover neither Portainer nor the mail archive,
+  and do not test authenticated user flows or the Traefik/tunnel/Access path.
+
+  For a read-only Prometheus query from the server:
+
+  ```bash
+  docker exec prometheus wget -qO- 'http://localhost:9090/api/v1/query?query=probe_success%7Bjob%3D%22blackbox-origin%22%7D'
+  ```
+
+  Expect two results, each with value `1`. If either is `0`, inspect the
+  exporter logs and its `proxy` network membership before assuming an
+  application failure. An empty result means the new scrape configuration has
+  not loaded or the targets have not yet been scraped.
 
 ## Notes
 
-- Only Grafana joins the `proxy` network; never add Traefik labels to the
-  other services.
+- Grafana and blackbox-exporter join `proxy`; the exporter needs direct origin
+  connectivity. Only Grafana has Traefik labels. Keep the exporter, Prometheus,
+  node-exporter, and cadvisor without published ports or Traefik routes.
 - cadvisor runs `privileged: true` with read-only host mounts: container
   metrics need broad `/sys` and `docker.sock` access, which makes cadvisor
   host-root-equivalent. This is acceptable only because it is stack-internal —
   never give it Traefik labels or a host port.
-- Config changes (scrape config, provisioning) require a bandit-lab rebuild
-  **and** a stack restart in Portainer — Nix does not manage these containers.
+- Config changes (scrape config, probe modules, provisioning) require a
+  bandit-lab rebuild **and container recreation** through Portainer. A restart
+  retains Docker's existing bind mounts even when Nix updates their host-side
+  symlink targets. Nix does not manage these containers.

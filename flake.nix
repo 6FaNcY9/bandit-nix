@@ -122,6 +122,11 @@
     };
 
     checks.${system} = {
+      lab-reliability = let
+        lab = self.nixosConfigurations.bandit-lab.config;
+      in
+        assert builtins.elem "docker-vaultwarden.service" lab.sops.templates."vaultwarden.env".restartUnits;
+          import ./ci/lab-reliability.nix {inherit pkgs sops-nix;};
       docker-discovery-proxy =
         pkgs.runCommand "docker-discovery-proxy-regressions" {
           nativeBuildInputs = [pkgs.python3];

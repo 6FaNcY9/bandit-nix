@@ -18,9 +18,8 @@
         static_configs:
           - targets: ["cadvisor:8080"]
 
-      # End-to-end WAN probes: DNS → Cloudflare Tunnel → Traefik → app.
-      # Access-gated apps answer 302/303 to the login redirect, which still
-      # proves the whole path works (see the blackbox module below).
+      # Public endpoint reachability. Cloudflare Access can return a login
+      # redirect without contacting the tunnel or origin application.
       - job_name: blackbox-wan
         metrics_path: /probe
         params:
@@ -39,23 +38,30 @@
           - target_label: __address__
             replacement: blackbox-exporter:9115
 
+      # Direct Docker endpoints bypass Traefik, the tunnel, and Access.
+      - job_name: blackbox-origin
+        metrics_path: /probe
+        params:
+          module: [http_origin]
+        static_configs:
+          - targets:
+              - http://vaultwarden:80/alive
+              - http://grafana:3000/api/health
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: __param_target
+          - source_labels: [__param_target]
+            target_label: instance
+          - target_label: __address__
+            replacement: blackbox-exporter:9115
+
       - job_name: blackbox-exporter
         static_configs:
           - targets: ["blackbox-exporter:9115"]
   '';
 
-  blackboxYml = pkgs.writeText "blackbox.yml" ''
-    modules:
-      http_wan:
-        prober: http
-        timeout: 10s
-        http:
-          # 200 = app served directly; 302/303 = Cloudflare Access or app
-          # login redirect. All three mean the WAN path is healthy.
-          valid_status_codes: [200, 302, 303]
-          follow_redirects: false
-          preferred_ip_protocol: ip4
-  '';
+  # Shared with the regression test so it exercises the deployed modules.
+  blackboxYml = ./blackbox.yml;
 
   # grafana.com id 1860 rev 45 (Node Exporter Full). Pinned by hash; bump the
   # revision deliberately. Uses a datasource template variable, so it picks
@@ -85,7 +91,7 @@
   # Small purpose-built dashboard for the blackbox WAN probes (community
   # blackbox dashboards assume datasource UIDs we do not control).
   dashboardWanProbes = pkgs.writeText "grafana-dashboard-wan-probes.json" (builtins.toJSON {
-    title = "WAN Probes";
+    title = "Public Endpoint Probes";
     uid = "wan-probes";
     schemaVersion = 39;
     version = 1;
@@ -100,7 +106,8 @@
       {
         id = 1;
         type = "stat";
-        title = "Reachability";
+        title = "Public endpoint reachability";
+        description = "Accepts HTTP 200, 302, or 303. A Cloudflare Access redirect does not prove tunnel or origin health.";
         datasource = {
           type = "prometheus";
           uid = "prometheus";
@@ -241,6 +248,91 @@
     ];
   });
 
+  # Keep origin failures visible independently of public Access redirects.
+  dashboardOriginProbes = pkgs.writeText "grafana-dashboard-origin-probes.json" (builtins.toJSON {
+    title = "Direct Origin Probes";
+    uid = "origin-probes";
+    schemaVersion = 39;
+    version = 1;
+    editable = false;
+    timezone = "browser";
+    refresh = "30s";
+    time = {
+      from = "now-6h";
+      to = "now";
+    };
+    panels = [
+      {
+        id = 1;
+        type = "stat";
+        title = "Direct origin health";
+        description = "Requires HTTP 200 without redirects from the container health endpoint. Does not exercise Traefik, Cloudflare Tunnel, or Access.";
+        datasource = {
+          type = "prometheus";
+          uid = "prometheus";
+        };
+        gridPos = {
+          h = 8;
+          w = 24;
+          x = 0;
+          y = 0;
+        };
+        targets = [
+          {
+            refId = "A";
+            expr = ''probe_success{job="blackbox-origin"}'';
+            legendFormat = "{{instance}}";
+          }
+        ];
+        fieldConfig = {
+          defaults = {
+            mappings = [
+              {
+                type = "value";
+                options = {
+                  "0" = {
+                    text = "DOWN";
+                    color = "red";
+                  };
+                  "1" = {
+                    text = "UP";
+                    color = "green";
+                  };
+                };
+              }
+            ];
+            thresholds = {
+              mode = "absolute";
+              steps = [
+                {
+                  color = "red";
+                  value = null;
+                }
+                {
+                  color = "green";
+                  value = 1;
+                }
+              ];
+            };
+          };
+          overrides = [];
+        };
+        options = {
+          colorMode = "background";
+          graphMode = "none";
+          justifyMode = "auto";
+          orientation = "auto";
+          reduceOptions = {
+            calcs = ["lastNotNull"];
+            fields = "";
+            values = false;
+          };
+          textMode = "value";
+        };
+      }
+    ];
+  });
+
   # Datasource + dashboard provider + alert rules, file-provisioned so the
   # stack is reproducible from a fresh volume. NOTE: the result must contain
   # real files (cp -L), not symlinkJoin/linkFarm links — Docker bind-mounts
@@ -301,26 +393,22 @@
                   relativeTimeRange: {from: 300, to: 0}
                   datasourceUid: __expr__
                   model:
-                    type: classic_conditions
+                    type: threshold
                     refId: C
                     expression: A
                     intervalMs: 1000
                     maxDataPoints: 43200
                     datasource: {type: __expr__, uid: __expr__}
                     conditions:
-                      - type: query
-                        operator: {type: and}
-                        query: {params: [C]}
-                        reducer: {type: last, params: []}
-                        evaluator: {type: lt, params: [1]}
+                      - evaluator: {type: lt, params: [1]}
             - uid: bandit-lab-wan-probe-down
-              title: WAN probe failing
+              title: Public endpoint probe failing
               condition: C
               for: 3m
               labels:
                 severity: critical
               annotations:
-                summary: "WAN path to {{ $labels.instance }} is failing"
+                summary: "Public endpoint HTTP probe for {{ $labels.instance }} is failing"
               data:
                 - refId: A
                   relativeTimeRange: {from: 300, to: 0}
@@ -337,18 +425,46 @@
                   relativeTimeRange: {from: 300, to: 0}
                   datasourceUid: __expr__
                   model:
-                    type: classic_conditions
+                    type: threshold
                     refId: C
                     expression: A
                     intervalMs: 1000
                     maxDataPoints: 43200
                     datasource: {type: __expr__, uid: __expr__}
                     conditions:
-                      - type: query
-                        operator: {type: and}
-                        query: {params: [C]}
-                        reducer: {type: last, params: []}
-                        evaluator: {type: lt, params: [1]}
+                      - evaluator: {type: lt, params: [1]}
+            - uid: bandit-lab-origin-probe-down
+              title: Direct origin probe failing
+              condition: C
+              for: 3m
+              labels:
+                severity: critical
+              annotations:
+                summary: "Direct origin HTTP probe for {{ $labels.instance }} is failing"
+              data:
+                - refId: A
+                  relativeTimeRange: {from: 300, to: 0}
+                  datasourceUid: prometheus
+                  model:
+                    editorMode: code
+                    expr: probe_success{job="blackbox-origin"}
+                    instant: true
+                    range: false
+                    refId: A
+                    intervalMs: 1000
+                    maxDataPoints: 43200
+                - refId: C
+                  relativeTimeRange: {from: 300, to: 0}
+                  datasourceUid: __expr__
+                  model:
+                    type: threshold
+                    refId: C
+                    expression: A
+                    intervalMs: 1000
+                    maxDataPoints: 43200
+                    datasource: {type: __expr__, uid: __expr__}
+                    conditions:
+                      - evaluator: {type: lt, params: [1]}
             - uid: bandit-lab-disk-low
               title: Root filesystem almost full
               condition: C
@@ -373,18 +489,14 @@
                   relativeTimeRange: {from: 900, to: 0}
                   datasourceUid: __expr__
                   model:
-                    type: classic_conditions
+                    type: threshold
                     refId: C
                     expression: A
                     intervalMs: 1000
                     maxDataPoints: 43200
                     datasource: {type: __expr__, uid: __expr__}
                     conditions:
-                      - type: query
-                        operator: {type: and}
-                        query: {params: [C]}
-                        reducer: {type: last, params: []}
-                        evaluator: {type: lt, params: [15]}
+                      - evaluator: {type: lt, params: [15]}
             - uid: bandit-lab-memory-low
               title: Memory almost exhausted
               condition: C
@@ -409,18 +521,14 @@
                   relativeTimeRange: {from: 600, to: 0}
                   datasourceUid: __expr__
                   model:
-                    type: classic_conditions
+                    type: threshold
                     refId: C
                     expression: A
                     intervalMs: 1000
                     maxDataPoints: 43200
                     datasource: {type: __expr__, uid: __expr__}
                     conditions:
-                      - type: query
-                        operator: {type: and}
-                        query: {params: [C]}
-                        reducer: {type: last, params: []}
-                        evaluator: {type: lt, params: [10]}
+                      - evaluator: {type: lt, params: [10]}
     '';
   in
     pkgs.runCommand "grafana-provisioning" {} ''
@@ -435,6 +543,7 @@
     cp -L ${dashboardNodeExporter} $out/node-exporter-full.json
     cp -L ${dashboardCadvisor} $out/cadvisor-exporter.json
     cp -L ${dashboardWanProbes} $out/wan-probes.json
+    cp -L ${dashboardOriginProbes} $out/origin-probes.json
   '';
 in {
   # Host-side grafana system user so sops-install-secrets can resolve the
