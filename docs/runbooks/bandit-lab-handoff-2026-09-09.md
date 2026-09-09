@@ -236,3 +236,87 @@ Tunnel ingress + CNAMEs + Access apps done via Cloudflare API.
 - Spec phase 5 (Gophish + maddy internal phishing-sim, Kasm Workspaces) —
   explicitly optional, not started.
 - `deploy-mrija-archive-1` plaintext env secrets (see session 2 note) — still open.
+
+## Wazuh SIEM session (evening) — 4.12.0 → 4.14.7, agents, tuning
+
+Stack lives at `/srv/containers/wazuh/` (compose, still NOT repo-managed).
+Backup of the old stack: `/srv/containers/wazuh.bak-4.12.0`.
+
+### Upgrade 4.12.0 → 4.14.7
+
+- Indexer config mount paths changed upstream: everything now under
+  `/usr/share/wazuh-indexer/config/{certs,opensearch.yml,opensearch-security/...}`
+  — fixed in `docker-compose.yml` AND the cert paths inside
+  `config/wazuh_indexer/wazuh.indexer.yml`.
+- Dashboard: global dark mode via saved-objects API
+  (`POST /api/opensearch-dashboards/settings/theme:darkMode`), branding title
+  "bandit-lab SIEM" in `config/wazuh_dashboard/opensearch_dashboards.yml`.
+  Custom CSS colors (Gruvbox) are NOT supported by OpenSearch Dashboards.
+- Manager agent ports 1514/1515 + 514-udp rebound from 0.0.0.0 to the
+  Tailscale IP `100.125.161.81` only; 55000/9200 stay on loopback.
+
+### Agent architecture (hard-won lessons)
+
+- **Both hosts run the `wazuh/wazuh-agent` container.** bandit-lab: compose
+  service `wazuh.agent`. bandit laptop: `nixos/wazuh-agent.nix` (podman
+  oci-container, commits 4f64ae7, 0536260).
+- **docker-listener wodle needs the python `docker` package**, missing from
+  the agent image. `import docker` silently resolved to the wodle's own dir
+  as a namespace package. Fix: `pip install --target` (via throwaway
+  `python:3.9-slim`) into `config/wazuh_agent/site-packages`, mounted at
+  `/usr/local/lib64/python3.9/site-packages:ro` (first in sys.path, empty in
+  the image). PYTHONPATH does NOT propagate through s6 to modulesd.
+- **Unfiltered journald localfile congests the agent queue.** NixOS docker
+  log-driver=journald → the entire host journal (all Traefik access logs)
+  was forwarded; the wodle blocked on `s.send()` to the full unix-dgram
+  queue. Fix: filtered journald blocks only — `_SYSTEMD_UNIT` =
+  sshd/systemd-logind/fail2ban/smbd/nmbd, `_COMM` = sudo, `PRIORITY` 0-3.
+  Filter semantics: multiple `<localfile>` blocks OR; filters within a block
+  AND; `ignore_if_missing="yes"` accepts logs lacking the field.
+- **Duplicate-name enrollment:** `docker compose up -d` recreates wipe
+  `/var/ossec/etc` → re-enroll → manager rejects duplicate. Fix: manager
+  `<auth><force_insert>yes</force_insert><force_time>0</force_time>` +
+  named volume `wazuh_agent_etc:/var/ossec/etc` (client.keys persists).
+  NOTE: the manager's `/var/ossec/etc` is itself a named volume
+  (`wazuh_etc`); `docker restart` did NOT re-copy the config-mount — had to
+  `docker exec cp /wazuh-config-mount/etc/ossec.conf /var/ossec/etc/ossec.conf`
+  + restart. Old duplicate agent 001 was auto-replaced by new ID 003.
+- **ossec.conf ownership on the laptop:** files seeded into
+  `/var/lib/wazuh-agent/etc` must be group 999 (image wazuh group);
+  root:root broke wazuh-agentd with "Error reading XML (line 0)".
+- The lab agent's `0-wazuh-init: exited 1` on start is cosmetic (unset
+  WAZUH_REGISTRATION_PASSWORD makes the last `&&` chain return 1).
+
+### FIM tuning
+
+- Default 100k file_limit was exceeded (level-12 alerts) because
+  `/host/srv/containers` includes the docker data-root (~637k files in
+  overlay2 etc.) plus ~296k `.git`/`node_modules` files. Fix:
+  `file_limit` 500k + ignores `^/host/srv/containers/docker`, `.git/`,
+  `node_modules`. No limit warnings since.
+
+### Data analysis (erste Auswertung)
+
+- Agents: 000 manager, 002 bandit (laptop), 003 bandit-lab — all Active.
+  Alerts 24h: bandit-lab 457, manager 190, bandit 189.
+- Level distribution 24h: 622× lvl3, 187× lvl7, 21× lvl5, 6× lvl4, 2× lvl12
+  (the lvl12 were the FIM-limit events, fixed).
+- 737 of 838 alerts (24h) are **SCA noise**: CIS Benchmark for Amazon Linux
+  2023 — the agents scan their CONTAINER OS, not the NixOS hosts. Host
+  packages/kernel are invisible to this setup (score ~52-53%, mostly
+  container-irrelevant checks like AIDE/auditd/nftables).
+- **Zero sshd brute-force alerts in 7 days** (SSH is tailscale/LAN-only +
+  fail2ban). The web/accesslog flood seen during debugging never reached the
+  indexer (dropped by the congested queue — that WAS the root-cause proof).
+- docker-listener live: container exec/volume events flowing (mostly
+  cadvisor/vaultwarden healthchecks, lvl3).
+- Vulnerabilities (container image, 4 per agent): **CVE-2026-14456 High**
+  (openssl-libs + openssl-fips-provider 3.5.7 amzn2023) — watch for a fixed
+  `wazuh/wazuh-agent` image; python3-pip-wheel CVE-2026-45409/9375 Medium.
+- Dashboard "no agents registered" card was stale cache → hard-refresh.
+
+### Open
+
+- Wazuh stack still not repo-managed (compose + .env under
+  `/srv/containers/wazuh/`, no sops, no NixOS module).
+- Consider pinning agent image updates to pick up the openssl CVE fix.
