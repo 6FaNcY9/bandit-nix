@@ -12,6 +12,14 @@ upstream tooling for no gain.
 
 ## Deploy the stack
 
+> **Status 2026-09-09: DEPLOYED** at `/srv/containers/wazuh` (external compose
+> project `wazuh`, console-visible in Portainer). The steps below are the
+> record of how it was done / how to redo it. Actual deviations from the
+> original plan: passwords live in a `0600 .env` next to the compose file
+> (referenced as `${VAR}`), the indexer admin + kibanaserver bcrypt hashes in
+> `config/wazuh_indexer/internal_users.yml` were replaced **before first
+> boot**, and indexer `9200` + manager API `55000` are loopback-bound too.
+
 1. On bandit-lab, prepare host directories:
 
    ```bash
@@ -26,23 +34,31 @@ upstream tooling for no gain.
    sudo docker compose -f generate-indexer-certs.yml run --rm generator
    ```
 
-3. In Portainer → Stacks → Add stack, paste `single-node/docker-compose.yml`.
-   Before deploying, edit it:
+3. Edit `single-node/docker-compose.yml` before the first `up`:
 
-   - Change **all default passwords** (`INDEXER_PASSWORD`,
-     `API_PASSWORD`, dashboard admin) — generate them and store the dashboard
-     admin password as a sops secret if you want it tracked.
+   - Reference passwords from a `0600 .env` (`${WAZUH_INDEXER_PASSWORD}`,
+     `${WAZUH_API_PASSWORD}`, `${WAZUH_DASHBOARD_PASSWORD}`) instead of the
+     upstream defaults, and replace the matching bcrypt hashes in
+     `config/wazuh_indexer/internal_users.yml` (`admin`, `kibanaserver`) —
+     the indexer only reads that file on first boot. The dashboard admin
+     password is tracked as the sops secret `wazuh-admin-password`.
    - Set the indexer heap (`OPENSEARCH_JAVA_OPTS`) to `-Xms4g -Xmx4g`; the
      lab has 64 GB, but the indexer does not need more than that for two
      hosts.
    - Do **not** publish dashboard port `443` on a routable interface. Bind it
-     to loopback: `"127.0.0.1:443:443"`. Access it via SSH/Tailscale port
+     to loopback: `"127.0.0.1:443:5601"`. Same for the indexer
+     (`"127.0.0.1:9200:9200"`) and the manager API
+     (`"127.0.0.1:55000:55000"`). Access the dashboard via SSH/Tailscale port
      forward, same as Cockpit and Portainer:
 
      ```bash
      ssh -L 8443:127.0.0.1:443 bandit-lab
      # → https://localhost:8443 (accept the self-signed cert)
      ```
+
+   The stack is started with plain `sudo docker compose up -d` in
+   `/srv/containers/wazuh` (it shows up in Portainer as an external stack —
+   Portainer stays console-only).
 
 4. Verify: `sudo docker ps | grep wazuh` — three containers (manager,
    indexer, dashboard) healthy.
