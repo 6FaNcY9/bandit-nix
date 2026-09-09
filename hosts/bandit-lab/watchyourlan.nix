@@ -19,7 +19,13 @@
       PROMETHEUS_ENABLE = "true"; # /metrics for the monitoring stack
     };
     volumes = ["/srv/containers/watchyourlan/data:/data/WatchYourLAN"];
-    extraOptions = ["--network=host"];
+    extraOptions = [
+      "--network=host"
+      # ARP scanning needs raw packets and interface control, nothing else.
+      "--cap-drop=ALL"
+      "--cap-add=NET_RAW"
+      "--cap-add=NET_ADMIN"
+    ];
   };
 
   # Host-network containers have no IP on the proxy network, so Traefik's

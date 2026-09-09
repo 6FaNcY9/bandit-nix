@@ -404,6 +404,10 @@ in {
 
   fonts.packages = [pkgs.nerd-fonts.jetbrains-mono];
 
+  # firmware.nix is shared with the laptop: fprintd is a desktop fingerprint
+  # daemon with no hardware (or use) on a headless server.
+  services.fprintd.enable = lib.mkForce false;
+
   services.openssh = {
     enable = true;
     openFirewall = true;
@@ -434,4 +438,8 @@ in {
     max-jobs = 2;
     cores = 4;
   };
+
+  # Keep more generations than the laptop's 30d (core.nix): the auto-updater's
+  # rollback target must survive quiet periods with no deploys.
+  nix.gc.options = lib.mkForce "--delete-older-than 90d";
 }

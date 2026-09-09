@@ -41,7 +41,7 @@ in {
       "${vaultwardenTemplates}:/templates:ro"
     ];
     environment = {
-      WEBSOCKET_ENABLED = "true";
+      # Websockets ride the main port since 1.29 (WEBSOCKET_ENABLED is gone).
       TEMPLATES_FOLDER = "/templates";
     };
     environmentFiles = [config.sops.templates."vaultwarden.env".path];

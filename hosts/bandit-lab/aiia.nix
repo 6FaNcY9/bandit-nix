@@ -93,7 +93,7 @@ in {
           STRIPE_TSHIRT_PUBLISHABLE_KEY=${config.sops.placeholder."aiia-stripe-publishable-key"}
           STRIPE_TSHIRT_WEBHOOK_SECRET=${config.sops.placeholder."aiia-stripe-webhook-secret"}
           AIIA_ORDER_MODE=draft
-          AIIA_PUBLIC_URL=https://aiia.bandit-lab.mrija.org
+          AIIA_PUBLIC_URL=https://aiia.at
           database__connection__password=${config.sops.placeholder."aiia-mysql-password"}
         '';
       };
@@ -115,6 +115,9 @@ in {
   virtualisation.oci-containers.containers = {
     aiia-mysql = {
       image = "mysql:8.4@sha256:b3b90af2a6552ae30c266fdb7d5dd55f3afb72404bb78d37fe8a23eb857fd3fb";
+      # Low-churn Ghost DB: cap binlog point-in-time recovery at 7 days
+      # instead of the 30-day default.
+      cmd = ["--binlog-expire-logs-seconds=604800"];
       volumes = ["/srv/containers/aiia/mysql:/var/lib/mysql"];
       environmentFiles = [config.sops.templates."aiia-mysql.env".path];
       networks = ["aiia"];
