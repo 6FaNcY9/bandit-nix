@@ -18,6 +18,7 @@
     ./aiia.nix
     ./auto-rebuild.nix
     ./crowdsec.nix
+    ./wazuh.nix
     ./toolbox.nix
     ./health-check.nix
     # Sideloading is on hold (cable/hardware issues) — anisette.nix stays in
