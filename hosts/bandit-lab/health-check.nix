@@ -5,6 +5,10 @@
 }: let
   criticalUnits = [
     "cloudflared-tunnel-bandit-lab.service"
+    # Intrusion detection + remediation: verified end-to-end (engine parses
+    # sshd/traefik, bouncers enforce). A dead engine must roll back deploys.
+    "crowdsec.service"
+    "crowdsec-firewall-bouncer.service"
     # docker-aiia-ghost deliberately stays out until the image transfer onto
     # the host is confirmed — the private GHCR image is docker-loaded by hand,
     # so the unit fails (and would roll back deploys) until then.
