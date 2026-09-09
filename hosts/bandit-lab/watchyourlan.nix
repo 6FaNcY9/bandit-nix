@@ -16,7 +16,8 @@
       TZ = config.time.timeZone;
       HOST = "127.0.0.1"; # loopback-only GUI; Traefik proxies it
       PORT = "8840";
-      PROMETHEUS_ENABLE = "true"; # /metrics for the monitoring stack
+      # No PROMETHEUS_ENABLE: /metrics would live on the same loopback-only
+      # port, so the bridge-networked Prometheus could never scrape it.
     };
     volumes = ["/srv/containers/watchyourlan/data:/data/WatchYourLAN"];
     extraOptions = [

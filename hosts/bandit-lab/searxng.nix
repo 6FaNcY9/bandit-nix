@@ -13,7 +13,15 @@ _: {
       "--label=traefik.enable=true"
       "--label=traefik.http.routers.searxng.rule=Host(`search.bandit-lab.mrija.org`)"
       "--label=traefik.http.routers.searxng.entrypoints=web"
+      "--label=traefik.http.routers.searxng.middlewares=searxng-ratelimit"
       "--label=traefik.http.services.searxng.loadbalancer.server.port=8080"
+      # Public endpoint: unthrottled metasearch abuse (scrapers proxying
+      # through it) gets the host IP banned by upstream engines. Client IPs
+      # resolve from Cloudflare's X-Forwarded-For (entrypoint trusts
+      # cloudflared on loopback), so the limit keys on the real visitor.
+      "--label=traefik.http.middlewares.searxng-ratelimit.ratelimit.average=60"
+      "--label=traefik.http.middlewares.searxng-ratelimit.ratelimit.period=1m"
+      "--label=traefik.http.middlewares.searxng-ratelimit.ratelimit.burst=120"
     ];
   };
 
