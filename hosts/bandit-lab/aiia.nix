@@ -140,6 +140,12 @@ in {
       # is /home/ghost (not the upstream /var/lib/ghost), and themes — the
       # aiia theme included — ship inside the image, so a whole-content mount
       # would shadow them on first boot.
+      # Theme activation is a DB setting, not an image property: the image
+      # still seeds active_theme="source" (default-settings.json), so after
+      # any DB rebuild the storefront silently falls back to the Source theme.
+      # Fix: UPDATE settings SET value='aiia' WHERE settings.key='active_theme'
+      # in aiia-mysql + docker restart aiia-ghost. Durable fix belongs in the
+      # AiiA repo (change the defaultValue to "aiia").
       volumes = [
         "/srv/containers/aiia/content-images:/home/ghost/content/images"
         "/srv/containers/aiia/content-media:/home/ghost/content/media"
