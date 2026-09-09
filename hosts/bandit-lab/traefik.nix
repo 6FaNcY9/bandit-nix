@@ -81,13 +81,37 @@ in {
     };
   };
 
+  # Access-log destination shared with the CrowdSec engine (the reader):
+  # group crowdsec may traverse the dir; files Traefik creates are 0644.
+  systemd.tmpfiles.rules = [
+    "d /var/log/traefik 0750 traefik crowdsec - -"
+  ];
+
+  # The access log no longer lands in the journal, so rotate it on disk.
+  # copytruncate avoids having to signal Traefik to reopen the file.
+  services.logrotate.settings."/var/log/traefik/access.log" = {
+    frequency = "daily";
+    rotate = 14;
+    compress = true;
+    missingok = true;
+    notifempty = true;
+    copytruncate = true;
+  };
+
   services.traefik = {
     enable = true;
     staticConfigOptions = {
       log.level = "INFO";
-      # JSON access log to stdout -> journald, where the CrowdSec engine
-      # (hosts/bandit-lab/crowdsec.nix) picks it up as its HTTP data source.
-      accessLog.format = "json";
+      # JSON access log to a file instead of stdout: the CrowdSec engine
+      # (hosts/bandit-lab/crowdsec.nix) reads it with a file acquisition.
+      # Journald is unusable as a transport here — the crowdsec journalctl
+      # source reads the default short format, so every line arrives with a
+      # "MMM DD HH:MM:SS host traefik[pid]: " prefix that breaks both the
+      # CLF and JSON branches of crowdsecurity/traefik-logs.
+      accessLog = {
+        format = "json";
+        filePath = "/var/log/traefik/access.log";
+      };
       entryPoints.web = {
         address = "127.0.0.1:80";
         forwardedHeaders.trustedIPs = [

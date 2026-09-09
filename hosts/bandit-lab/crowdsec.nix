@@ -54,9 +54,12 @@ _: {
           journalctl_filter = ["_SYSTEMD_UNIT=sshd.service"];
           labels.type = "syslog";
         }
+        # Traefik's JSON access log from a file, not journald: the journalctl
+        # source passes the default short format (with a syslog-style prefix)
+        # that crowdsecurity/traefik-logs cannot parse. See traefik.nix.
         {
-          source = "journalctl";
-          journalctl_filter = ["_SYSTEMD_UNIT=traefik.service"];
+          source = "file";
+          filenames = ["/var/log/traefik/access.log"];
           labels.type = "traefik";
         }
       ];
