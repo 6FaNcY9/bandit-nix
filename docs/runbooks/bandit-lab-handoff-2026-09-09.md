@@ -317,6 +317,33 @@ Backup of the old stack: `/srv/containers/wazuh.bak-4.12.0`.
 
 ### Open
 
-- Wazuh stack still not repo-managed (compose + .env under
-  `/srv/containers/wazuh/`, no sops, no NixOS module).
+- ~~Wazuh stack not repo-managed~~ → done, see next section.
 - Consider pinning agent image updates to pick up the openssl CVE fix.
+
+## Wazuh repo-managed (3c9822b) — compose → oci-containers
+
+The stack at `/srv/containers/wazuh/` is now declarative:
+`hosts/bandit-lab/wazuh.nix` runs manager/indexer/dashboard/agent as
+`virtualisation.oci-containers` on a dedicated `wazuh` docker network,
+reusing the existing compose named volumes (zero data migration). Portainer
+sees all four containers like every other unit on the host.
+
+- Configs + public certs versioned under `hosts/bandit-lab/wazuh/`, symlinked
+  to stable paths via tmpfiles `L+`.
+- Passwords (`wazuh-admin-password` = indexer admin, `wazuh-api-password`,
+  `wazuh-dashboard-password`), all TLS private keys, and
+  `internal_users.yml` (password hashes) are sops secrets in
+  `secrets/secrets.yaml`. Node/admin keys mount from `/run/secrets`; the CA
+  keys render back into the certs dir so the upstream cert-regeneration
+  compose file keeps working.
+- Indexer/dashboard containers read uid 1000 → sops owner `vino` (uid 1000
+  on this host). Grafana-style system-user trick unnecessary here.
+- Dashboard `wazuh.yml` ships upstream with a plaintext API password →
+  rendered via sops template, never committed.
+- Agent `site-packages` (pip `docker` package for the docker-listener wodle)
+  stays host state at `/srv/containers/wazuh/config/wazuh_agent/site-packages`;
+  regenerate on a fresh host with
+  `docker run --rm -v <dir>:/out python:3.9-slim pip install --target /out docker`.
+- The old `docker-compose.yml` + `generate-indexer-certs.yml` remain on the
+  host as inert files; `.env` (plaintext passwords) was removed after
+  verification.
