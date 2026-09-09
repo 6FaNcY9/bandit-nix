@@ -29,6 +29,10 @@
         # Cloudflare Access login. The Ghost /ghost/ admin should get an
         # Access app if it ever needs hardening (docs/runbooks/cloudflare-access.md).
         "aiia.bandit-lab.mrija.org" = "http://localhost:80";
+        # Primary storefront domain. Ghost canonical URL is https://aiia.at;
+        # both hostnames route to the same Traefik service.
+        "aiia.at" = "http://localhost:80";
+        "www.aiia.at" = "http://localhost:80";
         # WatchYourLAN device inventory — must have a Cloudflare Access
         # application (docs/runbooks/cloudflare-access.md); it has no auth
         # of its own and the host list is sensitive network metadata.

@@ -148,7 +148,14 @@ in {
         "/srv/containers/aiia/content-data:/home/ghost/content/data"
       ];
       environment = {
-        url = "https://aiia.bandit-lab.mrija.org";
+        # Canonical storefront domain. Ghost 301-redirects the old
+        # aiia.bandit-lab.mrija.org hostname here.
+        url = "https://aiia.at";
+        # Ghost 6 defaults server.host to 127.0.0.1, which makes the app
+        # unreachable for Traefik across the proxy network (502). Bind all
+        # interfaces inside the container; exposure is still gated by the
+        # tunnel + Traefik router.
+        server__host = "0.0.0.0";
         database__client = "mysql";
         database__connection__host = "aiia-mysql";
         database__connection__port = "3306";
@@ -164,7 +171,7 @@ in {
       extraOptions = [
         "--label=traefik.enable=true"
         "--label=traefik.docker.network=proxy"
-        "--label=traefik.http.routers.aiia.rule=Host(`aiia.bandit-lab.mrija.org`)"
+        "--label=traefik.http.routers.aiia.rule=Host(`aiia.at`) || Host(`www.aiia.at`) || Host(`aiia.bandit-lab.mrija.org`)"
         "--label=traefik.http.routers.aiia.entrypoints=web"
         "--label=traefik.http.services.aiia.loadbalancer.server.port=2368"
       ];
