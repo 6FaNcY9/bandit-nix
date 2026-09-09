@@ -38,7 +38,7 @@ _: {
       profiles = [
         {
           name = "default_ip_remediation";
-          filters = ["Alert.Remediation == true && Alert.EventsScope == \"Ip\""];
+          filters = ["Alert.Remediation == true && Alert.GetScope() == \"Ip\""];
           decisions = [
             {
               type = "ban";
