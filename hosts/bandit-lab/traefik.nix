@@ -140,12 +140,14 @@ in {
     };
     dynamicConfigOptions.http.middlewares.crowdsec-bouncer.plugin.bouncer = {
       enabled = true;
-      # The LAPI is loopback-only (crowdsec.nix); the plugin reads the key
-      # from this sops-owned file at request time, keeping it out of the
-      # Nix store.
+      # The LAPI is loopback-only (crowdsec.nix). The plugin resolves the
+      # key from this sops-owned file itself — it MUST be crowdsecLapiKeyFile,
+      # not crowdsecLapiKey: the latter is sent verbatim as X-Api-Key, and
+      # putting a path there made every LAPI call 403 (and every request
+      # fail-closed), which rolled the first deploy back.
       crowdsecLapiScheme = "http";
       crowdsecLapiHost = "127.0.0.1:8080";
-      crowdsecLapiKey = config.sops.secrets.crowdsec-traefik-bouncer-key.path;
+      crowdsecLapiKeyFile = config.sops.secrets.crowdsec-traefik-bouncer-key.path;
       # Immediate peer is always cloudflared on loopback; the real client
       # IP comes from its X-Forwarded-For.
       forwardedHeadersTrustedIPs = [

@@ -12,8 +12,8 @@
   # needs /etc/crowdsec/config.yaml the module never renders.
   sops.secrets = {
     crowdsec-firewall-bouncer-key = {};
-    # Read by the Traefik process (crowdsec-bouncer plugin accepts a file
-    # path for the LAPI key), so it must be owned by the traefik user.
+    # Read by the Traefik process (the plugin's crowdsecLapiKeyFile option),
+    # so it must be owned by the traefik user.
     crowdsec-traefik-bouncer-key.owner = "traefik";
   };
   services.crowdsec = {
@@ -96,5 +96,12 @@
     # unit is unusable on NixOS (see the header comment).
     registerBouncer.enable = false;
     secrets.apiKeyPath = config.sops.secrets.crowdsec-firewall-bouncer-key.path;
+    # INPUT alone leaves published container ports untouched; DOCKER-USER is
+    # where Docker lets administrators filter forwarded traffic, so the CAPI
+    # blocklist drops hostile IPs before they reach any published port too.
+    settings.iptables_chains = [
+      "INPUT"
+      "DOCKER-USER"
+    ];
   };
 }
