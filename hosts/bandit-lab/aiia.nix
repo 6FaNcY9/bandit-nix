@@ -26,7 +26,13 @@ in {
       "d /srv/containers/aiia/content-files 0750 ${username} users -"
       "d /srv/containers/aiia/content-logs 0750 ${username} users -"
       "d /srv/containers/aiia/content-data 0750 ${username} users -"
-      "d /srv/containers/aiia/mysql 0750 ${username} users -"
+      # Ownership left unset on purpose: the mysql:8.4 container runs as
+      # uid/gid 999, and tmpfiles re-applying ${username}:users 0750 after
+      # every boot revokes all access for the mysqld process (InnoDB
+      # EACCES, "Operating system error number 13"). The image entrypoint
+      # chowns the datadir itself. Pre-existing hosts still need a one-time
+      # `chown 999:999 /srv/containers/aiia/mysql`.
+      "d /srv/containers/aiia/mysql 0750 - - -"
     ];
 
     services = {
