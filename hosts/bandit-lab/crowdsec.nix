@@ -1,19 +1,29 @@
 _: {
   # Collaborative IPS (docs/specs/2026-09-09-security-lab.md, phase 3):
   # the engine parses journald (sshd + the Traefik JSON access log), enriches
-  # with community blocklists via the central API, and the firewall bouncer
-  # enforces decisions in its own nftables table. fail2ban stays in place
-  # until CrowdSec has proven itself — do not remove one for the other.
+  # with community blocklists via the central API, and bans via profiles.
+  # fail2ban stays in place until CrowdSec has proven itself.
   #
-  # Scope note: firewall bans only affect direct-hit traffic (sshd, Samba).
-  # All public HTTP arrives through the Cloudflare tunnel and never touches
-  # the host firewall — that path gets its own enforcement via the Traefik
-  # bouncer plugin (phase 3b, needs a cscli-registered bouncer key in sops).
+  # The firewall bouncer is NOT enabled here yet (phase 3b): the NixOS
+  # module's registerBouncer unit conflicts with the engine's state dir
+  # (DynamicUser StateDirectory creates /var/lib/crowdsec ->
+  # /var/lib/private/* owned by a dynamic UID, starving the engine) and its
+  # raw cscli needs /etc/crowdsec/config.yaml the module never renders.
+  # Instead the bouncer gets registered once imperatively via the wrapped
+  # cscli on the host and authenticates with a sops-provided key
+  # (services.crowdsec-firewall-bouncer.secrets.apiKeyPath).
   services.crowdsec = {
     enable = true;
     autoUpdateService = true; # daily cscli hub update
-    # LAPI keeps its loopback default (127.0.0.1:8080): only the local
-    # bouncers consume it, so openFirewall stays false.
+    settings = {
+      # LAPI for the bouncers; loopback default (127.0.0.1:8080), no firewall.
+      general.api.server.enable = true;
+      # Explicit credential paths under the writable state dir — left null,
+      # the setup script's `cscli machine add` / `capi register` steps have
+      # nowhere to write.
+      lapi.credentialsFile = "/var/lib/crowdsec/state/local_api_credentials.yaml";
+      capi.credentialsFile = "/var/lib/crowdsec/state/online_api_credentials.yaml";
+    };
     hub.collections = [
       "crowdsecurity/linux"
       "crowdsecurity/sshd"
@@ -21,6 +31,20 @@ _: {
       "crowdsecurity/http-cve"
     ];
     localConfig = {
+      # Without profiles the engine alerts but never decides (module warns).
+      profiles = [
+        {
+          name = "default_ip_remediation";
+          filters = ["Alert.Remediation == true && Alert.EventsScope == \"Ip\""];
+          decisions = [
+            {
+              type = "ban";
+              duration = "4h";
+            }
+          ];
+          on_success = "break";
+        }
+      ];
       acquisitions = [
         {
           source = "journalctl";
@@ -48,13 +72,5 @@ _: {
         }
       ];
     };
-  };
-
-  services.crowdsec-firewall-bouncer = {
-    enable = true;
-    # registerBouncer keeps its default (auto-register to the local LAPI —
-    # the module manages the API key, no manual cscli step). The bouncer
-    # enforces in its own nftables table, leaving the NixOS firewall
-    # (inet nixos-fw) untouched.
   };
 }
