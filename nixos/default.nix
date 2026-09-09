@@ -14,6 +14,7 @@ _: {
     ./dev.nix
     ./gaming.nix
     ./security-tools.nix
+    ./wazuh-agent.nix
     ./audio.nix
     ./desktop.nix
     ./users.nix
