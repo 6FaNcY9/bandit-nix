@@ -71,7 +71,8 @@
       </wodle>
 
       <sca>
-        <enabled>yes</enabled>
+        <!-- The image's Amazon Linux policies audit the container, not NixOS. -->
+        <enabled>no</enabled>
         <scan_on_start>yes</scan_on_start>
         <interval>12h</interval>
         <skip_nfs>yes</skip_nfs>
@@ -131,7 +132,7 @@
       <localfile>
         <log_format>journald</log_format>
         <location>journald</location>
-        <filter field="_SYSTEMD_UNIT">^(smbd|nmbd)\.service$</filter>
+        <filter field="_SYSTEMD_UNIT">^samba-(smbd|nmbd)\.service$</filter>
       </localfile>
       <localfile>
         <log_format>journald</log_format>
@@ -183,7 +184,6 @@ in {
       "/var/log/journal:/var/log/journal:ro"
       "/etc:/host/etc:ro"
       "/home:/host/home:ro"
-      "/root:/host/root:ro"
     ];
   };
 
