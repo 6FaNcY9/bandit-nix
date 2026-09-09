@@ -1,17 +1,21 @@
-_: {
+{config, ...}: {
   # Collaborative IPS (docs/specs/2026-09-09-security-lab.md, phase 3):
   # the engine parses journald (sshd + the Traefik JSON access log), enriches
   # with community blocklists via the central API, and bans via profiles.
   # fail2ban stays in place until CrowdSec has proven itself.
   #
-  # The firewall bouncer is NOT enabled here yet (phase 3b): the NixOS
-  # module's registerBouncer unit conflicts with the engine's state dir
-  # (DynamicUser StateDirectory creates /var/lib/crowdsec ->
-  # /var/lib/private/* owned by a dynamic UID, starving the engine) and its
-  # raw cscli needs /etc/crowdsec/config.yaml the module never renders.
-  # Instead the bouncer gets registered once imperatively via the wrapped
-  # cscli on the host and authenticates with a sops-provided key
-  # (services.crowdsec-firewall-bouncer.secrets.apiKeyPath).
+  # The bouncers are registered once imperatively via the wrapped cscli on
+  # the host (`cscli bouncers add <name>`) and authenticate with sops keys:
+  # the NixOS module's registerBouncer unit is unusable — its DynamicUser
+  # StateDirectory creates /var/lib/crowdsec -> /var/lib/private/* owned by
+  # a dynamic UID (starving the engine's state dir), and its raw cscli
+  # needs /etc/crowdsec/config.yaml the module never renders.
+  sops.secrets = {
+    crowdsec-firewall-bouncer-key = {};
+    # Read by the Traefik process (crowdsec-bouncer plugin accepts a file
+    # path for the LAPI key), so it must be owned by the traefik user.
+    crowdsec-traefik-bouncer-key.owner = "traefik";
+  };
   services.crowdsec = {
     enable = true;
     autoUpdateService = true; # daily cscli hub update
@@ -80,5 +84,17 @@ _: {
         }
       ];
     };
+  };
+
+  # Enforce engine decisions in the host firewall. The bouncer polls the
+  # loopback LAPI and maintains a DROP ipset (lab firewall is iptables;
+  # the module picks the mode from networking.nftables.enable). The key
+  # comes from sops, never the store.
+  services.crowdsec-firewall-bouncer = {
+    enable = true;
+    # Registered imperatively on the host; the module's registerBouncer
+    # unit is unusable on NixOS (see the header comment).
+    registerBouncer.enable = false;
+    secrets.apiKeyPath = config.sops.secrets.crowdsec-firewall-bouncer-key.path;
   };
 }

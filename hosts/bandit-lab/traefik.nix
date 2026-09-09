@@ -1,4 +1,8 @@
-{pkgs, ...}: let
+{
+  config,
+  pkgs,
+  ...
+}: let
   # Inspect-then-create: a plain `docker network create proxy || true` would
   # also mask real daemon failures (wedged socket, disk full), leaving every
   # dependent container unit to fail later with an obscure "network not
@@ -114,6 +118,9 @@ in {
       };
       entryPoints.web = {
         address = "127.0.0.1:80";
+        # Enforce CrowdSec decisions on every public router (see the
+        # crowdsec-bouncer middleware below).
+        http.middlewares = ["crowdsec-bouncer@file"];
         forwardedHeaders.trustedIPs = [
           "127.0.0.1/32"
           "::1/128"
@@ -124,6 +131,27 @@ in {
         exposedByDefault = false;
         network = "proxy";
       };
+      # CrowdSec bouncer plugin: blocks IPs the engine has decisions for
+      # before they ever reach a backend.
+      experimental.plugins.bouncer = {
+        moduleName = "github.com/maxlerebourg/crowdsec-bouncer-traefik-plugin";
+        version = "v1.7.1";
+      };
+    };
+    dynamicConfigOptions.http.middlewares.crowdsec-bouncer.plugin.bouncer = {
+      enabled = true;
+      # The LAPI is loopback-only (crowdsec.nix); the plugin reads the key
+      # from this sops-owned file at request time, keeping it out of the
+      # Nix store.
+      crowdsecLapiScheme = "http";
+      crowdsecLapiHost = "127.0.0.1:8080";
+      crowdsecLapiKey = config.sops.secrets.crowdsec-traefik-bouncer-key.path;
+      # Immediate peer is always cloudflared on loopback; the real client
+      # IP comes from its X-Forwarded-For.
+      forwardedHeadersTrustedIPs = [
+        "127.0.0.1/32"
+        "::1/128"
+      ];
     };
   };
 }
