@@ -52,6 +52,9 @@
         # Vaultwarden stays without an Access app: native Bitwarden clients
         # cannot complete an interactive Access login.
         "vault.bandit-lab.mrija.org" = "http://localhost:80";
+        # New primary vault domain (same service; old hostname kept while
+        # clients are migrated).
+        "vault.atmosphaere.at" = "http://localhost:80";
       };
     };
   };

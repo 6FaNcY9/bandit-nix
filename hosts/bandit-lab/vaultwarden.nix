@@ -29,7 +29,7 @@ in {
       ADMIN_TOKEN=${config.sops.placeholder."vaultwarden-admin-token"}
       SIGNUPS_ALLOWED=false
       INVITATIONS_ALLOWED=true
-      DOMAIN=https://vault.bandit-lab.mrija.org
+      DOMAIN=https://vault.atmosphaere.at
       IP_HEADER=CF-Connecting-IP
     '';
   };
@@ -48,7 +48,7 @@ in {
     extraOptions = [
       "--network=proxy"
       "--label=traefik.enable=true"
-      "--label=traefik.http.routers.vaultwarden.rule=Host(`vault.bandit-lab.mrija.org`)"
+      "--label=traefik.http.routers.vaultwarden.rule=Host(`vault.atmosphaere.at`) || Host(`vault.bandit-lab.mrija.org`)"
       "--label=traefik.http.routers.vaultwarden.entrypoints=web"
       "--label=traefik.http.services.vaultwarden.loadbalancer.server.port=80"
     ];

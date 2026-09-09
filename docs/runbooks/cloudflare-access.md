@@ -40,7 +40,8 @@ public by design (see below).
    Portainer is WAN-published behind its Access app, and also remains
    reachable via `ssh -L 9443:localhost:9443 bandit-lab` →
    `https://localhost:9443` as a fallback. Tailscale works too.
-5. `vault.bandit-lab.mrija.org` (Vaultwarden) intentionally has **no** Access
+5. `vault.atmosphaere.at` (Vaultwarden; legacy `vault.bandit-lab.mrija.org`
+   still routes during the client migration) intentionally has **no** Access
    application: native Bitwarden clients cannot complete an interactive
    Access login. It is hardened at the app level instead
    (`SIGNUPS_ALLOWED=false`, `ADMIN_TOKEN` from sops). Do not put an Access
