@@ -14,17 +14,43 @@ Cloudflare Tunnel at `https://aiia.bandit-lab.mrija.org`.
 2. **Image transfer**: the GHCR package is private and the host holds no
    registry credentials, so the image travels as a CI artifact over SSH:
 
+   Choose a run for the intended source revision with a successful production
+   image build and an unexpired `docker-image-production` artifact. If the
+   artifact has expired, a fresh CI build is needed before downloading it.
+   The configured image is `ghcr.io/6fancy9/aiia:main`; a package named
+   `aiia-ghost:v1` is a different image reference, even when linked to the same
+   repository. Verify its source revision and contents before substituting it.
+
+   The `aiia-ghost:v1` image inspected on 2026-09-09 (index digest
+   `sha256:7cb0de296dc7f736b26523847a0fd241ee84f5b788c30be84b4b6300025a6cde`)
+   reports source revision `abca48385e2032affc8eb4adf9081fd3b5ee2c59` in its
+   build provenance. That revision predates the `AIIA_ORDER_MODE` guard added
+   in `ee3b0e2bf4`; do not substitute that image for this draft-mode deployment.
+
    ```bash
    gh run download <run-id> --repo 6FaNcY9/AiiA --name docker-image-production
    scp docker-image-production.tar.gz bandit-lab:/tmp/
    ssh bandit-lab 'sudo docker load < /tmp/docker-image-production.tar.gz && rm /tmp/docker-image-production.tar.gz'
-   ssh bandit-lab 'sudo systemctl restart docker-aiia-ghost'
+   ssh bandit-lab 'sudo docker image inspect ghcr.io/6fancy9/aiia:main --format "{{.Id}} {{.Os}}/{{.Architecture}}"'
    ```
 
-   Until the first load, `docker-aiia-ghost.service` fails by design
-   (`pull = "missing"`); it is excluded from `criticalUnits` in
+   Confirm the expected tag exists and reports `linux/amd64` before starting
+   Ghost. If inspection fails, stop and resolve the image mismatch first.
+
+   ```bash
+   ssh bandit-lab 'sudo systemctl reset-failed docker-aiia-ghost'
+   ssh bandit-lab 'sudo systemctl restart docker-aiia-ghost'
+   ssh bandit-lab 'systemctl is-active docker-aiia-ghost'
+   ```
+
+   These transfer and service commands modify the server; they are deployment
+   steps, not read-only diagnostic checks.
+
+   Until the first load, `docker-aiia-ghost.service` fails because its image is
+   unavailable locally (`pull = "never"`); it is excluded from `criticalUnits` in
    `health-check.nix` so this does not roll back deploys. After the first
-   confirmed load, add it to `criticalUnits`.
+   successful startup and application health verification, add it to
+   `criticalUnits`.
 3. **Ghost first-run setup** (needs the tunnel hostname live):
    - `https://aiia.bandit-lab.mrija.org/ghost/` → create the staff account.
    - Settings → Design → activate the **aiia** theme.
