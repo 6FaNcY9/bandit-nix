@@ -30,7 +30,7 @@
   ];
   healthCheck = pkgs.writeShellApplication {
     name = "bandit-lab-health";
-    runtimeInputs = [pkgs.coreutils pkgs.systemd pkgs.curl config.services.postgresql.package];
+    runtimeInputs = [pkgs.coreutils pkgs.systemd pkgs.curl pkgs.docker config.services.postgresql.package];
     text = ''
       set -euo pipefail
 
@@ -53,6 +53,27 @@
         echo "Readiness check failed: $*" >&2
         return 1
       }
+      # Traefik withholds routing while a container's Docker healthcheck is
+      # "starting", and vaultwarden's first check lands a full interval after
+      # boot. An HTTP probe alone burns all retries on instant 404s and rolls
+      # back healthy deploys — wait for the engine health state first.
+      container_healthy() {
+        local attempt status
+        for ((attempt = 1; attempt <= 24; attempt++)); do
+          status="$(docker inspect --format '{{.State.Health.Status}}' "$1")"
+          case "$status" in
+            healthy) return 0 ;;
+            unhealthy)
+              echo "Container $1 reports unhealthy" >&2
+              return 1
+              ;;
+          esac
+          sleep 5
+        done
+        echo "Container $1 did not become healthy in time" >&2
+        return 1
+      }
+      container_healthy vaultwarden
       ready pg_isready -q -h /run/postgresql -t 3
       ready curl --fail --silent --show-error --output /dev/null --connect-timeout 2 --max-time 5 \
         -H 'Host: portainer.bandit-lab.mrija.org' http://127.0.0.1/api/status
