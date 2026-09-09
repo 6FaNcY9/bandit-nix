@@ -6,6 +6,8 @@ _: {
   };
 
   services = {
+    # Share the desktop notifier already enabled by earlyoom.
+    smartd.notifications.systembus-notify.enable = true;
     earlyoom = {
       enable = true;
       enableNotifications = true;

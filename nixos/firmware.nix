@@ -1,6 +1,7 @@
 _: {
   services = {
     fwupd.enable = true;
+    smartd.enable = true;
     fprintd.enable = true;
     # upower provides battery status used by status bars and desktop apps.
     upower.enable = true;
