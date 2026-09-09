@@ -179,3 +179,60 @@ The `deploy-mrija-archive-1` container (docker-compose managed, not declared in 
 2. `sudo nixos-rebuild switch --flake .#bandit-lab`, then confirm `docker-aiia-mysql.service` and `docker-aiia-ghost.service` start and Ghost finishes its migrations.
 3. Restore SSH access for `mrija_org@s16.thehost.com.ua` (re-add the `mrija-thehost-unattended` public key on the mail host or issue a new keypair and update the sops `thehost-sshkey` secret + `/home/vino/.ssh/thehost_mrija`). Then run `sudo systemctl start mrija-archive-sync.service` and verify it exits 0 and the sqlite index mtime advances.
 4. Run `bandit-lab-health` and confirm zero failed units.
+
+---
+
+# Continuation results — third session, 2026-09-09 (security-lab build-out)
+
+Governing spec: `docs/specs/2026-09-09-security-lab.md`. All phases deployed
+via signed commits + `lab-update apply` (health-gated, rollback-safe).
+
+## Phase 1 — quick hardening (627c050)
+
+SearXNG Traefik rateLimit middleware, WatchYourLAN cleanup, Jellyfin removed.
+
+## Phase 2 — Wazuh SIEM (b1d5a42)
+
+Wazuh manager/indexer/dashboard stack running (docker, all up).
+
+## Phase 3 — CrowdSec IDS/IPS (f56b645 → 6db8bc1)
+
+- Engine v1.7.8: journald sshd acquisition + file-based Traefik access-log
+  acquisition (`/var/log/traefik/access.log`, logrotate copytruncate).
+  Verified parsing and bucket pours. CAPI enrolled; community blocklist
+  (~15k IPs) pulled; sharing on.
+- Firewall bouncer: iptables/ipset DROP in `CROWDSEC_CHAIN`, hooked into
+  both `INPUT` and `DOCKER-USER` (published container ports covered too).
+- Traefik bouncer plugin (maxlerebourg v1.7.1) on the `web` entrypoint.
+  **Bootstrap lesson:** the plugin option MUST be `crowdsecLapiKeyFile` —
+  `crowdsecLapiKey` is sent verbatim as X-Api-Key; pointing it at the sops
+  path made every LAPI call 403 and every request fail closed, which
+  rolled the first remediation deploy back via the health gate's HTTP probes.
+- End-to-end ban test verified: `cscli decisions add --ip X` → request via
+  Traefik with that X-Forwarded-For → 403; clean IP → 200.
+
+## Phase 4 — analyst toolbox (a7dc331, e9f59c3)
+
+`hosts/bandit-lab/toolbox.nix`: juice-shop, cyberchef (port 8080!), it-tools
+on the proxy network behind Traefik. All three verified 200 via Traefik and
+302 → Cloudflare Access publicly (unauthenticated by design, Access-gated).
+Tunnel ingress + CNAMEs + Access apps done via Cloudflare API.
+
+## Hardening add-ons (96b7fe8, Cloudflare)
+
+- `crowdsec.service` + `crowdsec-firewall-bouncer.service` added to
+  health-check criticalUnits — a dead engine/bouncer now rolls back deploys.
+- Cloudflare Access app created for `aiia.at/ghost` (Ghost admin panel was
+  internet-exposed with only Ghost's own login). vino-allow policy.
+
+## Deferred / open
+
+- aiia `mail__from` still points at a stale domain; outbound SMTP is
+  impossible (ISP blocks 25/465/587/2525/2587, dynamic PTR, tunnel-only
+  inbound). Any mail must go via an HTTP-API relay (provider choice pending).
+- Public email server verdict is FINAL: impossible on this connection.
+- Vaultwarden admin token Argon2 hardening (LOW).
+- `ensure-*-network` script dedup (cosmetic).
+- Spec phase 5 (Gophish + maddy internal phishing-sim, Kasm Workspaces) —
+  explicitly optional, not started.
+- `deploy-mrija-archive-1` plaintext env secrets (see session 2 note) — still open.
