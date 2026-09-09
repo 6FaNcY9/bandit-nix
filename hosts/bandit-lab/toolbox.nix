@@ -13,7 +13,7 @@
     cyberchef = {
       image = "ghcr.io/gchq/cyberchef@sha256:379c6cbcfd8cc10b8e045548f3ebaa82ce429e4b40cf60e4532e116a4c67884d";
       host = "cyberchef.bandit-lab.mrija.org";
-      port = "80";
+      port = "8080";
     };
     it-tools = {
       image = "corentinth/it-tools@sha256:8b8128748339583ca951af03dfe02a9a4d7363f61a216226fc28030731a5a61f";
