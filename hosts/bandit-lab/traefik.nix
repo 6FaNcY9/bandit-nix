@@ -85,6 +85,9 @@ in {
     enable = true;
     staticConfigOptions = {
       log.level = "INFO";
+      # JSON access log to stdout -> journald, where the CrowdSec engine
+      # (hosts/bandit-lab/crowdsec.nix) picks it up as its HTTP data source.
+      accessLog.format = "json";
       entryPoints.web = {
         address = "127.0.0.1:80";
         forwardedHeaders.trustedIPs = [
