@@ -20,3 +20,6 @@ hosts/bandit/windows/
 .firecrawl/
 .aider*
 .worktrees/
+
+# Generated code-graph output (graphify); rebuilt locally, machine-specific.
+graphify-out/
