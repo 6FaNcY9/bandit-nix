@@ -1,30 +1,30 @@
 # bandit-nix — Agent Guide
 
-This is the personal NixOS configuration flake for two hosts:
+Personal NixOS configuration flake, two hosts:
 
-- **`bandit`** — A Framework 13 laptop with an AMD Ryzen 7040 chipset, used as a daily driver.
-- **`bandit-lab`** — A headless homelab server.
+- **`bandit`** — Framework 13 laptop, AMD Ryzen 7040, daily driver.
+- **`bandit-lab`** — Headless homelab server.
 
-The repo is a Nix Flake built on `nixos-unstable`. It declares NixOS system configurations, a standalone Home Manager configuration for the user `vino`, and CI checks.
+Nix Flake on `nixos-unstable`: NixOS system configurations, standalone Home Manager configuration for user `vino`, CI checks.
 
 ## 1. Technology Stack
 
 | Layer | Tool | Purpose |
 |-------|------|---------|
-| OS | NixOS 25.11 (`nixos-unstable`) | Declarative Linux system |
-| User env | Home Manager (master) | User dotfiles, packages, and services |
-| Editor | nixvim | Declarative Neovim configuration with LSP, DAP, cmp, etc. |
-| Theming | Stylix + custom base16 schemes | System-wide and Home Manager color/font/cursor theming |
-| Secrets | sops-nix with age | Encrypted secrets at runtime via `/var/lib/sops-nix/key.txt` |
-| Hardware | nixos-hardware | Framework 13 AMD 7040 optimizations |
-| Window manager | Hyprland (Wayland) | Desktop compositor on `bandit` |
-| Bars/notifications | Waybar / Mako | Status bar and notification daemon |
-| Launcher | Rofi (Wayland build via `pkgs.rofi`) | Application launcher |
-| Terminals | Kitty | Primary terminal emulator |
-| Shells | Fish + Zsh | Both are enabled and share aliases from `home/terminal/aliases.nix` |
-| Version control | Git + GPG signing | Commit signing and GitHub CLI |
-| Containers | Rootless Docker + Podman | Dev tooling on `bandit`; Docker-backed services on `bandit-lab` |
-| Server services | Traefik, Cloudflared, Tailscale, Samba, PostgreSQL, Vaultwarden, Portainer, Cockpit, SearXNG, WatchYourLAN | Homelab stack on `bandit-lab` |
+| OS | NixOS 25.11 (`nixos-unstable`) | Declarative Linux |
+| User env | Home Manager (master) | Dotfiles, packages, services |
+| Editor | nixvim | Declarative Neovim (LSP, DAP, cmp) |
+| Theming | Stylix + custom base16 | System + HM color/font/cursor |
+| Secrets | sops-nix + age | Runtime secrets via `/var/lib/sops-nix/key.txt` |
+| Hardware | nixos-hardware | Framework 13 AMD 7040 tweaks |
+| Window manager | Hyprland (Wayland) | Compositor on `bandit` |
+| Bars/notifications | Waybar / Mako | Status bar, notifications |
+| Launcher | Rofi (Wayland build via `pkgs.rofi`) | App launcher |
+| Terminals | Kitty | Primary emulator |
+| Shells | Fish + Zsh | Shared aliases `home/terminal/aliases.nix` |
+| Version control | Git + GPG signing | Commit signing, GitHub CLI |
+| Containers | Rootless Docker + Podman | Dev on `bandit`; Docker services on `bandit-lab` |
+| Server services | Traefik, Cloudflared, Tailscale, Samba, PostgreSQL, Vaultwarden, Portainer, Cockpit, SearXNG, WatchYourLAN | `bandit-lab` homelab stack |
 
 ### Key Inputs (see `flake.nix`)
 
@@ -60,6 +60,8 @@ The repo is a Nix Flake built on `nixos-unstable`. It declares NixOS system conf
 │       ├── vaultwarden.nix   # Password manager container (+ Gruvbox web-vault theme)
 │       ├── searxng.nix       # Private metasearch container (stateless)
 │       ├── watchyourlan.nix  # LAN device-discovery container (host network, loopback GUI)
+│       ├── wazuh.nix         # Wazuh SIEM stack (manager/indexer/dashboard/agent oci-containers)
+│       ├── wazuh/            # Wazuh configs + public TLS certs (keys in sops)
 │       ├── vaultwarden/      # gruvbox.scss.hbs theme source (TEMPLATES_FOLDER hook)
 │       ├── mrija-archive.nix # Backup/archive service
 │       ├── monitoring.nix    # Grafana+Prometheus host files/secrets for the Portainer stack
@@ -118,20 +120,20 @@ The repo is a Nix Flake built on `nixos-unstable`. It declares NixOS system conf
 
 | Output | What It Builds |
 |--------|----------------|
-| `.#bandit` | Full laptop NixOS configuration: Hyprland, Home Manager, Stylix, nixvim, dev tooling. |
-| `.#bandit-ci` | Same as `.#bandit` but with `nixos/ci-overrides.nix` so SOPS files do not need host keys during CI evaluation. |
-| `.#bandit-lab` | Homelab server: headless shell, Docker services, Traefik, Cloudflare Tunnel, Tailscale, Samba, PostgreSQL. |
-| `.#homeConfigurations.vino` | Standalone Home Manager configuration (useful for non-NixOS installs). |
-| `.#checks.x86_64-linux.repository` | Formatter, linter, dead-code, statix. (Installer shellcheck/smoke tests were dropped when the installers moved to the gitignored `script/` directory.) |
-| `.#checks.x86_64-linux.theme-contract` | Assertions that `lib/repository.nix` theme data matches the expected shape. |
-| `.#checks.x86_64-linux.output-evaluation` | Records derivation paths of all public outputs. |
-| `.#checks.x86_64-linux.home-manager-backup` | Tests the HM backup command used when files collide. |
-| `.#formatter.x86_64-linux` | `alejandra` Nix formatter. |
-| `.#packages.x86_64-linux.cachix` / `.#vulnix` | Utility packages exposed for CI/cache/security scanning. |
+| `.#bandit` | Laptop: Hyprland, Home Manager, Stylix, nixvim, dev tooling. |
+| `.#bandit-ci` | `.#bandit` + `nixos/ci-overrides.nix`; SOPS needs no host keys in CI. |
+| `.#bandit-lab` | Homelab: headless shell, Docker services, Traefik, Cloudflare Tunnel, Tailscale, Samba, PostgreSQL. |
+| `.#homeConfigurations.vino` | Standalone Home Manager (non-NixOS installs). |
+| `.#checks.x86_64-linux.repository` | Formatter, linter, dead-code, statix (installer shellcheck/smoke tests dropped when installers moved to gitignored `script/`). |
+| `.#checks.x86_64-linux.theme-contract` | `lib/repository.nix` theme shape assertions. |
+| `.#checks.x86_64-linux.output-evaluation` | Derivation paths of all public outputs. |
+| `.#checks.x86_64-linux.home-manager-backup` | HM backup command for file collisions. |
+| `.#formatter.x86_64-linux` | `alejandra`. |
+| `.#packages.x86_64-linux.cachix` / `.#vulnix` | CI/cache/security-scan utilities. |
 
 ## 4. Build, Test, and Deployment Commands
 
-All commands assume you are in the repo root with flakes enabled.
+Run from repo root, flakes enabled.
 
 ```bash
 # Evaluate and lint everything (run before committing)
@@ -178,26 +180,20 @@ lab-update apply         # build, test, health-check, and switch to latest
 
 ## 5. Code Style and Conventions
 
-- **Formatter:** `alejandra` with 2-space indentation. The flake exposes it as `.#formatter`.
-- **Group options under a single attrset** per file. Avoid repeating top-level keys like `services`, `programs`, etc.
-- **Imports rule:** `flake.nix` imports only host roots and aggregators (`./hosts/bandit`, `./nixos`, `./home`, `./hosts/bandit-lab`, `./nixos/server.nix`, `nixos/ci-overrides.nix`). Do **not** import individual leaf modules from `flake.nix`.
-- **Shared constants** live in `lib/repository.nix`: `system`, `workstation.username`, `workstation.homeDirectory`, `workstation.repoPath`, `workstationTheme`, `serverPalette`, `allowUnfreePredicate`.
-- **Theme files** are in `themes/`: `gruvbox-dark.yaml` (default), `gruvbox-light.yaml` (used by the `light` boot specialisation in `hosts/bandit/default.nix`), and the wallpaper `gruvbox_minimal_space.png`.
-- **stateVersion** is pinned to `25.11` in `hosts/bandit/default.nix` and `home/default.nix`. Do not change it unless you understand the migration implications.
-- **Unfree packages** are scoped by `lib/repository.nix::allowUnfreePredicate`. Only the named unfree packages and CUDA/libcu prefixes are allowed. Avoid global `allowUnfree = true`.
-- **Shell aliases** shared between Fish and Zsh live in `home/terminal/aliases.nix`. Shell-specific aliases (`reload`, `paths`) and abbreviations live in their respective files.
+- **Formatter:** `alejandra`, 2-space indent; exposed as `.#formatter`.
+- **Single attrset per file**; no repeated top-level keys (`services`, `programs`, etc.).
+- **Imports:** `flake.nix` imports only host roots/aggregators (`./hosts/bandit`, `./nixos`, `./home`, `./hosts/bandit-lab`, `./nixos/server.nix`, `nixos/ci-overrides.nix`) — never leaf modules.
+- **Shared constants** `lib/repository.nix`: `system`, `workstation.username`, `workstation.homeDirectory`, `workstation.repoPath`, `workstationTheme`, `serverPalette`, `allowUnfreePredicate`.
+- **Themes** `themes/`: `gruvbox-dark.yaml` (default), `gruvbox-light.yaml` (`light` boot specialisation, `hosts/bandit/default.nix`), wallpaper `gruvbox_minimal_space.png`.
+- **stateVersion** pinned `25.11` (`hosts/bandit/default.nix`, `home/default.nix`); change only with migration plan.
+- **Unfree** scoped by `lib/repository.nix::allowUnfreePredicate` (named packages + CUDA/libcu prefixes only); never global `allowUnfree = true`.
+- **Aliases** shared Fish/Zsh: `home/terminal/aliases.nix`; shell-specific (`reload`, `paths`) + abbreviations in per-shell files.
 
 ## 6. Secrets Management
 
-Secrets are managed with **sops-nix** and **age**.
+**sops-nix** + **age**. Config `.sops.yaml`; data `secrets/secrets.yaml`, `secrets/github.yaml`; host age key `/var/lib/sops-nix/key.txt` (provision first; `generateKey = false` → missing key fails loudly).
 
-- Encryption config: `.sops.yaml`
-- Encrypted data: `secrets/secrets.yaml`, `secrets/github.yaml`
-- Host age key at runtime: `/var/lib/sops-nix/key.txt`
-  - Must be provisioned before secrets work.
-  - `sops-nix` is configured with `generateKey = false` so a missing key fails loudly.
-
-Active secrets referenced in `nixos/sops.nix` (plus the host-specific one noted) include:
+Active secrets in `nixos/sops.nix` (+ host-specific noted):
 
 | Secret | Purpose |
 |--------|---------|
@@ -205,40 +201,38 @@ Active secrets referenced in `nixos/sops.nix` (plus the host-specific one noted)
 | `github_ssh_key` | SSH key → `~/.ssh/github` |
 | `github_ssh_key_banditstudent` | SSH key → `~/.ssh/github-banditstudent` |
 | `cachix-secret` | Cachix auth token |
-| `cloudflare-api-key` | Cloudflare API token → `CLOUDFLARE_API_TOKEN` env var (zsh/fish) for REST API curl calls |
+| `cloudflare-api-key` | Cloudflare token → `CLOUDFLARE_API_TOKEN` env var (zsh/fish) for REST curl calls |
 | `context7_api_key` | Context7 MCP API key |
 | `vaultwarden-admin-token` | Vaultwarden admin token |
 | `thehost-sshkey` | SSH key → `~/.ssh/thehost_mrija` |
 | `firecrawl-api-key` | Firecrawl API key |
-| `shodan-api-key` | Shodan Membership API key; the fish/zsh `shodan` wrapper runs `shodan init` from it on first use |
-| `grafana-admin-password` | Declared in `hosts/bandit-lab/monitoring.nix` (mode 0400, owner `grafana` system user uid/gid 472); consumed by the Portainer monitoring stack via bind mount |
-| `mrija-api-key` | mrija-archive admin API key; rendered by `hosts/bandit-lab/mrija-archive.nix` into `/run/secrets/rendered/mrija-archive.env` (container `env_file:` + sync service `EnvironmentFile`) |
-| `mrija-password` | mrija-archive web login password; same rendered env file as above |
+| `shodan-api-key` | Shodan Membership key; fish/zsh `shodan` wrapper runs `shodan init` from it on first use |
+| `grafana-admin-password` | `hosts/bandit-lab/monitoring.nix` (mode 0400, `grafana` uid/gid 472); Portainer stack bind mount |
+| `mrija-api-key` | mrija-archive admin key; rendered by `hosts/bandit-lab/mrija-archive.nix` → `/run/secrets/rendered/mrija-archive.env` (container `env_file:` + sync `EnvironmentFile`) |
+| `mrija-password` | mrija-archive web login password; same rendered env file |
 
-**Security rule:** Never commit plaintext secrets. Never modify `.sops.yaml` age/GPG keys without a backup and re-encryption plan.
+**Security rule:** never commit plaintext secrets; never modify `.sops.yaml` age/GPG keys without backup + re-encryption plan.
 
 ## 7. Testing and CI
 
 ### GitHub Actions (`.github/workflows/test-nixos-config.yml`)
 
-- **lint-commits:** Conventional commit messages on PRs.
-- **label-pr:** Auto-label PRs by changed files.
-- **build:** Runs `nix flake check`, then dry-runs `.#bandit-ci`.
-- **build-vm:** Builds `.#bandit-ci.config.system.build.vm` and runs a 90-second boot smoke test.
-- **security-scan:** Not present in the single workflow file currently; vulnix scanning is handled in GitLab CI.
-- **populate-cache:** On push to main + manual. Builds the bandit-lab closure and pushes it to the `github-bandit-nix` Cachix cache (feeds the lab's hourly auto-apply). Requires the `CACHIX_AUTH_TOKEN` repository secret (same value as sops `cachix-secret` — re-sync after every token rotation).
-- **update-flake:** Manually triggered workflow that runs `nix flake update` and opens a PR.
+- **lint-commits:** conventional commits on PRs.
+- **label-pr:** auto-label PRs by changed files.
+- **build:** `nix flake check`, dry-run `.#bandit-ci`.
+- **build-vm:** builds `.#bandit-ci.config.system.build.vm`, 90 s boot smoke test.
+- **security-scan:** not in this workflow; vulnix scan in GitLab CI.
+- **populate-cache:** push to main + manual; bandit-lab closure → `github-bandit-nix` Cachix cache (feeds lab's hourly auto-apply). Needs `CACHIX_AUTH_TOKEN` repo secret (= sops `cachix-secret`; re-sync after every rotation).
+- **update-flake:** manual; `nix flake update` + PR.
 
 ### GitLab CI (`.gitlab-ci.yml`)
 
-Runs in stages:
-
 1. **lint** — `nix flake check --no-update-lock-file`
-2. **build** — Dry-runs all three NixOS outputs plus the standalone home output.
-3. **test** — Builds `.#bandit-ci` and runs `vulnix` against the closure using `ci/vulnix-whitelist.toml`.
-4. **cache** — Manual job to build and push the full closure to Cachix.
+2. **build** — dry-runs 3 NixOS outputs + standalone home output.
+3. **test** — builds `.#bandit-ci`, runs `vulnix` with `ci/vulnix-whitelist.toml`.
+4. **cache** — manual; build + push full closure to Cachix.
 
-CI uses `nixos/nix` image with pinned digest. The build job uses `--dry-run` by default because full closures exceed shared-runner disk limits.
+`nixos/nix` image, pinned digest. Build job `--dry-run` by default (closures exceed shared-runner disk).
 
 ## 8. Architecture Rules
 
@@ -264,6 +258,7 @@ CI uses `nixos/nix` image with pinned digest. The build job uses `--dry-run` by 
 | Server base / SSH / Zellij | `nixos/server.nix`, `nixos/server/editor.nix` |
 | Homelab services | `hosts/bandit-lab/*.nix` |
 | Monitoring stack host files | `hosts/bandit-lab/monitoring.nix` |
+| Wazuh SIEM stack | `hosts/bandit-lab/wazuh.nix` (+ `wazuh/` configs/certs; secrets in sops) |
 | Hardware / filesystems | `hosts/<host>/hardware.nix` |
 | Hyprland config | `home/desktop/hyprland.nix` |
 | Waybar | `home/desktop/waybar.nix` |
@@ -279,31 +274,30 @@ CI uses `nixos/nix` image with pinned digest. The build job uses `--dry-run` by 
 
 ### Important Design Notes
 
-- **Hyprland is installed system-wide** in `nixos/desktop.nix` via `programs.hyprland.enable`. In `home/desktop/hyprland.nix`, `package = null` and `portalPackage = null` to avoid reinstalling it as a user package.
-- **Hyprland configuration is native Lua.** `home/desktop/hyprland.nix` is the source of truth and Home Manager generates `~/.config/hypr/hyprland.lua`. Lua mode skips legacy string entries in bindings, rules, and submaps, so keep those values structured with `_args` and `lib.generators.mkLuaInline` dispatchers. Do not edit the generated file.
-- **Stylix's Hyprland target is disabled** in `home/theme.nix` so `home/desktop/hyprland.nix` owns the border colors (orange accent) without merge conflicts.
-- **Rofi and Mako targets are also disabled** in `home/theme.nix` because they have hand-tuned themes in their own modules.
-- **Laptop SSH server is disabled** (`services.openssh.enable = false` in `nixos/dev.nix`); the machine only initiates outbound connections.
-- **DNS-over-TLS is opportunistic** (`DNSOverTLS = "opportunistic"`) so captive portals do not hard-fail.
-- **Docker is rootless** on `bandit` (`virtualisation.docker.rootless.enable`). `docker-compose` is wired as a user-level Docker CLI plugin in `home/terminal/tools.nix`.
-- **PipeWire config uses flat dot-notation keys** (`"default.clock.rate"`) because nested Nix attrsets produce JSON that PipeWire silently ignores.
-- **Spacebar hardware workaround:** `hosts/bandit/hardware.nix` enables `services.keyd` (scoped to the internal keyboard `0001:0001`) to disable the misbehaving spacebar (`space = noop`) and map Caps Lock and Right Ctrl (`rightcontrol`) to space. Note: hwdb keymaps from earlier generations persist in the atkbd driver until reboot or `sudo setkeycodes 39 57; sudo setkeycodes 3a 58` — a "dead" Caps Lock was a stale hwdb keymap, not hardware. The physical root cause is still a TODO; inspect the key mechanism, contact, and keyboard ribbon before replacing the input cover, then remove the workaround.
+- **Hyprland system-wide** via `programs.hyprland.enable` (`nixos/desktop.nix`); `home/desktop/hyprland.nix` sets `package = null` + `portalPackage = null` (no user-level reinstall).
+- **Hyprland config = native Lua:** source of truth `home/desktop/hyprland.nix`; HM generates `~/.config/hypr/hyprland.lua` (never edit). Lua mode skips legacy string entries in bindings/rules/submaps — use structured `_args` + `lib.generators.mkLuaInline` dispatchers.
+- **Stylix targets disabled** in `home/theme.nix`: Hyprland (borders owned by `home/desktop/hyprland.nix`, orange accent), Rofi + Mako (hand-tuned in own modules).
+- **Laptop SSH server disabled** (`services.openssh.enable = false`, `nixos/dev.nix`); outbound only.
+- **DNS-over-TLS opportunistic** (`DNSOverTLS = "opportunistic"`): captive portals don't hard-fail.
+- **Docker rootless** on `bandit` (`virtualisation.docker.rootless.enable`); `docker-compose` = user-level CLI plugin (`home/terminal/tools.nix`).
+- **PipeWire flat dot-notation keys** (`"default.clock.rate"`); nested attrsets → JSON PipeWire silently ignores.
+- **Spacebar workaround:** `hosts/bandit/hardware.nix` enables `services.keyd` (internal keyboard `0001:0001` only): spacebar `space = noop`, Caps Lock + Right Ctrl (`rightcontrol`) → space. Stale hwdb keymaps persist in atkbd until reboot or `sudo setkeycodes 39 57; sudo setkeycodes 3a 58` — "dead" Caps Lock = stale keymap, not hardware. Root cause TODO: inspect key mechanism, contact, ribbon before replacing input cover; then remove workaround.
 
 ## 9. Security Considerations
 
-- **SSH:** `bandit` has no SSH server. `bandit-lab` has SSH with password auth disabled, root login disabled, `AllowUsers` restricted to `vino`, and authorized Ed25519 keys only (`hosts/bandit-lab/default.nix`). fail2ban guards it with 1 h escalating bans (up to 1 week, maxretry 3); the Tailscale range `100.64.0.0/10` is exempt.
-- **Samba:** SMB2 minimum protocol and `hosts allow` restricted to loopback, private LAN ranges, and the tailnet, on top of the per-interface (`enp44s0`) firewall openings (`hosts/bandit-lab/webhost.nix`).
-- **Health gate:** `bandit-lab-health` (`hosts/bandit-lab/health-check.nix`) treats `sshd`, `fail2ban`, and `samba-smbd` as critical units, so a config that kills remote access rolls back instead of deploying.
-- **Sudo:** `wheelNeedsPassword = true`. On `bandit`, the user has passwordless `nixos-rebuild` only.
-- **User groups:** `vino` is explicitly **not** in `input`, `storage`, or `podman` groups to reduce privilege surface. The `wireshark` group (added in `nixos/security-tools.nix`) is the deliberate exception — it grants packet capture without root via setcap `dumpcap`.
-- **Trusted Nix users:** `root` and `vino` are `trusted-users` on the laptop (`nixos/core.nix`); on `bandit-lab`, `hosts/bandit-lab/default.nix` forces `trusted-users = ["root"]` since `lab-update` runs as root. See `docs/SECURITY-PLAN.md` for pending hardening decisions.
-- **Secrets:** sops-nix with age, no plaintext in repo, scoped file permissions.
-- **GPG agent:** Cache TTL defaults to 1 hour, max 4 hours.
-- **Neovim:** Persistent undo/swap/backup are disabled for `*/secrets/*`, `*.age`, `*.env*` files.
-- **Cachix token:** Provided via sops secret and injected only for the duration of a `cachix` call, never exported globally.
-- **Homelab WAN access:** Only via Cloudflare Tunnel. Admin services (Cockpit, Portainer, Samba) are not port-forwarded; access them via SSH/Tailscale tunnels. The tunnel is **remotely managed** — the dashboard's Public Hostnames are authoritative and applied within seconds; `hosts/bandit-lab/wan.nix` is a documentation mirror to keep in sync (see `docs/runbooks/cloudflare-access.md`).
+- **SSH:** `bandit` none. `bandit-lab` (`hosts/bandit-lab/default.nix`): no password auth, no root login, `AllowUsers` `vino`, Ed25519 keys only; fail2ban 1 h escalating bans (≤1 week, maxretry 3), Tailscale `100.64.0.0/10` exempt.
+- **Samba** (`hosts/bandit-lab/webhost.nix`): SMB2 min, `hosts allow` loopback + private LAN + tailnet, per-interface `enp44s0` firewall openings.
+- **Health gate:** `bandit-lab-health` (`hosts/bandit-lab/health-check.nix`) critical units `sshd`, `fail2ban`, `samba-smbd`; config killing remote access rolls back instead of deploying.
+- **Sudo:** `wheelNeedsPassword = true`; `bandit` passwordless `nixos-rebuild` only.
+- **Groups:** `vino` **not** in `input`/`storage`/`podman` (privilege surface); exception `wireshark` (`nixos/security-tools.nix`) — capture without root via setcap `dumpcap`.
+- **`trusted-users`:** laptop `root` + `vino` (`nixos/core.nix`); `bandit-lab` forced `trusted-users = ["root"]` (`hosts/bandit-lab/default.nix`; `lab-update` runs as root).
+- **Secrets:** sops-nix + age, no plaintext in repo, scoped permissions.
+- **GPG agent:** cache TTL 1 h default, 4 h max.
+- **Neovim:** no persistent undo/swap/backup for `*/secrets/*`, `*.age`, `*.env*`.
+- **Cachix token:** sops-provided, injected only during a `cachix` call, never exported globally.
+- **WAN:** Cloudflare Tunnel only. Admin services (Cockpit, Portainer, Samba) not port-forwarded — access via SSH/Tailscale tunnels. Tunnel **remotely managed**: dashboard Public Hostnames authoritative, applied in seconds; `hosts/bandit-lab/wan.nix` = documentation mirror, keep synced (`docs/runbooks/cloudflare-access.md`).
 
-See `docs/SECURITY-PLAN.md` for the active security roadmap (LUKS, Secure Boot, further hardening).
+Security roadmap (LUKS, Secure Boot, hardening): `docs/SECURITY-PLAN.md`.
 
 ## 10. Installation and Recovery
 
@@ -318,18 +312,11 @@ sudo ./script/install-bandit-lab.sh \
   --age-key /run/media/nixos/USB/key.txt
 ```
 
-The installer:
-
-- Formats the root partition as BTRFS.
-- Creates subvolumes: `@`, `@home`, `@nix`, `@log`, `@snapshots`.
-- Installs the age key to `/mnt/var/lib/sops-nix/key.txt`.
-- Runs `nixos-install --flake .#bandit-lab --no-root-passwd`.
-
-Resume modes (`--mode prepare|mount|install`) exist to recover from network failures without reformatting. For other hosts, use the generic `install-nixos.sh`.
+Installer: formats root BTRFS; subvolumes `@`, `@home`, `@nix`, `@log`, `@snapshots`; age key → `/mnt/var/lib/sops-nix/key.txt`; runs `nixos-install --flake .#bandit-lab --no-root-passwd`. Resume modes `--mode prepare|mount|install` recover from network failures without reformatting. Other hosts: generic `install-nixos.sh`.
 
 ### bandit Live ISO Reinstall (LUKS) — PLANNED
 
-> **Current state:** `bandit` is **not** LUKS-encrypted and still uses the old `@var` BTRFS layout. The procedure below is the **planned** reinstall; see `docs/runbooks/bandit-luks-reinstall.md` for the full runbook. `hosts/bandit/hardware.nix` will be regenerated with LUKS UUIDs and the `@log` layout at that time.
+> **Current state:** `bandit` **not** LUKS-encrypted, still old `@var` BTRFS layout. Below = **planned** reinstall (runbook `docs/runbooks/bandit-luks-reinstall.md`); `hosts/bandit/hardware.nix` regenerated with LUKS UUIDs + `@log` layout then.
 
 ```bash
 git clone https://github.com/6FaNcY9/bandit-nix.git
@@ -339,14 +326,9 @@ sudo ./script/install-bandit.sh \
   --age-key /run/media/nixos/USB/key.txt
 ```
 
-The installer would:
+Installer would: erase whole disk (GPT: 1 GiB EFI + LUKS2 argon2id container); BTRFS subvolumes inside LUKS `@`, `@home`, `@nix`, `@log`, `@snapshots` (bandit-lab layout; current `hardware.nix` keeps `@var` layout until reinstall); generate `hosts/bandit/hardware.nix` with real disk UUIDs + `boot.initrd.luks`; defer to `install-nixos.sh` for format/mount/install (same `--mode prepare|mount|install` resume modes; LUKS auto re-opened).
 
-- **Erase the whole disk.** GPT layout: 1 GiB EFI partition + one LUKS2 (argon2id) container.
-- Create BTRFS subvolumes inside LUKS: `@`, `@home`, `@nix`, `@log`, `@snapshots` (same layout as bandit-lab; the current `hardware.nix` still uses the old `@var` layout until the reinstall).
-- Generate `hosts/bandit/hardware.nix` with the real disk UUIDs and `boot.initrd.luks` config.
-- Defer to `install-nixos.sh` for format/mount/install, so the same `--mode prepare|mount|install` resume modes apply (LUKS is re-opened automatically).
-
-Post-install: commit the generated `hosts/bandit/hardware.nix`, then optionally enroll the TPM2 (`systemd-cryptenroll --tpm2-device=auto /dev/nvme0n1p2`) once Secure Boot (lanzaboote) is in place.
+Post-install: commit generated `hosts/bandit/hardware.nix`; optionally enroll TPM2 (`systemd-cryptenroll --tpm2-device=auto /dev/nvme0n1p2`) once Secure Boot (lanzaboote) in place.
 
 
 ### Post-Install (bandit-lab)
@@ -358,31 +340,29 @@ Post-install: commit the generated `hosts/bandit/hardware.nix`, then optionally 
 
 ## 11. Common Pitfalls
 
-- **Outdated documentation:** `README.md` and `docs/codebase-review.md` still describe the previous XFCE+i3 stack and `tomorrow-night-eighties` theme in places. The current workstation stack is **Hyprland/Wayland** with the **Gruvbox** (morhetz) Stylix theme — dark by default, light via the `light` boot specialisation.
-- **SOPS host keys:** If `nix flake check` or `nixos-rebuild` fails with sops validation errors, the host age key is likely missing or wrong. The CI output `.#bandit-ci` bypasses this.
-- **NixVim follows:** Do **not** add `inputs.nixpkgs.follows = "nixpkgs"` to the `nixvim` input. NixVim upstream tests against its own pinned nixpkgs and warns when overridden.
-- **Flake imports:** Do not import individual leaf `.nix` files directly from `flake.nix`; import host roots and aggregator modules only.
-- **Wayland vs X11:** Many desktop modules assume Wayland (e.g. `wl-clipboard`, `grim`, `slurp`, `hyprlock`). Do not blindly copy them into an X11 host.
-- **Hyprland activation:** Repository evaluation does not modify the running desktop. After validation, `sudo nixos-rebuild switch --flake .#bandit` is the privileged activation step; restart Hyprland or log out and back in before judging the native Lua configuration.
+- **Outdated docs:** `README.md`, `docs/codebase-review.md` still describe old XFCE+i3 stack / `tomorrow-night-eighties` theme. Current: **Hyprland/Wayland** + **Gruvbox** (morhetz) Stylix — dark default, light via `light` boot specialisation.
+- **SOPS host keys:** sops validation errors in `nix flake check`/`nixos-rebuild` → host age key missing/wrong; `.#bandit-ci` bypasses.
+- **NixVim follows:** never add `inputs.nixpkgs.follows = "nixpkgs"` to `nixvim` input — upstream tests against own pinned nixpkgs, warns when overridden.
+- **Flake imports:** no leaf `.nix` files in `flake.nix`; host roots + aggregators only.
+- **Wayland vs X11:** desktop modules assume Wayland (`wl-clipboard`, `grim`, `slurp`, `hyprlock`); don't copy to X11 hosts.
+- **Hyprland activation:** evaluation ≠ running desktop. Activate `sudo nixos-rebuild switch --flake .#bandit`, then restart Hyprland / re-login before judging Lua config.
 
 ## 12. Verification
 
-The repository currently passes:
+Passes:
 
 ```bash
 nix flake check --no-update-lock-file
 ```
 
-Run this before any commit. CI runs the same check plus dry-run builds and VM smoke tests.
+Run before any commit. CI runs same check + dry-run builds + VM smoke tests.
 
 <!-- rtk-instructions v2 -->
 # RTK (Rust Token Killer) - Token-Optimized Commands
 
 ## Golden Rule
 
-**Always prefix commands with `rtk`**. If RTK has a dedicated filter, it uses it. If not, it passes through unchanged. This means RTK is always safe to use.
-
-**Important**: Even in command chains with `&&`, use `rtk`:
+**Always prefix commands with `rtk`** — dedicated filter if available, else passthrough unchanged; always safe, even in `&&` chains:
 ```bash
 # ❌ Wrong
 git add . && git commit -m "msg" && git push
@@ -433,7 +413,7 @@ rtk git stash           # Compact stash
 rtk git worktree        # Compact worktree
 ```
 
-Note: Git passthrough works for ALL subcommands, even those not explicitly listed.
+Git passthrough works for ALL subcommands, even unlisted ones.
 
 ### GitHub (26-87% savings)
 ```bash
