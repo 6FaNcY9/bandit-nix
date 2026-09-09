@@ -18,14 +18,16 @@ _: {
     settings = {
       # LAPI for the bouncers; loopback default (127.0.0.1:8080), no firewall.
       general.api.server.enable = true;
-      # Explicit LAPI credential path under the writable state dir — left
-      # null, the setup script's `cscli machine add` has nowhere to write.
-      # capi.credentialsFile stays null on purpose: when set, the module's
-      # `cscli machine add` strictly loads the online credentials file
-      # BEFORE its own `capi register` step creates it, so first boot always
-      # fails. CAPI enrollment happens once imperatively on the host
-      # (`sudo cscli capi register`) after the engine is up.
+      # Explicit credential paths under the writable state dir.
+      # Bootstrap caveat: the module's setup script runs `cscli machine add`
+      # BEFORE `cscli capi register`, and machine add strictly loads the
+      # online credentials file when capi.credentialsFile is set — so on
+      # first boot this option must stay null. The file below was enrolled
+      # once imperatively (`sudo cscli capi register -f <path>`); only then
+      # could the option be enabled. If the state dir is ever wiped, repeat
+      # that dance: deploy with the line commented out, register, re-enable.
       lapi.credentialsFile = "/var/lib/crowdsec/state/local_api_credentials.yaml";
+      capi.credentialsFile = "/var/lib/crowdsec/state/online_api_credentials.yaml";
     };
     hub.collections = [
       "crowdsecurity/linux"
