@@ -99,6 +99,10 @@
         <skip_proc>yes</skip_proc>
         <skip_sys>yes</skip_sys>
         <process_priority>10</process_priority>
+        <file_limit>
+          <enabled>yes</enabled>
+          <entries>500000</entries>
+        </file_limit>
         <max_eps>50</max_eps>
         <synchronization>
           <enabled>yes</enabled>
@@ -107,9 +111,37 @@
         </synchronization>
       </syscheck>
 
+      <!-- Host journald: security-relevant units only; an unfiltered reader
+           floods the agent queue (host container access logs ride journald). -->
       <localfile>
         <log_format>journald</log_format>
         <location>journald</location>
+        <filter field="_SYSTEMD_UNIT">^sshd\.service$</filter>
+      </localfile>
+      <localfile>
+        <log_format>journald</log_format>
+        <location>journald</location>
+        <filter field="_SYSTEMD_UNIT">^systemd-logind\.service$</filter>
+      </localfile>
+      <localfile>
+        <log_format>journald</log_format>
+        <location>journald</location>
+        <filter field="_SYSTEMD_UNIT">^fail2ban\.service$</filter>
+      </localfile>
+      <localfile>
+        <log_format>journald</log_format>
+        <location>journald</location>
+        <filter field="_SYSTEMD_UNIT">^(smbd|nmbd)\.service$</filter>
+      </localfile>
+      <localfile>
+        <log_format>journald</log_format>
+        <location>journald</location>
+        <filter field="_COMM">^sudo$</filter>
+      </localfile>
+      <localfile>
+        <log_format>journald</log_format>
+        <location>journald</location>
+        <filter field="PRIORITY">^[0-3]$</filter>
       </localfile>
 
       <localfile>
@@ -160,8 +192,11 @@ in {
     wants = ["tailscaled.service"];
     # Persist /var/ossec/etc (client.keys, enrollment state) on the host so a
     # container recreation reuses the same agent identity instead of
-    # re-enrolling under a duplicate name. Seed it from the image on first
-    # start, then overlay the custom ossec.conf.
+    # re-enrolling under a duplicate name. Seed the directory from the image
+    # on first start. The custom ossec.conf is (re)installed on every start:
+    # the image entrypoint substitutes its CHANGE_* placeholders with the
+    # WAZUH_* environment values. Group 999 is the image's wazuh group;
+    # wazuh-agentd drops privileges and cannot read a root:root file.
     preStart = ''
       if [ ! -f ${stateDir}/etc/ossec.conf ]; then
         mkdir -p ${stateDir}/etc
@@ -169,8 +204,8 @@ in {
           -v ${stateDir}/etc:/seed \
           --entrypoint /bin/bash \
           ${agentImage} -c "cp -rp /var/ossec/etc/. /seed/"
-        install -m 0640 ${ossecConf} ${stateDir}/etc/ossec.conf
       fi
+      install -m 0640 -o root -g 999 ${ossecConf} ${stateDir}/etc/ossec.conf
     '';
   };
 }
