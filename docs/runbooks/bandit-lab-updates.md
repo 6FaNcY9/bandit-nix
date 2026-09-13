@@ -1,18 +1,20 @@
 # bandit-lab updates and rollback
 
-Two persistent timers manage updates:
+One persistent timer manages updates:
 
-- `lab-update-check.timer` checks `origin/main` every ten minutes and reports
-  whether a newer revision exists.
 - `lab-update-apply.timer` attempts a signed update hourly, with up to ten
-  minutes of randomized delay.
+  minutes of randomized delay. It fetches `origin/main` itself, so no separate
+  polling timer is needed.
 
-For manual-only control, disable the apply timer while leaving update checks
-enabled:
+For manual-only control, disable the apply timer:
 
 ```bash
 sudo systemctl disable --now lab-update-apply.timer
 ```
+
+The `lab-update-check.service` unit still exists for on-demand checks
+(`sudo lab-update check` or `sudo systemctl start lab-update-check`); only its
+timer was removed.
 
 ## Review and apply
 

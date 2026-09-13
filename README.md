@@ -24,7 +24,7 @@ declarative system and user environment.
 - **nixvim** declarative Neovim setup with LSP, DAP, and completions.
 - **Fish + Zsh** shells sharing aliases from `home/terminal/aliases.nix`.
 - **Rootless Docker + Podman** for container workflows.
-- **CI checks** for formatting, linting, dead code, installer smoke tests, and theme-contract assertions.
+- **CI checks** for formatting, linting, dead code, statix, theme-contract and output-evaluation assertions, plus security-lab compose/atomic checks.
 
 ## Flake Outputs
 
@@ -45,7 +45,7 @@ declarative system and user environment.
 ├── hosts/
 │   ├── bandit/            # Laptop host configuration
 │   │   ├── default.nix    # Hostname, stateVersion, bootloader
-│   │   └── hardware.nix   # Filesystems, LUKS, kernel modules
+│   │   └── hardware.nix   # Filesystems, kernel modules, Framework tweaks
 │   └── bandit-lab/        # Homelab host and service modules
 ├── nixos/                 # System-level NixOS modules
 │   ├── default.nix        # Aggregator for the bandit host
@@ -70,21 +70,24 @@ declarative system and user environment.
 ├── secrets/               # Encrypted secrets (sops-nix)
 │   ├── secrets.yaml
 │   └── github.yaml
-├── script/                # Local, gitignored helper scripts
-├── install-nixos.sh       # Generic live-ISO installer
-└── install-bandit-lab.sh  # bandit-lab-specific installer wrapper
+├── script/                # Local, gitignored helper scripts (incl. installers)
+└── labs/security/         # Opt-in security practice VM (BloodHound CE, crAPI, Atomic Red Team)
 ```
 
 ## 🚀 Installation
 
 ### bandit-lab Live ISO Install
 
+> **Note:** the installer scripts live in the gitignored `script/` directory
+> (local-only, not published). Copy them from an existing checkout onto the
+> live ISO alongside the cloned repo.
+
 From the NixOS live installer, connect to the network, clone this repo, and run:
 
 ```bash
 git clone https://github.com/6FaNcY9/bandit-nix.git
 cd bandit-nix
-sudo ./install-bandit-lab.sh \
+sudo ./script/install-bandit-lab.sh \
   --root-dev /dev/disk/by-id/<root-partition> \
   --boot-dev /dev/disk/by-id/<efi-partition> \
   --age-key /run/media/nixos/USB/key.txt
@@ -98,14 +101,14 @@ Resume modes exist to recover from network failures without reformatting:
 
 ```bash
 # Only run install after a previous prepare/format
-sudo ./install-bandit-lab.sh \
+sudo ./script/install-bandit-lab.sh \
   --root-dev /dev/disk/by-id/<root-partition> \
   --boot-dev /dev/disk/by-id/<efi-partition> \
   --age-key /tmp/sops-age-key.txt \
   --mode install
 
 # Mount existing subvolumes after a reboot
-sudo ./install-bandit-lab.sh \
+sudo ./script/install-bandit-lab.sh \
   --root-dev /dev/disk/by-id/<root-partition> \
   --boot-dev /dev/disk/by-id/<efi-partition> \
   --age-key /tmp/sops-age-key.txt \
@@ -115,7 +118,7 @@ sudo ./install-bandit-lab.sh \
 For other hosts, use the generic installer:
 
 ```bash
-sudo ./install-nixos.sh \
+sudo ./script/install-nixos.sh \
   --host <flake-host> \
   --root-dev /dev/disk/by-id/<root-partition> \
   --boot-dev /dev/disk/by-id/<efi-partition> \
@@ -160,13 +163,13 @@ boundary, verification, environment reassociation, and rollback procedures.
 
 ### bandit-lab Updates
 
-`bandit-lab` polls the public GitHub repository every ten minutes. Its guarded
-apply timer also attempts signed updates hourly; disable
-`lab-update-apply.timer` when manual-only control is needed. To apply a reviewed
-revision immediately:
+`bandit-lab` applies signed updates hourly via the `lab-update-apply.timer`;
+disable that timer when manual-only control is needed. To check for or apply a
+reviewed revision immediately:
 
 ```bash
-sudo lab-update apply
+sudo lab-update check   # poll GitHub for new commits
+sudo lab-update apply   # build, test, health-check, and switch
 ```
 
 `lab-update apply` verifies the commit signature, builds and test-activates the
