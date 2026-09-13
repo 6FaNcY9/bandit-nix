@@ -1,6 +1,9 @@
 # Approved vulnerability exceptions for the deployed runtime closure. These
 # entries capture the current pinned nixpkgs baseline; new findings still fail.
-# Reassess every entry before the short expiry instead of extending it blindly.
+# Reassess every entry at the expiry date instead of extending it blindly.
+# Scope: the scan builds .#bandit-ci (laptop) because full closures exceed
+# shared-runner disk; bandit-lab is covered indirectly through the same
+# nixpkgs pin and its own lab-reliability check, not by a separate scan.
 
 ["ada"]
 cve = ["CVE-2024-9410"]

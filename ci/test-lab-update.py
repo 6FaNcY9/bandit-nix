@@ -63,10 +63,14 @@ ln -sfn "$4" "$2"
             "/run/current-system": str(current),
             "/nix/var/nix/profiles/system": str(profile),
         }.items():
+            # Fail loudly when the updater script stops containing a path we
+            # redirect, instead of silently testing against real system paths.
+            assert original in script, f"updater no longer references {original}"
             script = script.replace(original, replacement)
         for command in ("git", "gpg", "nix-env", "nix"):
-            script = re.sub(r"/nix/store/[^/\s]+/bin/" + command + r"(?=[\s\"])",
-                            str(commands / command), script)
+            script, count = re.subn(r"/nix/store/[^/\s]+/bin/" + command + r"(?=[\s\"])",
+                                    str(commands / command), script)
+            assert count >= 1, f"updater no longer invokes {command} via a store path"
         updater = root / "updater"
         updater.write_text(script)
         result = subprocess.run(

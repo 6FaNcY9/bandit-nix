@@ -40,7 +40,7 @@ default:
 # Stages
 # ---------------------------------------------------------------------------
 stages:
-  - lint      # Pinned formatting, static analysis, and installer checks
+  - lint      # Pinned formatting, static analysis, and custom flake checks
   - build     # Flake validation + dry-run derivation check
   - test      # Enforced vulnerability scan
   - cache     # Manual job to populate Cachix cache on x86_64 runners
@@ -61,6 +61,10 @@ stages:
 # ---------------------------------------------------------------------------
 
 # Runs all repository checks with tools pinned by flake.lock.
+# Note: `nix flake check` includes the lab-reliability check, which boots a
+# QEMU VM (ci/lab-reliability.nix). On shared runners without KVM it falls
+# back to TCG emulation, so this job can take several minutes despite the
+# "lint" stage name.
 repository-checks:
   extends: .rules-push-and-mr
   stage: lint

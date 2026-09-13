@@ -130,19 +130,32 @@
 
     checks.${system} = {
       security-lab-atomic = securityLab.config.system.build.atomicCheck;
-      security-lab = assert securityLab.config.virtualisation.sharedDirectories == {};
-      assert securityLabOnline.config.virtualisation.sharedDirectories == {};
-        pkgs.runCommand "security-lab-compose-check" {
-          nativeBuildInputs = [pkgs.docker-compose];
-        } ''
-          docker-compose -f ${./labs/security/bloodhound.yml} config --quiet
-          docker-compose -f ${./labs/security/crapi.yml} config --quiet
-          touch "$out"
-        '';
+      security-lab = let
+        inherit (nixpkgs) lib;
+        noSharedDirs = name: cfg:
+          lib.assertMsg (cfg.config.virtualisation.sharedDirectories == {})
+          "${name} must not share host directories with the VM";
+      in
+        assert noSharedDirs "security-lab" securityLab;
+        assert noSharedDirs "security-lab-online" securityLabOnline;
+          pkgs.runCommand "security-lab-compose-check" {
+            nativeBuildInputs = [pkgs.docker-compose pkgs.gnugrep];
+          } ''
+            docker-compose -f ${./labs/security/bloodhound.yml} config --quiet
+            docker-compose -f ${./labs/security/crapi.yml} config --quiet
+            # Port contract with labs/security/default.nix labPorts
+            # (8080 bloodhound, 8888 crapi gateway, 8025 mail UI): the VM
+            # forwards exactly these host ports, so they must stay published.
+            docker-compose -f ${./labs/security/bloodhound.yml} config | grep -q 'published: "8080"'
+            docker-compose -f ${./labs/security/crapi.yml} config | grep -q 'published: "8888"'
+            docker-compose -f ${./labs/security/crapi.yml} config | grep -q 'published: "8025"'
+            touch "$out"
+          '';
       lab-reliability = let
         lab = self.nixosConfigurations.bandit-lab.config;
       in
-        assert builtins.elem "docker-vaultwarden.service" lab.sops.templates."vaultwarden.env".restartUnits;
+        assert nixpkgs.lib.assertMsg (builtins.elem "docker-vaultwarden.service" lab.sops.templates."vaultwarden.env".restartUnits)
+        "vaultwarden container must restart on sops secret rotation";
           import ./ci/lab-reliability.nix {inherit pkgs sops-nix;};
       docker-discovery-proxy =
         pkgs.runCommand "docker-discovery-proxy-regressions" {
@@ -153,7 +166,10 @@
         '';
 
       lab-update = let
-        updater = builtins.head (builtins.filter (p: p.name == "lab-update") self.nixosConfigurations.bandit-lab.config.environment.systemPackages);
+        inherit (nixpkgs) lib;
+        updater =
+          lib.findFirst (p: p.name or "" == "lab-update") (throw "lab-update package missing from bandit-lab systemPackages")
+          self.nixosConfigurations.bandit-lab.config.environment.systemPackages;
       in
         pkgs.runCommand "lab-update-regressions" {
           nativeBuildInputs = [pkgs.python3 pkgs.git pkgs.bash pkgs.coreutils];
@@ -196,18 +212,17 @@
           "surface"
         ];
       in
-        assert repoConfig ? workstationTheme;
-        assert theme.name == "Gruvbox";
-        assert builtins.pathExists ./themes/gruvbox-light.yaml;
-        assert actualColorKeys == expectedColorKeys;
-        assert theme.geometry.unit == 4;
-        assert theme.geometry.radius == 0;
-        assert (repoConfig.mkStylixTheme pkgs).base16Scheme == ./themes/gruvbox-dark.yaml;
-        assert theme.fonts.shell.name == "Departure Mono";
-        assert theme.fonts.technical.name == "JetBrainsMono Nerd Font Mono";
-        assert theme.fonts.interface.name == "Noto Sans";
-        assert theme.icons.name == "Papirus-Dark";
-        assert theme.cursor.name == "Bibata-Modern-Ice";
+        assert lib.assertMsg (theme.name == "Gruvbox") "workstationTheme.name must stay Gruvbox";
+        assert lib.assertMsg (builtins.pathExists ./themes/gruvbox-light.yaml) "themes/gruvbox-light.yaml missing (light specialisation)";
+        assert lib.assertMsg (actualColorKeys == expectedColorKeys) "workstationTheme.colors keys drifted from the contract";
+        assert lib.assertMsg (theme.geometry.unit == 4) "workstationTheme.geometry.unit must stay 4";
+        assert lib.assertMsg (theme.geometry.radius == 0) "workstationTheme.geometry.radius must stay 0";
+        assert lib.assertMsg ((repoConfig.mkStylixTheme pkgs).base16Scheme == ./themes/gruvbox-dark.yaml) "mkStylixTheme must use themes/gruvbox-dark.yaml";
+        assert lib.assertMsg (theme.fonts.shell.name == "Departure Mono") "workstationTheme shell font changed";
+        assert lib.assertMsg (theme.fonts.technical.name == "JetBrainsMono Nerd Font Mono") "workstationTheme technical font changed";
+        assert lib.assertMsg (theme.fonts.interface.name == "Noto Sans") "workstationTheme interface font changed";
+        assert lib.assertMsg (theme.icons.name == "Papirus-Dark") "workstationTheme icon theme changed";
+        assert lib.assertMsg (theme.cursor.name == "Bibata-Modern-Ice") "workstationTheme cursor theme changed";
           pkgs.runCommand "bandit-nix-theme-contract" {} ''
             touch "$out"
           '';

@@ -132,6 +132,10 @@ jobs:
   populate-cache:
     name: Populate Cachix binary cache
     runs-on: ubuntu-latest
+    timeout-minutes: 120
+    concurrency:
+      group: populate-cache
+      cancel-in-progress: true
     # Runs on every push to main (and manually). Builds the bandit-lab
     # closure — the host that auto-applies hourly — and pushes it to the
     # github-bandit-nix Cachix cache so the lab substitutes instead of

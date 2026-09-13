@@ -34,7 +34,7 @@ Nix Flake on `nixos-unstable`: NixOS system configurations, standalone Home Mana
 - `stylix` → `github:nix-community/stylix` (`follows nixpkgs`)
 - `nixos-hardware` → `github:NixOS/nixos-hardware` (`follows nixpkgs`)
 - `nixvim` → pinned independently (upstream recommends **not** using `follows`)
-- `fzf-tab-source`, `pdfreader-nvim` → plain git inputs used as plugin sources
+- `fzf-tab-source`, `pdfreader-nvim`, `zsh-kimi-cli` → plain git inputs used as plugin sources
 
 ## 2. Repository Layout
 
@@ -188,10 +188,10 @@ lab-update apply         # build, test, health-check, and switch to latest
 - **Formatter:** `alejandra`, 2-space indent; exposed as `.#formatter`.
 - **Single attrset per file**; no repeated top-level keys (`services`, `programs`, etc.).
 - **Imports:** `flake.nix` imports only host roots/aggregators (`./hosts/bandit`, `./nixos`, `./home`, `./hosts/bandit-lab`, `./nixos/server.nix`, `nixos/ci-overrides.nix`) — never leaf modules.
-- **Shared constants** `lib/repository.nix`: `system`, `workstation.username`, `workstation.homeDirectory`, `workstation.repoPath`, `workstationTheme`, `serverPalette`, `allowUnfreePredicate`.
+- **Shared constants** `lib/repository.nix`: `system`, `workstation.username`, `workstation.homeDirectory`, `workstation.repoPath`, `lab.tailscaleIp`, `workstationTheme`, `serverPalette`, `allowUnfreePredicate`, `mkDockerNetwork`.
 - **Themes** `themes/`: `gruvbox-dark.yaml` (default), `gruvbox-light.yaml` (`light` boot specialisation, `hosts/bandit/default.nix`), wallpaper `gruvbox_minimal_space.png`.
 - **stateVersion** pinned `25.11` (`hosts/bandit/default.nix`, `home/default.nix`); change only with migration plan.
-- **Unfree** scoped by `lib/repository.nix::allowUnfreePredicate` (named packages + CUDA/libcu prefixes only); never global `allowUnfree = true`.
+- **Unfree** scoped by `lib/repository.nix::allowUnfreePredicate` (named packages + `cuda_` prefix only); never global `allowUnfree = true`.
 - **Aliases** shared Fish/Zsh: `home/terminal/aliases.nix`; shell-specific (`reload`, `paths`) + abbreviations in per-shell files.
 
 ## 6. Secrets Management
@@ -286,7 +286,7 @@ Active secrets in `nixos/sops.nix` (+ host-specific noted):
 - **DNS-over-TLS opportunistic** (`DNSOverTLS = "opportunistic"`): captive portals don't hard-fail.
 - **Docker rootless** on `bandit` (`virtualisation.docker.rootless.enable`); `docker-compose` = user-level CLI plugin (`home/terminal/tools.nix`).
 - **PipeWire flat dot-notation keys** (`"default.clock.rate"`); nested attrsets → JSON PipeWire silently ignores.
-- **Spacebar workaround:** `hosts/bandit/hardware.nix` enables `services.keyd` (internal keyboard `0001:0001` only): spacebar `space = noop`, Caps Lock + Right Ctrl (`rightcontrol`) → space. Stale hwdb keymaps persist in atkbd until reboot or `sudo setkeycodes 39 57; sudo setkeycodes 3a 58` — "dead" Caps Lock = stale keymap, not hardware. Root cause TODO: inspect key mechanism, contact, ribbon before replacing input cover; then remove workaround.
+- **Spacebar:** the former `services.keyd` workaround in `hosts/bandit/hardware.nix` (spacebar `noop`, Caps Lock/Right Ctrl → space) was removed in 56f9485 after the hardware issue was resolved. If a "dead" Caps Lock ever returns, check for stale hwdb keymaps in atkbd first (`sudo setkeycodes 39 57; sudo setkeycodes 3a 58`), not hardware.
 
 ## 9. Security Considerations
 
