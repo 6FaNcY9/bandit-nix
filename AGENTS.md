@@ -45,6 +45,8 @@ Nix Flake on `nixos-unstable`: NixOS system configurations, standalone Home Mana
 ├── lib/repository.nix        # Shared constants: username, paths, theme, unfree policy
 ├── pkgs/                     # Vendored packages (e.g. anisette-v3-server; the NUR
 │                             #   package pinned a stale dub dependency hash)
+├── labs/security/            # Opt-in security practice VM: BloodHound, crAPI,
+│                             #   Atomic Red Team (runbook docs/runbooks/security-practice-vm.md)
 ├── hosts/                    # Host-specific hardware + host-level config
 │   ├── bandit/
 │   │   ├── default.nix       # Hostname, stateVersion, GRUB, kernel params
@@ -124,7 +126,10 @@ Nix Flake on `nixos-unstable`: NixOS system configurations, standalone Home Mana
 | `.#bandit-ci` | `.#bandit` + `nixos/ci-overrides.nix`; SOPS needs no host keys in CI. |
 | `.#bandit-lab` | Homelab: headless shell, Docker services, Traefik, Cloudflare Tunnel, Tailscale, Samba, PostgreSQL. |
 | `.#homeConfigurations.vino` | Standalone Home Manager (non-NixOS installs). |
+| `.#security-lab` / `.#security-lab-online` | QEMU launchers for the opt-in security practice VM (`labs/security/`); online variant for image pulls, restricted variant for practice. |
 | `.#checks.x86_64-linux.repository` | Formatter, linter, dead-code, statix (installer shellcheck/smoke tests dropped when installers moved to gitignored `script/`). |
+| `.#checks.x86_64-linux.security-lab` | Compose-file validation for `labs/security/` (asserts no host shared directories). |
+| `.#checks.x86_64-linux.security-lab-atomic` | Atomic Red Team catalogue/import check. |
 | `.#checks.x86_64-linux.theme-contract` | `lib/repository.nix` theme shape assertions. |
 | `.#checks.x86_64-linux.output-evaluation` | Derivation paths of all public outputs. |
 | `.#checks.x86_64-linux.home-manager-backup` | HM backup command for file collisions. |
