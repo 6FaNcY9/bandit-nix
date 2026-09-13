@@ -50,7 +50,7 @@ Nix Flake on `nixos-unstable`: NixOS system configurations, standalone Home Mana
 ├── hosts/                    # Host-specific hardware + host-level config
 │   ├── bandit/
 │   │   ├── default.nix       # Hostname, stateVersion, GRUB, kernel params
-│   │   └── hardware.nix      # Filesystems, kernel modules, Framework tweaks (LUKS layout planned; see docs/runbooks/bandit-luks-reinstall.md)
+│   │   └── hardware.nix      # Filesystems, kernel modules, Framework tweaks (in-place LUKS planned; see docs/runbooks/bandit-luks-in-place.md)
 │   └── bandit-lab/
 │       ├── default.nix       # Hostname, SSH hardening, authorized keys
 │       ├── hardware.nix      # Server filesystems/hardware
@@ -114,7 +114,7 @@ Nix Flake on `nixos-unstable`: NixOS system configurations, standalone Home Mana
 ├── themes/                   # Gruvbox base16 schemes (dark/light) + wallpaper
 ├── script/install-nixos.sh   # Generic live-ISO installer (gitignored, local-only)
 ├── script/install-bandit-lab.sh # bandit-lab-specific installer wrapper (gitignored)
-├── script/install-bandit.sh  # bandit laptop reinstall: wipe disk, LUKS2, generate hardware.nix (gitignored)
+├── script/install-bandit.sh  # bandit laptop reinstall: wipe disk, LUKS2, generate hardware.nix (gitignored; only for full reinstalls — in-place LUKS is the plan)
 └── .github/workflows/         # GitHub Actions CI
 ```
 
@@ -319,21 +319,15 @@ sudo ./script/install-bandit-lab.sh \
 
 Installer: formats root BTRFS; subvolumes `@`, `@home`, `@nix`, `@log`, `@snapshots`; age key → `/mnt/var/lib/sops-nix/key.txt`; runs `nixos-install --flake .#bandit-lab --no-root-passwd`. Resume modes `--mode prepare|mount|install` recover from network failures without reformatting. Other hosts: generic `install-nixos.sh`.
 
-### bandit Live ISO Reinstall (LUKS) — PLANNED
+### bandit Disk Encryption (LUKS) — PLANNED (in-place, no reinstall)
 
-> **Current state:** `bandit` **not** LUKS-encrypted, still old `@var` BTRFS layout. Below = **planned** reinstall (runbook `docs/runbooks/bandit-luks-reinstall.md`); `hosts/bandit/hardware.nix` regenerated with LUKS UUIDs + `@log` layout then.
+> **Current state:** `bandit` **not** LUKS-encrypted, old `@var` BTRFS layout (kept as-is). Plan = **in-place encryption** with `cryptsetup reencrypt --encrypt` from a live ISO (runbook `docs/runbooks/bandit-luks-in-place.md`); decision reversed 2026-09-14 (`docs/SECURITY-PLAN.md` Phase 3) — no reinstall just for LUKS. Only config change: one `boot.initrd.luks` block in `hosts/bandit/hardware.nix` (BTRFS UUID persists, so `fileSystems` entries stay untouched).
 
-```bash
-git clone https://github.com/6FaNcY9/bandit-nix.git
-cd bandit-nix
-sudo ./script/install-bandit.sh \
-  --disk /dev/nvme0n1 \
-  --age-key /run/media/nixos/USB/key.txt
-```
+Flow: backup `/home` + age/GPG keys → shrink BTRFS 64 MiB online → live ISO → `cryptsetup reencrypt --encrypt --reduce-device-size 32M /dev/nvme0n1p2` (journaled, resumable) → record new LUKS UUID, add `boot.initrd.luks.devices."cryptroot"` → `nixos-enter` + `nixos-rebuild boot` → reboot into initrd passphrase prompt.
 
-Installer would: erase whole disk (GPT: 1 GiB EFI + LUKS2 argon2id container); BTRFS subvolumes inside LUKS `@`, `@home`, `@nix`, `@log`, `@snapshots` (bandit-lab layout; current `hardware.nix` keeps `@var` layout until reinstall); generate `hosts/bandit/hardware.nix` with real disk UUIDs + `boot.initrd.luks`; defer to `install-nixos.sh` for format/mount/install (same `--mode prepare|mount|install` resume modes; LUKS auto re-opened).
+The destructive wipe-and-reinstall installer `script/install-bandit.sh` (gitignored) remains available only if the layout is ever changed to the bandit-lab `@log` scheme.
 
-Post-install: commit generated `hosts/bandit/hardware.nix`; optionally enroll TPM2 (`systemd-cryptenroll --tpm2-device=auto /dev/nvme0n1p2`) once Secure Boot (lanzaboote) in place.
+Post-encryption: commit updated `hosts/bandit/hardware.nix`; optionally enroll TPM2 (`systemd-cryptenroll --tpm2-device=auto /dev/nvme0n1p2`) once Secure Boot (lanzaboote) in place.
 
 
 ### Post-Install (bandit-lab)

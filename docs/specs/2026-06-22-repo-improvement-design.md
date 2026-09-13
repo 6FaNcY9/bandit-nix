@@ -1,5 +1,9 @@
 # bandit-nix Improvement Plan
 > Design spec. Approved 2026-06-22. Approach: Security-First, high risk tolerance.
+>
+> **Superseded (2026-09-14):** Phase 1's reinstall approach was reversed —
+> disk encryption now goes in place via `cryptsetup reencrypt`, no reinstall.
+> See `docs/SECURITY-PLAN.md` Phase 3 and `docs/runbooks/bandit-luks-in-place.md`.
 
 ---
 
