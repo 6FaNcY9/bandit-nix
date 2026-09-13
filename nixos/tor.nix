@@ -41,8 +41,9 @@
 
     ${ipt} -t filter -A OUTPUT -j TOR_BLOCK
 
-    # Block IPv6 outbound to prevent leaks (Tor is IPv4-only)
-    ${ip6t} -A OUTPUT ! -o lo -j DROP 2>/dev/null || true
+    # Block IPv6 outbound to prevent leaks (Tor is IPv4-only). Fatal on
+    # error: a silently missing IPv6 block would leak while routing is active.
+    ${ip6t} -A OUTPUT ! -o lo -j DROP
   '';
 
   disableScript = pkgs.writeShellScript "tor-routing-disable" ''

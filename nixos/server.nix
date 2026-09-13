@@ -6,6 +6,11 @@
 }: let
   # Bandit Retro base16 palette, shared with the workstation theme.
   c = repoConfig.serverPalette;
+  # base16 hex → "r g b" for Zellij theme definitions.
+  rgb = hex: let
+    h = lib.removePrefix "#" hex;
+    byte = i: toString (lib.fromHexString (builtins.substring i 2 h));
+  in "${byte 0} ${byte 2} ${byte 4}";
   zellijMenu = pkgs.writeShellScriptBin "zellij-menu" ''
     set -euo pipefail
 
@@ -127,16 +132,11 @@ in {
       zoxide
       zellij
       zellijMenu
-      starship
-      zsh-autosuggestions
       zsh-fzf-tab
-      zsh-syntax-highlighting
-      brightnessctl
-      libinput
     ];
 
     etc."xdg/zellij/config.kdl".text = ''
-      theme "tomorrow-night-eighties"
+      theme "bandit-retro"
       pane_frames true
       default_layout "compact"
       simplified_ui true
@@ -201,18 +201,18 @@ in {
       }
 
       themes {
-          tomorrow-night-eighties {
-              fg 213 196 161
-              bg 45 45 45
-              black 30 30 30
-              red 242 119 122
-              green 153 204 153
-              yellow 255 204 102
-              blue 102 153 204
-              magenta 204 153 204
-              cyan 102 204 204
-              white 242 240 236
-              orange 249 145 87
+          bandit-retro {
+              fg ${rgb c.base05}
+              bg ${rgb c.base02}
+              black ${rgb c.base01}
+              red ${rgb c.base08}
+              green ${rgb c.base0B}
+              yellow ${rgb c.base0A}
+              blue ${rgb c.base0D}
+              magenta ${rgb c.base0E}
+              cyan ${rgb c.base0C}
+              white ${rgb c.base06}
+              orange ${rgb c.base09}
           }
       }
     '';
@@ -402,13 +402,7 @@ in {
     };
   };
 
-  fonts.packages = [pkgs.nerd-fonts.jetbrains-mono];
-
-  # firmware.nix is shared with the laptop: fprintd is a desktop fingerprint
-  # daemon with no hardware (or use) on a headless server.
   services = {
-    fprintd.enable = lib.mkForce false;
-
     openssh = {
       enable = true;
       openFirewall = true;

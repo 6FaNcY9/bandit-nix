@@ -4,10 +4,7 @@
     tmp.useTmpfs = true;
   };
 
-  # Disable NixOS documentation — large closure not needed on a desktop.
-  documentation = {
-    enable = true;
-    nixos.enable = true;
-    man.enable = true;
-  };
+  # Disable the NixOS manual — large closure not needed on a desktop.
+  # Man pages stay enabled.
+  documentation.nixos.enable = false;
 }

@@ -81,17 +81,4 @@ in {
   };
 
   services.journald.settings.Journal.SystemMaxUse = "500M";
-
-  # LSM: enable AppArmor. NixOS ships only a small default profile set, so
-  # this mostly confines suid helpers; killUnconfinedConfinables stays off
-  # until the profile coverage has been audited.
-  security.apparmor.enable = true;
-
-  # IP-based NTP fallbacks so timesyncd can sync even when DNS is broken (e.g. after RTC reset from removing battery)
-  services.timesyncd.servers = [
-    "162.159.200.1" # Cloudflare
-    "162.159.200.123" # Cloudflare
-    "216.239.35.0" # Google
-    "216.239.35.4" # Google
-  ];
 }

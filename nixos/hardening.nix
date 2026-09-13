@@ -1,6 +1,13 @@
 _: {
   # Prevent overwriting the running kernel image while it is loaded.
-  security.protectKernelImage = true;
+  security = {
+    protectKernelImage = true;
+
+    # LSM: enable AppArmor. NixOS ships only a small default profile set, so
+    # this mostly confines suid helpers; killUnconfinedConfinables stays off
+    # until the profile coverage has been audited.
+    apparmor.enable = true;
+  };
 
   # Conservative kernel/sysctl hardening (SECURITY-PLAN Phase 5).
   # Settings are chosen to avoid breaking common desktop/server workloads.

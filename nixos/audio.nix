@@ -9,7 +9,6 @@ _: {
       support32Bit = true;
     };
     jack.enable = true;
-    wireplumber.enable = true;
 
     extraConfig.pipewire."92-low-latency" = {
       # PipeWire expects flat dot-notation keys, not nested attrsets.

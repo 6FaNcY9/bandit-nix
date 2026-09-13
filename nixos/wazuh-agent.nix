@@ -1,7 +1,11 @@
-{pkgs, ...}: let
+{
+  pkgs,
+  repoConfig,
+  ...
+}: let
   # bandit-lab on the tailnet; agent ports 1514/1515 are bound to its
   # tailscale interface only.
-  managerAddress = "100.125.161.81";
+  managerAddress = repoConfig.lab.tailscaleIp;
   stateDir = "/var/lib/wazuh-agent";
   agentImage = "docker.io/wazuh/wazuh-agent:4.14.7";
   # Custom agent configuration: host journald (host journal directory and

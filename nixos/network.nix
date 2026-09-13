@@ -1,20 +1,9 @@
-{
-  config,
-  lib,
-  pkgs,
-  ...
-}: {
+{pkgs, ...}: {
   networking = {
     networkmanager = {
       enable = true;
       dns = "systemd-resolved";
       plugins = [pkgs.networkmanager-openvpn];
-      # Random MAC per network, stable per SSID: defeats cross-network
-      # tracking without breaking captive portals or per-network DHCP leases.
-      # Laptop-only: bandit-lab is headless and has no Wi-Fi use case.
-      wifi = lib.mkIf (config.networking.hostName == "bandit") {
-        macAddress = "stable";
-      };
     };
     useDHCP = false; # NetworkManager handles this
     firewall = {
@@ -47,9 +36,12 @@
       };
     };
 
-    # Laptop-only tailnet access: reach bandit-lab (100.125.161.81) from any
-    # network without the Cloudflare Access browser flow. The lab enables its
-    # own tailscaled in hosts/bandit-lab/webhost.nix.
-    tailscale.enable = lib.mkIf (config.networking.hostName == "bandit") true;
+    # IP-based NTP fallbacks so timesyncd can sync even when DNS is broken (e.g. after RTC reset from removing battery)
+    timesyncd.servers = [
+      "162.159.200.1" # Cloudflare
+      "162.159.200.123" # Cloudflare
+      "216.239.35.0" # Google
+      "216.239.35.4" # Google
+    ];
   };
 }

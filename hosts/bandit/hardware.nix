@@ -21,10 +21,8 @@ in {
         "uas"
         "sd_mod"
       ];
-      kernelModules = [];
     };
     kernelModules = ["kvm-amd"];
-    extraModulePackages = [];
   };
 
   fileSystems = {

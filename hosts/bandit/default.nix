@@ -42,6 +42,27 @@
   # Framework 13 AMD 7040: s2idle is the only working suspend mode.
   boot.kernelParams = ["mem_sleep_default=s2idle"];
 
+  # Framework 13 AMD hardware support.
+  services = {
+    fprintd.enable = true;
+    # upower provides battery status used by status bars and desktop apps.
+    upower.enable = true;
+    # Laptop tailnet access: reach bandit-lab (100.125.161.81) from any
+    # network without the Cloudflare Access browser flow. The lab enables its
+    # own tailscaled in hosts/bandit-lab/webhost.nix.
+    tailscale.enable = true;
+  };
+
+  # Random MAC per network, stable per SSID: defeats cross-network
+  # tracking without breaking captive portals or per-network DHCP leases.
+  networking.networkmanager.wifi.macAddress = "stable";
+  # AMD CPU microcode updates — applied at boot for security and stability.
+  # Redistributable firmware blobs for WiFi (ath11k) and Bluetooth.
+  hardware = {
+    cpu.amd.updateMicrocode = true;
+    enableRedistributableFirmware = true;
+  };
+
   # ── Programs ───────────────────────────────────────────────
   programs = {
     nix-ld.enable = true;
