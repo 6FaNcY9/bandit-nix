@@ -148,9 +148,9 @@ in {
       description = "Copy file contents to clipboard (or stdin if no arg)";
       body = ''
         if test (count $argv) -eq 0
-          xclip -selection clipboard
+          ${pkgs.wl-clipboard}/bin/wl-copy
         else if test -f $argv[1]
-          xclip -selection clipboard < $argv[1]
+          ${pkgs.wl-clipboard}/bin/wl-copy < $argv[1]
         else
           echo "cb: '$argv[1]' is not a file" >&2
           return 1

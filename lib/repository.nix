@@ -23,6 +23,12 @@ in {
     repoPath = "/home/vino/src/bandit-nix";
   };
 
+  lab = {
+    # Tailscale IP of bandit-lab. Update after any Tailscale machine
+    # re-enrollment or tailnet migration.
+    tailscaleIp = "100.125.161.81";
+  };
+
   # Shared with the headless shell and editor modules.
   serverPalette = {
     base00 = "#111111";
@@ -80,6 +86,30 @@ in {
   };
 
   inherit unfreePackageNames;
+
+  # Inspect-then-create Docker network as a oneshot systemd unit. A plain
+  # `docker network create ... || true` would mask real daemon failures,
+  # leaving dependent container units to fail later with an obscure
+  # "network not found". Used for proxy/wazuh/aiia on bandit-lab;
+  # portainer-control keeps a custom variant (verifies --internal).
+  mkDockerNetwork = pkgs: name: let
+    script = pkgs.writeShellScript "ensure-${name}-network" ''
+      set -euo pipefail
+      if ! ${pkgs.docker}/bin/docker network inspect ${name} >/dev/null 2>&1; then
+        ${pkgs.docker}/bin/docker network create ${name}
+      fi
+    '';
+  in {
+    description = "Create ${name} Docker network";
+    after = ["docker.service"];
+    requires = ["docker.service"];
+    wantedBy = ["multi-user.target"];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = script;
+    };
+  };
 
   allowUnfreePredicate = pkg: let
     name = lib.getName pkg;

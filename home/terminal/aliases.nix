@@ -14,7 +14,7 @@
 
   # ── Navigation ────────────────────────────────────────
   ll = "eza -la --icons --git";
-  la = "eza -la --icons --git";
+  la = "eza -a --icons --git";
   lt = "eza --tree --icons --level=2";
   lta = "eza --tree --icons --level=3 -a";
   cat = "bat";

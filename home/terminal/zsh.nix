@@ -196,9 +196,9 @@ in {
         # ── cb: copy file/stdin to clipboard ──────────────────
         cb() {
           if [[ $# -eq 0 ]]; then
-            xclip -selection clipboard
+            ${pkgs.wl-clipboard}/bin/wl-copy
           elif [[ -f "$1" ]]; then
-            xclip -selection clipboard < "$1"
+            ${pkgs.wl-clipboard}/bin/wl-copy < "$1"
           else
             print "cb: '$1' is not a file" >&2
             return 1
@@ -214,7 +214,7 @@ in {
     zoxide.enableZshIntegration = true;
     nix-index.enableZshIntegration = true;
 
-    # fzf: key-bindings sourced manually in initExtra to avoid loading
+    # fzf: key-bindings sourced manually in initContent to avoid loading
     # fzf's completion.zsh (conflicts with fzf-tab)
     fzf.enableZshIntegration = false;
   };

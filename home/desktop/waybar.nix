@@ -1,6 +1,7 @@
 {
   config,
   pkgs,
+  repoConfig,
   ...
 }: let
   colors = config.lib.stylix.colors.withHashtag;
@@ -35,7 +36,7 @@ in {
 
       "custom/nix" = {
         format = "󱄅 BANDIT";
-        on-click = "${pkgs.rofi}/bin/rofi -show drun";
+        on-click = "${config.programs.rofi.package}/bin/rofi -show drun";
         tooltip = false;
       };
 
@@ -86,6 +87,7 @@ in {
         format-disconnected = "󰖪 OFF";
         tooltip-format-wifi = "{essid}\n{ipaddr}/{cidr}\n⇣ {bandwidthDownBytes}  ⇡ {bandwidthUpBytes}";
         tooltip-format-ethernet = "{ifname}\n{ipaddr}/{cidr}\n⇣ {bandwidthDownBytes}  ⇡ {bandwidthUpBytes}";
+        on-click = "${repoConfig.workstation.homeDirectory}/.local/bin/net-menu";
         interval = 2;
       };
 
@@ -95,10 +97,10 @@ in {
         format-icons = {
           default = ["󰕿" "󰖀" "󰕾"];
         };
-        on-click = "${pkgs.pipewire}/bin/pactl set-sink-mute @DEFAULT_SINK@ toggle";
+        on-click = "${pkgs.pulseaudio}/bin/pactl set-sink-mute @DEFAULT_SINK@ toggle";
         on-click-right = "${pkgs.pavucontrol}/bin/pavucontrol";
-        on-scroll-up = "${pkgs.pipewire}/bin/pactl set-sink-volume @DEFAULT_SINK@ +5%";
-        on-scroll-down = "${pkgs.pipewire}/bin/pactl set-sink-volume @DEFAULT_SINK@ -5%";
+        on-scroll-up = "${pkgs.pulseaudio}/bin/pactl set-sink-volume @DEFAULT_SINK@ +5%";
+        on-scroll-down = "${pkgs.pulseaudio}/bin/pactl set-sink-volume @DEFAULT_SINK@ -5%";
       };
 
       "power-profiles-daemon" = {

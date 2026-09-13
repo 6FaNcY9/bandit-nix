@@ -1,31 +1,10 @@
 {
   config,
   pkgs,
-  repoConfig,
   ...
-}: let
-  colors = config.lib.stylix.colors.withHashtag;
-in {
-  home.packages = with pkgs; [
-    wl-clipboard # for "copy public IP" action
-  ];
-
+}: {
   home.file = {
-    # ── Panel chip: Tor status indicator (click → net-menu) ───────────────
-    ".local/bin/panel-tor" = {
-      executable = true;
-      text = ''
-        #!/usr/bin/env bash
-        if systemctl is-active --quiet tor-routing-enable.service 2>/dev/null; then
-          echo "<txt><span color='${colors.base0E}'>[</span><span color='${colors.base0B}'>🧅 TOR</span><span color='${colors.base0E}'>]</span></txt>"
-        else
-          echo "<txt><span color='${colors.base02}'>[</span><span color='${colors.base03}'>󰛳 net</span><span color='${colors.base02}'>]</span></txt>"
-        fi
-        echo "<click>${repoConfig.workstation.homeDirectory}/.local/bin/net-menu</click>"
-      '';
-    };
-
-    # ── Network + Tor rofi menu ────────────────────────────────────────────
+    # ── Network + Tor rofi menu (waybar network module on-click) ─────────
     ".local/bin/net-menu" = {
       executable = true;
       text = ''

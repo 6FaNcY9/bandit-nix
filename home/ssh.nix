@@ -48,8 +48,8 @@
       # Default path — tailnet address, reachable from any network without
       # the Cloudflare browser flow. The old direct-LAN IP was dropped when
       # the lab moved networks; re-add a LAN alias if a reservation returns.
-      "bandit-lab" = {
-        Hostname = "100.125.161.81";
+      "bandit-lab bandit-lab-ts" = {
+        Hostname = repoConfig.lab.tailscaleIp;
         User = repoConfig.workstation.username;
         IdentityFile = "~/.ssh/homelabKey";
         IdentitiesOnly = true;
@@ -64,14 +64,6 @@
         IdentityFile = "~/.ssh/homelabKey";
         IdentitiesOnly = true;
         ProxyCommand = "${pkgs.cloudflared}/bin/cloudflared access ssh --hostname %h";
-      };
-      # Tailnet path — same host, same key, over Tailscale. Works from any
-      # network once tailscaled is up; no Cloudflare browser flow needed.
-      "bandit-lab-ts" = {
-        Hostname = "100.125.161.81";
-        User = repoConfig.workstation.username;
-        IdentityFile = "~/.ssh/homelabKey";
-        IdentitiesOnly = true;
       };
     };
   };

@@ -1,4 +1,4 @@
-_: {
+{repoConfig, ...}: {
   imports = [
     ./fish.nix
     ./kitty.nix
@@ -13,5 +13,5 @@ _: {
   # but Home Manager owns the shell config (ZDOTDIR), so that file is never
   # read and the export dies on every rebuild. Own the PATH entry here so it
   # survives nixos-rebuild / home-manager switch.
-  home.sessionPath = ["/home/vino/.kimi-code/bin"];
+  home.sessionPath = ["${repoConfig.workstation.homeDirectory}/.kimi-code/bin"];
 }

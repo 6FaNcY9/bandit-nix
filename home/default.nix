@@ -32,8 +32,9 @@
 
   home = {
     inherit (repoConfig.workstation) username homeDirectory;
-    stateVersion = "25.11"; #
+    stateVersion = "25.11";
     sessionVariables = {
+      # Single-user host: gcr's ssh agent socket under the user runtime dir.
       SSH_AUTH_SOCK = "/run/user/1000/gcr/ssh";
     };
     packages = with pkgs; [
