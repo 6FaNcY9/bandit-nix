@@ -39,17 +39,14 @@ buildDubPackage {
     libplist
   ];
 
-  propagatedBuildInputs = [
-    cacert
-  ];
-
   installPhase = ''
     runHook preInstall
     mkdir -p $out/bin
     install -m755 anisette-v3-server $out/bin/.anisette-v3-server-unwrapped
 
     makeWrapper $out/bin/.anisette-v3-server-unwrapped $out/bin/anisette-v3-server \
-      --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath [libplist openssl zlib]}"
+      --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath [libplist openssl zlib]}" \
+      --set-default SSL_CERT_FILE "${cacert}/etc/ssl/certs/ca-bundle.crt"
 
     runHook postInstall
   '';

@@ -21,6 +21,13 @@
     tar xf ${atomics} --strip-components=1 -C "$out/tests"
     tar xf ${invoke} --strip-components=1 -C "$out/modules/Invoke-AtomicRedTeam"
     unzip -q ${yaml} -d "$out/modules/powershell-yaml"
+    # Guard against a truncated upstream archive: the catalogue holds
+    # one T*.yaml per technique, currently around 340 of them.
+    count=$(find "$out/tests/atomics" -name 'T*.yaml' | wc -l)
+    if [ "$count" -lt 300 ]; then
+      echo "atomics extraction looks incomplete: $count technique files" >&2
+      exit 1
+    fi
   '';
   atomicConsole = pkgs.writeShellApplication {
     name = "atomic-console";
@@ -57,6 +64,9 @@
         -f "/etc/security-lab/$stack.yml" "$@"
     '';
   };
+  # Guest ports forwarded to host loopback and allowed by the guest
+  # firewall. The compose check in flake.nix asserts these stay published.
+  labPorts = [8080 8888 8025];
 in {
   imports = [(modulesPath + "/virtualisation/qemu-vm.nix")];
   networking.hostName = "security-lab";
@@ -83,17 +93,19 @@ in {
     useNixStoreImage = true;
     sharedDirectories = lib.mkForce {};
     restrictNetwork = true;
-    forwardPorts = map (port: {
-      from = "host";
-      host = {
-        inherit port;
-        address = "127.0.0.1";
-      };
-      guest.port = port;
-    }) [8080 8888 8025];
+    forwardPorts =
+      map (port: {
+        from = "host";
+        host = {
+          inherit port;
+          address = "127.0.0.1";
+        };
+        guest.port = port;
+      })
+      labPorts;
     docker.enable = true;
   };
-  networking.firewall.allowedTCPPorts = [8080 8888 8025];
+  networking.firewall.allowedTCPPorts = labPorts;
   environment.etc = {
     "security-lab/bloodhound.yml".source = ./bloodhound.yml;
     "security-lab/crapi.yml".source = ./crapi.yml;

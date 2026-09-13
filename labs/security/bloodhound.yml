@@ -1,5 +1,7 @@
 # Upstream: https://raw.githubusercontent.com/SpecterOps/BloodHound/v9.7.0/examples/docker-compose/docker-compose.yml
-# Images pinned to published digests.
+# Images pinned to published digests. neo4j 4.4 is EOL; kept because it
+# matches the upstream practice target and runs in a network-restricted
+# throwaway VM.
 # Copyright 2023 Specter Ops, Inc.
 #
 # Licensed under the Apache License, Version 2.0
