@@ -406,15 +406,24 @@ in {
 
   # firmware.nix is shared with the laptop: fprintd is a desktop fingerprint
   # daemon with no hardware (or use) on a headless server.
-  services.fprintd.enable = lib.mkForce false;
+  services = {
+    fprintd.enable = lib.mkForce false;
 
-  services.openssh = {
-    enable = true;
-    openFirewall = true;
-    settings = {
-      PasswordAuthentication = false;
-      KbdInteractiveAuthentication = false;
-      PermitRootLogin = "no";
+    openssh = {
+      enable = true;
+      openFirewall = true;
+      settings = {
+        PasswordAuthentication = false;
+        KbdInteractiveAuthentication = false;
+        PermitRootLogin = "no";
+      };
+    };
+
+    # Server keeps the same monthly cadence as the laptop; adjust per-host if disk churn increases.
+    btrfs.autoScrub = {
+      enable = true;
+      interval = "monthly";
+      fileSystems = ["/"];
     };
   };
 
@@ -423,14 +432,6 @@ in {
     enable = true;
     algorithm = "zstd";
     memoryPercent = 25; # 16 GB zram out of 64 GB RAM
-  };
-
-  # ── BTRFS maintenance ─────────────────────────────────────────────────────
-  services.btrfs.autoScrub = {
-    enable = true;
-    # Server keeps the same monthly cadence as the laptop; adjust per-host if disk churn increases.
-    interval = "monthly";
-    fileSystems = ["/"];
   };
 
   # ── Nix build capacity ────────────────────────────────────────────────────

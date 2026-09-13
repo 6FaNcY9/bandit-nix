@@ -80,7 +80,7 @@ in {
     };
   };
 
-  services.journald.extraConfig = "SystemMaxUse=500M";
+  services.journald.settings.Journal.SystemMaxUse = "500M";
 
   # LSM: enable AppArmor. NixOS ships only a small default profile set, so
   # this mostly confines suid helpers; killUnconfinedConfinables stays off
