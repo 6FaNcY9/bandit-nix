@@ -69,6 +69,13 @@
       stylix = repoConfig.mkStylixTheme pkgs;
     };
     sharedArgs = {inherit inputs repoConfig;};
+    securityLab = nixpkgs.lib.nixosSystem {
+      inherit system;
+      modules = [./labs/security];
+    };
+    securityLabOnline = securityLab.extendModules {
+      modules = [{virtualisation.restrictNetwork = nixpkgs.lib.mkForce false;}];
+    };
 
     hmBase = {
       useGlobalPkgs = true;
@@ -122,6 +129,16 @@
     };
 
     checks.${system} = {
+      security-lab-atomic = securityLab.config.system.build.atomicCheck;
+      security-lab = assert securityLab.config.virtualisation.sharedDirectories == {};
+      assert securityLabOnline.config.virtualisation.sharedDirectories == {};
+        pkgs.runCommand "security-lab-compose-check" {
+          nativeBuildInputs = [pkgs.docker-compose];
+        } ''
+          docker-compose -f ${./labs/security/bloodhound.yml} config --quiet
+          docker-compose -f ${./labs/security/crapi.yml} config --quiet
+          touch "$out"
+        '';
       lab-reliability = let
         lab = self.nixosConfigurations.bandit-lab.config;
       in
@@ -311,6 +328,8 @@
     formatter.${system} = pkgs.alejandra;
     packages.${system} = {
       inherit (pkgs) cachix vulnix;
+      security-lab = securityLab.config.system.build.vm;
+      security-lab-online = securityLabOnline.config.system.build.vm;
     };
   };
 }
