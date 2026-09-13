@@ -1,9 +1,14 @@
-{pkgs, ...}: let
+{
+  pkgs,
+  repoConfig,
+  ...
+}: let
+  c = repoConfig.serverPalette;
   brandingCss = pkgs.writeText "bandit-lab-cockpit-branding.css" ''
     :root,
     .pf-v6-theme-dark {
       --color-body-background: #1d1f21;
-      --color-background: #2d2d2d;
+      --color-background: ${c.base02};
       --color-secondary-background: #393939;
       --color-text: #f2f0ec;
       --color-secondary-text: #cccccc;
@@ -13,10 +18,10 @@
       --color-border-light: #747369;
       --color-input-background: #1d1f21;
       --color-input: #f2f0ec;
-      --color-primary: #ffcc66;
-      --color-primary-active: #f99157;
-      --color-link: #66cccc;
-      --color-link-active: #99cc99;
+      --color-primary: ${c.base0A};
+      --color-primary-active: ${c.base09};
+      --color-link: ${c.base0C};
+      --color-link-active: ${c.base0B};
       --pf-t--global--font--family--body: "JetBrainsMono Nerd Font", "JetBrainsMono Nerd Font Mono", "JetBrains Mono", monospace;
       --pf-t--global--font--family--heading: "JetBrainsMono Nerd Font", "JetBrainsMono Nerd Font Mono", "JetBrains Mono", monospace;
       --pf-t--global--border--radius--tiny: 0;
@@ -54,7 +59,7 @@
     .pf-v6-c-toolbar,
     .pf-v6-c-tabs,
     .pf-v6-c-nav {
-      background: #2d2d2d !important;
+      background: ${c.base02} !important;
       color: #f2f0ec !important;
     }
 
@@ -84,20 +89,20 @@
       border: 1px solid #515151 !important;
       border-radius: 0 !important;
       color: #f2f0ec !important;
-      box-shadow: inset 1px 1px 0 #747369, inset -1px -1px 0 #111111 !important;
+      box-shadow: inset 1px 1px 0 #747369, inset -1px -1px 0 ${c.base00} !important;
     }
 
     .pf-v6-c-button.pf-m-primary,
     .pf-v6-c-button.pf-m-progress {
       background: #393939 !important;
-      border-color: #ffcc66 !important;
-      color: #ffcc66 !important;
+      border-color: ${c.base0A} !important;
+      color: ${c.base0A} !important;
     }
 
     a,
     .pf-v6-c-nav__link.pf-m-current,
     .pf-v6-c-tabs__link[aria-selected="true"] {
-      color: #66cccc !important;
+      color: ${c.base0C} !important;
     }
 
     .pf-v6-c-label,
@@ -114,7 +119,7 @@
 
     #brand::before {
       content: "bandit-lab";
-      color: #ffcc66;
+      color: ${c.base0A};
       font-family: "JetBrainsMono Nerd Font", "JetBrainsMono Nerd Font Mono", "JetBrains Mono", monospace;
       font-size: 1.75rem;
       font-weight: 700;
@@ -122,10 +127,10 @@
     }
 
     .login-pf .container {
-      background: #2d2d2d !important;
+      background: ${c.base02} !important;
       border: 1px solid #515151 !important;
       border-radius: 0 !important;
-      box-shadow: inset 1px 1px 0 #747369, inset -1px -1px 0 #111111 !important;
+      box-shadow: inset 1px 1px 0 #747369, inset -1px -1px 0 ${c.base00} !important;
     }
 
     #system-terminal-page,
@@ -143,7 +148,7 @@
 
     #terminal {
       border: 1px solid #515151 !important;
-      box-shadow: inset 1px 1px 0 #747369, inset -1px -1px 0 #111111 !important;
+      box-shadow: inset 1px 1px 0 #747369, inset -1px -1px 0 ${c.base00} !important;
     }
 
     .terminal .xterm-viewport,

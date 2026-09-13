@@ -5,15 +5,6 @@
   ...
 }: let
   username = repoConfig.workstation.username;
-
-  # Inspect-then-create, same rationale as docker-network-proxy in traefik.nix.
-  ensureAiiaNetwork = pkgs.writeShellScript "ensure-aiia-network" ''
-    set -euo pipefail
-
-    if ! ${pkgs.docker}/bin/docker network inspect aiia >/dev/null 2>&1; then
-      ${pkgs.docker}/bin/docker network create aiia
-    fi
-  '';
 in {
   # Internal service network for ghost <-> mysql <-> redis. The ghost container
   # additionally joins the `proxy` network at creation so Traefik can
@@ -36,17 +27,7 @@ in {
     ];
 
     services = {
-      docker-network-aiia = {
-        description = "Create aiia Docker network";
-        after = ["docker.service"];
-        requires = ["docker.service"];
-        wantedBy = ["multi-user.target"];
-        serviceConfig = {
-          Type = "oneshot";
-          RemainAfterExit = true;
-          ExecStart = ensureAiiaNetwork;
-        };
-      };
+      docker-network-aiia = repoConfig.mkDockerNetwork pkgs "aiia";
 
       docker-aiia-mysql = {
         after = ["docker-network-aiia.service"];

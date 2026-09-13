@@ -1,4 +1,10 @@
 {config, ...}: {
+  # Pre-create the data dir like every other stateful service instead of
+  # letting Docker auto-create it root-owned on first start.
+  systemd.tmpfiles.rules = [
+    "d /srv/containers/watchyourlan/data 0750 root root -"
+  ];
+
   # Network device discovery: ARP-scans the LAN on a timer and keeps a web
   # inventory with online/offline history and new-host notifications.
   # ARP needs L2 access, so the container runs on the host network — but the
@@ -22,10 +28,13 @@
     volumes = ["/srv/containers/watchyourlan/data:/data/WatchYourLAN"];
     extraOptions = [
       "--network=host"
-      # ARP scanning needs raw packets and interface control, nothing else.
+      # ARP scanning needs raw packets only. NET_ADMIN is deliberately not
+      # granted: with host networking it could reconfigure the host
+      # firewall/routing. If scanning breaks after an image update, verify
+      # whether upstream started requiring interface control before
+      # re-adding it.
       "--cap-drop=ALL"
       "--cap-add=NET_RAW"
-      "--cap-add=NET_ADMIN"
     ];
   };
 

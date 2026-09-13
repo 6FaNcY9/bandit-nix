@@ -7,7 +7,7 @@
   username = repoConfig.workstation.username;
   version = "4.14.7";
   # Manager agent ports listen on the tailnet only; API/indexer/dashboard on loopback.
-  tailscaleIp = "100.125.161.81";
+  tailscaleIp = repoConfig.lab.tailscaleIp;
   stateDir = "/srv/containers/wazuh";
   confDir = "${stateDir}/config";
   certDir = "${confDir}/wazuh_indexer_ssl_certs";
@@ -17,13 +17,6 @@
   managerKey = config.sops.secrets."wazuh-tls-manager-key".path;
   dashboardKey = config.sops.secrets."wazuh-tls-dashboard-key".path;
   internalUsers = config.sops.secrets."wazuh-internal-users-yml".path;
-
-  ensureWazuhNetwork = pkgs.writeShellScript "ensure-wazuh-network" ''
-    set -euo pipefail
-    if ! ${pkgs.docker}/bin/docker network inspect wazuh >/dev/null 2>&1; then
-      ${pkgs.docker}/bin/docker network create wazuh
-    fi
-  '';
 in {
   # Passwords live only as sops placeholders; TLS private keys and the
   # security-plugin user DB (password hashes) are sops secrets. The CA keys
@@ -131,17 +124,7 @@ in {
     ];
 
     services = {
-      docker-network-wazuh = {
-        description = "Create wazuh Docker network";
-        after = ["docker.service"];
-        requires = ["docker.service"];
-        wantedBy = ["multi-user.target"];
-        serviceConfig = {
-          Type = "oneshot";
-          RemainAfterExit = true;
-          ExecStart = ensureWazuhNetwork;
-        };
-      };
+      docker-network-wazuh = repoConfig.mkDockerNetwork pkgs "wazuh";
       "docker-wazuh.manager" = {
         after = ["docker-network-wazuh.service"];
         requires = ["docker-network-wazuh.service"];
@@ -262,6 +245,12 @@ in {
       volumes = [
         "${confDir}/wazuh_agent/ossec.conf:/wazuh-config-mount/etc/ossec.conf:ro"
         "${confDir}/wazuh_agent/site-packages:/usr/local/lib64/python3.9/site-packages:ro"
+        # The docker-listener wodle needs the daemon socket. `:ro` only makes
+        # the bind mount read-only — the Docker API over the socket is fully
+        # writable, so this container is effectively host-root. Accepted risk,
+        # same as portainer-agent (webhost.nix); a socket-proxy like
+        # traefik-docker-proxy (traefik.nix) is the alternative if the wodle
+        # endpoint set ever stabilises.
         "/var/run/docker.sock:/var/run/docker.sock:ro"
         "/etc/machine-id:/etc/machine-id:ro"
         "/var/log/journal:/var/log/journal:ro"

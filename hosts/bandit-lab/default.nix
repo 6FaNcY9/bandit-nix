@@ -64,9 +64,6 @@
     };
 
     openssh.settings = {
-      PasswordAuthentication = lib.mkForce false;
-      KbdInteractiveAuthentication = lib.mkForce false;
-      PermitRootLogin = "no";
       # Only the vino account holds authorized keys; refuse everyone else
       # outright instead of relying on per-account key checks.
       AllowUsers = [repoConfig.workstation.username];

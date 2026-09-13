@@ -9,7 +9,6 @@
 #   /dev/nvme0n1p5  2.7 TiB  NixOS target, format as BTRFS
 {
   config,
-  lib,
   modulesPath,
   pkgs,
   ...
@@ -46,10 +45,7 @@ in {
   # ── CPU ───────────────────────────────────────────────────────────────────
   boot.kernelModules = ["kvm-intel"];
   hardware = {
-    cpu = {
-      amd.updateMicrocode = lib.mkForce false;
-      intel.updateMicrocode = true;
-    };
+    cpu.intel.updateMicrocode = true;
 
     # ── GPU — NVIDIA GeForce RTX 4090 Laptop ───────────────────────────────
     graphics = {

@@ -186,18 +186,6 @@ in {
     };
 
     timers = {
-      lab-update-check = {
-        description = "Poll GitHub for bandit-lab configuration updates";
-        wantedBy = ["timers.target"];
-        timerConfig = {
-          # Informational only — the hourly apply timer fetches on its own,
-          # so a 10-minute poll cadence is pure log noise.
-          OnActiveSec = "2min";
-          OnUnitActiveSec = "1d";
-          Persistent = true;
-        };
-      };
-
       lab-update-apply = {
         description = "Automatically apply bandit-lab configuration updates";
         wantedBy = ["timers.target"];
