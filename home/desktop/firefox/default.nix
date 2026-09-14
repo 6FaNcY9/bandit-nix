@@ -12,6 +12,9 @@
 in {
   programs.firefox = {
     enable = true;
+    # HM master moved the default under XDG configHome for stateVersion >=
+    # 26.05; pin the legacy path so the existing profile is untouched.
+    configPath = ".mozilla/firefox";
     profiles.default = {
       id = 0;
       isDefault = true;

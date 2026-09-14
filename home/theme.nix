@@ -1,6 +1,5 @@
 {
   config,
-  inputs,
   pkgs,
   lib,
   ...
@@ -8,11 +7,13 @@
   colors = config.lib.stylix.colors.withHashtag;
   gruvboxKvantum = let
     kvconfig = config.lib.stylix.colors {
-      template = "${inputs.stylix}/modules/qt/kvconfig.mustache";
+      # Vendored from stylix's modules/qt/: the template argument must be a
+      # real path — a string is written verbatim as file content instead.
+      template = ./kvantum/kvconfig.mustache;
       extension = ".kvconfig";
     };
     svg = config.lib.stylix.colors {
-      template = "${inputs.stylix}/modules/qt/kvantum.svg.mustache";
+      template = ./kvantum/kvantum.svg.mustache;
       extension = ".svg";
     };
   in
