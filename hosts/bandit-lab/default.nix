@@ -14,6 +14,7 @@
     ./vaultwarden.nix
     ./searxng.nix
     ./watchyourlan.nix
+    ./minecraft.nix
     ./power.nix
     ./aiia.nix
     ./auto-rebuild.nix

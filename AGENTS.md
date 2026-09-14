@@ -24,7 +24,7 @@ Nix Flake on `nixos-unstable`: NixOS system configurations, standalone Home Mana
 | Shells | Fish + Zsh | Shared aliases `home/terminal/aliases.nix` |
 | Version control | Git + GPG signing | Commit signing, GitHub CLI |
 | Containers | Rootless Docker + Podman | Dev on `bandit`; Docker services on `bandit-lab` |
-| Server services | Traefik, Cloudflared, Tailscale, Samba, PostgreSQL, Vaultwarden, Portainer, Cockpit, SearXNG, WatchYourLAN | `bandit-lab` homelab stack |
+| Server services | Traefik, Cloudflared, Tailscale, Samba, PostgreSQL, Vaultwarden, Portainer, Cockpit, SearXNG, WatchYourLAN, Minecraft | `bandit-lab` homelab stack |
 
 ### Key Inputs (see `flake.nix`)
 
@@ -62,6 +62,7 @@ Nix Flake on `nixos-unstable`: NixOS system configurations, standalone Home Mana
 │       ├── vaultwarden.nix   # Password manager container (+ Gruvbox web-vault theme)
 │       ├── searxng.nix       # Private metasearch container (stateless)
 │       ├── watchyourlan.nix  # LAN device-discovery container (host network, loopback GUI)
+│       ├── minecraft.nix     # Paper Minecraft container (4 players, 4 CPU / 12 GiB cap, port 25565)
 │       ├── wazuh.nix         # Wazuh SIEM stack (manager/indexer/dashboard/agent oci-containers)
 │       ├── wazuh/            # Wazuh configs + public TLS certs (keys in sops)
 │       ├── vaultwarden/      # gruvbox.scss.hbs theme source (TEMPLATES_FOLDER hook)
