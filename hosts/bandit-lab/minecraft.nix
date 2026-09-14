@@ -10,7 +10,8 @@
   # (i9-14900HX, 62 GiB) barely notices it. Not proxied through Traefik:
   # Minecraft is a raw TCP protocol, so port 25565 is published directly.
   virtualisation.oci-containers.containers.minecraft = {
-    image = "itzg/minecraft-server@sha256:50bdc4b0746c48456d8e737a017786a94c02295b14a8f0f4cb02592a0388cc09"; # java21
+    # java25 tag: Minecraft 26.1+ refuses to start on anything older.
+    image = "itzg/minecraft-server@sha256:769a826c340586e9d483a0eb6437b8e2c3611aea6a115ff072a2fe372d43e2be"; # java25
     environment = {
       EULA = "TRUE";
       # Paper over vanilla: same gameplay, much better tick performance.
