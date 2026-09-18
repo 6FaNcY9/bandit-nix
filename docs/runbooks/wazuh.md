@@ -72,9 +72,16 @@ compete for ports and state. They record the original certificate/setup flow.
    docker exec wazuh-wazuh.manager-1 /var/ossec/bin/agent_control -l
    ```
 
-   Check the dashboard for recent events from both hosts.
+   Check the dashboard for recent events from the lab agent.
 
 ## Agents and coverage
+
+Only bandit-lab runs an agent. The bandit laptop agent
+(`nixos/wazuh-agent.nix`, Podman container + `/var/lib/wazuh-agent` state)
+was removed on 2026-09-18; after the removal rebuild, stop and delete the
+leftover container (`sudo podman rm -f wazuh-agent`), remove
+`/var/lib/wazuh-agent`, and delete the `bandit` agent entry from the manager
+(`agent_id` 002) via the dashboard or the manager API.
 
 Verified on 2026-09-09: manager 4.14.7 reports `bandit` (002) and
 `bandit-lab` (003) Active, alongside its local manager identity (000).
@@ -83,20 +90,16 @@ Verified on 2026-09-09: manager 4.14.7 reports `bandit` (002) and
   project; the new lab module declares that agent too.
   The manager's local identity monitors its container; it does not replace
   the host agent.
-- **bandit** uses the Podman agent declared in `nixos/wazuh-agent.nix`.
-  Manager TCP ports 1514/1515 are bound to `100.125.161.81` on the tailnet.
-  Persisted `/var/lib/wazuh-agent/etc` retains enrollment identity across
-  container recreation. Startup installs `ossec.conf` with mode 0640 and
-  group 999 so the agent can read it after dropping privileges.
+- Manager TCP ports 1514/1515 are bound to `100.125.161.81` on the tailnet.
 - Host coverage comes from mounted journald data and FIM paths under `/host`.
   Inventory, rootcheck and default SCA policies run in the container's view
   of the system. Package vulnerability results therefore do not establish
   NixOS host package coverage. NixOS `/etc` symlinks into an unmounted Nix
   store also limit file-content coverage.
-- The laptop configuration disables the image's Amazon Linux SCA policies.
-  Check the separate lab agent configuration in
-  `hosts/bandit-lab/wazuh/config/wazuh_agent_ossec.conf` for equivalent policy
-  coverage before enabling SCA there. Keep host vulnerability assessment in the existing
+- The image's Amazon Linux SCA policies audit the container, not NixOS.
+  Check the lab agent configuration in
+  `hosts/bandit-lab/wazuh/config/wazuh_agent_ossec.conf` before enabling SCA
+  there. Keep host vulnerability assessment in the existing
   Nix/vulnix workflow; inspect actual closures and advisories before acting.
 - Journald filters use separate blocks for OR semantics and restrict ingestion
   to security-relevant sources. NixOS Samba units are `samba-smbd.service`
@@ -105,8 +108,8 @@ Verified on 2026-09-09: manager 4.14.7 reports `bandit` (002) and
 - Container active response is not host firewall enforcement. CrowdSec and
   its host firewall bouncer provide that separate integration.
 
-After a laptop rebuild, check `systemctl status podman-wazuh-agent` and
-confirm fresh host events in the dashboard. For external compose changes,
+After a lab rebuild, check the agent container (`systemctl status 'docker-wazuh.agent'`)
+and confirm fresh host events in the dashboard. For external compose changes,
 update the persistent agent configuration as well as any seed file before
 restarting the agent; a populated volume can hide changes to the image seed.
 Do not delete enrollment state to apply a configuration change.
