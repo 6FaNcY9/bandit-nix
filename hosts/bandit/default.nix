@@ -51,6 +51,8 @@
     # network without the Cloudflare Access browser flow. The lab enables its
     # own tailscaled in hosts/bandit-lab/webhost.nix.
     tailscale.enable = true;
+    # iOS device pairing over USB (SideStore/iloader sideloading).
+    usbmuxd.enable = true;
   };
 
   # Random MAC per network, stable per SSID: defeats cross-network
