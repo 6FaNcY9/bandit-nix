@@ -62,7 +62,7 @@ Nix Flake on `nixos-unstable`: NixOS system configurations, standalone Home Mana
 │       ├── vaultwarden.nix   # Password manager container (+ Gruvbox web-vault theme)
 │       ├── searxng.nix       # Private metasearch container (stateless)
 │       ├── watchyourlan.nix  # LAN device-discovery container (host network, loopback GUI)
-│       ├── minecraft.nix     # Paper Minecraft container (4 players, 4 CPU / 12 GiB cap, port 25565)
+│       ├── minecraft.nix     # Paper Minecraft container (12 players, 4 CPU / 12 GiB cap, port 25565)
 │       ├── wazuh.nix         # Wazuh SIEM stack (manager/indexer/dashboard/agent oci-containers)
 │       ├── wazuh/            # Wazuh configs + public TLS certs (keys in sops)
 │       ├── vaultwarden/      # gruvbox.scss.hbs theme source (TEMPLATES_FOLDER hook)
