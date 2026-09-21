@@ -60,7 +60,9 @@ in {
       USE_AIKAR_FLAGS = "true";
       MAX_PLAYERS = "12";
       MOTD = "bandit-lab";
-      # RCON adds an unauthenticated-by-default admin socket; not needed.
+      OPS = "fancy8869";
+      # Administer through the local console without exposing RCON.
+      CREATE_CONSOLE_IN_PIPE = "true";
       ENABLE_RCON = "false";
     };
     ports = ["25565:25565"];
