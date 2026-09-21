@@ -235,8 +235,6 @@ git push
 
 ```bash
 git config --global --get user.signingkey && git log --show-signature -1
-sudo systemctl start tor-routing-enable && curl -s https://check.torproject.org/api/ip
-sudo systemctl stop tor-routing-enable
 ```
 
 No data restore is needed — nothing left the disk. Keep the backup stick
@@ -252,7 +250,7 @@ around until the setup has survived a few reboots.
   `sudo systemd-cryptenroll --tpm2-device=auto /dev/nvme0n1p2`
 - **SOPS PGP recipient removal** (SECURITY-PLAN — the offline GPG backup from
   step 4 is its prerequisite and now exists).
-- Remaining roadmap: Firefox hardening, Tor Browser, backups to bandit-lab,
+- Remaining roadmap: Firefox hardening, [deferred Tor support](tor-routing-deferred.md), backups to bandit-lab,
   kernel/sysctl hardening, vulnerable-lab VMs.
 - Tick the boxes in `docs/SECURITY-PLAN.md` and update the pending-items
   memory once the encrypted disk is confirmed stable.

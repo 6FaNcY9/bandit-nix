@@ -4,7 +4,7 @@
   ...
 }: {
   home.file = {
-    # ── Network + Tor rofi menu (waybar network module on-click) ─────────
+    # ── Network rofi menu (waybar network module on-click) ─────────
     ".local/bin/net-menu" = {
       executable = true;
       text = ''
@@ -16,8 +16,6 @@
                | grep '^yes:' | cut -d: -f2 | head -1)
         LOCAL_IP=$(ip route get 1.1.1.1 2>/dev/null | awk '/src/{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}')
         PUBLIC_IP=$(cat "$XDG_RUNTIME_DIR/public-ip-cache" 2>/dev/null | tr -d '[:space:]')
-        TOR_ON=false
-        systemctl is-active --quiet tor-routing-enable.service 2>/dev/null && TOR_ON=true
 
         # ── Build menu items ─────────────────────────────────────────────
         ITEMS=""
@@ -43,15 +41,6 @@
         done < <(${pkgs.networkmanager}/bin/nmcli -t -f NAME,TYPE,STATE con show --active 2>/dev/null)
         ITEMS+="󰐕  Connect / manage WiFi…"$'\n'
 
-        # Tor toggle
-        ITEMS+="── Tor ─────────────────────────────"$'\n'
-        if $TOR_ON; then
-          ITEMS+="🔓  Disable Tor routing"$'\n'
-        else
-          ITEMS+="🧅  Enable Tor routing"$'\n'
-        fi
-        ITEMS+="󰙀  Check Tor IP (browser)"$'\n'
-
         # Tools
         ITEMS+="── Tools ────────────────────────────"$'\n'
         ITEMS+="󰆒  Copy public IP to clipboard"$'\n'
@@ -68,19 +57,6 @@
 
         # ── Handle selection ─────────────────────────────────────────────
         case "$CHOICE" in
-          *"Enable Tor routing"*)
-            systemctl start tor-routing-enable.service
-            # Wait for Tor circuits then refresh IP — panel shows exit node IP
-            (sleep 5 && systemctl --user start public-ip-refresh.service) &
-            ;;
-          *"Disable Tor routing"*)
-            systemctl stop tor-routing-enable.service
-            # Refresh immediately — panel shows real IP again
-            systemctl --user start public-ip-refresh.service
-            ;;
-          *"Check Tor IP"*)
-            ${pkgs.xdg-utils}/bin/xdg-open "https://check.torproject.org" &
-            ;;
           *"Copy public IP"*)
             echo -n "$PUBLIC_IP" | ${pkgs.wl-clipboard}/bin/wl-copy
             ;;
