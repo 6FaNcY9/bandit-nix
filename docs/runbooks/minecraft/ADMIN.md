@@ -36,10 +36,12 @@ https://github.com/PlayPro/CoreProtect/releases.
 
 ## Administrator
 
-Requested account: `ted`. The server resolved its canonical profile name to `Ted`,
-UUID `5de30a2f-2513-4c41-97ee-34a1ac6a0bf7`; level-4 OP and LuckPerms `admin`
-membership verified after restart. Existing operator `fancy8869` retained.
-UUID was resolved by the server, not manually fabricated or changed.
+Administrator: `fancy8869`, UUID `623c7ee4-71ca-487a-b92a-a4564e43fbb9`.
+Level-4 OP and LuckPerms `admin` membership verified live.
+The mistakenly requested Ted account has been de-opped and removed from `admin`.
+Before this correction, operators were backed up to
+`data/ops-before-admin-correction-20260921-1926.json` and LuckPerms exported to
+`data/plugins/LuckPerms/before-admin-correction-20260921-1926.json.gz`.
 
 `admin` has `luckperms.*`, `inventoryrollbackplus.*` and these documented nodes:
 
@@ -61,7 +63,7 @@ formatter, which was not installed solely for cosmetics.
 
 ```text
 /plugins
-/lp user ted info
+/lp user fancy8869 info
 /lp editor
 /smod
 /modlogs <player>
@@ -145,7 +147,7 @@ The new Nix configuration has not been activated during this session.
 
 Remaining work:
 
-- Log in as ted and test `/smod`, inventory inspection and `/irp restore` navigation.
+- Log in as fancy8869 and test `/smod`, inventory inspection and `/irp restore` navigation.
   Use a disposable test inventory for death/grave retrieval and restoration tests.
 - Verify a released CoreProtect artifact explicitly supporting 26.2 before installation.
 - Schedule a host reboot: NVIDIA kernel module 595.91.07 differs from userspace
