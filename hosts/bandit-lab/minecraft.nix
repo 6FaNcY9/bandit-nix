@@ -14,6 +14,23 @@
     url = "https://hangarcdn.papermc.io/plugins/ViaVersion/ViaBackwards/versions/5.11.0/PAPER/ViaBackwards-5.11.0.jar";
     hash = "sha256-QQhaWdeEyaDRSRf+dIfvXiAanaeCX9BH8I0yj/M+7Nw=";
   };
+  # Official Modrinth releases explicitly supporting Minecraft 26.2.
+  luckPerms = pkgs.fetchurl {
+    url = "https://cdn.modrinth.com/data/Vebnzrzj/versions/b0mk8uS6/LuckPerms-Bukkit-5.5.71.jar";
+    hash = "sha512-GIqR8KVD0jv9oyOF/KbbY9YeScikIr1FKiYL2cvGp9f+RQcRmen8qPPOQ8K0HuhP0xW9FUZFdwKP85UafU+rJw==";
+  };
+  sModeration = pkgs.fetchurl {
+    url = "https://cdn.modrinth.com/data/psWnUhHl/versions/oSGjnNOf/SModeration-Paper-2.0.0.jar";
+    hash = "sha512-lPfgeAqYZMZU4ACHBd4Hj7PtCCfcpfVUQ8jWHxwkrEWgO0aJve+jAQB0tjIZEJTw6VE1MalxwIGBwD63nAU2KA==";
+  };
+  inventoryRollbackPlus = pkgs.fetchurl {
+    url = "https://cdn.modrinth.com/data/XWKWAzd8/versions/2JWRgmoZ/InventoryRollbackPlus-1.8.4.jar";
+    hash = "sha512-UUS+wSYGcxIvG9yRwnQ/JsfSDeR0A8FWiY0pnQrhqV9KptWM/Sg6VH5RhiyRmxMb8JzMOA2iFbcOTuVrc5wbEA==";
+  };
+  axGraves = pkgs.fetchurl {
+    url = "https://cdn.modrinth.com/data/Cz6msz34/versions/TVfUUk5c/AxGraves-1.32.0.jar";
+    hash = "sha512-ZH1PTpLRu+6DkTgDLVM4DhfyCZTe9GfGZ5U1u44/k/fk2bGhuVDCx1Es1wA9azjxhSATFzEobtLYgMvpZOD1Lw==";
+  };
   pluginsDir = "/srv/containers/minecraft/data/plugins";
 in {
   # Pre-create the data dir like every other stateful service instead of
@@ -37,6 +54,11 @@ in {
     script = ''
       mkdir -p ${pluginsDir}
       rm -f ${pluginsDir}/ViaVersion-*.jar ${pluginsDir}/ViaBackwards-*.jar
+      rm -f ${pluginsDir}/LuckPerms-Bukkit-*.jar ${pluginsDir}/SModeration-Paper-*.jar ${pluginsDir}/InventoryRollbackPlus-*.jar ${pluginsDir}/AxGraves-*.jar
+      install -m 0644 ${luckPerms} ${pluginsDir}/LuckPerms-Bukkit-5.5.71.jar
+      install -m 0644 ${sModeration} ${pluginsDir}/SModeration-Paper-2.0.0.jar
+      install -m 0644 ${inventoryRollbackPlus} ${pluginsDir}/InventoryRollbackPlus-1.8.4.jar
+      install -m 0644 ${axGraves} ${pluginsDir}/AxGraves-1.32.0.jar
       install -m 0644 ${viaVersion} ${pluginsDir}/ViaVersion-5.11.0.jar
       install -m 0644 ${viaBackwards} ${pluginsDir}/ViaBackwards-5.11.0.jar
     '';
@@ -53,6 +75,7 @@ in {
       EULA = "TRUE";
       # Paper over vanilla: same gameplay, much better tick performance.
       TYPE = "PAPER";
+      VERSION = "26.2";
       TZ = config.time.timeZone;
       # 8 GiB heap (Xms = Xmx) + Aikar GC flags = no GC stutter; container
       # cap below leaves headroom for off-heap/metaspace.
@@ -60,7 +83,7 @@ in {
       USE_AIKAR_FLAGS = "true";
       MAX_PLAYERS = "12";
       MOTD = "bandit-lab";
-      OPS = "fancy8869";
+      OPS = "fancy8869,ted";
       # Administer through the local console without exposing RCON.
       CREATE_CONSOLE_IN_PIPE = "true";
       ENABLE_RCON = "false";
