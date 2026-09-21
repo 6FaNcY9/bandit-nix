@@ -65,7 +65,10 @@
       container_healthy() {
         local attempt status
         for ((attempt = 1; attempt <= 24; attempt++)); do
-          status="$(docker inspect --format '{{.State.Health.Status}}' "$1")"
+          if ! status="$(docker inspect --format '{{.State.Health.Status}}' "$1")"; then
+            sleep "$((attempt < 5 ? attempt : 5))"
+            continue
+          fi
           case "$status" in
             healthy) return 0 ;;
             unhealthy)
