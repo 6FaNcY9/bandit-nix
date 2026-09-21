@@ -140,7 +140,10 @@ in {
     # ── VPN ────────────────────────────────────────────────────────────────
     tailscale = {
       enable = true;
-      extraSetFlags = ["--ssh"];
+      # Use the hardened OpenSSH service over tailscale0. Tailscale SSH
+      # intercepts port 22 and can lock out key-based access when its ACL
+      # does not include an SSH rule.
+      extraSetFlags = ["--ssh=false"];
     };
 
     # ── File storage ───────────────────────────────────────────────────────
