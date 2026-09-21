@@ -1,4 +1,9 @@
-{config, ...}: {
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}: {
   # Collaborative IPS (docs/specs/2026-09-09-security-lab.md, phase 3):
   # the engine parses journald (sshd + the Traefik JSON access log), enriches
   # with community blocklists via the central API, and bans via profiles.
@@ -85,6 +90,11 @@
       ];
     };
   };
+
+  # The hub updater runs as crowdsec, which cannot ask systemd to reload
+  # the engine. Elevate only this fixed reload command, not the hub update.
+  systemd.services.crowdsec-update-hub.serviceConfig.ExecStartPost =
+    lib.mkForce "+${pkgs.systemd}/bin/systemctl reload crowdsec.service";
 
   # Enforce engine decisions in the host firewall. The bouncer polls the
   # loopback LAPI and maintains a DROP ipset (lab firewall is iptables;
