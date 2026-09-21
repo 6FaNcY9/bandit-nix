@@ -1,13 +1,13 @@
 # bandit LUKS in-place encryption runbook
 
-Converts the existing root partition to LUKS2 **without reinstalling and
-without wiping data**, using `cryptsetup reencrypt --encrypt`. Read fully
-before starting.
+Converts the existing root partition to LUKS2 without reinstalling, using
+`cryptsetup reencrypt --encrypt`. This modifies the only working filesystem
+in place: verify an independent backup before starting.
 
 - Time budget: 2–3 hours (mostly waiting on reencryption + one reboot window).
 - Hardware needed: two USB sticks — (A) NixOS live ISO, (B) encrypted backup —
-  plus the laptop on AC power. Interrupting AC during reencryption is
-  recoverable (see "If something goes wrong"), but do not tempt fate.
+  plus the laptop on AC power. Recovery after interruption is supported,
+  but does not replace a verified backup.
 - You must know: your current user password (unchanged — it comes from the
   sops `user-password` secret), and a new LUKS passphrase you will invent
   during conversion (use a 5–6 word diceware sentence).
@@ -20,6 +20,11 @@ the partition and encrypts everything in place. The **BTRFS filesystem UUID is
 unchanged**, so every `fileSystems` entry in `hosts/bandit/hardware.nix` keeps
 working as-is — the only config change is adding one `boot.initrd.luks` block.
 The existing `@var` subvolume layout is kept.
+
+In-place encryption does not securely erase old plaintext remnants retained
+by SSD wear levelling. See the upstream
+[cryptsetup reencryption manual](https://gitlab.com/cryptsetup/cryptsetup/-/blob/main/man/cryptsetup-reencrypt.8.adoc)
+for interruption, recovery, and device-size requirements.
 
 ---
 
@@ -52,23 +57,12 @@ yet a bug or bad device is not worth your home directory.
 |------|-------|------------|
 | Dotfiles/config | repo + Home Manager | git (step 1) |
 | Secrets (github ssh keys, tokens) | `secrets/*.yaml` | git (encrypted) |
-| sops age key | `/var/lib/sops-nix/key.txt` | **manual copy — step 4** |
-| GPG secret key | `~/.gnupg` | **manual export — step 4** |
+| sops age key | `/var/lib/sops-nix/key.txt` | **manual copy — step 5** |
+| GPG secret key | `~/.gnupg` | **manual export — step 5** |
 | Personal data | `/home/vino` | **backup — step 5** |
 | VM images | `/var/lib/libvirt/images` | optional, step 5 |
 
-### 4. Export the keys that are NOT in git
-
-```bash
-# sops age key
-sudo cp /var/lib/sops-nix/key.txt /run/media/vino/BACKUP_USB/age-key.txt
-
-# GPG secret key (needed for git commit signing)
-gpg --export-secret-keys --armor 4D8770567A65FE1369E2BCC1611871842A8C1619 \
-  > /run/media/vino/BACKUP_USB/gpg-secret-key.asc
-```
-
-### 5. Full `/home` backup to an ENCRYPTED drive
+### 4. Prepare the encrypted backup drive
 
 An unencrypted backup defeats the entire point of LUKS. Encrypt the backup
 stick first (destroys the stick's contents):
@@ -78,17 +72,34 @@ sudo cryptsetup luksFormat --type luks2 /dev/sdX1        # CHECK the device with
 sudo cryptsetup open /dev/sdX1 backup
 sudo mkfs.ext4 -L bandit-backup /dev/mapper/backup
 sudo mount /dev/mapper/backup /mnt
+```
+
+### 5. Export recovery keys and back up `/home`
+
+Only after the encrypted drive is mounted, export keys directly onto it:
+
+```bash
+mountpoint -q /mnt || exit 1
+sudo install -d -m 0700 -o vino -g users /mnt/recovery-keys
+sudo install -m 0600 /var/lib/sops-nix/key.txt /mnt/recovery-keys/age-key.txt
+(umask 077; gpg --export-secret-keys --armor 4D8770567A65FE1369E2BCC1611871842A8C1619 \
+  > /mnt/recovery-keys/gpg-secret-key.asc)
+test -s /mnt/recovery-keys/gpg-secret-key.asc || exit 1
 sudo rsync -aHAX --info=progress2 /home/vino/ /mnt/home-vino/
 # optional, large: VM images
 sudo rsync -aHAX --info=progress2 /var/lib/libvirt/images/ /mnt/libvirt-images/
 sudo umount /mnt && sudo cryptsetup close backup
 ```
 
-**Verify the backup:** reopen it, spot-check that `home-vino/Documents`,
-`.ssh`, `.gnupg`, browser profiles etc. are readable. A backup you have not
-opened is not a backup.
+**Verify the backup:** reopen and mount it, compare the age-key copy with
+`sudo cmp /var/lib/sops-nix/key.txt /mnt/recovery-keys/age-key.txt`, and verify
+the GPG export can be imported into a temporary GPG home on the encrypted
+drive. Restore representative personal files to a temporary directory there
+and compare them with the originals. Check browser profiles and SSH keys,
+then unmount and close the backup. Stop if any export, copy, or verification
+fails. Keep this drive disconnected during conversion.
 
-### 6. Shrink the BTRFS filesystem (online, safe)
+### 6. Shrink the BTRFS filesystem online
 
 The LUKS2 header needs 16 MiB; `--reduce-device-size 32M` below carves that
 out of the **end** of the partition, so the filesystem must be at least 32 MiB
@@ -106,10 +117,10 @@ lsblk -o NAME,SIZE /dev/nvme0n1
 
 Use the already-downloaded live ISO at
 `~/Archive/Install-Media/ISOs/Downloads-ISOs/nixos-minimal-25.11.8107.1073dad219cb-x86_64-linux.iso`.
-Minimal ISO: set up WiFi with `sudo nmtui`. Write it:
+Write it (verify the ISO exists and select the correct USB device):
 
 ```bash
-sudo dd if=nixos-*.iso of=/dev/sdY bs=4M status=progress oflag=sync   # CHECK the device!
+sudo dd if="$HOME/Archive/Install-Media/ISOs/Downloads-ISOs/nixos-minimal-25.11.8107.1073dad219cb-x86_64-linux.iso" of=/dev/sdY bs=4M status=progress oflag=sync
 ```
 
 ---
@@ -122,7 +133,9 @@ Power on, tap `F12` (Framework boot menu), pick the USB. Plug in AC.
 
 ### 9. Connect to the network
 
-Needed for the final rebuild step. Minimal ISO: `sudo nmtui`.
+Needed for the final rebuild step. Use Ethernet or the wireless setup
+instructions supplied with the ISO; do not assume `nmtui` is installed.
+Confirm network access before proceeding.
 
 ### 10. Identify the internal disk and confirm it is untouched
 
@@ -142,16 +155,21 @@ sudo cryptsetup reencrypt --encrypt --type luks2 \
 ```
 
 You will be asked for the new LUKS passphrase (twice). The command shifts and
-encrypts all data; progress is printed. **If interrupted** (power loss,
-accidental Ctrl-C is not interrupt-safe mid-write but power loss is
-journaled): reboot the live ISO and rerun the exact same command — it resumes
-from the reencryption journal.
+encrypts all data; progress is printed. Ctrl-C (SIGINT) is a supported safe
+interruption. To resume an interrupted conversion, use
+`sudo cryptsetup reencrypt --resume-only /dev/nvme0n1p2` from the live ISO
+with the filesystem unmounted. Abrupt power loss may require metadata
+recovery; stop and inspect any errors instead of repeating initialization.
 
 ### 12. Open the container, reclaim the shrunk space, record the UUID
 
 ```bash
 sudo cryptsetup open /dev/nvme0n1p2 cryptroot
 sudo mount /dev/mapper/cryptroot /mnt -o subvol=@
+sudo mount /dev/mapper/cryptroot /mnt/home -o subvol=@home
+sudo mount /dev/mapper/cryptroot /mnt/nix -o subvol=@nix
+sudo mount /dev/mapper/cryptroot /mnt/var -o subvol=@var
+sudo mount /dev/nvme0n1p1 /mnt/boot
 sudo btrfs filesystem resize max /mnt      # fs grows back to fill the LUKS device
 sudo cryptsetup luksUUID /dev/nvme0n1p2    # RECORD THIS — it goes into hardware.nix
 sudo blkid /dev/mapper/cryptroot           # sanity: the old BTRFS UUID, unchanged
@@ -162,13 +180,14 @@ sudo blkid /dev/mapper/cryptroot           # sanity: the old BTRFS UUID, unchang
 Still on the live ISO, edit the repo checkout inside the installed system:
 
 ```bash
-$EDITOR /mnt/home/vino/src/bandit-nix/hosts/bandit/hardware.nix
+sudo nano /mnt/home/vino/src/bandit-nix/hosts/bandit/hardware.nix
 ```
 
-Add (with the UUID from step 12):
+Inside the existing `boot.initrd = { ... };` attrset, add this with the UUID
+from step 12 (do not create a second top-level `boot` attribute):
 
 ```nix
-boot.initrd.luks.devices."cryptroot" = {
+luks.devices."cryptroot" = {
   device = "/dev/disk/by-uuid/<LUKS-UUID>";
   allowDiscards = true; # NVMe TRIM through LUKS
 };
@@ -179,14 +198,11 @@ unchanged and now resolves through the mapper device.
 
 ### 14. Rebuild the installed system from the live ISO
 
-Mount the full layout so activation sees everything it expects:
+The full layout, including the repository on `@home`, was mounted in step 12.
+Confirm those mounts before rebuilding:
 
 ```bash
-sudo mount /dev/mapper/cryptroot /mnt -o subvol=@            # if not already mounted
-sudo mount /dev/mapper/cryptroot /mnt/home -o subvol=@home
-sudo mount /dev/mapper/cryptroot /mnt/nix -o subvol=@nix
-sudo mount /dev/mapper/cryptroot /mnt/var -o subvol=@var
-sudo mount /dev/nvme0n1p1 /mnt/boot
+findmnt -R /mnt
 sudo nixos-enter --root /mnt -c \
   'cd /home/vino/src/bandit-nix && nixos-rebuild boot --flake .#bandit'
 ```
@@ -197,7 +213,7 @@ switched yet — the running system is the live ISO.
 ### 15. Reboot
 
 ```bash
-sudo umount -R /mnt 2>/dev/null || true
+sudo umount -R /mnt
 sudo cryptsetup close cryptroot
 reboot
 ```
@@ -249,7 +265,7 @@ around until the setup has survived a few reboots.
 - **TPM2 unattended unlock** once Secure Boot is in place:
   `sudo systemd-cryptenroll --tpm2-device=auto /dev/nvme0n1p2`
 - **SOPS PGP recipient removal** (SECURITY-PLAN — the offline GPG backup from
-  step 4 is its prerequisite and now exists).
+  step 5 is its prerequisite).
 - Remaining roadmap: Firefox hardening, [deferred Tor support](tor-routing-deferred.md), backups to bandit-lab,
   kernel/sysctl hardening, vulnerable-lab VMs.
 - Tick the boxes in `docs/SECURITY-PLAN.md` and update the pending-items
@@ -259,17 +275,18 @@ around until the setup has survived a few reboots.
 
 - **Forgot the LUKS passphrase** → no recovery. The data is gone. Choose
   carefully in step 11.
-- **Reencryption interrupted** → boot the live ISO and rerun the exact
-  command from step 11; it resumes from the journal. Do not run anything else
-  against the partition first.
+- **Reencryption interrupted** → boot the live ISO and use the
+  `--resume-only` command in step 11. Do not format or recreate the LUKS header.
+  Stop for diagnosis if cryptsetup reports recovery errors.
 - **First boot does not reach the LUKS prompt** → boot the live USB, open the
-  container (`sudo cryptsetup open /dev/nvme0n1p2 cryptroot`), mount `@`, fix
-  the UUID in `hosts/bandit/hardware.nix`, rerun step 14.
-- **LUKS prompt appears but boot fails afterward** → the BTRFS side is fine
-  (UUID unchanged); check `subvol=` names in `fileSystems` against
-  `sudo btrfs subvolume list /mnt`.
-- **Want to abandon the idea entirely** → nothing on disk changed yet if you
-  stop before step 11; the only leftover is the 64 MiB shrink, reverted with
+  container and mount the layout from step 12, fix the UUID in
+  `hosts/bandit/hardware.nix`, then rerun step 14.
+- **LUKS prompt appears but boot fails afterward** → unlocking alone does
+  not verify BTRFS health. Inspect the boot error, mapper device, filesystem
+  UUID and `subvol=` names before attempting repairs.
+- **Want to abandon the idea entirely** → internal-disk encryption has not
+  started before step 11, but the filesystem has been shrunk and the backup
+  stick formatted. Revert the 64 MiB shrink with
   `sudo btrfs filesystem resize max /`.
 
 ## Appendix — full reinstall alternative
