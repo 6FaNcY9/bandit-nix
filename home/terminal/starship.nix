@@ -10,6 +10,7 @@ in {
     enableFishIntegration = true;
     enableZshIntegration = true;
     settings = {
+      scan_timeout = 100;
       palette = lib.mkForce "stylix";
 
       palettes.stylix = {
