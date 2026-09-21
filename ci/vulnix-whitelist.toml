@@ -2,8 +2,8 @@
 # entries capture the current pinned nixpkgs baseline; new findings still fail.
 # Reassess every entry at the expiry date instead of extending it blindly.
 # Scope: the scan builds .#bandit-ci (laptop) because full closures exceed
-# shared-runner disk; bandit-lab is covered indirectly through the same
-# nixpkgs pin and its own lab-reliability check, not by a separate scan.
+# shared-runner disk. bandit-lab is not vulnerability-scanned; sharing the
+# nixpkgs pin and passing lab-reliability does not cover its distinct closure.
 
 ["ada"]
 cve = ["CVE-2024-9410"]
