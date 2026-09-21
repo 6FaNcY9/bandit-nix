@@ -35,6 +35,18 @@ activation. Public HTTPS is read-only and requires no deploy key.
 
 The headless health policy intentionally excludes `getty@tty1.service`.
 
+## Vaultwarden changes
+
+Automatic apply refuses a signed revision that changes
+`hosts/bandit-lab/vaultwarden.nix`. NixOS rollback restores configuration and
+services, but it does not restore persistent Vaultwarden data under
+`/srv/containers/vaultwarden/data`.
+
+Apply Vaultwarden changes only during supervised maintenance, after taking a
+consistent, verified backup of that data. Confirm the backup can be restored
+before using a supervised deployment procedure; the unattended apply guard
+must not be bypassed casually.
+
 ## Post-apply Portainer checks
 
 After an update that changes Portainer, verify both services and the declared

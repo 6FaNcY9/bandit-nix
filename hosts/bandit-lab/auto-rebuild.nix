@@ -95,6 +95,13 @@
       exit 1
     fi
 
+    vaultwarden_changes="$($git -c safe.directory="$repo" -C "$repo" diff --name-only "$before" "$after" -- hosts/bandit-lab/vaultwarden.nix)"
+    if [[ -n "$vaultwarden_changes" ]]; then
+      echo "Refusing automatic activation of $after: hosts/bandit-lab/vaultwarden.nix changed." >&2
+      echo "Automatic rollback does not restore persistent Vaultwarden data; supervised maintenance with a consistent, verified backup is required." >&2
+      exit 1
+    fi
+
     # The checkout is a clean read-only mirror — all changes are authored on
     # the laptop — so rewritten upstream history (rebase/force-push) must not
     # wedge the updater. Warn now and reset the mirror to the deployed commit
