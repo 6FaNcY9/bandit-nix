@@ -87,6 +87,7 @@ in {
       interactiveShellInit = ''
         # ── Vi mode ───────────────────────────────────────────
         fish_vi_key_bindings
+        bind -M insert ctrl-delete kill-word
         # Restore fzf bindings clobbered by vi mode
         # ctrl-r=history  ctrl-f=dir  ctrl-v=shell-vars  ctrl-alt-p=processes
         fzf_configure_bindings --history=\cr --directory=\cf --git_log=\cg --git_status=\cs --variables=\cv --processes=\ca\cp

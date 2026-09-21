@@ -234,6 +234,7 @@ in {
         bindkey '^?' backward-delete-char
         bindkey '^H' backward-delete-char
         bindkey '^[[3~' delete-char
+        bindkey '^[[3;5~' kill-word
         bindkey '^[[H' beginning-of-line
         bindkey '^[[F' end-of-line
         bindkey '^[[1;5D' backward-word
@@ -310,7 +311,7 @@ in {
           color_yellow = c.base0A;
         };
 
-        format = "$hostname$username$directory$git_branch$git_status$nix_shell$custom.net$time$cmd_duration$line_break$character";
+        format = "$hostname$username$directory$git_branch$git_status$nix_shell\${custom.net}$time$cmd_duration$line_break$character";
 
         hostname = {
           ssh_only = false;
@@ -363,18 +364,9 @@ in {
           command = ''
             IFACE=$(ip route show default 2>/dev/null | awk '/default/ {print $5; exit}')
             [[ -z "$IFACE" ]] && exit 1
-            PREV="/tmp/starship-net-$IFACE"
-            RX=$(awk -v i="$IFACE:" '$1==i {print $2}' /proc/net/dev)
-            TX=$(awk -v i="$IFACE:" '$1==i {print $10}' /proc/net/dev)
-            if [[ -f "$PREV" ]]; then
-              read -r prev_rx prev_tx < "$PREV"
-              DRX=$(( (RX - prev_rx) / 1024 ))
-              DTX=$(( (TX - prev_tx) / 1024 ))
-            else
-              DRX=0; DTX=0
-            fi
-            echo "$RX $TX" > "$PREV"
-            echo "↑''${DTX}k ↓''${DRX}k"
+            ADDRESS=$(ip -o -4 addr show dev "$IFACE" scope global | awk '{print $4; exit}')
+            [[ -n "$ADDRESS" ]] || exit 1
+            printf '%s %s\n' "$IFACE" "$ADDRESS"
           '';
           when = "true";
           shell = ["bash" "-c"];

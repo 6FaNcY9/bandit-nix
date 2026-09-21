@@ -95,6 +95,7 @@ in {
         bindkey -e
         bindkey '^[[1;5D' backward-word   # Ctrl+Left
         bindkey '^[[1;5C' forward-word    # Ctrl+Right
+        bindkey '^[[3;5~' kill-word       # Ctrl+Delete
         # fzf history widget (ctrl-r) — source only key-bindings, not completion
         # (completion is handled by fzf-tab loaded in completionInit above)
         [[ -f ${pkgs.fzf}/share/fzf/key-bindings.zsh ]] && source ${pkgs.fzf}/share/fzf/key-bindings.zsh
