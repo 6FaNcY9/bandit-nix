@@ -212,7 +212,7 @@ in {
     package = pkgs.rofi;
     theme = "retro-eighties";
 
-    extraConfig = {
+    settings = {
       modi = "drun,run,window";
       show-icons = true;
       drun-display-format = "{name}";
