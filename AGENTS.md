@@ -20,6 +20,12 @@ Routing is automatic: the main agent chooses the cheapest capable route without 
 - Do not spawn every role or parallelize without an independent benefit.
 - Routing never expands task authority; inspection-only, propose-first, and no-deploy restrictions remain binding.
 
+## Web research
+
+- Use Firecrawl as the default provider for live-web search, scraping, and source discovery.
+- Use another web-search provider only when Firecrawl cannot retrieve the required source or the user explicitly requests one.
+- Prefer primary and official sources regardless of provider.
+
 ## 1. Technology Stack
 
 | Layer | Tool | Purpose |
