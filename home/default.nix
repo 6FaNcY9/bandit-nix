@@ -13,18 +13,7 @@
     ./git.nix
     ./theme.nix
     ./qt.nix
-    ./desktop/hyprland.nix
-    ./desktop/files.nix
-    ./desktop/netmenu.nix
-    ./desktop/mako.nix
-    ./desktop/rofi-wayland.nix
-    ./desktop/firefox
-    ./desktop/thunderbird.nix
-    ./desktop/waybar.nix
-    ./desktop/libreoffice.nix
-    ./desktop/powermenu.nix
-    ./desktop/keybinds-menu.nix
-    ./desktop/obsidian.nix
+    ./desktop
     ./editor
     ./terminal
     ./node.nix
