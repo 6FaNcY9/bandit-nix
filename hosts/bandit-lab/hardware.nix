@@ -72,6 +72,9 @@ in {
   # NixOS' NVIDIA module keys off this option even with no X server running; keep X disabled in server.nix.
   services.xserver.videoDrivers = ["nvidia"];
 
+  # Use the current runtime path and avoid systemd's legacy /var/run warning.
+  systemd.services.nvidia-persistenced.serviceConfig.PIDFile = "/run/nvidia-persistenced/nvidia-persistenced.pid";
+
   environment.systemPackages = with pkgs; [
     nvtopPackages.nvidia
   ];

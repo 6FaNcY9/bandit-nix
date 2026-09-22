@@ -228,7 +228,7 @@ in {
     backend = "docker";
     containers = {
       portainer = {
-        image = "portainer/portainer-ee:2.39.6@sha256:00c8114f44e240b4aa14429d365c1fb05cf7cd163ab0601c084c7af6ce8d58e2";
+        image = "portainer/portainer-ce:2.39.6@sha256:3fa8750ac2b98ce56784ca292df1adc3ec38f0062fd572811ea4b2221beee310";
         # WAN-published through Traefik + Cloudflare Tunnel, gated by a
         # Cloudflare Access application (docs/runbooks/cloudflare-access.md).
         # Loopback HTTPS stays available: ssh -L 9443:localhost:9443 bandit-lab.
