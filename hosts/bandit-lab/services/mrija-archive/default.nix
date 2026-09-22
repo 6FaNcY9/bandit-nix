@@ -21,8 +21,7 @@ in {
       mode = "0400";
       # No restartUnits: the container is Portainer-managed (not defined in
       # this repo), so after a sops rotation restart the mrija-archive
-      # container manually (Portainer UI or `docker restart`). The oneshot
-      # sync service re-reads this EnvironmentFile on every run.
+      # container manually (Portainer UI or `docker restart`).
       content = ''
         MRIJA_API_KEY=${config.sops.placeholder."mrija-api-key"}
         MRIJA_PASSWORD=${config.sops.placeholder."mrija-password"}
@@ -48,6 +47,10 @@ in {
         Type = "oneshot";
         User = username;
         EnvironmentFile = envFile;
+        LoadCredential = [
+          "mrija-api-key:${config.sops.secrets."mrija-api-key".path}"
+        ];
+        UnsetEnvironment = ["MRIJA_API_KEY" "MRIJA_PASSWORD"];
         TimeoutStartSec = "35min";
         # Sandboxing: the job only curls 127.0.0.1:8081 and needs nothing else.
         NoNewPrivileges = true;
@@ -68,7 +71,6 @@ in {
         IPAddressDeny = ["any"];
         ExecStart = pkgs.writeShellScript "mrija-sync" ''
           set -euo pipefail
-          : "''${MRIJA_API_KEY:?missing MRIJA_API_KEY in ${envFile}}"
 
           phase_start=$SECONDS
           ${pkgs.coreutils}/bin/printf '%s\n' \
@@ -76,8 +78,20 @@ in {
           trigger_response_file="$(${pkgs.coreutils}/bin/mktemp)"
           api_header_file="$(${pkgs.coreutils}/bin/mktemp)"
           ${pkgs.coreutils}/bin/chmod 600 "''${api_header_file}"
+          credential_file="''${CREDENTIALS_DIRECTORY}/mrija-api-key"
+          if [ ! -s "''${credential_file}" ]; then
+            ${pkgs.coreutils}/bin/printf '%s\n' \
+              'mrija sync failed: missing or empty mrija-api-key credential' >&2
+            exit 1
+          fi
+          api_key="$(${pkgs.coreutils}/bin/cat "''${credential_file}")"
+          if [ -z "''${api_key}" ]; then
+            ${pkgs.coreutils}/bin/printf '%s\n' \
+              'mrija sync failed: missing or empty mrija-api-key credential' >&2
+            exit 1
+          fi
           ${pkgs.coreutils}/bin/printf 'X-API-Key: %s\n' \
-            "''${MRIJA_API_KEY}" >"''${api_header_file}"
+            "''${api_key}" >"''${api_header_file}"
           trap '${pkgs.coreutils}/bin/rm -f "''${trigger_response_file}" "''${api_header_file}"' EXIT
           if trigger_http_status="$(printf '%s\n' \
               'silent' \

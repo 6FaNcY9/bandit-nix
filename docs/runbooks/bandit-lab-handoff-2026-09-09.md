@@ -167,8 +167,9 @@ Source fix (this session): `hosts/bandit-lab/aiia.nix` now declares the MySQL di
 
 The external Compose deployment still supplies `MRIJA_API_KEY` and `MRIJA_PASSWORD` as
 container environment variables, which Docker exposes to users with host Docker access
-via `docker inspect`. The service-side API-key argv leak is fixed; migrating the
-application to file-backed secrets remains a separate hardening task.
+via `docker inspect`. The service-side API-key argv and environment exposure are
+fixed with a systemd credential; migrating the external application to
+file-backed secrets remains a separate hardening task.
 
 ## Validation (this session)
 
