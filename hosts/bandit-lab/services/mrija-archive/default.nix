@@ -69,28 +69,76 @@ in {
           set -euo pipefail
           : "''${MRIJA_API_KEY:?missing MRIJA_API_KEY in ${envFile}}"
 
-          trigger_response="$(
+          phase_start=$SECONDS
+          ${pkgs.coreutils}/bin/printf '%s\n' \
+            'mrija sync phase=post_trigger event=start' >&2
+          if trigger_response="$(
             ${pkgs.curl}/bin/curl -sf --max-time 30 -X POST \
               http://127.0.0.1:8081/api/sync \
               -H "X-API-Key: ''${MRIJA_API_KEY}"
-          )"
-          ${pkgs.jq}/bin/jq -e '.status == "started"' \
-            <<<"''${trigger_response}" >/dev/null
+          )"; then
+            :
+          else
+            curl_status=$?
+            ${pkgs.coreutils}/bin/printf \
+              'mrija sync phase=post_trigger event=failed rc=%s elapsed=%ss\n' \
+              "''${curl_status}" "$((SECONDS - phase_start))" >&2
+            exit "''${curl_status}"
+          fi
+          ${pkgs.coreutils}/bin/printf \
+            'mrija sync phase=post_trigger event=complete elapsed=%ss\n' \
+            "$((SECONDS - phase_start))" >&2
+          if ${pkgs.jq}/bin/jq -e '.status == "started"' \
+            <<<"''${trigger_response}" >/dev/null; then
+            :
+          else
+            parse_status=$?
+            ${pkgs.coreutils}/bin/printf \
+              'mrija sync phase=post_trigger_parse event=failed rc=%s elapsed=%ss\n' \
+              "''${parse_status}" "$((SECONDS - phase_start))" >&2
+            exit "''${parse_status}"
+          fi
 
-          progress="$(
+          phase_start=$SECONDS
+          ${pkgs.coreutils}/bin/printf '%s\n' \
+            'mrija sync phase=sse_progress event=start' >&2
+          if progress="$(
             ${pkgs.curl}/bin/curl -sfN --max-time 1800 \
               http://127.0.0.1:8081/api/update/progress \
               -H "X-API-Key: ''${MRIJA_API_KEY}"
-          )"
-          final_event="$(
+          )"; then
+            ${pkgs.coreutils}/bin/printf \
+              'mrija sync phase=sse_progress event=complete elapsed=%ss\n' \
+              "$((SECONDS - phase_start))" >&2
+          else
+            curl_status=$?
+            ${pkgs.coreutils}/bin/printf \
+              'mrija sync phase=sse_progress event=failed rc=%s elapsed=%ss\n' \
+              "''${curl_status}" "$((SECONDS - phase_start))" >&2
+            exit "''${curl_status}"
+          fi
+
+          phase_start=$SECONDS
+          ${pkgs.coreutils}/bin/printf '%s\n' \
+            'mrija sync phase=final_status event=start' >&2
+          if final_event="$(
             ${pkgs.coreutils}/bin/printf '%s\n' "''${progress}" |
               ${pkgs.gnused}/bin/sed -n 's/^data: //p' |
               ${pkgs.coreutils}/bin/tail -n 1
-          )"
-          status="$(
+          )" && status="$(
             ${pkgs.coreutils}/bin/printf '%s\n' "''${final_event}" |
               ${pkgs.jq}/bin/jq -er '.status | strings'
-          )"
+          )"; then
+            ${pkgs.coreutils}/bin/printf \
+              'mrija sync phase=final_status event=complete elapsed=%ss\n' \
+              "$((SECONDS - phase_start))" >&2
+          else
+            parse_status=$?
+            ${pkgs.coreutils}/bin/printf \
+              'mrija sync phase=final_status event=failed rc=%s elapsed=%ss\n' \
+              "''${parse_status}" "$((SECONDS - phase_start))" >&2
+            exit "''${parse_status}"
+          fi
 
           case "''${status}" in
             "Sync complete"*)
