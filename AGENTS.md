@@ -7,6 +7,19 @@ Personal NixOS configuration flake, two hosts:
 
 Nix Flake on `nixos-unstable`: NixOS system configurations, standalone Home Manager configuration for user `vino`, CI checks.
 
+## Automatic agent routing
+
+Routing is automatic: the main agent chooses the cheapest capable route without requiring the user to name a role.
+
+- Trivial tasks stay with the main agent.
+- Repository facts, context, and evidence use `scout`.
+- Straightforward implementation, documentation, tests, formatting, and mechanical changes use `worker` only when writes are permitted.
+- Facts followed by implementation use `scout` then `worker`.
+- `architect` is used automatically only for a narrow, genuinely difficult architecture, cross-cutting, security, migration, or debugging question after cheaper evidence or an implementation attempt is insufficient.
+- Do not use `architect` for routine inspection, edits, documentation, tests, or basic research.
+- Do not spawn every role or parallelize without an independent benefit.
+- Routing never expands task authority; inspection-only, propose-first, and no-deploy restrictions remain binding.
+
 ## 1. Technology Stack
 
 | Layer | Tool | Purpose |
