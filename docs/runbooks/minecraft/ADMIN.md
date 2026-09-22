@@ -207,8 +207,9 @@ Remaining work:
   only with a consenting test account because it deliberately creates history.
   Use a disposable test inventory for death/grave retrieval and restoration tests.
 - Verify a released CoreProtect artifact explicitly supporting 26.2 before installation.
-- Schedule a host reboot: NVIDIA kernel module 595.91.07 differs from userspace
-  595.99.02, causing `nvidia-persistenced.service` failure and NVML mismatch.
-  Health passes with this non-critical warning. No reboot performed; after reboot
-  verify `nvidia-smi`, daemon status and `bandit-lab-health` again.
+- NVIDIA mismatch resolved: the running kernel module and userspace are both
+  `595.99.02`; `nvidia-persistenced.service`, `nvidia-smi`, and
+  `bandit-lab-health` all pass after the host maintenance. Systemd still logs a
+  harmless warning because the generated unit references the legacy `/var/run`
+  PID path; update that unit only if the warning needs cleanup.
 - Broader Portainer/container/monitoring/firewall audit remains separate work.
