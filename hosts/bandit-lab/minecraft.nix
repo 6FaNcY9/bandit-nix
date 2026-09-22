@@ -32,11 +32,12 @@
     hash = "sha512-ZH1PTpLRu+6DkTgDLVM4DhfyCZTe9GfGZ5U1u44/k/fk2bGhuVDCx1Es1wA9azjxhSATFzEobtLYgMvpZOD1Lw==";
   };
   pluginsDir = "/srv/containers/minecraft/data/plugins";
+  grep = "${pkgs.gnugrep}/bin/grep";
+  sed = "${pkgs.gnused}/bin/sed";
 in {
-  # Pre-create the data dir like every other stateful service instead of
-  # letting Docker auto-create it root-owned on first start.
+  # Match the container's minecraft UID/GID so Paper can read player saves.
   systemd.tmpfiles.rules = [
-    "d /srv/containers/minecraft/data 0750 root root -"
+    "d /srv/containers/minecraft/data 0750 1000 1000 -"
   ];
 
   # Stage pinned plugin JARs into the data volume before the container
@@ -52,6 +53,35 @@ in {
       RemainAfterExit = true;
     };
     script = ''
+      serverProperties=/srv/containers/minecraft/data/server.properties
+      if [ ! -f "$serverProperties" ] || [ "$(${grep} -Ec '^allow-flight=(true|false)$' "$serverProperties")" -ne 1 ]; then
+        echo "Refusing to edit unexpected allow-flight property" >&2
+        exit 1
+      fi
+      viaConfig=${pluginsDir}/ViaVersion/config.yml
+      if [ ! -f "$viaConfig" ]; then
+        echo "Refusing to edit missing ViaVersion config" >&2
+        exit 1
+      fi
+      packetLimiterBlock="$(${sed} -n '/^packet-limiter:[[:space:]]*$/,/^[^[:space:]#]/p' "$viaConfig")"
+      if [ "$(${grep} -Ec '^[[:space:]]+enabled:[[:space:]]*(true|false)[[:space:]]*$' <<<"$packetLimiterBlock")" -ne 1 ]; then
+        echo "Refusing to edit unexpected ViaVersion packet-limiter block" >&2
+        exit 1
+      fi
+
+      ${sed} -E -i 's/^allow-flight=(true|false)$/allow-flight=true/' "$serverProperties"
+      if ! ${grep} -q '^allow-flight=true$' "$serverProperties"; then
+        echo "allow-flight validation failed" >&2
+        exit 1
+      fi
+
+      ${sed} -i '/^packet-limiter:[[:space:]]*$/,/^[^[:space:]#]/ s/^\([[:space:]]*enabled:[[:space:]]*\)\(true\|false\)$/\1false/' "$viaConfig"
+      packetLimiterBlock="$(${sed} -n '/^packet-limiter:[[:space:]]*$/,/^[^[:space:]#]/p' "$viaConfig")"
+      if ! ${grep} -Eq '^[[:space:]]+enabled:[[:space:]]*false[[:space:]]*$' <<<"$packetLimiterBlock"; then
+        echo "ViaVersion packet-limiter validation failed" >&2
+        exit 1
+      fi
+
       mkdir -p ${pluginsDir}
       rm -f ${pluginsDir}/ViaVersion-*.jar ${pluginsDir}/ViaBackwards-*.jar
       rm -f ${pluginsDir}/LuckPerms-Bukkit-*.jar ${pluginsDir}/SModeration-Paper-*.jar ${pluginsDir}/InventoryRollbackPlus-*.jar ${pluginsDir}/AxGraves-*.jar

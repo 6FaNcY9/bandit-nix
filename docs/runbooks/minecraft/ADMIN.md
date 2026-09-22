@@ -9,6 +9,18 @@ Verified live on 2026-09-21 after a graceful restart. Existing server and worlds
 - Data: `/srv/containers/minecraft/data` (container `/data`); plugins: `data/plugins`.
 - Declarative configuration: `hosts/bandit-lab/minecraft.nix`; staging: `minecraft-plugins.service`.
 - Online mode enabled; whitelist disabled; existing ports/gameplay/world configuration preserved.
+- Phase 2 pending deployment: `minecraft-plugins.service` now validates and targets only
+  `server.properties` `allow-flight=true`, and only the `packet-limiter.enabled` field
+  in ViaVersion's persistent `plugins/ViaVersion/config.yml`. These are persistent
+  runtime files, so the service is the declarative reconciliation point; no broad
+  `OVERRIDE_SERVER_PROPERTIES` rewrite is used. Unexpected or missing target sections
+  fail the service before plugin staging. Live values may therefore drift until the
+  configuration is deployed.
+- ViaVersion's packet limiter is disabled (`enabled: false`) because Paper's existing
+  packet limiter remains the authoritative protection layer; ViaVersion's
+  `packet-size-limiter` is unchanged. Paper packet-limiter settings are unchanged.
+  `allow-flight=true` only prevents false flying checks during lag or unusual movement;
+  it does not grant creative flight on this survival server.
 - Cold backup after `save-all flush` and graceful stop:
   `/srv/containers/minecraft/backups/admin-20260921-163140/data.tar.gz`.
 - Archive listing verified; SHA256:
