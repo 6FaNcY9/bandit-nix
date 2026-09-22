@@ -71,6 +71,26 @@ in {
 
           phase_start=$SECONDS
           ${pkgs.coreutils}/bin/printf '%s\n' \
+            'mrija sync phase=preflight event=start' >&2
+          if status_response="$(
+            ${pkgs.curl}/bin/curl -sf --max-time 5 \
+              http://127.0.0.1:8081/api/status \
+              -H "X-API-Key: ''${MRIJA_API_KEY}"
+          )" && sync_state="$(${pkgs.jq}/bin/jq -er '.state | strings' \
+            <<<"''${status_response}")"; then
+            :
+          else
+            status_check=$?
+            ${pkgs.coreutils}/bin/printf \
+              'mrija sync phase=preflight event=failed rc=%s elapsed=%ss\n' \
+              "''${status_check}" "$((SECONDS - phase_start))" >&2
+            exit "''${status_check}"
+          fi
+          if [ "''${sync_state}" = "updating" ]; then
+            ${pkgs.coreutils}/bin/printf '%s\n' \
+              'mrija sync phase=preflight event=already_updating action=skip_post' >&2
+          else
+          ${pkgs.coreutils}/bin/printf '%s\n' \
             'mrija sync phase=post_trigger event=start' >&2
           if trigger_response="$(
             ${pkgs.curl}/bin/curl -sf --max-time 30 -X POST \
@@ -97,6 +117,7 @@ in {
               'mrija sync phase=post_trigger_parse event=failed rc=%s elapsed=%ss\n' \
               "''${parse_status}" "$((SECONDS - phase_start))" >&2
             exit "''${parse_status}"
+          fi
           fi
 
           phase_start=$SECONDS
