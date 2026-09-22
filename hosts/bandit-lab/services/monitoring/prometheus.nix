@@ -26,10 +26,10 @@
           module: [http_wan]
         static_configs:
           - targets:
-              - https://vault.bandit-lab.mrija.org
-              - https://grafana.bandit-lab.mrija.org
+              - https://vault.atmosphaere.at
+              - https://grafana.atmosphaere.at
               - https://mail-archive.bandit-lab.mrija.org
-              - https://portainer.bandit-lab.mrija.org
+              - https://portainer.atmosphaere.at
         relabel_configs:
           - source_labels: [__address__]
             target_label: __param_target

@@ -240,7 +240,7 @@ in {
           "--network=proxy"
           "--network=portainer-control"
           "--label=traefik.enable=true"
-          "--label=traefik.http.routers.portainer.rule=Host(`portainer.bandit-lab.mrija.org`)"
+          "--label=traefik.http.routers.portainer.rule=Host(`portainer.atmosphaere.at`) || Host(`portainer.bandit-lab.mrija.org`)"
           "--label=traefik.http.routers.portainer.entrypoints=web"
           "--label=traefik.http.services.portainer.loadbalancer.server.port=9000"
         ];

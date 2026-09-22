@@ -84,9 +84,9 @@
       container_healthy vaultwarden
       ready pg_isready -q -h /run/postgresql -t 3
       ready curl --fail --silent --show-error --output /dev/null --connect-timeout 2 --max-time 5 \
-        -H 'Host: portainer.bandit-lab.mrija.org' http://127.0.0.1/api/status
+        -H 'Host: portainer.atmosphaere.at' http://127.0.0.1/api/status
       ready curl --fail --silent --show-error --output /dev/null --connect-timeout 2 --max-time 5 \
-        -H 'Host: vault.bandit-lab.mrija.org' http://127.0.0.1/alive
+        -H 'Host: vault.atmosphaere.at' http://127.0.0.1/alive
 
       failed_units="$(systemctl --failed --no-legend --plain)"
       if [[ -n "$failed_units" ]]; then

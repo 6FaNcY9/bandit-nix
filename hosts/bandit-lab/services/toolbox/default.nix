@@ -7,17 +7,20 @@
       # Intentionally vulnerable practice target — extra reason the Access
       # gate is non-negotiable.
       image = "bkimminich/juice-shop@sha256:73c53fbf442e8337b3ea3d98c7e8550308854701ebdfce4cc39768f36b75430e";
-      host = "juice.bandit-lab.mrija.org";
+      host = "juice.atmosphaere.at";
+      legacyHost = "juice.bandit-lab.mrija.org";
       port = "3000";
     };
     cyberchef = {
       image = "ghcr.io/gchq/cyberchef@sha256:379c6cbcfd8cc10b8e045548f3ebaa82ce429e4b40cf60e4532e116a4c67884d";
-      host = "cyberchef.bandit-lab.mrija.org";
+      host = "cyberchef.atmosphaere.at";
+      legacyHost = "cyberchef.bandit-lab.mrija.org";
       port = "8080";
     };
     it-tools = {
       image = "corentinth/it-tools@sha256:8b8128748339583ca951af03dfe02a9a4d7363f61a216226fc28030731a5a61f";
-      host = "tools.bandit-lab.mrija.org";
+      host = "tools.atmosphaere.at";
+      legacyHost = "tools.bandit-lab.mrija.org";
       port = "80";
     };
   };
@@ -28,7 +31,7 @@ in {
       extraOptions = [
         "--network=proxy"
         "--label=traefik.enable=true"
-        "--label=traefik.http.routers.${_name}.rule=Host(`${cfg.host}`)"
+        "--label=traefik.http.routers.${_name}.rule=Host(`${cfg.host}`) || Host(`${cfg.legacyHost}`)"
         "--label=traefik.http.routers.${_name}.entrypoints=web"
         "--label=traefik.http.services.${_name}.loadbalancer.server.port=${cfg.port}"
       ];

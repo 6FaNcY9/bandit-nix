@@ -37,24 +37,32 @@
         # application (docs/runbooks/cloudflare-access.md); it has no auth
         # of its own and the host list is sensitive network metadata.
         "devices.bandit-lab.mrija.org" = "http://localhost:80";
+        "devices.atmosphaere.at" = "http://localhost:80";
         "grafana.bandit-lab.mrija.org" = "http://localhost:80";
+        "grafana.atmosphaere.at" = "http://localhost:80";
         "mail-archive.bandit-lab.mrija.org" = "http://localhost:80";
         # Admin UI — must have a Cloudflare Access application in front of it
         # (docs/runbooks/cloudflare-access.md); never expose it directly.
         "portainer.bandit-lab.mrija.org" = "http://localhost:80";
+        "portainer.atmosphaere.at" = "http://localhost:80";
         # Metasearch — needs a Cloudflare Access application
         # (docs/runbooks/cloudflare-access.md). A public SearXNG instance
         # gets scraped/abused by bots within hours.
         "search.bandit-lab.mrija.org" = "http://localhost:80";
+        "search.atmosphaere.at" = "http://localhost:80";
         # Requires a Cloudflare Access application + policy in front of it;
         # see docs/runbooks/cloudflare-access.md.
         "ssh-bandit-lab.mrija.org" = "ssh://localhost:22";
+        "ssh.atmosphaere.at" = "ssh://localhost:22";
         # Vaultwarden stays without an Access app: native Bitwarden clients
         # cannot complete an interactive Access login.
         "vault.bandit-lab.mrija.org" = "http://localhost:80";
         # New primary vault domain (same service; old hostname kept while
         # clients are migrated).
         "vault.atmosphaere.at" = "http://localhost:80";
+        "juice.atmosphaere.at" = "http://localhost:80";
+        "cyberchef.atmosphaere.at" = "http://localhost:80";
+        "tools.atmosphaere.at" = "http://localhost:80";
       };
     };
   };

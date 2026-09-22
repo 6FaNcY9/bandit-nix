@@ -6,12 +6,12 @@ _: {
   virtualisation.oci-containers.containers.searxng = {
     image = "searxng/searxng@sha256:11a9b34cdc0b1ec2b991470a2762ecb5a1a531898289fb51dcd015260450729e";
     environment = {
-      SEARXNG_BASE_URL = "https://search.bandit-lab.mrija.org/";
+      SEARXNG_BASE_URL = "https://search.atmosphaere.at/";
     };
     extraOptions = [
       "--network=proxy"
       "--label=traefik.enable=true"
-      "--label=traefik.http.routers.searxng.rule=Host(`search.bandit-lab.mrija.org`)"
+      "--label=traefik.http.routers.searxng.rule=Host(`search.atmosphaere.at`) || Host(`search.bandit-lab.mrija.org`)"
       "--label=traefik.http.routers.searxng.entrypoints=web"
       "--label=traefik.http.routers.searxng.middlewares=searxng-ratelimit"
       "--label=traefik.http.services.searxng.loadbalancer.server.port=8080"

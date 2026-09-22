@@ -43,7 +43,7 @@
   # provider to the loopback GUI instead.
   services.traefik.dynamicConfigOptions.http = {
     routers.watchyourlan = {
-      rule = "Host(`devices.bandit-lab.mrija.org`)";
+      rule = "Host(`devices.atmosphaere.at`) || Host(`devices.bandit-lab.mrija.org`)";
       entryPoints = ["web"];
       service = "watchyourlan";
     };
