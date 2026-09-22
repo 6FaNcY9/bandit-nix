@@ -27,6 +27,14 @@
     url = "https://github.com/rockyhawk64/CommandPanels/releases/download/4.2.4/CommandPanels-4.2.4.jar";
     hash = "sha256-I5BNRmQALJbL/9w5RCBl4iC09r0CKxXT+CsXgRUgYAE=";
   };
+  placeholderApi = pkgs.fetchurl {
+    url = "https://hangarcdn.papermc.io/plugins/HelpChat/PlaceholderAPI/versions/2.12.3/PAPER/PlaceholderAPI-2.12.3.jar";
+    hash = "sha256-/eAyWfWvaTjzwz7rTYFAAKGtq/HSMEzhSXC+gfYJpDc=";
+  };
+  placeholderApiPlayer = pkgs.fetchurl {
+    url = "https://dl.placeholderapi.com/PAPI-Expansion-Player_R5xV754.jar";
+    hash = "sha256-o1V0u76c6IaIIRVDcf11TmZAKjgox0U7jOMrxTborGw=";
+  };
   inventoryRollbackPlus = pkgs.fetchurl {
     url = "https://cdn.modrinth.com/data/XWKWAzd8/versions/2JWRgmoZ/InventoryRollbackPlus-1.8.4.jar";
     hash = "sha512-UUS+wSYGcxIvG9yRwnQ/JsfSDeR0A8FWiY0pnQrhqV9KptWM/Sg6VH5RhiyRmxMb8JzMOA2iFbcOTuVrc5wbEA==";
@@ -37,6 +45,7 @@
   };
   pluginsDir = "/srv/containers/minecraft/data/plugins";
   commandPanelsDir = "${pluginsDir}/CommandPanels";
+  placeholderApiDir = "${pluginsDir}/PlaceholderAPI";
   grep = "${pkgs.gnugrep}/bin/grep";
   sed = "${pkgs.gnused}/bin/sed";
   awk = "${pkgs.gawk}/bin/awk";
@@ -128,7 +137,7 @@ in {
 
       mkdir -p ${pluginsDir}
       rm -f ${pluginsDir}/ViaVersion-*.jar ${pluginsDir}/ViaBackwards-*.jar
-      rm -f ${pluginsDir}/LuckPerms-Bukkit-*.jar ${pluginsDir}/SModeration-Paper-*.jar ${pluginsDir}/InventoryRollbackPlus-*.jar ${pluginsDir}/AxGraves-*.jar ${pluginsDir}/CommandPanels-*.jar
+      rm -f ${pluginsDir}/LuckPerms-Bukkit-*.jar ${pluginsDir}/SModeration-Paper-*.jar ${pluginsDir}/InventoryRollbackPlus-*.jar ${pluginsDir}/AxGraves-*.jar ${pluginsDir}/CommandPanels-*.jar ${pluginsDir}/PlaceholderAPI-*.jar
       install -m 0644 ${luckPerms} ${pluginsDir}/LuckPerms-Bukkit-5.5.71.jar
       install -m 0644 ${sModeration} ${pluginsDir}/SModeration-Paper-2.0.0.jar
       install -m 0644 ${inventoryRollbackPlus} ${pluginsDir}/InventoryRollbackPlus-1.8.4.jar
@@ -139,6 +148,10 @@ in {
       install -m 0644 ${commandPanels} ${pluginsDir}/CommandPanels-4.2.4.jar
       install -o 1000 -g 1000 -m 0644 ${./minecraft/commandpanels/admin.yml} ${commandPanelsDir}/panels/admin.yml
       install -o 1000 -g 1000 -m 0644 ${./minecraft/commandpanels/admin-player.yml} ${commandPanelsDir}/panels/admin-player.yml
+      install -d -o 1000 -g 1000 -m 0750 ${placeholderApiDir} ${placeholderApiDir}/expansions
+      rm -f ${placeholderApiDir}/expansions/PAPI-Expansion-Player_*.jar
+      install -m 0644 ${placeholderApi} ${pluginsDir}/PlaceholderAPI-2.12.3.jar
+      install -o 1000 -g 1000 -m 0644 ${placeholderApiPlayer} ${placeholderApiDir}/expansions/PAPI-Expansion-Player_R5xV754.jar
     '';
   };
 
