@@ -9,6 +9,7 @@
 #   /dev/nvme0n1p5  2.7 TiB  NixOS target, format as BTRFS
 {
   config,
+  lib,
   modulesPath,
   pkgs,
   ...
@@ -73,7 +74,7 @@ in {
   services.xserver.videoDrivers = ["nvidia"];
 
   # Use the current runtime path and avoid systemd's legacy /var/run warning.
-  systemd.services.nvidia-persistenced.serviceConfig.PIDFile = "/run/nvidia-persistenced/nvidia-persistenced.pid";
+  systemd.services.nvidia-persistenced.serviceConfig.PIDFile = lib.mkForce "/run/nvidia-persistenced/nvidia-persistenced.pid";
 
   environment.systemPackages = with pkgs; [
     nvtopPackages.nvidia
