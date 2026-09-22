@@ -73,7 +73,7 @@ MySQL evidence:
 
 The host had ample disk space (about 2.4T free, 3% used). `/srv/containers/aiia/mysql` was observed as mode `750`, owner `1000:100`. The likely cause is a UID/GID mismatch between the Nix tmpfiles ownership and the MySQL container, but this must be confirmed before editing.
 
-The archive endpoint answered locally with HTTP 303. The archive container had no recent log output. The daily sync service exited with status 28 after its 30-second POST timeout; whether the API is slow, unavailable, or returning an unexpected response is not yet proven.
+At the time of the original audit, the archive endpoint answered locally with HTTP 303. The archive container had no recent log output. The daily sync service exited with status 28 after its 30-second POST timeout; this was a historical failure and is superseded by the verified end-to-end repair documented below.
 
 ## Relevant source locations
 
@@ -158,10 +158,10 @@ Source fix (this session): `hosts/bandit-lab/aiia.nix` now declares the MySQL di
 ## Archive sync: verified complete on 2026-09-22
 
 - TheHost SSH uses the rotated ED25519 key and a pinned ECDSA host key in the dedicated read-only `known_hosts` mount.
-- The supervised service now completes the full POST → SSE → rsync → reindex path with strict SSH checking; the verified run indexed 29,748 emails and exited `0/SUCCESS`.
+- The supervised service now completes the full POST → SSE → rsync → reindex path with strict SSH checking; the latest verified run indexed 29,750 emails and exited `0/SUCCESS`.
 - The daily timer is enabled and scheduled for 03:00 CEST.
 - Docker DNAT required the service sandbox to allow the external proxy subnet `172.18.0.0/16` while retaining `IPAddressDeny=any`.
-- The API key is passed through a temporary mode-600 header file and is no longer present in curl process arguments.
+- The API key is loaded through a systemd credential, passed through a temporary mode-600 header file, and is no longer present in the service environment or curl process arguments.
 
 ## Security observation (remaining)
 

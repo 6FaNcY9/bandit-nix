@@ -10,10 +10,10 @@ all of its application workflows work.
 | --- | --- | --- |
 | Minecraft updates | Healthy Paper 26.2 build 124; official latest endpoint reports stable build 126, published September 20. ViaVersion/ViaBackwards 5.11.0 loaded. | Schedule a backed-up server update; this audit did not restart it. |
 | Minecraft administration | `ops.json` is empty; RCON disabled; online mode enabled; whitelist disabled. | User subsequently selected `fancy8869`. Configured `OPS=fancy8869` and a local console pipe; pending deployment/container recreation. No live operator grant has been applied. |
-| CrowdSec hub updater | Update succeeds, but service reload fails with interactive-authentication/access-denied error. | The repository's privileged ExecStartPost fix exists but is not active on the lab. |
-| Archive sync | `mrija-archive-sync.service` fails with curl status 28 after about 30 seconds on September 19–21. | Investigate the initial `/api/sync` request timeout; the archive login responding does not establish successful mail synchronization. Do not merely increase the timeout without checking the application. |
+| CrowdSec hub updater | Update succeeds, but service reload fails with interactive-authentication/access-denied error. | Repository fix was deployed; verify the next scheduled hub update before treating this as closed. |
+| Archive sync | Historical runs failed with curl status 28 after about 30 seconds on September 19–21. | Resolved and verified on September 22: POST → SSE → rsync → reindex completed with 29,750 emails and exit 0. |
 | NVIDIA | `nvidia-persistenced` failed. `nvidia-smi`: `Failed to initialize NVML: Driver/library version mismatch`. Loaded module 595.91.07; NVML library 595.99. | Reconcile the running kernel module and installed driver during planned maintenance. No reboot performed. |
-| Monitoring coverage | Eight Prometheus targets UP; four WAN probes successful. Live configuration lacks the direct-origin probes already present in the repository. | Deploy the origin probes. WAN probes accept redirects, so a Cloudflare Access login redirect can pass while the application behind it is broken. |
+| Monitoring coverage | Live Prometheus reports both configured direct-origin probes and four WAN probes healthy. | Keep the origin probes independent from WAN/Access checks; recheck after future monitoring-container changes. |
 
 Paper source: [official latest-build API](https://fill.papermc.io/v3/projects/paper/versions/26.2/builds/latest).
 “Latest” is time-sensitive; recheck before updating.
