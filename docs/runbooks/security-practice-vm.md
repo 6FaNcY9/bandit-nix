@@ -90,4 +90,4 @@ checks and explicitly use Bash for the gateway's TCP health probe.
 The chatbot needs an external model API key and is not configured for use.
 BloodHound needs an authorized AD dataset; the VM does not provision a domain.
 Atomic source, runner and powershell-yaml archives are revision/hash pinned
-in `labs/security/default.nix`. Review upstream changes before updating pins.
+in `labs/security/atomics.nix`. Review upstream changes before updating pins.

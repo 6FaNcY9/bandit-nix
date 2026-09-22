@@ -141,14 +141,14 @@
           pkgs.runCommand "security-lab-compose-check" {
             nativeBuildInputs = [pkgs.docker-compose pkgs.gnugrep];
           } ''
-            docker-compose -f ${./labs/security/bloodhound.yml} config --quiet
-            docker-compose -f ${./labs/security/crapi.yml} config --quiet
+            docker-compose -f ${./labs/security/stacks/bloodhound.yml} config --quiet
+            docker-compose -f ${./labs/security/stacks/crapi.yml} config --quiet
             # Port contract with labs/security/default.nix labPorts
             # (8080 bloodhound, 8888 crapi gateway, 8025 mail UI): the VM
             # forwards exactly these host ports, so they must stay published.
-            docker-compose -f ${./labs/security/bloodhound.yml} config | grep -q 'published: "8080"'
-            docker-compose -f ${./labs/security/crapi.yml} config | grep -q 'published: "8888"'
-            docker-compose -f ${./labs/security/crapi.yml} config | grep -q 'published: "8025"'
+            docker-compose -f ${./labs/security/stacks/bloodhound.yml} config | grep -q 'published: "8080"'
+            docker-compose -f ${./labs/security/stacks/crapi.yml} config | grep -q 'published: "8888"'
+            docker-compose -f ${./labs/security/stacks/crapi.yml} config | grep -q 'published: "8025"'
             touch "$out"
           '';
       lab-reliability = let
