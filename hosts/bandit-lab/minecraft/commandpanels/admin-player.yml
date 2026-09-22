@@ -1,0 +1,63 @@
+title: '&8Admin: %commandpanels_session_player%'
+type: inventory
+command: admin player
+conditions: '%player_name% $HASPERM bandit.admin.menu'
+rows: 3
+layout:
+  10:
+    - logs
+  11:
+    - inventory
+  12:
+    - equipment
+  13:
+    - enderchest
+  14:
+    - teleport
+  15:
+    - offline-teleport
+  16:
+    - backup
+items:
+  logs:
+    material: WRITABLE_BOOK
+    name: '&eModeration logs'
+    left-click:
+      commands:
+        - '[chat] /modlogs %commandpanels_session_player% all'
+  inventory:
+    material: CHEST
+    name: '&aInventory'
+    left-click:
+      commands:
+        - '[chat] /invsee %commandpanels_session_player% inventory'
+  equipment:
+    material: ARMOR_STAND
+    name: '&bEquipment'
+    left-click:
+      commands:
+        - '[chat] /invsee %commandpanels_session_player% equipment'
+  enderchest:
+    material: ENDER_CHEST
+    name: '&5Ender chest'
+    left-click:
+      commands:
+        - '[chat] /enderchestsee %commandpanels_session_player%'
+  teleport:
+    material: ENDER_PEARL
+    name: '&dTeleport'
+    left-click:
+      commands:
+        - '[chat] /tp %commandpanels_session_player%'
+  offline-teleport:
+    material: CLOCK
+    name: '&6Offline teleport'
+    left-click:
+      commands:
+        - '[chat] /offlinetp %commandpanels_session_player%'
+  backup:
+    material: SHULKER_BOX
+    name: '&cForce inventory backup'
+    left-click:
+      commands:
+        - '[chat] /irp forcebackup player %commandpanels_session_player%'

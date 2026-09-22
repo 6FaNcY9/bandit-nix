@@ -1,0 +1,47 @@
+title: '&8Admin'
+type: inventory
+command: admin
+conditions: '%player_name% $HASPERM bandit.admin.menu'
+rows: 3
+layout:
+  10:
+    - smod
+  12:
+    - vanish
+  14:
+    - socialspy
+  16:
+    - player-tools
+  22:
+    - help
+items:
+  smod:
+    material: COMPASS
+    name: '&cSModeration'
+    left-click:
+      commands:
+        - '[chat] /smod'
+  vanish:
+    material: ENDER_PEARL
+    name: '&bVanish'
+    left-click:
+      commands:
+        - '[chat] /vanish'
+  socialspy:
+    material: SPYGLASS
+    name: '&eSocialSpy'
+    left-click:
+      commands:
+        - '[chat] /socialspy'
+  player-tools:
+    material: BOOK
+    name: '&aPlayer tools'
+    left-click:
+      commands:
+        - '[msg] &7Use &f/admin <player> &7to open player tools.'
+  help:
+    material: PAPER
+    name: '&6Admin help'
+    left-click:
+      commands:
+        - '[msg] &7Admin: &f/smod &7| &f/vanish &7| &f/socialspy'

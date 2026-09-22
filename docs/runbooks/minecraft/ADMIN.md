@@ -9,18 +9,17 @@ Verified live on 2026-09-21 after a graceful restart. Existing server and worlds
 - Data: `/srv/containers/minecraft/data` (container `/data`); plugins: `data/plugins`.
 - Declarative configuration: `hosts/bandit-lab/minecraft.nix`; staging: `minecraft-plugins.service`.
 - Online mode enabled; whitelist disabled; existing ports/gameplay/world configuration preserved.
-- Phase 2 pending deployment: `minecraft-plugins.service` now validates and targets only
-  `server.properties` `allow-flight=true`, and only the `packet-limiter.enabled` field
-  in ViaVersion's persistent `plugins/ViaVersion/config.yml`. These are persistent
-  runtime files, so the service is the declarative reconciliation point; no broad
-  `OVERRIDE_SERVER_PROPERTIES` rewrite is used. Unexpected or missing target sections
-  fail the service before plugin staging. Live values may therefore drift until the
-  configuration is deployed.
+- Phase 2 baseline is deployed live: `allow-flight=true` and ViaVersion's
+  `packet-limiter.enabled=false`. The declarative staging service targets only those
+  exact persistent fields; it does not use broad `OVERRIDE_SERVER_PROPERTIES` rewrites.
+  Unexpected or missing target sections fail the service before plugin staging.
 - ViaVersion's packet limiter is disabled (`enabled: false`) because Paper's existing
   packet limiter remains the authoritative protection layer; ViaVersion's
   `packet-size-limiter` is unchanged. Paper packet-limiter settings are unchanged.
   `allow-flight=true` only prevents false flying checks during lag or unusual movement;
   it does not grant creative flight on this survival server.
+- The CommandPanels/SModeration reconciliation below is pending deployment; until then,
+  live panel files and SModeration custom punishments remain unchanged.
 - Cold backup after `save-all flush` and graceful stop:
   `/srv/containers/minecraft/backups/admin-20260921-163140/data.tar.gz`.
 - Archive listing verified; SHA256:
@@ -38,12 +37,15 @@ Verified live on 2026-09-21 after a graceful restart. Existing server and worlds
 | AxGraves | 1.32.0 | https://modrinth.com/plugin/axgraves | Enabled |
 | ViaVersion | 5.11.0 | https://hangar.papermc.io/ViaVersion/ViaVersion | Existing, untouched |
 | ViaBackwards | 5.11.0 | https://hangar.papermc.io/ViaVersion/ViaBackwards | Existing, untouched |
+| CommandPanels | 4.2.4 | https://github.com/rockyhawk64/CommandPanels/releases/tag/4.2.4 | Pinned and staged declaratively; pending deployment |
 
-The four new releases explicitly list 26.2 compatibility in Modrinth metadata;
-their SHA512 hashes and exact download URLs are pinned in the Nix module.
+The managed plugin releases are pinned with exact download URLs and hashes in the
+Nix module; the Modrinth-hosted releases explicitly list 26.2 compatibility, while
+CommandPanels 4.2.4 is pinned from its official GitHub release.
 Paper's bundled spark remains available. No client mods or EssentialsX installed.
 CoreProtect is deferred: public CE 24.0 release notes explicitly mention 26.1,
-but no explicitly 26.2-compatible release artifact was verified:
+but 26.2 support is currently a development/supporter build rather than a verified
+public release:
 https://github.com/PlayPro/CoreProtect/releases.
 
 ## Administrator
@@ -71,7 +73,25 @@ https://github.com/Shiewk/SModeration/blob/main/docs/permissions.md.
 Prefix metadata is `[Admin]` (priority 100); displaying it in chat needs a chat
 formatter, which was not installed solely for cosmetics.
 
+The planned admin panel gate is `bandit.admin.menu`; grant it only to the intended
+administrator. Panel actions remain player-executed and use the existing native
+SModeration, teleport, inventory, and InventoryRollbackPlus permissions. The planned
+untimed native `Warn` custom punishment is enabled by the staged SModeration config;
+`/modlogs <player> all` shows the player's moderation history.
+
 ## In-game commands
+
+The following new panel and warning commands are pending deployment:
+
+```text
+/admin
+/admin <player>
+/warn <player> <reason>
+/modlogs <player> all
+/offlinetp <player>
+```
+
+Existing commands:
 
 ```text
 /plugins
@@ -93,6 +113,11 @@ formatter, which was not installed solely for cosmetics.
 /irp forcebackup player fancy8869
 /irp restore fancy8869
 ```
+
+Daily admin workflow: use `/admin` for server tools, `/admin <player>` for inspection
+and a force backup, then `/modlogs <player> all` before any moderation action. The
+panel intentionally has no restore, punishment buttons, console actions, permission
+grants, or server controls.
 
 Inventory restoration can overwrite the current inventory: force a fresh backup
 first, then inspect the desired snapshot in the restore GUI. No real inventory
@@ -149,8 +174,9 @@ sudo systemctl restart docker-minecraft.service
 bandit-lab-health
 ```
 
-Before any future modification, repeat a full consistent backup. Never extract an
-old world backup over a running server. Restart verification: all six plugins
+Before any future modification, take a full consistent backup manually; automated
+Nix staging does not create backups. Never extract an old world backup over a running
+server. Restart verification: all seven plugins
 enabled, three worlds loaded, ready at 19:04:51, no new startup ERROR/stack trace.
 OP, admin membership, inventory-edit permission and prefix survived restart.
 Generated plugin data, LuckPerms database, ops.json and the three AxGraves settings
