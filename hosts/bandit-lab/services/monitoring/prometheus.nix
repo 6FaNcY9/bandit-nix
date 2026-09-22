@@ -61,7 +61,7 @@
   '';
 
   # Shared with the regression test so it exercises the deployed modules.
-  blackboxYml = ../blackbox.yml;
+  blackboxYml = ../blackbox/blackbox.yml;
 in {
   _module.args.monitoringPrometheus = {inherit prometheusYml blackboxYml;};
 }

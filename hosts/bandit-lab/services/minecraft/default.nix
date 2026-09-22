@@ -146,8 +146,8 @@ in {
       install -m 0644 ${viaBackwards} ${pluginsDir}/ViaBackwards-5.12.0.jar
       install -d -o 1000 -g 1000 -m 0750 ${commandPanelsDir} ${commandPanelsDir}/panels
       install -m 0644 ${commandPanels} ${pluginsDir}/CommandPanels-4.2.4.jar
-      install -o 1000 -g 1000 -m 0644 ${./minecraft/commandpanels/admin.yml} ${commandPanelsDir}/panels/admin.yml
-      install -o 1000 -g 1000 -m 0644 ${./minecraft/commandpanels/admin-player.yml} ${commandPanelsDir}/panels/admin-player.yml
+      install -o 1000 -g 1000 -m 0644 ${./commandpanels/admin.yml} ${commandPanelsDir}/panels/admin.yml
+      install -o 1000 -g 1000 -m 0644 ${./commandpanels/admin-player.yml} ${commandPanelsDir}/panels/admin-player.yml
       install -d -o 1000 -g 1000 -m 0750 ${placeholderApiDir} ${placeholderApiDir}/expansions
       rm -f ${placeholderApiDir}/expansions/PAPI-Expansion-Player_*.jar
       install -m 0644 ${placeholderApi} ${pluginsDir}/PlaceholderAPI-2.12.3.jar

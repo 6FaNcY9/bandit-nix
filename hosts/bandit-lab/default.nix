@@ -5,25 +5,25 @@
 }: {
   imports = [
     ./hardware.nix
-    ./cockpit-theme.nix
+    ./services/cockpit-theme
     ./wan.nix
-    ./webhost.nix
-    ./traefik.nix
-    ./mrija-archive.nix
-    ./monitoring
-    ./vaultwarden.nix
-    ./searxng.nix
-    ./watchyourlan.nix
-    ./minecraft.nix
+    ./services/webhost
+    ./services/traefik
+    ./services/mrija-archive
+    ./services/monitoring
+    ./services/vaultwarden
+    ./services/searxng
+    ./services/watchyourlan
+    ./services/minecraft
     ./power.nix
-    ./aiia.nix
-    ./auto-rebuild.nix
-    ./crowdsec.nix
-    ./wazuh.nix
-    ./toolbox.nix
-    ./health-check.nix
-    # Sideloading is on hold (cable/hardware issues) — anisette.nix stays in
-    # the repo but is not imported, so the service is not installed.
+    ./services/aiia
+    ./services/auto-rebuild
+    ./services/crowdsec
+    ./services/wazuh
+    ./services/toolbox
+    ./services/health-check
+    # Sideloading is on hold (cable/hardware issues) — services/anisette stays
+    # in the repo but is not imported, so the service is not installed.
   ];
 
   networking.hostName = "bandit-lab";

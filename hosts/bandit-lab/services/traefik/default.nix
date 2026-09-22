@@ -87,7 +87,7 @@ in {
     staticConfigOptions = {
       log.level = "INFO";
       # JSON access log to a file instead of stdout: the CrowdSec engine
-      # (hosts/bandit-lab/crowdsec.nix) reads it with a file acquisition.
+      # (hosts/bandit-lab/services/crowdsec) reads it with a file acquisition.
       # Journald is unusable as a transport here — the crowdsec journalctl
       # source reads the default short format, so every line arrives with a
       # "MMM DD HH:MM:SS host traefik[pid]: " prefix that breaks both the

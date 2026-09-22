@@ -5,7 +5,7 @@
 }: let
   # Vendored from SZanko/nur-packages: the upstream dub-lock.json pins a stale
   # fetchgit hash for Dadoum/Provision, so the NUR package no longer builds.
-  anisette = pkgs.callPackage ../../pkgs/anisette-v3-server {};
+  anisette = pkgs.callPackage ../../../pkgs/anisette-v3-server {};
 in {
   environment.systemPackages = [
     anisette

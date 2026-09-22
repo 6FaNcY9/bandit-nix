@@ -111,16 +111,16 @@ in {
       # wazuh-agent image ships no pip packages. See the handoff runbook.
       "d ${confDir}/wazuh_agent/site-packages 0755 root root -"
       "d ${certDir} 0755 root root -"
-      "L+ ${confDir}/wazuh_cluster/wazuh_manager.conf - - - - ${./wazuh/config/wazuh_manager.conf}"
-      "L+ ${confDir}/wazuh_agent/ossec.conf - - - - ${./wazuh/config/wazuh_agent_ossec.conf}"
-      "L+ ${confDir}/wazuh_indexer/wazuh.indexer.yml - - - - ${./wazuh/config/wazuh.indexer.yml}"
-      "L+ ${confDir}/wazuh_dashboard/opensearch_dashboards.yml - - - - ${./wazuh/config/opensearch_dashboards.yml}"
-      "L+ ${certDir}/root-ca.pem - - - - ${./wazuh/certs/root-ca.pem}"
-      "L+ ${certDir}/root-ca-manager.pem - - - - ${./wazuh/certs/root-ca-manager.pem}"
-      "L+ ${certDir}/admin.pem - - - - ${./wazuh/certs/admin.pem}"
-      "L+ ${certDir}/wazuh.indexer.pem - - - - ${./wazuh/certs/wazuh.indexer.pem}"
-      "L+ ${certDir}/wazuh.manager.pem - - - - ${./wazuh/certs/wazuh.manager.pem}"
-      "L+ ${certDir}/wazuh.dashboard.pem - - - - ${./wazuh/certs/wazuh.dashboard.pem}"
+      "L+ ${confDir}/wazuh_cluster/wazuh_manager.conf - - - - ${./config/wazuh_manager.conf}"
+      "L+ ${confDir}/wazuh_agent/ossec.conf - - - - ${./config/wazuh_agent_ossec.conf}"
+      "L+ ${confDir}/wazuh_indexer/wazuh.indexer.yml - - - - ${./config/wazuh.indexer.yml}"
+      "L+ ${confDir}/wazuh_dashboard/opensearch_dashboards.yml - - - - ${./config/opensearch_dashboards.yml}"
+      "L+ ${certDir}/root-ca.pem - - - - ${./certs/root-ca.pem}"
+      "L+ ${certDir}/root-ca-manager.pem - - - - ${./certs/root-ca-manager.pem}"
+      "L+ ${certDir}/admin.pem - - - - ${./certs/admin.pem}"
+      "L+ ${certDir}/wazuh.indexer.pem - - - - ${./certs/wazuh.indexer.pem}"
+      "L+ ${certDir}/wazuh.manager.pem - - - - ${./certs/wazuh.manager.pem}"
+      "L+ ${certDir}/wazuh.dashboard.pem - - - - ${./certs/wazuh.dashboard.pem}"
     ];
 
     services = {

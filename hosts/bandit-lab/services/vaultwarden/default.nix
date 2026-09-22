@@ -7,7 +7,7 @@
   username = repoConfig.workstation.username;
   # Compiled by Vaultwarden into the vaultwarden.css served to the web vault.
   vaultwardenTemplates = pkgs.writeTextDir "scss/user.vaultwarden.scss.hbs" (
-    builtins.readFile ./vaultwarden/gruvbox.scss.hbs
+    builtins.readFile ./gruvbox.scss.hbs
   );
 in {
   systemd.tmpfiles.rules = [

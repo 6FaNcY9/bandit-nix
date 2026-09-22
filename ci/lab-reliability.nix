@@ -44,7 +44,7 @@ in
       environment.etc."lab-test-age-key".source = "${fixtures}/key.txt";
       services.prometheus.exporters.blackbox = {
         enable = true;
-        configFile = ../hosts/bandit-lab/blackbox.yml;
+        configFile = ../hosts/bandit-lab/services/blackbox/blackbox.yml;
       };
       systemd.services = {
         origin-fixture = {
