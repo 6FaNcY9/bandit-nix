@@ -71,32 +71,13 @@ in {
 
           phase_start=$SECONDS
           ${pkgs.coreutils}/bin/printf '%s\n' \
-            'mrija sync phase=preflight event=start' >&2
-          if status_response="$(
-            ${pkgs.curl}/bin/curl -sf --max-time 5 \
-              http://127.0.0.1:8081/api/status \
-              -H "X-API-Key: ''${MRIJA_API_KEY}"
-          )" && sync_state="$(${pkgs.jq}/bin/jq -er '.state | strings' \
-            <<<"''${status_response}")"; then
-            :
-          else
-            status_check=$?
-            ${pkgs.coreutils}/bin/printf \
-              'mrija sync phase=preflight event=failed rc=%s elapsed=%ss\n' \
-              "''${status_check}" "$((SECONDS - phase_start))" >&2
-            exit "''${status_check}"
-          fi
-          if [ "''${sync_state}" = "updating" ]; then
-            ${pkgs.coreutils}/bin/printf '%s\n' \
-              'mrija sync phase=preflight event=already_updating action=skip_post' >&2
-          else
-          ${pkgs.coreutils}/bin/printf '%s\n' \
             'mrija sync phase=post_trigger event=start' >&2
-          if trigger_response="$(
-            ${pkgs.curl}/bin/curl -sf --max-time 30 -X POST \
+          trigger_response_file="$(${pkgs.coreutils}/bin/mktemp)"
+          trap '${pkgs.coreutils}/bin/rm -f "''${trigger_response_file}"' EXIT
+          if trigger_http_status="$(${pkgs.curl}/bin/curl -sS --max-time 30 -X POST \
               http://127.0.0.1:8081/api/sync \
-              -H "X-API-Key: ''${MRIJA_API_KEY}"
-          )"; then
+              -H "X-API-Key: ''${MRIJA_API_KEY}" \
+              -o "''${trigger_response_file}" -w '%{http_code}')"; then
             :
           else
             curl_status=$?
@@ -108,17 +89,40 @@ in {
           ${pkgs.coreutils}/bin/printf \
             'mrija sync phase=post_trigger event=complete elapsed=%ss\n' \
             "$((SECONDS - phase_start))" >&2
-          if ${pkgs.jq}/bin/jq -e '.status == "started"' \
-            <<<"''${trigger_response}" >/dev/null; then
-            :
-          else
-            parse_status=$?
-            ${pkgs.coreutils}/bin/printf \
-              'mrija sync phase=post_trigger_parse event=failed rc=%s elapsed=%ss\n' \
-              "''${parse_status}" "$((SECONDS - phase_start))" >&2
-            exit "''${parse_status}"
-          fi
-          fi
+          case "''${trigger_http_status}" in
+            2??)
+              if ${pkgs.jq}/bin/jq -e '.status == "started"' \
+                "''${trigger_response_file}" >/dev/null; then
+                :
+              else
+                parse_status=$?
+                ${pkgs.coreutils}/bin/printf \
+                  'mrija sync phase=post_trigger_parse event=failed rc=%s elapsed=%ss\n' \
+                  "''${parse_status}" "$((SECONDS - phase_start))" >&2
+                exit "''${parse_status}"
+              fi
+              ;;
+            409)
+              if ${pkgs.jq}/bin/jq -e \
+                '.detail == "Sync already in progress"' \
+                "''${trigger_response_file}" >/dev/null; then
+                ${pkgs.coreutils}/bin/printf '%s\n' \
+                  'mrija sync phase=post_trigger event=already_in_progress action=join_sse' >&2
+              else
+                parse_status=$?
+                ${pkgs.coreutils}/bin/printf \
+                  'mrija sync phase=post_trigger_parse event=failed rc=%s elapsed=%ss\n' \
+                  "''${parse_status}" "$((SECONDS - phase_start))" >&2
+                exit "''${parse_status}"
+              fi
+              ;;
+            *)
+              ${pkgs.coreutils}/bin/printf \
+                'mrija sync phase=post_trigger event=failed http_status=%s elapsed=%ss\n' \
+                "''${trigger_http_status}" "$((SECONDS - phase_start))" >&2
+              exit 1
+              ;;
+          esac
 
           phase_start=$SECONDS
           ${pkgs.coreutils}/bin/printf '%s\n' \
