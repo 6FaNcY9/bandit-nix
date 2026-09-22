@@ -36,6 +36,7 @@ in {
       "d /srv/containers/mrija-archive/deploy 0750 ${username} users -"
       "d ${maildir} 0750 ${username} users -"
       "d ${data} 0750 ${username} users -"
+      "C+ /srv/containers/mrija-archive/deploy/known_hosts 0644 root root - ${./thehost-known_hosts}"
     ];
 
     services.mrija-archive-sync = {
@@ -108,8 +109,8 @@ in {
 
     timers.mrija-archive-sync = {
       description = "Periodic mrija.org mail sync";
-      # Disabled until TheHost SSH key signing/authorization is repaired;
-      # invoke the service manually for a supervised test afterward.
+      # Keep disabled until a supervised end-to-end sync succeeds after the
+      # external Compose deployment's SSH trust repair.
       enable = false;
       wantedBy = ["timers.target"];
       timerConfig = {

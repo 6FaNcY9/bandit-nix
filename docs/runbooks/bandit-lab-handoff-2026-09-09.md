@@ -155,12 +155,14 @@ Read-only inspection confirmed the hypothesis:
 
 Source fix (this session): `hosts/bandit-lab/aiia.nix` now declares the MySQL dir as `"d /srv/containers/aiia/mysql 0750 - - -"` so tmpfiles only creates it if missing and never re-owns it; the image entrypoint chowns the datadir itself. The existing remote directory still needs the one-time operator correction below — the Nix change prevents recurrence, it does not repair the current host.
 
-## Archive sync: timeout cause traced, no repo change made
+## Archive sync: external deployment SSH trust repaired, final service test pending
 
 - Every daily run Aug 26 → Sep 9 failed identically: POST `/api/sync` produced no response within the 30 s curl timeout (exit 28). Earlier runs Aug 21–24 failed fast with status 1.
 - The archive API is healthy and fast: `GET /` → 303 in ~1 ms; authenticated `GET /api/update/progress` → 200 in 0.19 s, but returns a stale `{"percent": 100, "status": ""}` (last real index write was Aug 26).
-- Root cause is upstream: from inside the container **and** from the host, `ssh -i /home/vino/.ssh/thehost_mrija mrija_org@s16.thehost.com.ua` fails with `Permission denied (publickey,password)`. The mounted key and host key are the same key (fingerprint `SHA256:SQ/wg+BBurOECFUlodP2OpGFelRYAg/5mmlb4VpoANE`), so the remote server no longer accepts it. The `/api/sync` handler blocks on this dead SSH path longer than the 30 s POST timeout.
-- Conclusion: extending the sync unit's timeout would only hide the failure — `hosts/bandit-lab/mrija-archive.nix` was intentionally left unchanged. The fix is restoring the key on the mail host (or provisioning a new key), which is outside this repo and outside read-only authorization.
+- The new client key is accepted by TheHost (`SHA256:zxHSsjpM3JKDzsKcPLGeimX9yOrdOmYFKNTBrKlV3cI`). The running archive image now uses strict SSH verification with an isolated config and `/run/ssh/known_hosts`.
+- The external Compose deployment now uses a pinned TheHost host key with strict SSH verification. The system service still needs one supervised end-to-end run before the timer is re-enabled.
+
+The verified TheHost ECDSA fingerprint is `SHA256:bfFYi3Un58m+ZM/P+cXMX4nZo73Vm/o5+g5B8GYR/tE`; the strict SSH probe and no-delete rsync dry-run passed with 1000 itemized changes and no stderr. The API already starts its worker in the background, so the curl timeout was not increased.
 
 ## Security observation (no action taken)
 
@@ -177,7 +179,7 @@ The `deploy-mrija-archive-1` container (docker-compose managed, not declared in 
 
 1. `sudo chown 999:999 /srv/containers/aiia/mysql` on bandit-lab (one-time repair; the tmpfiles fix in this diff prevents recurrence after reboot).
 2. `sudo nixos-rebuild switch --flake .#bandit-lab`, then confirm `docker-aiia-mysql.service` and `docker-aiia-ghost.service` start and Ghost finishes its migrations.
-3. Restore SSH access for `mrija_org@s16.thehost.com.ua` (re-add the `mrija-thehost-unattended` public key on the mail host or issue a new keypair and update the sops `thehost-sshkey` secret + `/home/vino/.ssh/thehost_mrija`). Then run `sudo systemctl start mrija-archive-sync.service` and verify it exits 0 and the sqlite index mtime advances.
+3. Run `sudo systemctl start --wait mrija-archive-sync.service` and verify it exits 0 and the sqlite index mtime advances. Only then remove `enable = false` from the timer declaration and deploy it.
 4. Run `bandit-lab-health` and confirm zero failed units.
 
 ---
