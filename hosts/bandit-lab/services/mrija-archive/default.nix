@@ -63,7 +63,8 @@ in {
         RestrictRealtime = true;
         RestrictSUIDSGID = true;
         RestrictAddressFamilies = ["AF_UNIX" "AF_INET" "AF_INET6"];
-        IPAddressAllow = ["localhost"];
+        # Docker DNAT reaches the proxy on its dynamic shared-network address.
+        IPAddressAllow = ["localhost" "172.18.0.0/16"];
         IPAddressDeny = ["any"];
         ExecStart = pkgs.writeShellScript "mrija-sync" ''
           set -euo pipefail
