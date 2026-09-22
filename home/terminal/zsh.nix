@@ -15,7 +15,14 @@ in {
       enable = true;
       dotDir = "${config.xdg.configHome}/zsh";
       autosuggestion.enable = true;
-      syntaxHighlighting.enable = true;
+
+      syntaxHighlighting = {
+        enable = true;
+        styles = {
+          comment = "fg=${colors.base03}";
+        };
+      };
+
       enableCompletion = true;
 
       historySubstringSearch = {
