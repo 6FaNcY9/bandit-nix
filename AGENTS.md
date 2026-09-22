@@ -87,6 +87,11 @@ Routing is automatic: the main agent chooses the cheapest capable route without 
 │       ├── vaultwarden/      # gruvbox.scss.hbs theme source (TEMPLATES_FOLDER hook)
 │       ├── mrija-archive.nix # Backup/archive service
 │       ├── monitoring.nix    # Grafana+Prometheus host files/secrets for the Portainer stack
+│       ├── crowdsec.nix      # CrowdSec IPS (journald/Traefik parsing, community blocklists)
+│       ├── aiia.nix          # ghost + mysql + redis internal service network
+│       ├── toolbox.nix       # Analyst toolbox containers (juice-shop et al., behind Cloudflare Access)
+│       ├── anisette.nix      # Parked (not imported): anisette-v3 sideloading hold
+│       ├── blackbox.yml      # Blackbox exporter targets (also read by ci/lab-reliability.nix)
 │       ├── power.nix         # Server power settings
 │       └── cockpit-theme.nix # Cockpit admin UI theming
 ├── nixos/                    # System-level NixOS modules
@@ -106,10 +111,11 @@ Routing is automatic: the main agent chooses the cheapest capable route without 
 │   ├── theme.nix             # Fonts and Stylix system targets
 │   ├── users.nix             # User account, groups, sudo
 │   ├── health-check.nix      # bandit-health system check
+│   ├── hardening.nix         # Kernel/AppArmor/sysctl hardening (both hosts)
 │   ├── cli-tools.nix         # CLI tools shared between hosts
 │   ├── tor.nix               # Tor client configuration
 │   ├── server.nix            # Headless server base module aggregator
-│   ├── server/editor.nix     # Server-side editor/Zellij/Starship config
+│   ├── server/editor.nix     # Server-side nixvim config
 │   └── ci-overrides.nix      # CI-only sops validation override for bandit-ci
 ├── home/                     # Home Manager configuration
 │   ├── default.nix           # Aggregator + user packages
@@ -128,7 +134,10 @@ Routing is automatic: the main agent chooses the cheapest capable route without 
 ├── secrets/                  # Encrypted secrets
 │   ├── secrets.yaml          # General secrets
 │   └── github.yaml           # GitHub SSH keys
-├── ci/
+├── ci/                       # Flake checks + CI helpers
+│   ├── lab-reliability.nix   # NixOS VM test: lab service/sops reliability assertions
+│   ├── test-docker-discovery-proxy.py # Docker discovery proxy regression tests
+│   ├── test-lab-update.py    # lab-update regression tests
 │   └── vulnix-whitelist.toml # CVE allowlist for security scanning
 ├── script/                   # Local, gitignored helper scripts
 ├── themes/                   # Gruvbox base16 schemes (dark/light) + wallpaper
@@ -280,10 +289,12 @@ Active secrets in `nixos/sops.nix` (+ host-specific noted):
 | Firmware / fwupd / fprintd | `nixos/firmware.nix` |
 | Power / zram / trim / scrub | `nixos/power.nix` |
 | Secrets wiring | `nixos/sops.nix` |
+| System hardening | `nixos/hardening.nix` |
 | Server base / SSH / Zellij | `nixos/server.nix`, `nixos/server/editor.nix` |
-| Homelab services | `hosts/bandit-lab/*.nix` |
+| Homelab services | `hosts/bandit-lab/*.nix` (incl. `aiia.nix`, `crowdsec.nix`, `toolbox.nix`; `anisette.nix` parked/unimported) |
 | Monitoring stack host files | `hosts/bandit-lab/monitoring.nix` |
 | Wazuh SIEM stack | `hosts/bandit-lab/wazuh.nix` (+ `wazuh/` configs/certs; secrets in sops) |
+| CI checks / regression tests | `ci/` (`lab-reliability.nix` VM test, Python tests, vulnix allowlist) |
 | Hardware / filesystems | `hosts/<host>/hardware.nix` |
 | Hyprland config | `home/desktop/hyprland.nix` |
 | Waybar | `home/desktop/waybar.nix` |
@@ -359,7 +370,7 @@ Post-encryption: commit updated `hosts/bandit/hardware.nix`; optionally enroll T
 
 ## 11. Common Pitfalls
 
-- **Outdated docs:** `README.md`, `docs/codebase-review.md` still describe old XFCE+i3 stack / `tomorrow-night-eighties` theme. Current: **Hyprland/Wayland** + **Gruvbox** (morhetz) Stylix — dark default, light via `light` boot specialisation.
+- **Docs:** `README.md` is current (Hyprland/Wayland + Gruvbox, synced 2026-09); dated design docs live in `docs/specs/`, research notes in `docs/research/`.
 - **SOPS host keys:** sops validation errors in `nix flake check`/`nixos-rebuild` → host age key missing/wrong; `.#bandit-ci` bypasses.
 - **NixVim follows:** never add `inputs.nixpkgs.follows = "nixpkgs"` to `nixvim` input — upstream tests against own pinned nixpkgs, warns when overridden.
 - **Flake imports:** no leaf `.nix` files in `flake.nix`; host roots + aggregators only.
