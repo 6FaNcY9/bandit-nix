@@ -192,40 +192,10 @@
           touch "$out"
         '';
 
-      theme-contract = let
+      theme-contract = import ./ci/theme-contract.nix {
+        inherit pkgs repoConfig;
         inherit (nixpkgs) lib;
-        theme = repoConfig.workstationTheme;
-        actualColorKeys = lib.sort builtins.lessThan (builtins.attrNames theme.colors);
-        expectedColorKeys = lib.sort builtins.lessThan [
-          "active"
-          "canvas"
-          "critical"
-          "foreground"
-          "info"
-          "muted"
-          "primary"
-          "raised"
-          "secondary"
-          "shadow"
-          "structure"
-          "success"
-          "surface"
-        ];
-      in
-        assert lib.assertMsg (theme.name == "Gruvbox") "workstationTheme.name must stay Gruvbox";
-        assert lib.assertMsg (builtins.pathExists ./themes/gruvbox-light.yaml) "themes/gruvbox-light.yaml missing (light specialisation)";
-        assert lib.assertMsg (actualColorKeys == expectedColorKeys) "workstationTheme.colors keys drifted from the contract";
-        assert lib.assertMsg (theme.geometry.unit == 4) "workstationTheme.geometry.unit must stay 4";
-        assert lib.assertMsg (theme.geometry.radius == 0) "workstationTheme.geometry.radius must stay 0";
-        assert lib.assertMsg ((repoConfig.mkStylixTheme pkgs).base16Scheme == ./themes/gruvbox-dark.yaml) "mkStylixTheme must use themes/gruvbox-dark.yaml";
-        assert lib.assertMsg (theme.fonts.shell.name == "Departure Mono") "workstationTheme shell font changed";
-        assert lib.assertMsg (theme.fonts.technical.name == "JetBrainsMono Nerd Font Mono") "workstationTheme technical font changed";
-        assert lib.assertMsg (theme.fonts.interface.name == "Noto Sans") "workstationTheme interface font changed";
-        assert lib.assertMsg (theme.icons.name == "Papirus-Dark") "workstationTheme icon theme changed";
-        assert lib.assertMsg (theme.cursor.name == "Bibata-Modern-Ice") "workstationTheme cursor theme changed";
-          pkgs.runCommand "bandit-nix-theme-contract" {} ''
-            touch "$out"
-          '';
+      };
 
       output-evaluation = let
         evaluatedPath = builtins.unsafeDiscardStringContext;
@@ -255,89 +225,11 @@
         touch "$out"
       '';
 
-      dotdir-tools = let
-        packageByName = name:
-          nixpkgs.lib.findFirst
-          (package: (package.name or "") == name)
-          (throw "missing Home Manager package: ${name}")
-          self.homeConfigurations.vino.config.home.packages;
-        dotdirAudit = packageByName "bandit-dotdir-audit";
-        dotdirAdopt = packageByName "bandit-dotdir-adopt";
-      in
-        pkgs.runCommand "bandit-nix-dotdir-tools-check" {} ''
-          export HOME="$PWD/home"
-          export XDG_DATA_HOME="$PWD/data"
-          export XDG_CONFIG_HOME="$PWD/config"
-          export XDG_CACHE_HOME="$PWD/cache"
-          mkdir -p "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME"
-
-          if ${dotdirAdopt}/bin/bandit-dotdir-adopt >/dev/null 2>&1; then
-            echo "adopt accepted missing arguments" >&2
-            exit 1
-          fi
-          if ${dotdirAdopt}/bin/bandit-dotdir-adopt safe data extra >/dev/null 2>&1; then
-            echo "adopt accepted too many arguments" >&2
-            exit 1
-          fi
-
-          mkdir -p "$HOME/.nested/tool" "$XDG_DATA_HOME/nested"
-          printf source > "$HOME/.nested/tool/value"
-          if ${dotdirAdopt}/bin/bandit-dotdir-adopt nested/tool >/dev/null 2>&1; then
-            echo "adopt accepted a name containing a path separator" >&2
-            exit 1
-          fi
-          test -f "$HOME/.nested/tool/value"
-
-          mkdir "$HOME/.blocked" "$XDG_DATA_HOME/blocked-target"
-          printf source > "$HOME/.blocked/value"
-          ln -s "$XDG_DATA_HOME/blocked-target" "$XDG_DATA_HOME/blocked"
-          if ${dotdirAdopt}/bin/bandit-dotdir-adopt blocked >/dev/null 2>&1; then
-            echo "adopt accepted a non-directory destination" >&2
-            exit 1
-          fi
-          test "$(cat "$HOME/.blocked/value")" = source
-          test -L "$XDG_DATA_HOME/blocked"
-          test ! -e "$XDG_DATA_HOME/blocked-target/value"
-          mv "$HOME/.nested" "$PWD/nested-leftovers"
-          mv "$HOME/.blocked" "$PWD/blocked-leftovers"
-
-          mkdir "$HOME/.fresh"
-          printf moved > "$HOME/.fresh/value"
-          ${dotdirAdopt}/bin/bandit-dotdir-adopt fresh >/dev/null
-          test ! -e "$HOME/.fresh"
-          test "$(cat "$XDG_DATA_HOME/fresh/value")" = moved
-
-          mkdir "$HOME/.merge" "$XDG_DATA_HOME/merge"
-          printf source > "$HOME/.merge/source-only"
-          printf source-conflict > "$HOME/.merge/conflict"
-          printf target-conflict > "$XDG_DATA_HOME/merge/conflict"
-          ln -s missing "$HOME/.merge/source-dangling"
-          ln -s missing "$HOME/.merge/target-dangling"
-          ln -s missing "$XDG_DATA_HOME/merge/target-dangling"
-          if ${dotdirAdopt}/bin/bandit-dotdir-adopt merge >/dev/null 2>&1; then
-            echo "adopt did not report merge conflicts" >&2
-            exit 1
-          fi
-          test "$(cat "$XDG_DATA_HOME/merge/source-only")" = source
-          test "$(cat "$XDG_DATA_HOME/merge/conflict")" = target-conflict
-          test "$(cat "$HOME/.merge/conflict")" = source-conflict
-          test -L "$XDG_DATA_HOME/merge/source-dangling"
-          test -L "$XDG_DATA_HOME/merge/target-dangling"
-          test -L "$HOME/.merge/target-dangling"
-          mv "$HOME/.merge" "$PWD/merge-leftovers"
-
-          mkdir "$HOME/.unknown"
-          if ${dotdirAudit}/bin/bandit-dotdir-audit >/dev/null 2>&1; then
-            echo "audit missed an unshimmed dotdir" >&2
-            exit 1
-          fi
-          rmdir "$HOME/.unknown"
-          mkdir "$HOME/.cache"
-          ln -s "$XDG_DATA_HOME/fresh" "$HOME/.shim"
-          ${dotdirAudit}/bin/bandit-dotdir-audit >/dev/null
-
-          touch "$out"
-        '';
+      dotdir-tools = import ./ci/dotdir-tools.nix {
+        inherit pkgs;
+        inherit (nixpkgs) lib;
+        homePackages = self.homeConfigurations.vino.config.home.packages;
+      };
     };
 
     formatter.${system} = pkgs.alejandra;
