@@ -108,6 +108,9 @@ in {
 
     timers.mrija-archive-sync = {
       description = "Periodic mrija.org mail sync";
+      # Disabled until TheHost SSH key signing/authorization is repaired;
+      # invoke the service manually for a supervised test afterward.
+      enable = false;
       wantedBy = ["timers.target"];
       timerConfig = {
         OnCalendar = "*-*-* 03:00:00";
