@@ -173,6 +173,11 @@ file-backed secrets remains a separate hardening task. The currently deployed im
 only reads the direct variables and has no `*_FILE` support, so removing `env_file`
 now would break authentication or trigger its generated development-key path.
 
+Application-side support for strict file-backed credentials is prepared locally in
+the separate `mrija-archive` checkout as commit `60ac9a7`; syntax and credential
+helper checks pass, but its focused pytest run needs the missing offline FastAPI
+dependencies. The image has not been rebuilt, published, or deployed.
+
 The safe migration is coordinated: add strict file-backed credential loading to the
 application (including API validation, password login, startup, and templates), build
 and pin a tested image, then update the authoritative Portainer stack to mount only
