@@ -183,9 +183,7 @@ in {
 
     timers.mrija-archive-sync = {
       description = "Periodic mrija.org mail sync";
-      # Keep disabled until a supervised end-to-end sync succeeds after the
-      # external Compose deployment's SSH trust repair.
-      enable = false;
+      enable = true;
       wantedBy = ["timers.target"];
       timerConfig = {
         OnCalendar = "*-*-* 03:00:00";
