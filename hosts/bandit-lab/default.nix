@@ -10,7 +10,7 @@
     ./webhost.nix
     ./traefik.nix
     ./mrija-archive.nix
-    ./monitoring.nix
+    ./monitoring
     ./vaultwarden.nix
     ./searxng.nix
     ./watchyourlan.nix

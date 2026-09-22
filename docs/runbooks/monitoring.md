@@ -1,7 +1,7 @@
 # Monitoring stack (Grafana + Prometheus) on bandit-lab
 
 The stack is managed in **Portainer** (Stacks → `monitoring`). Host-side files
-and secrets are declared in `hosts/bandit-lab/monitoring.nix`, with probe modules
+and secrets are declared in `hosts/bandit-lab/monitoring/`, with probe modules
 in `hosts/bandit-lab/blackbox.yml`. Rebuild bandit-lab after editing them, then
 redeploy the stack in Portainer, recreating containers to refresh bind mounts.
 
@@ -196,7 +196,7 @@ services:
   [secret rotation](secret-rotation.md#grafanas-stored-admin-password).
   The Prometheus datasource
   is pre-configured and green.
-- Dashboards are file-provisioned from `hosts/bandit-lab/monitoring.nix`:
+- Dashboards are file-provisioned from `hosts/bandit-lab/monitoring/`:
   "Node Exporter Full" (host CPU/RAM/disk/network), "Cadvisor exporter"
   (per-container), and "Public Endpoint Probes" (public HTTPS reachability of
   the four tunnel hostnames, including TLS expiry), plus "Direct Origin Probes"
