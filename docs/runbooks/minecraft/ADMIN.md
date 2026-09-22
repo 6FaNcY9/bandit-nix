@@ -35,8 +35,8 @@ Verified live on 2026-09-21 after a graceful restart. Existing server and worlds
 | SModeration | 2.0.0 | https://modrinth.com/plugin/smoderation | Enabled, 12 commands registered |
 | InventoryRollbackPlus | 1.8.4 | https://modrinth.com/plugin/inventoryrollbackplus | Enabled, 5 startup tests passed |
 | AxGraves | 1.32.0 | https://modrinth.com/plugin/axgraves | Enabled |
-| ViaVersion | 5.11.0 | https://hangar.papermc.io/ViaVersion/ViaVersion | Existing, untouched |
-| ViaBackwards | 5.11.0 | https://hangar.papermc.io/ViaVersion/ViaBackwards | Existing, untouched |
+| ViaVersion | 5.12.0 | https://hangar.papermc.io/ViaVersion/ViaVersion | Pinned and staged declaratively; pending deployment |
+| ViaBackwards | 5.12.0 | https://hangar.papermc.io/ViaVersion/ViaBackwards | Pinned and staged declaratively; pending deployment |
 | CommandPanels | 4.2.4 | https://github.com/rockyhawk64/CommandPanels/releases/tag/4.2.4 | Pinned and staged declaratively; pending deployment |
 
 The managed plugin releases are pinned with exact download URLs and hashes in the
@@ -192,5 +192,6 @@ Remaining work:
   595.99.02, causing `nvidia-persistenced.service` failure and NVML mismatch.
   Health passes with this non-critical warning. No reboot performed; after reboot
   verify `nvidia-smi`, daemon status and `bandit-lab-health` again.
-- ViaVersion reports 5.12 available; existing 5.11.0 deliberately retained here.
+- ViaVersion and ViaBackwards 5.12.0 are pinned in Nix; deployment and post-restart
+  client compatibility verification remain pending.
 - Broader Portainer/container/monitoring/firewall audit remains separate work.

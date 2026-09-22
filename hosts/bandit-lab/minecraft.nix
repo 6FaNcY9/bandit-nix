@@ -7,12 +7,12 @@
   # channel. ViaVersion lets newer clients join; ViaBackwards (requires
   # ViaVersion) lets older clients join. Both support Paper 1.8/1.10-26.2.
   viaVersion = pkgs.fetchurl {
-    url = "https://hangarcdn.papermc.io/plugins/ViaVersion/ViaVersion/versions/5.11.0/PAPER/ViaVersion-5.11.0.jar";
-    hash = "sha256-idt2yOPmdCOPXu4rt6npor7roHYLvRuGSUd46KWlL3A=";
+    url = "https://hangarcdn.papermc.io/plugins/ViaVersion/ViaVersion/versions/5.12.0/PAPER/ViaVersion-5.12.0.jar";
+    hash = "sha256-xNUS+pdg+kHRerrt3hKqH0yb3pINCpkv4PwBaWLxJr4=";
   };
   viaBackwards = pkgs.fetchurl {
-    url = "https://hangarcdn.papermc.io/plugins/ViaVersion/ViaBackwards/versions/5.11.0/PAPER/ViaBackwards-5.11.0.jar";
-    hash = "sha256-QQhaWdeEyaDRSRf+dIfvXiAanaeCX9BH8I0yj/M+7Nw=";
+    url = "https://hangarcdn.papermc.io/plugins/ViaVersion/ViaBackwards/versions/5.12.0/PAPER/ViaBackwards-5.12.0.jar";
+    hash = "sha256-+QL32n65nov69GH4AoPE4nULfZcn5rUI6ku5Fj9Vsds=";
   };
   # Official Modrinth releases explicitly supporting Minecraft 26.2.
   luckPerms = pkgs.fetchurl {
@@ -133,8 +133,8 @@ in {
       install -m 0644 ${sModeration} ${pluginsDir}/SModeration-Paper-2.0.0.jar
       install -m 0644 ${inventoryRollbackPlus} ${pluginsDir}/InventoryRollbackPlus-1.8.4.jar
       install -m 0644 ${axGraves} ${pluginsDir}/AxGraves-1.32.0.jar
-      install -m 0644 ${viaVersion} ${pluginsDir}/ViaVersion-5.11.0.jar
-      install -m 0644 ${viaBackwards} ${pluginsDir}/ViaBackwards-5.11.0.jar
+      install -m 0644 ${viaVersion} ${pluginsDir}/ViaVersion-5.12.0.jar
+      install -m 0644 ${viaBackwards} ${pluginsDir}/ViaBackwards-5.12.0.jar
       install -d -o 1000 -g 1000 -m 0750 ${commandPanelsDir} ${commandPanelsDir}/panels
       install -m 0644 ${commandPanels} ${pluginsDir}/CommandPanels-4.2.4.jar
       install -o 1000 -g 1000 -m 0644 ${./minecraft/commandpanels/admin.yml} ${commandPanelsDir}/panels/admin.yml
