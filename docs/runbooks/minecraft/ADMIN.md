@@ -1,6 +1,6 @@
 # Minecraft administration
 
-Verified live on 2026-09-21 after a graceful restart. Existing server and worlds preserved.
+Verified live on 2026-09-22 after activation. Existing server and worlds preserved.
 
 ## Server and backup
 
@@ -9,7 +9,7 @@ Verified live on 2026-09-21 after a graceful restart. Existing server and worlds
 - Data: `/srv/containers/minecraft/data` (container `/data`); plugins: `data/plugins`.
 - Declarative configuration: `hosts/bandit-lab/minecraft.nix`; staging: `minecraft-plugins.service`.
 - Online mode enabled; whitelist disabled; existing ports/gameplay/world configuration preserved.
-- Phase 2 baseline is deployed live: `allow-flight=true` and ViaVersion's
+- Live baseline: `allow-flight=true` and ViaVersion's
   `packet-limiter.enabled=false`. The declarative staging service targets only those
   exact persistent fields; it does not use broad `OVERRIDE_SERVER_PROPERTIES` rewrites.
   Unexpected or missing target sections fail the service before plugin staging.
@@ -18,8 +18,12 @@ Verified live on 2026-09-21 after a graceful restart. Existing server and worlds
   `packet-size-limiter` is unchanged. Paper packet-limiter settings are unchanged.
   `allow-flight=true` only prevents false flying checks during lag or unusual movement;
   it does not grant creative flight on this survival server.
-- The CommandPanels/SModeration reconciliation below is pending deployment; until then,
-  live panel files and SModeration custom punishments remain unchanged.
+- CommandPanels and SModeration Phase 3 changes are live; the container is running with
+  seven plugins, zero restarts, no startup ERROR/Exception, and health passed.
+- SModeration live state: `force-reason=true`, all seven feature keys remain `true`,
+  and custom `Warn` is registered as `smod.warn`.
+- Pre-update backup: `/srv/containers/minecraft/backups/plugin-update-20260922-062200/data.tar.gz`;
+  SHA256 `5fe664db499e143565b284136bcda9a8a9127a091f09443b839973bd0409abe1`.
 - Cold backup after `save-all flush` and graceful stop:
   `/srv/containers/minecraft/backups/admin-20260921-163140/data.tar.gz`.
 - Archive listing verified; SHA256:
@@ -35,9 +39,9 @@ Verified live on 2026-09-21 after a graceful restart. Existing server and worlds
 | SModeration | 2.0.0 | https://modrinth.com/plugin/smoderation | Enabled, 12 commands registered |
 | InventoryRollbackPlus | 1.8.4 | https://modrinth.com/plugin/inventoryrollbackplus | Enabled, 5 startup tests passed |
 | AxGraves | 1.32.0 | https://modrinth.com/plugin/axgraves | Enabled |
-| ViaVersion | 5.12.0 | https://hangar.papermc.io/ViaVersion/ViaVersion | Pinned and staged declaratively; pending deployment |
-| ViaBackwards | 5.12.0 | https://hangar.papermc.io/ViaVersion/ViaBackwards | Pinned and staged declaratively; pending deployment |
-| CommandPanels | 4.2.4 | https://github.com/rockyhawk64/CommandPanels/releases/tag/4.2.4 | Pinned and staged declaratively; pending deployment |
+| ViaVersion | 5.12.0 | https://hangar.papermc.io/ViaVersion/ViaVersion | Live |
+| ViaBackwards | 5.12.0 | https://hangar.papermc.io/ViaVersion/ViaBackwards | Live |
+| CommandPanels | 4.2.4 | https://github.com/rockyhawk64/CommandPanels/releases/tag/4.2.4 | Live |
 
 The managed plugin releases are pinned with exact download URLs and hashes in the
 Nix module; the Modrinth-hosted releases explicitly list 26.2 compatibility, while
@@ -56,15 +60,19 @@ The mistakenly requested Ted account has been de-opped and removed from `admin`.
 Before this correction, operators were backed up to
 `data/ops-before-admin-correction-20260921-1926.json` and LuckPerms exported to
 `data/plugins/LuckPerms/before-admin-correction-20260921-1926.json.gz`.
+The admin-phase LuckPerms export is
+`/data/plugins/LuckPerms/before-admin-phase3-20260922.json.gz`.
 
 `admin` has `luckperms.*`, `inventoryrollbackplus.*` and these documented nodes:
 
 ```text
 smod.menu smod.mute smod.preventmute smod.ban smod.preventban
 smod.kick smod.preventkick smod.notifications smod.unmute smod.unban
-smod.logs smod.invsee smod.invsee.modify smod.invsee.preventmodify
+smod.logs smod.invsee smod.invsee.modify smod.invsee.preventmodify smod.offlinetp smod.warn
 smod.enderchestsee smod.enderchestsee.modify smod.vanish
-smod.vanish.see smod.socialspy
+smod.vanish.see smod.socialspy bandit.admin.menu
+commandpanels.command.reload commandpanels.command.generate commandpanels.command.data
+commandpanels.command.open commandpanels.command.open.other
 ```
 
 No global `*` granted. Vanilla administration/teleport commands remain available
@@ -73,15 +81,18 @@ https://github.com/Shiewk/SModeration/blob/main/docs/permissions.md.
 Prefix metadata is `[Admin]` (priority 100); displaying it in chat needs a chat
 formatter, which was not installed solely for cosmetics.
 
-The planned admin panel gate is `bandit.admin.menu`; grant it only to the intended
+The admin panel gate is `bandit.admin.menu`; it is granted to the intended
 administrator. Panel actions remain player-executed and use the existing native
-SModeration, teleport, inventory, and InventoryRollbackPlus permissions. The planned
-untimed native `Warn` custom punishment is enabled by the staged SModeration config;
-`/modlogs <player> all` shows the player's moderation history.
+SModeration, teleport, inventory, and InventoryRollbackPlus permissions. The untimed
+native `Warn` custom punishment is registered as `smod.warn`; `/modlogs <player> all`
+shows the player's moderation history. `fancy8869` passes the menu permission checks;
+`Kirafunk` has no `bandit.admin.menu` grant.
+
+Whitelist entries verified live: `CringeLord21`, `Kirafunk`.
 
 ## In-game commands
 
-The following new panel and warning commands are pending deployment:
+The following panel and warning commands are live:
 
 ```text
 /admin
@@ -119,8 +130,9 @@ and a force backup, then `/modlogs <player> all` before any moderation action. T
 panel intentionally has no restore, punishment buttons, console actions, permission
 grants, or server controls.
 
-Inventory restoration can overwrite the current inventory: force a fresh backup
-first, then inspect the desired snapshot in the restore GUI. No real inventory
+InventoryRollbackPlus passed 5/5 live tests. Inventory restoration can overwrite
+the current inventory: force a fresh backup first, then inspect the desired snapshot
+in the restore GUI. No real inventory
 was restored during setup. Old losses are recoverable only if a suitable backup
 exists. IRP now has six join and six quit snapshots for fancy8869; death snapshots
 and the restore GUI still need a harmless dedicated test. Defaults retain 10 join,
@@ -176,22 +188,21 @@ bandit-lab-health
 
 Before any future modification, take a full consistent backup manually; automated
 Nix staging does not create backups. Never extract an old world backup over a running
-server. Restart verification: all seven plugins
-enabled, three worlds loaded, ready at 19:04:51, no new startup ERROR/stack trace.
+server. Restart verification: all seven plugins enabled, three worlds loaded, ready
+at 06:26:52, no new startup ERROR/stack trace; this activation also passed health checks.
 OP, admin membership, inventory-edit permission and prefix survived restart.
 Generated plugin data, LuckPerms database, ops.json and the three AxGraves settings
 are live runtime state; Nix stages jars without overwriting those configurations.
-The new Nix configuration has not been activated during this session.
 
 Remaining work:
 
-- Log in as fancy8869 and test `/smod`, inventory inspection and `/irp restore` navigation.
+- Log in as fancy8869 and test `/admin`, `/admin <player>`, `/smod`, inventory
+  inspection, `/modlogs`, `/offlinetp`, and `/irp restore` navigation. Test `/warn`
+  only with a consenting test account because it deliberately creates history.
   Use a disposable test inventory for death/grave retrieval and restoration tests.
 - Verify a released CoreProtect artifact explicitly supporting 26.2 before installation.
 - Schedule a host reboot: NVIDIA kernel module 595.91.07 differs from userspace
   595.99.02, causing `nvidia-persistenced.service` failure and NVML mismatch.
   Health passes with this non-critical warning. No reboot performed; after reboot
   verify `nvidia-smi`, daemon status and `bandit-lab-health` again.
-- ViaVersion and ViaBackwards 5.12.0 are pinned in Nix; deployment and post-restart
-  client compatibility verification remain pending.
 - Broader Portainer/container/monitoring/firewall audit remains separate work.
