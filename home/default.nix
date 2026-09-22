@@ -25,7 +25,7 @@
     ./desktop/powermenu.nix
     ./desktop/keybinds-menu.nix
     ./desktop/obsidian.nix
-    ./editor.nix
+    ./editor
     ./terminal
     ./node.nix
   ];

@@ -1,5 +1,11 @@
-{repoConfig, ...}: {
-  programs.nixvim.keymaps = [
+{
+  lib,
+  repoConfig,
+  ...
+}: {
+  # mkAfter keeps these behind the main nixvim keymaps (nixvim/keymaps.nix),
+  # preserving the registration order from before the nixvim.nix split.
+  programs.nixvim.keymaps = lib.mkAfter [
     {
       mode = "n";
       key = "<leader>nr";

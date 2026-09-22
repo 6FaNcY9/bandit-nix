@@ -1,4 +1,5 @@
 {
+  lib,
   inputs,
   pkgs,
   ...
@@ -45,7 +46,9 @@ in {
       require("pdfreader").setup()
     '';
 
-    keymaps = [
+    # mkAfter keeps these behind the main nixvim keymaps (nixvim/keymaps.nix),
+    # preserving the registration order from before the nixvim.nix split.
+    keymaps = lib.mkAfter [
       {
         mode = "n";
         key = "<leader>fp";
