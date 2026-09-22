@@ -42,7 +42,7 @@ Verified live on 2026-09-22 after activation. Existing server and worlds preserv
 | ViaVersion | 5.12.0 | https://hangar.papermc.io/ViaVersion/ViaVersion | Live |
 | ViaBackwards | 5.12.0 | https://hangar.papermc.io/ViaVersion/ViaBackwards | Live |
 | CommandPanels | 4.2.4 | https://github.com/rockyhawk64/CommandPanels/releases/tag/4.2.4 | Live |
-| PlaceholderAPI | 2.12.3 + Player expansion | https://hangar.papermc.io/HelpChat/PlaceholderAPI | Pinned and staged declaratively; pending deployment |
+| PlaceholderAPI | 2.12.3 + Player expansion | https://hangar.papermc.io/HelpChat/PlaceholderAPI | Enabled and verified live |
 
 The managed plugin releases are pinned with exact download URLs and hashes in the
 Nix module; the Modrinth-hosted releases explicitly list 26.2 compatibility, while
@@ -93,8 +93,8 @@ Whitelist entries verified live: `CringeLord21`, `Kirafunk`.
 
 ## In-game commands
 
-The warning command is live. The panel commands are registered, but their
-permission-placeholder fix requires the pending PlaceholderAPI deployment:
+The warning command and permission-placeholder fix are live. The panel commands
+are registered:
 
 ```text
 /admin
@@ -133,9 +133,8 @@ panel intentionally has no restore, punishment buttons, console actions, permiss
 grants, or server controls.
 
 CommandPanels is the `/admin` frontend; `/smod` remains the SModeration backend.
-PlaceholderAPI 2.12.3 plus its Player expansion are required only to resolve the
-`%player_name%` permission condition that gates the panels; this staging change is
-pending deployment.
+PlaceholderAPI 2.12.3 plus its Player expansion resolve the `%player_name%`
+permission condition that gates the panels.
 
 InventoryRollbackPlus passed 5/5 live tests. Inventory restoration can overwrite
 the current inventory: force a fresh backup first, then inspect the desired snapshot
