@@ -95,9 +95,9 @@
       exit 1
     fi
 
-    vaultwarden_changes="$($git -c safe.directory="$repo" -C "$repo" diff --name-only "$before" "$after" -- hosts/bandit-lab/vaultwarden.nix)"
+    vaultwarden_changes="$($git -c safe.directory="$repo" -C "$repo" diff --name-only "$before" "$after" -- hosts/bandit-lab/services/vaultwarden/)"
     if [[ -n "$vaultwarden_changes" ]]; then
-      echo "Refusing automatic activation of $after: hosts/bandit-lab/vaultwarden.nix changed." >&2
+      echo "Refusing automatic activation of $after: hosts/bandit-lab/services/vaultwarden/ changed." >&2
       echo "Automatic rollback does not restore persistent Vaultwarden data; supervised maintenance with a consistent, verified backup is required." >&2
       exit 1
     fi

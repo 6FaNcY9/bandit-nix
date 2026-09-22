@@ -49,7 +49,7 @@
     upower.enable = true;
     # Laptop tailnet access: reach bandit-lab (100.125.161.81) from any
     # network without the Cloudflare Access browser flow. The lab enables its
-    # own tailscaled in hosts/bandit-lab/webhost.nix.
+    # own tailscaled in hosts/bandit-lab/services/webhost/default.nix.
     tailscale.enable = true;
     # iOS device pairing over USB (SideStore/iloader sideloading).
     usbmuxd.enable = true;
