@@ -22,7 +22,7 @@ declarative system and user environment.
 - **Hyprland/Wayland** desktop on `bandit` with Waybar, Mako, and Rofi.
 - **Stylix** system-wide theming using the **Gruvbox** (morhetz) palette, dark by default with a light boot specialisation.
 - **nixvim** declarative Neovim setup with LSP, DAP, and completions.
-- **Fish + Zsh** shells sharing aliases from `home/terminal/aliases.nix`.
+- **Zsh** with shared aliases from `home/terminal/aliases.nix`.
 - **Rootless Docker + Podman** for container workflows.
 - **CI checks** for formatting, linting, dead code, statix, theme-contract and output-evaluation assertions, plus security-lab compose/atomic checks.
 
@@ -60,7 +60,7 @@ declarative system and user environment.
 │   └── server.nix         # Headless server base aggregator
 ├── home/                  # Home Manager configuration
 │   ├── default.nix        # Aggregator and user packages
-│   ├── terminal/          # Fish, Zsh, Kitty, Starship, aliases
+│   ├── terminal/          # Zsh, Kitty, Starship, aliases
 │   ├── desktop/           # Hyprland, Waybar, Mako, Rofi, Firefox, Thunderbird
 │   ├── editor/            # nixvim, pdfreader
 │   ├── theme.nix          # HM Stylix targets
@@ -226,7 +226,7 @@ loudly.
   entries because legacy Hyprland configuration strings are not rendered.
 - **Status bar / notifications**: `home/desktop/waybar.nix` and
   `home/desktop/mako.nix`.
-- **Shells**: `home/terminal/fish.nix`, `home/terminal/zsh.nix`, and shared
+- **Shell**: `home/terminal/zsh.nix` and shared
   aliases in `home/terminal/aliases.nix`.
 - **Editor**: `home/editor/nixvim.nix`.
 - **Shared constants**: `lib/repository.nix` holds `system`, username,

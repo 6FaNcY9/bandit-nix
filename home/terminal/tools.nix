@@ -20,7 +20,6 @@ in {
   programs = {
     nix-index = {
       enable = true;
-      enableFishIntegration = true;
     };
 
     eza.enable = true;
@@ -39,12 +38,10 @@ in {
 
     zoxide = {
       enable = true;
-      enableFishIntegration = true;
     };
 
     fzf = {
       enable = true;
-      enableFishIntegration = true;
       # Colors managed by Stylix.
     };
   };

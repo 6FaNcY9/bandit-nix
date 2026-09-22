@@ -8,7 +8,6 @@ in {
     # so we only configure behavior here
 
     shellIntegration = {
-      enableFishIntegration = true;
       enableZshIntegration = true;
       # lets kitty track cwd, mark prompts, jump between commands
       mode = "enabled";

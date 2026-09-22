@@ -67,7 +67,7 @@ in {
       shellAliases =
         sharedAliases
         // {
-          # zsh-only (fish has these as abbrs in fish.nix)
+          # zsh-only helpers
           nrs = "sudo nixos-rebuild switch --flake .#bandit";
           nrt = "sudo nixos-rebuild test --flake .#bandit";
           nfc = "nix flake check --no-update-lock-file";
@@ -82,7 +82,7 @@ in {
           rm = "rm -i";
           cp = "cp -i";
           mv = "mv -i";
-          # zsh-specific (different syntax from fish)
+          # zsh-specific helpers
           reload = "exec zsh";
           paths = "echo $PATH | tr ':' '\n'";
         };

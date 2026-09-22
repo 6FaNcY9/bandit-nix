@@ -1,3 +1,5 @@
+# ARCHIVED: Fish is no longer used. This file is intentionally inactive and
+# retained only as historical reference; do not import or revive it casually.
 {
   config,
   pkgs,

@@ -171,7 +171,6 @@ stylix = {
 | `grub` | NixOS `stylix.targets.grub` | Bootloader |
 | `console` | NixOS `stylix.targets.console` | TTY colors |
 | `lightdm` | NixOS `stylix.targets.lightdm` | Greeter theme |
-| `fish` | HM `stylix.targets.fish` | Shell prompt colors |
 | `gtk` (HM) | HM `stylix.targets.gtk` | Per-user GTK overrides |
 | `i3` | HM `stylix.targets.i3` | Window border colors |
 | `kitty` | HM `stylix.targets.kitty` | Terminal colors |

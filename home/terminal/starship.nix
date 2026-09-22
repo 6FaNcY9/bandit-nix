@@ -7,7 +7,6 @@
 in {
   programs.starship = {
     enable = true;
-    enableFishIntegration = true;
     enableZshIntegration = true;
     settings = {
       scan_timeout = 100;

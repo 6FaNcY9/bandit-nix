@@ -50,7 +50,6 @@ in {
   };
 
   stylix.targets = {
-    fish.enable = true;
     gtk.enable = true;
     kitty.enable = true;
     nixvim.enable = true;

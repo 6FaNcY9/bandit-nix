@@ -34,7 +34,7 @@ in `hosts/bandit-lab/default.nix` (key-auth-only SSH) and the WAN runbooks.
   `ServerAliveInterval`, and `ServerAliveCountMax`.
 - [x] `home/desktop/hyprland.nix` + `home/desktop/powermenu.nix`: screen locks
   with `hyprlock` before suspend and on idle.
-- [x] `home/terminal/fish.nix` and `home/terminal/zsh.nix`: the Cachix auth token
+- [x] `home/terminal/zsh.nix`: the Cachix auth token
   is read from the sops secret and injected only for the duration of a `cachix`
   call, never exported globally.
 - [x] `home/editor/nixvim.nix`: persistent undo, swap, and backups are disabled

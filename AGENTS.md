@@ -40,7 +40,7 @@ Routing is automatic: the main agent chooses the cheapest capable route without 
 | Bars/notifications | Waybar / Mako | Status bar, notifications |
 | Launcher | Rofi (Wayland build via `pkgs.rofi`) | App launcher |
 | Terminals | Kitty | Primary emulator |
-| Shells | Fish + Zsh | Shared aliases `home/terminal/aliases.nix` |
+| Shell | Zsh | Shared aliases `home/terminal/aliases.nix` |
 | Version control | Git + GPG signing | Commit signing, GitHub CLI |
 | Containers | Rootless Docker + Podman | Dev on `bandit`; Docker services on `bandit-lab` |
 | Server services | Traefik, Cloudflared, Tailscale, Samba, PostgreSQL, Vaultwarden, Portainer, Cockpit, SearXNG, WatchYourLAN, Minecraft | `bandit-lab` homelab stack |
@@ -133,7 +133,7 @@ Routing is automatic: the main agent chooses the cheapest capable route without 
 │   │   ├── nixvim/           # nixvim split: lsp/completion/dap/lualine/keymaps/plugins
 │   │   ├── pdfreader.nix     # pdfreader.nvim setup
 │   │   └── theme.nix         # nixvim theme tweaks
-│   ├── terminal/             # Fish, Zsh, Kitty, Starship, tools, aliases, automation
+│   ├── terminal/             # Zsh, Kitty, Starship, tools, aliases, automation
 │   └── desktop/              # default.nix aggregator; hyprland/ split (bindings/rules/
 │                             #   settings/idle-lock/scripts), Waybar, Mako, Rofi, Firefox, etc.
 ├── secrets/                  # Encrypted secrets
@@ -228,7 +228,7 @@ lab-update apply         # build, test, health-check, and switch to latest
 - **Themes** `themes/`: `gruvbox-dark.yaml` (default), `gruvbox-light.yaml` (`light` boot specialisation, `hosts/bandit/default.nix`), wallpaper `gruvbox_minimal_space.png`.
 - **stateVersion** pinned `25.11` (`hosts/bandit/default.nix`, `home/default.nix`); change only with migration plan.
 - **Unfree** scoped by `lib/repository.nix::allowUnfreePredicate` (named packages + `cuda_` prefix only); never global `allowUnfree = true`.
-- **Aliases** shared Fish/Zsh: `home/terminal/aliases.nix`; shell-specific (`reload`, `paths`) + abbreviations in per-shell files.
+- **Aliases** shared with `home/terminal/aliases.nix`; shell-specific helpers live in `home/terminal/zsh.nix`.
 
 ## 6. Secrets Management
 
@@ -242,12 +242,12 @@ Active secrets in `nixos/sops.nix` (+ host-specific noted):
 | `github_ssh_key` | SSH key → `~/.ssh/github` |
 | `github_ssh_key_banditstudent` | SSH key → `~/.ssh/github-banditstudent` |
 | `cachix-secret` | Cachix auth token |
-| `cloudflare-api-key` | Cloudflare token → `CLOUDFLARE_API_TOKEN` env var (zsh/fish) for REST curl calls |
+| `cloudflare-api-key` | Cloudflare token → `CLOUDFLARE_API_TOKEN` env var (zsh) for REST curl calls |
 | `context7_api_key` | Context7 MCP API key |
 | `vaultwarden-admin-token` | Vaultwarden admin token |
 | `thehost-sshkey` | SSH key → `~/.ssh/thehost_mrija` |
 | `firecrawl-api-key` | Firecrawl API key |
-| `shodan-api-key` | Shodan Membership key; fish/zsh `shodan` wrapper runs `shodan init` from it on first use |
+| `shodan-api-key` | Shodan Membership key; the zsh `shodan` wrapper runs `shodan init` from it on first use |
 | `grafana-admin-password` | `hosts/bandit-lab/services/monitoring/` (mode 0400, `grafana` uid/gid 472); Portainer stack bind mount |
 | `mrija-api-key` | mrija-archive admin key; rendered by `hosts/bandit-lab/services/mrija-archive/` → `/run/secrets/rendered/mrija-archive.env` (container `env_file:` + sync `EnvironmentFile`) |
 | `mrija-password` | mrija-archive web login password; same rendered env file |
@@ -311,7 +311,7 @@ Active secrets in `nixos/sops.nix` (+ host-specific noted):
 | Firefox / Thunderbird | `home/desktop/firefox/`, `home/desktop/thunderbird.nix` |
 | Obsidian vaults | `home/desktop/obsidian.nix` |
 | nixvim | `home/editor/nixvim/` |
-| Fish / Zsh / Kitty / Starship | `home/terminal/` |
+| Zsh / Kitty / Starship | `home/terminal/` |
 | Git / GPG | `home/git.nix` |
 | HM Stylix / GTK / Qt | `home/theme.nix`, `home/qt.nix` |
 
