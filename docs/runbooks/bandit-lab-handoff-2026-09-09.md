@@ -169,7 +169,18 @@ The external Compose deployment still supplies `MRIJA_API_KEY` and `MRIJA_PASSWO
 container environment variables, which Docker exposes to users with host Docker access
 via `docker inspect`. The service-side API-key argv and environment exposure are
 fixed with a systemd credential; migrating the external application to
-file-backed secrets remains a separate hardening task.
+file-backed secrets remains a separate hardening task. The currently deployed image
+only reads the direct variables and has no `*_FILE` support, so removing `env_file`
+now would break authentication or trigger its generated development-key path.
+
+The safe migration is coordinated: add strict file-backed credential loading to the
+application (including API validation, password login, startup, and templates), build
+and pin a tested image, then update the authoritative Portainer stack to mount only
+the two individual secret files read-only and set `MRIJA_API_KEY_FILE`/
+`MRIJA_PASSWORD_FILE`. Acceptance requires file-only startup, fail-closed missing or
+conflicting credentials, authenticated API/login checks, no sentinel values in
+`Config.Env`, argv, logs, or image layers, and a recreate-plus-rotation test. Do not
+introduce a competing Nix-managed container or mount all of `/run/secrets`.
 
 ## Validation (this session)
 
