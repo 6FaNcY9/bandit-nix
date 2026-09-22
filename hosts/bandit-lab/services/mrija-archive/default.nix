@@ -75,10 +75,16 @@ in {
             'mrija sync phase=post_trigger event=start' >&2
           trigger_response_file="$(${pkgs.coreutils}/bin/mktemp)"
           trap '${pkgs.coreutils}/bin/rm -f "''${trigger_response_file}"' EXIT
-          if trigger_http_status="$(${pkgs.curl}/bin/curl -sS --max-time 30 -X POST \
-              http://127.0.0.1:8081/api/sync \
-              -H "X-API-Key: ''${MRIJA_API_KEY}" \
-              -o "''${trigger_response_file}" -w '%{http_code}')"; then
+          if trigger_http_status="$(printf '%s\n' \
+              'silent' \
+              'show-error' \
+              'max-time = 30' \
+              'request = POST' \
+              'url = http://127.0.0.1:8081/api/sync' \
+              "header = X-API-Key: ''${MRIJA_API_KEY}" \
+              "output = ''${trigger_response_file}" \
+              'write-out = %{http_code}' |
+              ${pkgs.curl}/bin/curl --config -)"; then
             :
           else
             curl_status=$?
@@ -128,10 +134,15 @@ in {
           phase_start=$SECONDS
           ${pkgs.coreutils}/bin/printf '%s\n' \
             'mrija sync phase=sse_progress event=start' >&2
-          if progress="$(
-            ${pkgs.curl}/bin/curl -sfN --max-time 1800 \
-              http://127.0.0.1:8081/api/update/progress \
-              -H "X-API-Key: ''${MRIJA_API_KEY}"
+          if progress="$(printf '%s\n' \
+              'silent' \
+              'show-error' \
+              'fail' \
+              'no-buffer' \
+              'max-time = 1800' \
+              'url = http://127.0.0.1:8081/api/update/progress' \
+              "header = X-API-Key: ''${MRIJA_API_KEY}" |
+              ${pkgs.curl}/bin/curl --config -
           )"; then
             ${pkgs.coreutils}/bin/printf \
               'mrija sync phase=sse_progress event=complete elapsed=%ss\n' \
