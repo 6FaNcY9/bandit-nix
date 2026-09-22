@@ -155,18 +155,20 @@ Read-only inspection confirmed the hypothesis:
 
 Source fix (this session): `hosts/bandit-lab/aiia.nix` now declares the MySQL dir as `"d /srv/containers/aiia/mysql 0750 - - -"` so tmpfiles only creates it if missing and never re-owns it; the image entrypoint chowns the datadir itself. The existing remote directory still needs the one-time operator correction below — the Nix change prevents recurrence, it does not repair the current host.
 
-## Archive sync: external deployment SSH trust repaired, final service test pending
+## Archive sync: verified complete on 2026-09-22
 
-- Every daily run Aug 26 → Sep 9 failed identically: POST `/api/sync` produced no response within the 30 s curl timeout (exit 28). Earlier runs Aug 21–24 failed fast with status 1.
-- The archive API is healthy and fast: `GET /` → 303 in ~1 ms; authenticated `GET /api/update/progress` → 200 in 0.19 s, but returns a stale `{"percent": 100, "status": ""}` (last real index write was Aug 26).
-- The new client key is accepted by TheHost (`SHA256:zxHSsjpM3JKDzsKcPLGeimX9yOrdOmYFKNTBrKlV3cI`). The running archive image now uses strict SSH verification with an isolated config and `/run/ssh/known_hosts`.
-- The external Compose deployment now uses a pinned TheHost host key with strict SSH verification. The system service still needs one supervised end-to-end run before the timer is re-enabled.
+- TheHost SSH uses the rotated ED25519 key and a pinned ECDSA host key in the dedicated read-only `known_hosts` mount.
+- The supervised service now completes the full POST → SSE → rsync → reindex path with strict SSH checking; the verified run indexed 29,748 emails and exited `0/SUCCESS`.
+- The daily timer is enabled and scheduled for 03:00 CEST.
+- Docker DNAT required the service sandbox to allow the external proxy subnet `172.18.0.0/16` while retaining `IPAddressDeny=any`.
+- The API key is passed through a temporary mode-600 header file and is no longer present in curl process arguments.
 
-The verified TheHost ECDSA fingerprint is `SHA256:bfFYi3Un58m+ZM/P+cXMX4nZo73Vm/o5+g5B8GYR/tE`; the strict SSH probe and no-delete rsync dry-run passed with 1000 itemized changes and no stderr. The API already starts its worker in the background, so the curl timeout was not increased.
+## Security observation (remaining)
 
-## Security observation (no action taken)
-
-The `deploy-mrija-archive-1` container (docker-compose managed, not declared in this repo) has `MRIJA_API_KEY` and `MRIJA_PASSWORD` baked into `Config.Env` in plaintext — readable by anyone with host docker access via `docker inspect`. Consider moving the compose project to an env file with `0400` perms or to the sops-managed path in a future session.
+The external Compose deployment still supplies `MRIJA_API_KEY` and `MRIJA_PASSWORD` as
+container environment variables, which Docker exposes to users with host Docker access
+via `docker inspect`. The service-side API-key argv leak is fixed; migrating the
+application to file-backed secrets remains a separate hardening task.
 
 ## Validation (this session)
 
@@ -177,10 +179,9 @@ The `deploy-mrija-archive-1` container (docker-compose managed, not declared in 
 
 ## Operator checklist (requires a separately authorized session)
 
-1. `sudo chown 999:999 /srv/containers/aiia/mysql` on bandit-lab (one-time repair; the tmpfiles fix in this diff prevents recurrence after reboot).
-2. `sudo nixos-rebuild switch --flake .#bandit-lab`, then confirm `docker-aiia-mysql.service` and `docker-aiia-ghost.service` start and Ghost finishes its migrations.
-3. Run `sudo systemctl start --wait mrija-archive-sync.service` and verify it exits 0 and the sqlite index mtime advances. Only then remove `enable = false` from the timer declaration and deploy it.
-4. Run `bandit-lab-health` and confirm zero failed units.
+1. AiiA MySQL directory ownership repair is deployed declaratively; `docker-aiia-mysql.service` and `docker-aiia-ghost.service` are active with clean recent logs.
+2. MRIJA archive sync and its daily timer are verified complete as documented above.
+3. Run `bandit-lab-health` after future service changes and confirm zero failed units.
 
 ---
 
@@ -237,7 +238,8 @@ Tunnel ingress + CNAMEs + Access apps done via Cloudflare API.
 - `ensure-*-network` script dedup (cosmetic).
 - Spec phase 5 (Gophish + maddy internal phishing-sim, Kasm Workspaces) —
   explicitly optional, not started.
-- `deploy-mrija-archive-1` plaintext env secrets (see session 2 note) — still open.
+- MRIJA container environment secrets remain a hardening follow-up; see the archive
+  security observation above.
 
 ## Wazuh SIEM session (evening) — 4.12.0 → 4.14.7, agents, tuning
 
