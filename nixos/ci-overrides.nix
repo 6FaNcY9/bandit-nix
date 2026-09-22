@@ -1,11 +1,11 @@
 {
   lib,
-  options,
+  config,
   ...
 }:
 {
   sops.validateSopsFiles = false;
 }
-// lib.optionalAttrs (lib.hasAttrByPath ["virtualisation" "sharedDirectories"] options) {
+// lib.mkIf ((config.virtualisation or {}) ? sharedDirectories) {
   virtualisation.sharedDirectories = lib.mkForce {};
 }
