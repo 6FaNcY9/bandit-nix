@@ -64,36 +64,36 @@ Routing is automatic: the main agent chooses the cheapest capable route without 
 ├── lib/repository.nix        # Shared constants: username, paths, theme, unfree policy
 ├── pkgs/                     # Vendored packages (e.g. anisette-v3-server; the NUR
 │                             #   package pinned a stale dub dependency hash)
-├── labs/security/            # Opt-in security practice VM: BloodHound, crAPI,
-│                             #   Atomic Red Team (runbook docs/runbooks/security-practice-vm.md)
+├── labs/security/            # Opt-in security practice VM (runbook docs/runbooks/security-practice-vm.md):
+│                             #   default.nix VM + labPorts contract, atomics.nix pins,
+│                             #   apps.nix shell apps, stacks/ BloodHound + crAPI compose files
 ├── hosts/                    # Host-specific hardware + host-level config
 │   ├── bandit/
 │   │   ├── default.nix       # Hostname, stateVersion, GRUB, kernel params
 │   │   └── hardware.nix      # Filesystems, kernel modules, Framework tweaks (in-place LUKS planned; see docs/runbooks/bandit-luks-in-place.md)
 │   └── bandit-lab/
-│       ├── default.nix       # Hostname, SSH hardening, authorized keys
+│       ├── default.nix       # Hostname, SSH hardening, authorized keys, service imports
 │       ├── hardware.nix      # Server filesystems/hardware
-│       ├── auto-rebuild.nix  # lab-update tooling: poll GitHub, auto-apply timer, build, test, switch
-│       ├── health-check.nix  # bandit-lab-health critical-unit check
-│       ├── wan.nix           # Cloudflare Tunnel (remotely managed — see docs/runbooks/cloudflare-access.md)
-│       ├── webhost.nix       # Static web hosting / Caddy-adjacent services
-│       ├── traefik.nix       # Reverse proxy + Docker service labels
-│       ├── vaultwarden.nix   # Password manager container (+ Gruvbox web-vault theme)
-│       ├── searxng.nix       # Private metasearch container (stateless)
-│       ├── watchyourlan.nix  # LAN device-discovery container (host network, loopback GUI)
-│       ├── minecraft.nix     # Paper Minecraft container (12 players, 4 CPU / 12 GiB cap, port 25565)
-│       ├── wazuh.nix         # Wazuh SIEM stack (manager/indexer/dashboard/agent oci-containers)
-│       ├── wazuh/            # Wazuh configs + public TLS certs (keys in sops)
-│       ├── vaultwarden/      # gruvbox.scss.hbs theme source (TEMPLATES_FOLDER hook)
-│       ├── mrija-archive.nix # Backup/archive service
-│       ├── monitoring.nix    # Grafana+Prometheus host files/secrets for the Portainer stack
-│       ├── crowdsec.nix      # CrowdSec IPS (journald/Traefik parsing, community blocklists)
-│       ├── aiia.nix          # ghost + mysql + redis internal service network
-│       ├── toolbox.nix       # Analyst toolbox containers (juice-shop et al., behind Cloudflare Access)
-│       ├── anisette.nix      # Parked (not imported): anisette-v3 sideloading hold
-│       ├── blackbox.yml      # Blackbox exporter targets (also read by ci/lab-reliability.nix)
 │       ├── power.nix         # Server power settings
-│       └── cockpit-theme.nix # Cockpit admin UI theming
+│       ├── wan.nix           # Cloudflare Tunnel (remotely managed — see docs/runbooks/cloudflare-access.md)
+│       └── services/         # One directory per service, assets colocated
+│           ├── auto-rebuild/ # lab-update tooling (+ lab-update*.asc signing keys)
+│           ├── health-check/ # bandit-lab-health critical-unit check
+│           ├── webhost/      # Static web hosting / Caddy-adjacent services
+│           ├── traefik/      # Reverse proxy + Docker service labels
+│           ├── vaultwarden/  # Password manager container (+ gruvbox.scss.hbs theme)
+│           ├── searxng/      # Private metasearch container (stateless)
+│           ├── watchyourlan/ # LAN device-discovery container (host network, loopback GUI)
+│           ├── minecraft/    # Paper Minecraft container (+ commandpanels/ assets)
+│           ├── wazuh/        # Wazuh SIEM stack (+ config/ + certs/; keys in sops)
+│           ├── mrija-archive/# Backup/archive service
+│           ├── monitoring/   # Grafana+Prometheus: prometheus/dashboards/alerting slices
+│           ├── crowdsec/     # CrowdSec IPS (journald/Traefik parsing, community blocklists)
+│           ├── aiia/         # ghost + mysql + redis internal service network
+│           ├── toolbox/      # Analyst toolbox containers (behind Cloudflare Access)
+│           ├── anisette/     # Parked (not imported): anisette-v3 sideloading hold
+│           ├── blackbox/     # blackbox.yml exporter targets (read by ci/lab-reliability.nix)
+│           └── cockpit-theme/# Cockpit admin UI theming
 ├── nixos/                    # System-level NixOS modules
 │   ├── default.nix           # Aggregator imported by bandit
 │   ├── sops.nix              # sops-nix wiring and secret definitions
@@ -114,8 +114,12 @@ Routing is automatic: the main agent chooses the cheapest capable route without 
 │   ├── hardening.nix         # Kernel/AppArmor/sysctl hardening (both hosts)
 │   ├── cli-tools.nix         # CLI tools shared between hosts
 │   ├── tor.nix               # Tor client configuration
-│   ├── server.nix            # Headless server base module aggregator
-│   ├── server/editor.nix     # Server-side nixvim config
+│   ├── server/               # Headless server base (bandit-lab)
+│   │   ├── default.nix       # Packages, openssh, btrfs, zram, nix settings, imports
+│   │   ├── editor.nix        # Server-side nixvim config
+│   │   ├── zellij.nix        # Zellij multiplexer, zellijMenu, KDL config
+│   │   ├── zsh.nix           # Server zsh + zj/zjh/zjm helpers
+│   │   └── starship.nix      # Server Starship prompt
 │   └── ci-overrides.nix      # CI-only sops validation override for bandit-ci
 ├── home/                     # Home Manager configuration
 │   ├── default.nix           # Aggregator + user packages
@@ -125,16 +129,19 @@ Routing is automatic: the main agent chooses the cheapest capable route without 
 │   ├── qt.nix                # Qt/Kvantum theming
 │   ├── xdg-cleanup.nix       # XDG cleanup rules
 │   ├── node.nix              # Node.js tooling
-│   ├── editor.nix            # Editor aggregator (nixvim, pdfreader)
-│   ├── editor/nixvim.nix     # Full nixvim configuration
-│   ├── editor/pdfreader.nix  # pdfreader.nvim setup
-│   ├── editor/theme.nix      # nixvim theme tweaks
+│   ├── editor/               # default.nix aggregator (nixvim, pdfreader, nix-actions)
+│   │   ├── nixvim/           # nixvim split: lsp/completion/dap/lualine/keymaps/plugins
+│   │   ├── pdfreader.nix     # pdfreader.nvim setup
+│   │   └── theme.nix         # nixvim theme tweaks
 │   ├── terminal/             # Fish, Zsh, Kitty, Starship, tools, aliases, automation
-│   └── desktop/              # Hyprland, Waybar, Mako, Rofi, Firefox, Thunderbird, etc.
+│   └── desktop/              # default.nix aggregator; hyprland/ split (bindings/rules/
+│                             #   settings/idle-lock/scripts), Waybar, Mako, Rofi, Firefox, etc.
 ├── secrets/                  # Encrypted secrets
 │   ├── secrets.yaml          # General secrets
 │   └── github.yaml           # GitHub SSH keys
 ├── ci/                       # Flake checks + CI helpers
+│   ├── theme-contract.nix    # Theme shape assertions (extracted from flake.nix)
+│   ├── dotdir-tools.nix      # Home dotdir tooling check (extracted from flake.nix)
 │   ├── lab-reliability.nix   # NixOS VM test: lab service/sops reliability assertions
 │   ├── test-docker-discovery-proxy.py # Docker discovery proxy regression tests
 │   ├── test-lab-update.py    # lab-update regression tests
@@ -216,7 +223,7 @@ lab-update apply         # build, test, health-check, and switch to latest
 
 - **Formatter:** `alejandra`, 2-space indent; exposed as `.#formatter`.
 - **Single attrset per file**; no repeated top-level keys (`services`, `programs`, etc.).
-- **Imports:** `flake.nix` imports only host roots/aggregators (`./hosts/bandit`, `./nixos`, `./home`, `./hosts/bandit-lab`, `./nixos/server.nix`, `nixos/ci-overrides.nix`) — never leaf modules.
+- **Imports:** `flake.nix` imports only host roots/aggregators (`./hosts/bandit`, `./nixos`, `./home`, `./hosts/bandit-lab`, `./nixos/server`, `nixos/ci-overrides.nix`) plus check bodies from `./ci/*.nix` — never leaf modules.
 - **Shared constants** `lib/repository.nix`: `system`, `workstation.username`, `workstation.homeDirectory`, `workstation.repoPath`, `lab.tailscaleIp`, `workstationTheme`, `serverPalette`, `allowUnfreePredicate`, `mkDockerNetwork`.
 - **Themes** `themes/`: `gruvbox-dark.yaml` (default), `gruvbox-light.yaml` (`light` boot specialisation, `hosts/bandit/default.nix`), wallpaper `gruvbox_minimal_space.png`.
 - **stateVersion** pinned `25.11` (`hosts/bandit/default.nix`, `home/default.nix`); change only with migration plan.
@@ -241,8 +248,8 @@ Active secrets in `nixos/sops.nix` (+ host-specific noted):
 | `thehost-sshkey` | SSH key → `~/.ssh/thehost_mrija` |
 | `firecrawl-api-key` | Firecrawl API key |
 | `shodan-api-key` | Shodan Membership key; fish/zsh `shodan` wrapper runs `shodan init` from it on first use |
-| `grafana-admin-password` | `hosts/bandit-lab/monitoring.nix` (mode 0400, `grafana` uid/gid 472); Portainer stack bind mount |
-| `mrija-api-key` | mrija-archive admin key; rendered by `hosts/bandit-lab/mrija-archive.nix` → `/run/secrets/rendered/mrija-archive.env` (container `env_file:` + sync `EnvironmentFile`) |
+| `grafana-admin-password` | `hosts/bandit-lab/services/monitoring/` (mode 0400, `grafana` uid/gid 472); Portainer stack bind mount |
+| `mrija-api-key` | mrija-archive admin key; rendered by `hosts/bandit-lab/services/mrija-archive/` → `/run/secrets/rendered/mrija-archive.env` (container `env_file:` + sync `EnvironmentFile`) |
 | `mrija-password` | mrija-archive web login password; same rendered env file |
 
 **Security rule:** never commit plaintext secrets; never modify `.sops.yaml` age/GPG keys without backup + re-encryption plan.
@@ -290,29 +297,29 @@ Active secrets in `nixos/sops.nix` (+ host-specific noted):
 | Power / zram / trim / scrub | `nixos/power.nix` |
 | Secrets wiring | `nixos/sops.nix` |
 | System hardening | `nixos/hardening.nix` |
-| Server base / SSH / Zellij | `nixos/server.nix`, `nixos/server/editor.nix` |
-| Homelab services | `hosts/bandit-lab/*.nix` (incl. `aiia.nix`, `crowdsec.nix`, `toolbox.nix`; `anisette.nix` parked/unimported) |
-| Monitoring stack host files | `hosts/bandit-lab/monitoring.nix` |
-| Wazuh SIEM stack | `hosts/bandit-lab/wazuh.nix` (+ `wazuh/` configs/certs; secrets in sops) |
+| Server base / SSH / Zellij | `nixos/server/` (`default.nix`, `zellij.nix`, `zsh.nix`, `starship.nix`, `editor.nix`) |
+| Homelab services | `hosts/bandit-lab/services/<name>/default.nix` (one dir per service; `anisette/` parked/unimported) |
+| Monitoring stack host files | `hosts/bandit-lab/services/monitoring/` |
+| Wazuh SIEM stack | `hosts/bandit-lab/services/wazuh/` (module + `config/`/`certs/`; secrets in sops) |
 | CI checks / regression tests | `ci/` (`lab-reliability.nix` VM test, Python tests, vulnix allowlist) |
 | Hardware / filesystems | `hosts/<host>/hardware.nix` |
-| Hyprland config | `home/desktop/hyprland.nix` |
+| Hyprland config | `home/desktop/hyprland/` (bindings/rules/settings/idle-lock/scripts) |
 | Waybar | `home/desktop/waybar.nix` |
 | Rofi | `home/desktop/rofi-wayland.nix` |
 | Keybinding browser (SUPER+F2) | `home/desktop/keybinds-menu.nix` |
 | Mako | `home/desktop/mako.nix` |
 | Firefox / Thunderbird | `home/desktop/firefox/`, `home/desktop/thunderbird.nix` |
 | Obsidian vaults | `home/desktop/obsidian.nix` |
-| nixvim | `home/editor/nixvim.nix` |
+| nixvim | `home/editor/nixvim/` |
 | Fish / Zsh / Kitty / Starship | `home/terminal/` |
 | Git / GPG | `home/git.nix` |
 | HM Stylix / GTK / Qt | `home/theme.nix`, `home/qt.nix` |
 
 ### Important Design Notes
 
-- **Hyprland system-wide** via `programs.hyprland.enable` (`nixos/desktop.nix`); `home/desktop/hyprland.nix` sets `package = null` + `portalPackage = null` (no user-level reinstall).
-- **Hyprland config = native Lua:** source of truth `home/desktop/hyprland.nix`; HM generates `~/.config/hypr/hyprland.lua` (never edit). Lua mode skips legacy string entries in bindings/rules/submaps — use structured `_args` + `lib.generators.mkLuaInline` dispatchers.
-- **Stylix targets disabled** in `home/theme.nix`: Hyprland (borders owned by `home/desktop/hyprland.nix`, orange accent), Rofi + Mako (hand-tuned in own modules).
+- **Hyprland system-wide** via `programs.hyprland.enable` (`nixos/desktop.nix`); `home/desktop/hyprland/` sets `package = null` + `portalPackage = null` (no user-level reinstall).
+- **Hyprland config = native Lua:** source of truth `home/desktop/hyprland/`; HM generates `~/.config/hypr/hyprland.lua` (never edit). Lua mode skips legacy string entries in bindings/rules/submaps — use structured `_args` + `lib.generators.mkLuaInline` dispatchers.
+- **Stylix targets disabled** in `home/theme.nix`: Hyprland (borders owned by `home/desktop/hyprland/`, orange accent), Rofi + Mako (hand-tuned in own modules).
 - **Laptop SSH server disabled** (`services.openssh.enable = false`, `nixos/dev.nix`); outbound only.
 - **DNS-over-TLS opportunistic** (`DNSOverTLS = "opportunistic"`): captive portals don't hard-fail.
 - **Docker rootless** on `bandit` (`virtualisation.docker.rootless.enable`); `docker-compose` = user-level CLI plugin (`home/terminal/tools.nix`).
@@ -322,8 +329,8 @@ Active secrets in `nixos/sops.nix` (+ host-specific noted):
 ## 9. Security Considerations
 
 - **SSH:** `bandit` none. `bandit-lab` (`hosts/bandit-lab/default.nix`): no password auth, no root login, `AllowUsers` `vino`, Ed25519 keys only; fail2ban 1 h escalating bans (≤1 week, maxretry 3), Tailscale `100.64.0.0/10` exempt.
-- **Samba** (`hosts/bandit-lab/webhost.nix`): SMB2 min, `hosts allow` loopback + private LAN + tailnet, per-interface `enp44s0` firewall openings.
-- **Health gate:** `bandit-lab-health` (`hosts/bandit-lab/health-check.nix`) critical units `sshd`, `fail2ban`, `samba-smbd`; config killing remote access rolls back instead of deploying.
+- **Samba** (`hosts/bandit-lab/services/webhost/default.nix`): SMB2 min, `hosts allow` loopback + private LAN + tailnet, per-interface `enp44s0` firewall openings.
+- **Health gate:** `bandit-lab-health` (`hosts/bandit-lab/services/health-check/`) critical units `sshd`, `fail2ban`, `samba-smbd`; config killing remote access rolls back instead of deploying.
 - **Sudo:** `wheelNeedsPassword = true`; `bandit` passwordless `nixos-rebuild` only.
 - **Groups:** `vino` **not** in `input`/`storage`/`podman` (privilege surface); exception `wireshark` (`nixos/security-tools.nix`) — capture without root via setcap `dumpcap`.
 - **`trusted-users`:** laptop `root` + `vino` (`nixos/core.nix`); `bandit-lab` forced `trusted-users = ["root"]` (`hosts/bandit-lab/default.nix`; `lab-update` runs as root).
