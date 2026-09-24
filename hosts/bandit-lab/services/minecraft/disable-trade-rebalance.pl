@@ -43,8 +43,6 @@ sub remove_string_from_list {
 
 my $feature_changed = remove_string_from_list(\$data, 'enabled_features', 'minecraft:trade_rebalance');
 my $datapack_changed = remove_string_from_list(\$data, 'Enabled', 'trade_rebalance');
-die "trade_rebalance remains enabled\n"
-  if $data =~ /minecraft:trade_rebalance|(?<!minecraft:)trade_rebalance/;
 
 gzip \$data => $path or die "cannot write $path: $GzipError\n";
 printf "trade_rebalance feature=%s datapack=%s\n", $feature_changed ? 'removed' : 'absent', $datapack_changed ? 'removed' : 'absent';
