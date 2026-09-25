@@ -54,8 +54,8 @@
         # see docs/runbooks/cloudflare-access.md.
         "ssh-bandit-lab.mrija.org" = "ssh://localhost:22";
         "ssh.atmosphaere.at" = "ssh://localhost:22";
-        # Vaultwarden stays without an Access app: native Bitwarden clients
-        # cannot complete an interactive Access login.
+        # Vaultwarden is Access-protected in the live account; keep native
+        # client compatibility testing separate before changing that policy.
         "vault.bandit-lab.mrija.org" = "http://localhost:80";
         # New primary vault domain (same service; old hostname kept while
         # clients are migrated).

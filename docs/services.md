@@ -124,8 +124,10 @@ socket. Minecraft and Wazuh exposure matched the current firewall rules.
   `search.bandit-lab.mrija.org`, `search.atmosphaere.at`,
   `ssh-bandit-lab.mrija.org`, `ssh.atmosphaere.at`, `juice.atmosphaere.at`,
   `cyberchef.atmosphaere.at`, and `tools.atmosphaere.at`; the source comments
-  require Cloudflare Access for the sensitive routes. The tunnel ingress and
-  Access policy are externally managed, so this is not runtime enforcement.
+  require Cloudflare Access for the sensitive routes. A read-only Cloudflare
+  API audit on 2026-09-25 confirmed the configured Access applications and
+  allow policies, but tunnel routing and interactive browser/client
+  enforcement still need endpoint testing.
 - Docker inter-container communication is disabled by the daemon setting
   (`icc = false`). Traefik uses a restricted, read-only Docker discovery
   proxy; Portainer Agent and the Wazuh agent retain the documented Docker

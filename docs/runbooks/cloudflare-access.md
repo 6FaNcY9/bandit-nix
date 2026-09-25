@@ -7,8 +7,8 @@ the authoritative per-hostname allowlist lives in the Zero Trust dashboard
 edits within seconds — no rebuild required. `hosts/bandit-lab/wan.nix` carries
 a documentation mirror of those routes; keep it in sync when you change the
 dashboard. Protect the published hostnames with Cloudflare Zero Trust Access
-before relying on them from the Internet — except Vaultwarden, which stays
-public by design (see below).
+before relying on them from the Internet. Vaultwarden client compatibility
+must be tested separately before changing its current Access protection.
 
 ## Configure
 
@@ -40,14 +40,20 @@ public by design (see below).
    Portainer is WAN-published behind its Access app, and also remains
    reachable via `ssh -L 9443:localhost:9443 bandit-lab` →
    `https://localhost:9443` as a fallback. Tailscale works too.
-5. `vault.atmosphaere.at` (Vaultwarden; legacy `vault.bandit-lab.mrija.org`
-   still routes during the client migration) intentionally has **no** Access
-   application: native Bitwarden clients cannot complete an interactive
-   Access login. It is hardened at the app level instead
-   (`SIGNUPS_ALLOWED=false`, `ADMIN_TOKEN` from sops). Do not put an Access
-   app in front of it unless all clients are moved to Tailscale first.
+5. Vaultwarden (`vault.atmosphaere.at`; legacy
+   `vault.bandit-lab.mrija.org` still routes during the client migration) is
+   currently represented by an Access application in the live account. Keep
+   the app-level hardening (`SIGNUPS_ALLOWED=false`, `ADMIN_TOKEN` from sops)
+   and test every native Bitwarden client before changing this boundary.
 
 ## Verify
+
+The read-only Cloudflare API audit on 2026-09-25 found 11 self-hosted Access
+applications (including Vaultwarden) and one WARP application. Each
+self-hosted application had the `vino-allow` policy at precedence 1, with a
+24-hour session duration. This verifies the configured application/policy
+objects only; it does not prove that every tunnel hostname reaches the
+intended application or that an interactive browser/client flow succeeds.
 
 From an unauthenticated browser session, each hostname should redirect to the
 Cloudflare Access login page rather than returning the application. Sign in as
