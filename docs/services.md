@@ -39,7 +39,7 @@ or readiness claim.
 | SearXNG | Private metasearch | Docker | Loopback/Traefik/Cloudflare path | **observed**; external access not verified |
 | WatchYourLAN | LAN device discovery | Docker | LAN-oriented service path | **observed**; discovery completeness not verified |
 | Juice Shop, CyberChef, IT Tools | Practice and analyst web tools | Docker | Mostly loopback/Traefik/Cloudflare | **observed**; access controls not verified |
-| Mrija Archive | Archive and synchronization service | Docker plus scheduled host sync | Traefik/Cloudflare path; daily sync | **observed**; sync completed 2026-09-24; archive completeness remains unknown; latest image uses a mutable tag |
+| Mrija Archive | Archive and synchronization service | Docker plus scheduled host sync | Traefik/Cloudflare path; daily sync | **observed**; historical sync runs included timeouts and HTTP 401s, but the 2026-09-24 sync completed with 29,783 emails; archive completeness remains unknown; latest image uses a mutable tag |
 
 Persistent data is mainly under `/srv/containers`. Minecraft data and backups
 are known there. Scheduled maintenance includes PostgreSQL daily backups,
@@ -86,6 +86,23 @@ loopback-, Traefik-, or Cloudflare-mediated. Exact full listener enumeration
 was not verified. Portainer Agent's Docker socket is host-root-equivalent;
 Minecraft and Samba exposure on all interfaces should remain intentional.
 
+## Latest read-only audit evidence
+
+The 2026-09-25 audit observed `iptables-save v1.8.13 (nf_tables)` active;
+the `nft` CLI is absent. The default firewall drops unsolicited input, with
+explicit listeners and rules documented above; the complete live firewall set
+remains unknown. All running containers had `privileged=false` except cAdvisor,
+which had `privileged=true`. Portainer Agent and Wazuh Agent mount the Docker
+socket. Minecraft and Wazuh exposure matched the current firewall rules.
+
+## Backup integrity evidence
+
+- Four Minecraft `.tar.gz` archives were gzip- and tar-readable; the recovery
+  archive matched its sidecar SHA256.
+- PostgreSQL `all.sql.gz` and `all.prev.sql.gz` passed gzip integrity checks.
+- Restore validity remains unknown. Btrfs scrub results also remain unknown;
+  the next scrub timer run is scheduled for 2026-10-01.
+
 ## Source-declared access and security boundaries
 
 - The host firewall is enabled, denies ping, and logs refused connections.
@@ -130,7 +147,7 @@ Minecraft and Samba exposure on all interfaces should remain intentional.
 
 - Continuous health of `bandit` beyond the 2026-09-25 snapshot.
 - PostgreSQL backup restore validity, Minecraft restore/gameplay, and Mrija
-  archive completeness.
+  archive completeness, and Btrfs scrub result.
 - Wazuh dashboard browser login and alert delivery. The 489-alert sample is
   not a full security conclusion.
 - External login and authorization for the exposed applications.
