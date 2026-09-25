@@ -6,8 +6,13 @@ agents on every machine you want watched.
 
 As of the source review on **2026-09-25**, the stack is declared in
 `hosts/bandit-lab/services/wazuh/default.nix` using
-`virtualisation.oci-containers`. This source review did not activate the
-configuration or authenticate to Wazuh, so it proves declaration only.
+`virtualisation.oci-containers`. Activation evidence from **2026-09-22**
+confirmed the declared units and containers. Later authenticated verification
+found a green indexer with 0 unassigned shards, successful API authentication,
+healthy manager core processes, and an active/current lab agent. A sample of
+489 recent alerts was mostly levels 7/3 with no high/critical alerts; this is
+not a full security conclusion. Dashboard browser login and alert delivery
+remain unverified.
 
 ## Current ownership and paths
 
@@ -41,10 +46,11 @@ docker exec wazuh.manager /var/ossec/bin/agent_control -l
 ```
 
 The final command requires a running container and does not, by itself, prove
-authenticated dashboard/indexer health or fresh event ingestion. Remaining
-verification is: activate the declaration in an authorized window, confirm
-unit/container state, authenticate to the dashboard or API, confirm manager ↔
-indexer health, confirm the lab agent is connected, and inspect a fresh event.
+authenticated dashboard/indexer health or fresh event ingestion. The
+2026-09-22 activation evidence and later authenticated checks cover unit and
+container state, API/indexer health, manager core processes, lab-agent status,
+and the sampled alerts. Remaining verification is dashboard browser login and
+alert delivery; the sampled alert count is not a full security conclusion.
 
 ## Historical Compose/bootstrap material
 
