@@ -213,9 +213,14 @@ Console (SSH as vino; no public RCON):
 docker exec --user 1000 minecraft mc-send-to-console 'plugins'
 docker exec --user 1000 minecraft mc-send-to-console 'save-all flush'
 docker logs --since 5m minecraft
+# Restart only after confirming the server is empty: mc-send-to-console 'list'
 sudo systemctl restart docker-minecraft.service
 bandit-lab-health
 ```
+
+Treat restarts as maintenance actions: announce the interruption, confirm
+zero online players with `list`, then save and restart. Never restart during
+active gameplay merely to perform a routine verification.
 
 Before any future modification, take a full consistent backup manually; automated
 Nix staging does not create backups. Never extract an old world backup over a running
