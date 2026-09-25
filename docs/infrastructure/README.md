@@ -8,6 +8,7 @@ service definitions.
 
 - [Service inventory and dependency map](../services.md)
 - [Monitoring runbook](../runbooks/monitoring.md)
+- [Portainer retirement](../runbooks/portainer-retirement.md)
 - [Wazuh runbook](../runbooks/wazuh.md)
 - [Minecraft administration](../runbooks/minecraft/ADMIN.md)
 - [Cloudflare access boundaries](../runbooks/cloudflare-access.md)
