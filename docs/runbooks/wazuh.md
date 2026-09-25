@@ -4,22 +4,59 @@ Wazuh is the self-hosted SIEM/XDR: log ingestion, MITRE ATT&CK-mapped
 detection rules, file-integrity monitoring, and vulnerability detection, with
 agents on every machine you want watched.
 
-The repository now declares the stack in `hosts/bandit-lab/wazuh.nix`,
-with sops-managed credentials and persistent Docker volumes. That migration
-arrived during this audit; its activation was not verified here. The live
-checks below observed the earlier external Compose deployment. See
-[the lab handoff](bandit-lab-handoff-2026-09-09.md) for migration details.
+As of the source review on **2026-09-25**, the stack is declared in
+`hosts/bandit-lab/services/wazuh/default.nix` using
+`virtualisation.oci-containers`. This source review did not activate the
+configuration or authenticate to Wazuh, so it proves declaration only.
 
-## Historical Compose bootstrap
+## Current ownership and paths
 
-Do not run these bootstrap steps alongside the declarative stack: they would
-compete for ports and state. They record the original certificate/setup flow.
+- Nix module: `hosts/bandit-lab/services/wazuh/default.nix`.
+- Versioned configuration and public certificates:
+  `hosts/bandit-lab/services/wazuh/config/` and `certs/`.
+- Host state: `/srv/containers/wazuh/config/`, with tmpfiles-managed stable
+  paths and symlinks into the repository assets.
+- Secrets: sops declarations in the module and encrypted repository data;
+  rendered files live under `/run/secrets` and `/run/secrets/rendered`.
+- Containers: `wazuh.manager`, `wazuh.indexer`, `wazuh.dashboard`, and
+  `wazuh.agent`, managed by generated units
+  `docker-wazuh.manager.service`, `docker-wazuh.indexer.service`,
+  `docker-wazuh.dashboard.service`, and `docker-wazuh.agent.service`.
+- Persistent data: Docker named volumes beginning `wazuh_`; the module
+  intentionally reuses the existing volume names.
 
-> **Status 2026-09-09: DEPLOYED** at `/srv/containers/wazuh` (external compose
-> project `wazuh`, console-visible in Portainer). The steps below describe
-> initial setup; restoring the current deployment requires its external compose
-> files, configuration, certificates and volumes. Actual deviations from the
-> original plan: passwords live in a `0600 .env` next to the compose file
+The declared bindings are manager ports 1514/1515/514 on the configured
+Tailscale address, manager API `127.0.0.1:55000`, indexer
+`127.0.0.1:9200`, and dashboard `127.0.0.1:443`. These are source-declared
+bindings, not proof that the services are currently listening.
+
+For a later privileged verification window, use read-only checks first:
+
+```bash
+systemctl status docker-wazuh.manager.service docker-wazuh.indexer.service \
+  docker-wazuh.dashboard.service docker-wazuh.agent.service
+docker ps --filter name=wazuh
+journalctl -u docker-wazuh.manager.service -u docker-wazuh.agent.service -b --no-pager
+docker exec wazuh.manager /var/ossec/bin/agent_control -l
+```
+
+The final command requires a running container and does not, by itself, prove
+authenticated dashboard/indexer health or fresh event ingestion. Remaining
+verification is: activate the declaration in an authorized window, confirm
+unit/container state, authenticate to the dashboard or API, confirm manager ↔
+indexer health, confirm the lab agent is connected, and inspect a fresh event.
+
+## Historical Compose/bootstrap material
+
+The following is historical migration material only. Do not run it alongside
+the declarative stack: it would compete for ports and state. It records the
+original certificate/setup flow and is not the current ownership model.
+
+> **Historical status 2026-09-09:** the former external Compose project was
+> observed at `/srv/containers/wazuh` and in Portainer. The steps below
+> describe initial setup only; they do not describe current ownership.
+> Historical deviations from the original plan: passwords lived in a `0600
+> .env` next to the compose file
 > (referenced as `${VAR}`), the indexer admin + kibanaserver bcrypt hashes in
 > `config/wazuh_indexer/internal_users.yml` were replaced **before first
 > boot**, and indexer `9200` + manager API `55000` are loopback-bound too.
@@ -60,9 +97,8 @@ compete for ports and state. They record the original certificate/setup flow.
      # → https://localhost:8443 (accept the self-signed cert)
      ```
 
-   The stack is started with plain `sudo docker compose up -d` in
-   `/srv/containers/wazuh` (it shows up in Portainer as an external stack —
-   Portainer stays console-only).
+   The former stack was started with plain `sudo docker compose up -d` in
+   `/srv/containers/wazuh`; this is retained only as historical evidence.
 
 4. Verify the running containers and connected agents (container state alone
    does not prove successful ingestion):
@@ -76,18 +112,12 @@ compete for ports and state. They record the original certificate/setup flow.
 
 ## Agents and coverage
 
-Only bandit-lab runs an agent. The bandit laptop agent
-(`nixos/wazuh-agent.nix`, Podman container + `/var/lib/wazuh-agent` state)
-was removed on 2026-09-18; after the removal rebuild, stop and delete the
-leftover container (`sudo podman rm -f wazuh-agent`), remove
-`/var/lib/wazuh-agent`, and delete the `bandit` agent entry from the manager
-(`agent_id` 002) via the dashboard or the manager API.
+The current repository declares only the `bandit-lab` agent in the Wazuh OCI
+module. The former laptop agent module was removed on 2026-09-18. Whether an
+old laptop enrollment or container remains is runtime state and is not verified
+by this source review.
 
-Verified on 2026-09-09: manager 4.14.7 reports `bandit` (002) and
-`bandit-lab` (003) Active, alongside its local manager identity (000).
-
-- **bandit-lab** was running a separate Docker agent in the external Compose
-  project; the new lab module declares that agent too.
+- **bandit-lab** declares a Docker agent in the Nix-managed OCI stack.
   The manager's local identity monitors its container; it does not replace
   the host agent.
 - Manager TCP ports 1514/1515 are bound to `100.125.161.81` on the tailnet.
@@ -98,7 +128,7 @@ Verified on 2026-09-09: manager 4.14.7 reports `bandit` (002) and
   store also limit file-content coverage.
 - The image's Amazon Linux SCA policies audit the container, not NixOS.
   Check the lab agent configuration in
-  `hosts/bandit-lab/wazuh/config/wazuh_agent_ossec.conf` before enabling SCA
+  `hosts/bandit-lab/services/wazuh/config/wazuh_agent_ossec.conf` before enabling SCA
   there. Keep host vulnerability assessment in the existing
   Nix/vulnix workflow; inspect actual closures and advisories before acting.
 - Journald filters use separate blocks for OR semantics and restrict ingestion
@@ -108,8 +138,9 @@ Verified on 2026-09-09: manager 4.14.7 reports `bandit` (002) and
 - Container active response is not host firewall enforcement. CrowdSec and
   its host firewall bouncer provide that separate integration.
 
-After a lab rebuild, check the agent container (`systemctl status 'docker-wazuh.agent'`)
-and confirm fresh host events in the dashboard. For external compose changes,
+After an authorized lab activation, check the agent unit
+(`systemctl status docker-wazuh.agent.service`) and confirm fresh host events
+in the dashboard. For historical external-Compose changes,
 update the persistent agent configuration as well as any seed file before
 restarting the agent; a populated volume can hide changes to the image seed.
 Do not delete enrollment state to apply a configuration change.
