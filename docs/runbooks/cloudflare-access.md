@@ -42,9 +42,11 @@ must be tested separately before changing its current Access protection.
    `https://localhost:9443` as a fallback. Tailscale works too.
 5. Vaultwarden (`vault.atmosphaere.at`; legacy
    `vault.bandit-lab.mrija.org` still routes during the client migration) is
-   currently represented by an Access application in the live account. Keep
-   the app-level hardening (`SIGNUPS_ALLOWED=false`, `ADMIN_TOKEN` from sops)
-   and test every native Bitwarden client before changing this boundary.
+   currently represented by an Access application in the live account. The
+   API audit did not find a separate application for the legacy hostname, so
+   do not assume that both hostnames have the same protection. Keep the
+   app-level hardening (`SIGNUPS_ALLOWED=false`, `ADMIN_TOKEN` from sops) and
+   test every native Bitwarden client before changing this boundary.
 
 ## Verify
 
@@ -53,7 +55,10 @@ applications (including Vaultwarden) and one WARP application. Each
 self-hosted application had the `vino-allow` policy at precedence 1, with a
 24-hour session duration. This verifies the configured application/policy
 objects only; it does not prove that every tunnel hostname reaches the
-intended application or that an interactive browser/client flow succeeds.
+intended application or that an interactive browser/client flow succeeds. In
+particular, the legacy Vaultwarden hostname was not returned as a separate
+Access application and needs a direct endpoint check before being considered
+protected.
 
 From an unauthenticated browser session, each hostname should redirect to the
 Cloudflare Access login page rather than returning the application. Sign in as
