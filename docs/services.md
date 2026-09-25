@@ -86,6 +86,34 @@ loopback-, Traefik-, or Cloudflare-mediated. Exact full listener enumeration
 was not verified. Portainer Agent's Docker socket is host-root-equivalent;
 Minecraft and Samba exposure on all interfaces should remain intentional.
 
+## Source-declared access and security boundaries
+
+- The host firewall is enabled, denies ping, and logs refused connections.
+  DNS uses `systemd-resolved` with Cloudflare and Quad9 DNS-over-TLS in
+  opportunistic mode, including fallback behavior.
+- SMB/WSDD is intentionally LAN-exposed only on `enp44s0` and `wlo1`: TCP
+  `139/445/5357` and UDP `137/138/3702` are allowed on those interfaces.
+- Minecraft TCP `25565` is explicitly allowed. Wazuh manager traffic binds to
+  the Tailscale address on TCP `1514/1515` and UDP `514`; its API, indexer, and
+  dashboard remain loopback-published and are reached through SSH tunnels.
+- The `wan.nix` route mirror lists public storefront/vault routes:
+  `aiia.bandit-lab.mrija.org`, `aiia.at`, `www.aiia.at`,
+  `vault.bandit-lab.mrija.org`, and `vault.atmosphaere.at`. Other routes are
+  the lab entrypoint or admin/sensitive services:
+  `bandit-lab.mrija.org`, `devices.bandit-lab.mrija.org`,
+  `devices.atmosphaere.at`, `grafana.bandit-lab.mrija.org`,
+  `grafana.atmosphaere.at`, `mail-archive.bandit-lab.mrija.org`,
+  `portainer.bandit-lab.mrija.org`, `portainer.atmosphaere.at`,
+  `search.bandit-lab.mrija.org`, `search.atmosphaere.at`,
+  `ssh-bandit-lab.mrija.org`, `ssh.atmosphaere.at`, `juice.atmosphaere.at`,
+  `cyberchef.atmosphaere.at`, and `tools.atmosphaere.at`; the source comments
+  require Cloudflare Access for the sensitive routes. The tunnel ingress and
+  Access policy are externally managed, so this is not runtime enforcement.
+- Docker inter-container communication is disabled by the daemon setting
+  (`icc = false`). Traefik uses a restricted, read-only Docker discovery
+  proxy; Portainer Agent and the Wazuh agent retain the documented Docker
+  socket risk.
+
 ## What to check first
 
 1. Run the [lab health check](../hosts/bandit-lab/services/health-check/default.nix)
