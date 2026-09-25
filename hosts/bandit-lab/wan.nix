@@ -24,9 +24,9 @@
       default = "http_status:404";
       ingress = {
         "bandit-lab.mrija.org" = "http://localhost:80";
-        # AiiA AI T-shirt shop (Ghost fork) — deliberately public, like
-        # vault.bandit-lab.mrija.org: a storefront cannot sit behind a
-        # Cloudflare Access login. The Ghost /ghost/ admin should get an
+        # AiiA AI T-shirt shop (Ghost fork) — deliberately public: a
+        # storefront cannot sit behind a Cloudflare Access login. The Ghost
+        # /ghost/ admin should get an
         # Access app if it ever needs hardening (docs/runbooks/cloudflare-access.md).
         "aiia.bandit-lab.mrija.org" = "http://localhost:80";
         # Primary storefront domain. Ghost canonical URL is https://aiia.at;
@@ -54,11 +54,8 @@
         # see docs/runbooks/cloudflare-access.md.
         "ssh-bandit-lab.mrija.org" = "ssh://localhost:22";
         "ssh.atmosphaere.at" = "ssh://localhost:22";
-        # Vaultwarden is Access-protected in the live account; keep native
-        # client compatibility testing separate before changing that policy.
-        "vault.bandit-lab.mrija.org" = "http://localhost:80";
-        # New primary vault domain (same service; old hostname kept while
-        # clients are migrated).
+        # Canonical Vaultwarden hostname; the legacy public route was retired
+        # after client migration verification.
         "vault.atmosphaere.at" = "http://localhost:80";
         "juice.atmosphaere.at" = "http://localhost:80";
         "cyberchef.atmosphaere.at" = "http://localhost:80";

@@ -115,7 +115,7 @@ socket. Minecraft and Wazuh exposure matched the current firewall rules.
   dashboard remain loopback-published and are reached through SSH tunnels.
 - The `wan.nix` route mirror lists public storefront/vault routes:
   `aiia.bandit-lab.mrija.org`, `aiia.at`, `www.aiia.at`,
-  `vault.bandit-lab.mrija.org`, and `vault.atmosphaere.at`. Other routes are
+  and `vault.atmosphaere.at`. Other routes are
   the lab entrypoint or admin/sensitive services:
   `bandit-lab.mrija.org`, `devices.bandit-lab.mrija.org`,
   `devices.atmosphaere.at`, `grafana.bandit-lab.mrija.org`,

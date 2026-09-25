@@ -40,13 +40,11 @@ must be tested separately before changing its current Access protection.
    Portainer is WAN-published behind its Access app, and also remains
    reachable via `ssh -L 9443:localhost:9443 bandit-lab` →
    `https://localhost:9443` as a fallback. Tailscale works too.
-5. Vaultwarden (`vault.atmosphaere.at`; legacy
-   `vault.bandit-lab.mrija.org` still routes during the client migration) is
-   currently represented by an Access application in the live account. The
-   API audit did not find a separate application for the legacy hostname, so
-   do not assume that both hostnames have the same protection. Keep the
-   app-level hardening (`SIGNUPS_ALLOWED=false`, `ADMIN_TOKEN` from sops) and
-   test every native Bitwarden client before changing this boundary.
+5. Vaultwarden is served at the canonical hostname
+   `vault.atmosphaere.at`, which is represented by an Access application in
+   the live account. The legacy public hostname was retired after client
+   migration verification. Keep the app-level hardening
+   (`SIGNUPS_ALLOWED=false`, `ADMIN_TOKEN` from sops).
 
 ## Verify
 
@@ -54,11 +52,8 @@ The read-only Cloudflare API audit on 2026-09-25 found 11 self-hosted Access
 applications (including Vaultwarden) and one WARP application. Each
 self-hosted application had the `vino-allow` policy at precedence 1, with a
 24-hour session duration. This verifies the configured application/policy
-objects only; it does not prove that every tunnel hostname reaches the
-intended application or that an interactive browser/client flow succeeds. In
-particular, the legacy Vaultwarden hostname was not returned as a separate
-Access application and needs a direct endpoint check before being considered
-protected.
+objects only; direct endpoint checks and client testing are still required for
+interactive behavior.
 
 From an unauthenticated browser session, each hostname should redirect to the
 Cloudflare Access login page rather than returning the application. Sign in as
@@ -71,11 +66,11 @@ not create a broad bypass to work around that limitation. Use a documented,
 least-privilege service-authentication approach or keep those clients on
 Tailscale instead.
 
-## Vaultwarden hostname migration
+## Vaultwarden hostname migration (completed)
 
-`vault.atmosphaere.at` is the intended canonical hostname. Keep the legacy
-`vault.bandit-lab.mrija.org` route during migration because it is currently
-the direct, non-Access path.
+`vault.atmosphaere.at` is now the sole canonical hostname. The legacy
+`vault.bandit-lab.mrija.org` tunnel route was removed after client migration
+verification.
 
 For each phone, desktop app, browser extension, and CLI client:
 
@@ -85,10 +80,8 @@ For each phone, desktop app, browser extension, and CLI client:
 3. Verify login, unlock, sync, and adding or editing one disposable test item.
 4. Remove the test item and repeat on the next client.
 
-Only after every required client passes should the legacy hostname be removed
-from the Cloudflare tunnel and mirrored out of `hosts/bandit-lab/wan.nix`.
-That final removal is a separate change because it can immediately invalidate
-an unverified client.
+Do not reintroduce a second public hostname without repeating the client and
+Access verification sequence.
 
 ## Avoiding remote lockout on ingress changes
 
