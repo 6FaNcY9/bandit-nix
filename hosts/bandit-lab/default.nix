@@ -11,6 +11,7 @@
     ./services/traefik
     ./services/mrija-archive
     ./services/monitoring
+    ./services/beszel
     ./services/vaultwarden
     ./services/searxng
     ./services/watchyourlan
