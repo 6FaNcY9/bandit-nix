@@ -16,7 +16,7 @@ or readiness claim.
 | Host | Declared role | Live status |
 | --- | --- | --- |
 | `bandit` | Framework 13 workstation ([host declaration](../hosts/bandit/default.nix)) | **observed snapshot 2026-09-25** — `bandit-health` passed; no failed units; rootless Docker active; 14 GiB RAM and 51% disk use at the snapshot. This is not continuous health monitoring. |
-| `bandit-lab` | NixOS lab/server ([host declaration](../hosts/bandit-lab/default.nix)) | **observed** — NixOS 26.11, 22 active Docker containers, health passed, no failed units, low load, and 4% disk use. |
+| `bandit-lab` | NixOS lab/server ([host declaration](../hosts/bandit-lab/default.nix)) | **observed 2026-09-25 04:13 CEST** — NixOS 26.11, 22 active Docker containers, no failed units, load 1.50, 42 GiB available memory, and 4% disk use. |
 
 ## Service inventory
 
@@ -34,7 +34,7 @@ or readiness claim.
 | Wazuh manager, indexer, dashboard, agent | SIEM/XDR, indexing, dashboard, agent coverage | Docker via the Wazuh Nix module ([Wazuh module](../hosts/bandit-lab/services/wazuh/default.nix)) | Agent traffic on Tailscale UDP 514 and TCP 1514–1515; dashboard loopback via SSH tunnel | **observed**; authenticated indexer green with 0 unassigned shards, API authentication succeeded, manager core processes healthy, and the lab agent active/current. A sample of 489 recent alerts was mostly levels 7/3 with no high/critical alerts; dashboard browser login and alert delivery remain unverified |
 | Portainer server and agent | Docker administration | Docker; agent uses the Docker socket | Agent access is host-root-equivalent; server/agent manage the container runtime | **observed**; ownership and live-connect details need care |
 | Vaultwarden | Password manager | Docker | Traefik/Cloudflare path | **observed** as part of the live container set; external login not verified |
-| Minecraft | Paper game server | Docker ([Minecraft module](../hosts/bandit-lab/services/minecraft/default.nix)) | Port 25565; all-interface exposure needs intentionality | **observed**; live datapacks were vanilla, `minecraft:improvements`, and `paper`; `trade_rebalance` was absent; restart was healthy; gameplay and restore remain unverified |
+| Minecraft | Paper game server | Docker ([Minecraft module](../hosts/bandit-lab/services/minecraft/default.nix)) | Port 25565; all-interface exposure needs intentionality | **observed**; live datapacks were vanilla, `minecraft:improvements`, and `paper`; `trade_rebalance` was absent; restart was healthy; an isolated archive extraction restore drill passed; gameplay restore remains unverified |
 | AiiA Ghost, MySQL, Redis | Storefront and its dependencies | Docker | Internal service network and Traefik path | **observed**; external login and application checks not verified |
 | SearXNG | Private metasearch | Docker | Loopback/Traefik/Cloudflare path | **observed**; external access not verified |
 | WatchYourLAN | LAN device discovery | Docker | LAN-oriented service path | **observed**; discovery completeness not verified |
@@ -98,10 +98,12 @@ socket. Minecraft and Wazuh exposure matched the current firewall rules.
 ## Backup integrity evidence
 
 - Four Minecraft `.tar.gz` archives were gzip- and tar-readable; the recovery
-  archive matched its sidecar SHA256.
+  archive matched its sidecar SHA256. The newest archive was extracted into a
+  temporary directory and contained `level.dat` plus the world datapacks
+  directory; the temporary copy was removed afterward.
 - PostgreSQL `all.sql.gz` and `all.prev.sql.gz` passed gzip integrity checks.
-- Restore validity remains unknown. Btrfs scrub results also remain unknown;
-  the next scrub timer run is scheduled for 2026-10-01.
+- A manual Btrfs scrub completed on 2026-09-25: 90.96 GiB scanned with no
+  errors. The next scheduled scrub is 2026-10-01.
 
 ## Source-declared access and security boundaries
 
@@ -158,7 +160,15 @@ socket. Minecraft and Wazuh exposure matched the current firewall rules.
   recorded over seven days, including current intermittent entries, while
   direct Vaultwarden `/alive` returned HTTP 200 and Prometheus reported 10/10
   up. No fix was applied.
-- Whether the mutable Mrija latest tag is acceptable.
+- Whether the mutable Mrija latest tag is acceptable; that container is
+  Portainer-managed rather than declared in this repository.
+- Wazuh Agent and Portainer Agent retain Docker-socket mounts. This is an
+  intentional but host-root-equivalent risk; no socket-proxy migration is
+  justified until the required Wazuh Docker-listener API is confirmed.
+- Current resource sample: Minecraft used 8.8 GiB of its 12 GiB cap; Wazuh
+  Indexer used 5.3 GiB with a 4 GiB Java heap; host memory and CPU headroom
+  remained ample. No new global container scheduler is justified by this
+  sample.
 - Cockpit is inactive; anisette is parked and unimported.
 - No new dashboard is needed: monitoring already uses Grafana and Prometheus.
 
