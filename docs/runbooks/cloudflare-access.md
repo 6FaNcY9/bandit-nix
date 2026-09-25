@@ -71,6 +71,25 @@ not create a broad bypass to work around that limitation. Use a documented,
 least-privilege service-authentication approach or keep those clients on
 Tailscale instead.
 
+## Vaultwarden hostname migration
+
+`vault.atmosphaere.at` is the intended canonical hostname. Keep the legacy
+`vault.bandit-lab.mrija.org` route during migration because it is currently
+the direct, non-Access path.
+
+For each phone, desktop app, browser extension, and CLI client:
+
+1. Export or record the current server URL and confirm the account can still
+   sign in and sync.
+2. Change the server URL to `https://vault.atmosphaere.at`.
+3. Verify login, unlock, sync, and adding or editing one disposable test item.
+4. Remove the test item and repeat on the next client.
+
+Only after every required client passes should the legacy hostname be removed
+from the Cloudflare tunnel and mirrored out of `hosts/bandit-lab/wan.nix`.
+That final removal is a separate change because it can immediately invalidate
+an unverified client.
+
 ## Avoiding remote lockout on ingress changes
 
 Ingress rules live in the dashboard, not in this repository: the running
