@@ -113,20 +113,25 @@ Retain `/var/lib/portainer`; this plan never deletes it.
 
 ## 3. Establish host authority before stopping Portainer
 
-For each stack, put a reviewed Compose file and a systemd procedure under the
-host's approved administration path (exact path is a deployment decision, not
-invented here). Use the recorded project name explicitly:
+The reviewed source assets are now
+`hosts/bandit-lab/services/monitoring/compose.yml` and
+`hosts/bandit-lab/services/mrija-archive/compose.yml`; Nix exposes them under
+`/etc/bandit-lab/` with disabled manual lifecycle units
+`compose-monitoring.service` and `compose-mrija-archive.service`. Portainer
+still owns the live projects until the separately approved handoff. That
+handoff must pass before the later Portainer shutdown GO gate. Use the recorded
+project name explicitly:
 
 ```bash
 sudo docker compose -p <RECORDED_PROJECT> -f <APPROVED_COMPOSE_FILE> config
 sudo docker compose -p <RECORDED_PROJECT> -f <APPROVED_COMPOSE_FILE> ps
-sudo docker compose -p <RECORDED_PROJECT> -f <APPROVED_COMPOSE_FILE> up -d
+sudo docker compose -p <RECORDED_PROJECT> -f <APPROVED_COMPOSE_FILE> up -d --pull never --no-build
 sudo docker compose -p <RECORDED_PROJECT> -f <APPROVED_COMPOSE_FILE> ps
 ```
 
-The systemd unit must order after Docker, reference the approved Compose file,
-use the same project name, and provide explicit `start`, `stop`, `restart` and
-status/log procedures. Preserve existing named volumes, host bind paths,
+The systemd unit orders after Docker, references the approved Compose file,
+uses the same project name, and provides explicit `start`, `stop` and status
+procedures. Preserve existing named volumes, host bind paths,
 external `proxy`/other networks, container names where required, and all
 secret references. Do not use `down -v`, `docker volume prune`, network prune,
 or any deletion of application volumes/data.

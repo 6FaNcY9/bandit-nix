@@ -14,7 +14,7 @@ not a completed live rotation.
 | AiiA Ghost | Rendered `aiia.env` | Manual coordinated rotation below; this file combines provider keys and the database password. |
 | AiiA MySQL | Rendered `aiia-mysql.env` | Bootstrap inputs only; existing SQL accounts must be changed in MySQL. |
 | Grafana | Admin password file mounted by the Portainer stack | Initializes a new database only; for an existing database, change the stored account password below. |
-| Mrija archive app | Rendered `mrija-archive.env`, external Portainer deployment | Recreate the app container through its owning stack after rendering the new environment; no NixOS app unit is declared here. |
+| Mrija archive app | Rendered `mrija-archive.env`, currently external Portainer deployment | Recreate through the current owning stack after rendering the new environment; the reviewed Git Compose asset is canonical for the pending handoff. |
 | Mrija archive sync | API key through systemd `LoadCredential`; application container still uses the rendered environment file | Each new `mrija-archive-sync.service` invocation reads the current API key. Recreate the external archive container when rotating its application credentials. |
 
 Host account password changes use the NixOS activation path (`neededForUsers`).
@@ -90,8 +90,8 @@ Portainer stack so its environment matches the rendered file. Verify a fresh
 web login and an authenticated API request with the new values before restoring
 the timer's prior state. The next sync invocation reads the API key through its
 systemd `LoadCredential` binding; the archive container still reads the rendered
-application environment file until its external Compose deployment supports
-file-backed variables.
+application environment file; the reviewed Compose asset preserves this until
+the deferred file-backed credential migration is separately approved.
 Avoid restarting the Docker daemon or guessing an application systemd unit.
 
 ## Verification boundary

@@ -1,0 +1,30 @@
+services:
+  mrija-archive:
+    image: mrija-archive:latest
+    restart: unless-stopped
+    networks: [proxy]
+    ports:
+      - "127.0.0.1:8081:8080"
+    env_file:
+      - /run/secrets/rendered/mrija-archive.env
+    volumes:
+      - /srv/containers/mrija-archive/data:/data
+      - /srv/containers/mrija-archive/maildir:/maildir
+      - /home/vino/.ssh/thehost_mrija:/run/secrets/thehost_sshkey:ro
+      - /srv/containers/mrija-archive/deploy/known_hosts:/run/ssh/known_hosts:ro
+    environment:
+      MRIJA_SYNC_REMOTE: "mrija_org@s16.thehost.com.ua"
+      MRIJA_SYNC_REMOTE_PATH: "email/mrija.org/"
+      MRIJA_SSH_KEY: "/run/secrets/thehost_sshkey"
+      MRIJA_MAILDIR: "/maildir"
+      MRIJA_DB: "/data/mail_index.sqlite"
+      MRIJA_AUDIT_LOG: "/data/audit/events.jsonl"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mrija-archive.rule=Host(`mail-archive.bandit-lab.mrija.org`)"
+      - "traefik.http.routers.mrija-archive.entrypoints=web"
+      - "traefik.http.services.mrija-archive.loadbalancer.server.port=8080"
+
+networks:
+  proxy:
+    external: true

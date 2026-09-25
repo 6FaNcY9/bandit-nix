@@ -1,0 +1,89 @@
+networks:
+  proxy:
+    external: true
+  monitoring:
+
+services:
+  grafana:
+    image: grafana/grafana-oss:13.0.2
+    container_name: grafana
+    restart: unless-stopped
+    networks:
+      - proxy
+      - monitoring
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana-admin-password
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - /srv/containers/monitoring/grafana:/var/lib/grafana
+      - /srv/containers/monitoring/grafana-provisioning:/etc/grafana/provisioning:ro
+      - /srv/containers/monitoring/grafana-dashboards:/var/lib/grafana-dashboards:ro
+      - /run/secrets/grafana-admin-password:/run/secrets/grafana-admin-password:ro
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.grafana.rule: Host(`grafana.bandit-lab.mrija.org`)
+      traefik.http.routers.grafana.entrypoints: web
+      traefik.http.services.grafana.loadbalancer.server.port: "3000"
+    depends_on:
+      - prometheus
+
+  prometheus:
+    image: prom/prometheus:v3.13.2
+    container_name: prometheus
+    restart: unless-stopped
+    networks:
+      - monitoring
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=30d
+    volumes:
+      - /srv/containers/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - /srv/containers/monitoring/prometheus:/prometheus
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.28.0
+    container_name: blackbox-exporter
+    restart: unless-stopped
+    networks:
+      - monitoring
+      - proxy
+    command:
+      - --config.file=/etc/blackbox_exporter/config.yml
+    volumes:
+      - /srv/containers/monitoring/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    container_name: node-exporter
+    restart: unless-stopped
+    pid: host
+    networks:
+      - monitoring
+    command:
+      - --path.rootfs=/host
+      # Per-unit up/down for the services bandit-lab-health cares about.
+      # Needs the host D-Bus socket (mounted below) to talk to systemd.
+      # NOTE: node-exporter hard-codes /var/run/dbus — inside the container
+      # /var/run is NOT a symlink to /run like on the NixOS host, so the
+      # mount must target /var/run/dbus explicitly.
+      - --collector.systemd
+      - --collector.systemd.unit-include=(sshd|docker|containerd|traefik|cloudflared.*|postgresql|smbd|nmbd|ollama|tailscaled|lab-update-.*)\.service
+    volumes:
+      - /:/host:ro,rslave
+      - /run/dbus:/var/run/dbus:ro
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.55.1
+    container_name: cadvisor
+    restart: unless-stopped
+    privileged: true
+    networks:
+      - monitoring
+    command:
+      - --containerd=/var/run/docker/containerd/containerd.sock
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro

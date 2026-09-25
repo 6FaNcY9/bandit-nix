@@ -157,6 +157,30 @@
         assert nixpkgs.lib.assertMsg (builtins.elem "docker-vaultwarden.service" lab.sops.templates."vaultwarden.env".restartUnits)
         "vaultwarden container must restart on sops secret rotation";
           import ./ci/lab-reliability.nix {inherit pkgs sops-nix;};
+      compose-adoption = let
+        lab = self.nixosConfigurations.bandit-lab.config;
+        monitoringUnit = lab.systemd.services.compose-monitoring;
+        mrijaUnit = lab.systemd.services.compose-mrija-archive;
+        monitoringExec = monitoringUnit.serviceConfig.ExecStart;
+        mrijaExec = mrijaUnit.serviceConfig.ExecStart;
+      in
+        assert nixpkgs.lib.assertMsg (nixpkgs.lib.hasInfix "--project-name monitoring" monitoringExec)
+        "monitoring lifecycle unit must use the monitoring Compose project";
+        assert nixpkgs.lib.assertMsg (nixpkgs.lib.hasInfix "--project-name deploy" mrijaExec)
+        "Mrija lifecycle unit must preserve the live deploy Compose project";
+        assert nixpkgs.lib.assertMsg (monitoringUnit.wantedBy == [] && mrijaUnit.wantedBy == [])
+        "Compose adoption units must remain manual until the approved live handoff";
+        assert nixpkgs.lib.assertMsg (!monitoringUnit.restartIfChanged && !mrijaUnit.restartIfChanged)
+        "Nix activation must not restart adopted Compose projects";
+        assert nixpkgs.lib.assertMsg (nixpkgs.lib.hasSuffix " start" monitoringExec && nixpkgs.lib.hasSuffix " start" mrijaExec)
+        "Compose lifecycle units must start existing containers without reconciling them";
+          pkgs.runCommand "compose-adoption-check" {
+            nativeBuildInputs = [pkgs.gnugrep];
+          } ''
+            ! grep -q '^[[:space:]]*ports:' ${./hosts/bandit-lab/services/monitoring/compose.yml}
+            grep -q '/run/secrets/rendered/mrija-archive.env' ${./hosts/bandit-lab/services/mrija-archive/compose.yml}
+            touch "$out"
+          '';
       docker-discovery-proxy =
         pkgs.runCommand "docker-discovery-proxy-regressions" {
           nativeBuildInputs = [pkgs.python3];

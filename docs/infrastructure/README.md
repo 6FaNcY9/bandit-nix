@@ -8,6 +8,7 @@ service definitions.
 
 - [Service inventory and dependency map](../services.md)
 - [Monitoring runbook](../runbooks/monitoring.md)
+- [Mrija archive runbook](../runbooks/mrija-archive.md)
 - [Portainer retirement](../runbooks/portainer-retirement.md)
 - [Wazuh runbook](../runbooks/wazuh.md)
 - [Minecraft administration](../runbooks/minecraft/ADMIN.md)

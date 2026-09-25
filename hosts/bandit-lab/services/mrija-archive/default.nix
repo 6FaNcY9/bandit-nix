@@ -208,6 +208,21 @@ in {
       };
     };
 
+    services.compose-mrija-archive = {
+      description = "Start and stop the bandit-lab Mrija archive Compose project";
+      wants = ["network-online.target"];
+      requires = ["docker.service" "docker-network-proxy.service"];
+      after = ["network-online.target" "docker.service" "docker-network-proxy.service"];
+      restartIfChanged = false;
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecCondition = "${pkgs.coreutils}/bin/test -r ${envFile}";
+        ExecStart = "${pkgs.docker-compose}/bin/docker-compose --project-name deploy --file /etc/bandit-lab/mrija-archive.compose.yml start";
+        ExecStop = "${pkgs.docker-compose}/bin/docker-compose --project-name deploy --file /etc/bandit-lab/mrija-archive.compose.yml stop";
+      };
+    };
+
     timers.mrija-archive-sync = {
       description = "Periodic mrija.org mail sync";
       enable = true;
@@ -218,4 +233,6 @@ in {
       };
     };
   };
+
+  environment.etc."bandit-lab/mrija-archive.compose.yml".source = ./compose.yml;
 }
