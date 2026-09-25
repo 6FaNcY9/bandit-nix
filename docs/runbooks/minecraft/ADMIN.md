@@ -7,7 +7,7 @@ Verified live on 2026-09-22 after activation. Existing server and worlds preserv
 - Paper 26.2 build 127 (`ad9a034`); Temurin Java 25.0.4+7-LTS.
 - Host: bandit-lab; service: `docker-minecraft.service`; container: `minecraft`.
 - Data: `/srv/containers/minecraft/data` (container `/data`); plugins: `data/plugins`.
-- Declarative configuration: `hosts/bandit-lab/minecraft.nix`; staging: `minecraft-plugins.service`.
+- Declarative configuration: `hosts/bandit-lab/services/minecraft/default.nix`; staging: `minecraft-plugins.service`.
 - Online mode enabled; whitelist disabled; existing ports/gameplay/world configuration preserved.
 - Live baseline: `allow-flight=true` and ViaVersion's
   `packet-limiter.enabled=false`. The declarative staging service targets only those
@@ -181,6 +181,31 @@ Do not grant this group OP, admin inheritance, LuckPerms administration, invento
 modification or rollback rights. Add other specific permissions only when needed.
 
 ## Operations and continuation
+
+## Offline trade-rebalance maintenance
+
+`hosts/bandit-lab/services/minecraft/disable-trade-rebalance.pl` is not run by
+`minecraft-plugins.service`. Use it only as an explicit, offline maintenance
+operation after all gates below pass:
+
+1. **BACKUP:** make and verify a full consistent backup of
+   `/srv/containers/minecraft/data`, including the target world's
+   `level.dat`; record its checksum and restore location.
+2. **STOP:** stop/quiesce `docker-minecraft.service`; do not edit a live world.
+3. **COPY:** copy the target `level.dat` into an isolated working directory and
+   verify that the copy is owned by the operator and not writable by Paper.
+4. **TEST/RESTORE:** run the unchanged script only on that copy, inspect its
+   output, validate the result, and retain the original until a restore test is
+   complete. Restore the original on any error or unexpected result.
+5. **OWNERSHIP:** before any approved replacement, verify the destination
+   ownership is the Paper container's `1000:1000` and mode is appropriate for
+   the existing data directory.
+6. **GO:** obtain an explicit maintenance GO after backup, offline state,
+   isolated-copy result, and restore path are all recorded. A source change or
+   Nix staging run is not a GO.
+
+This procedure does not authorize deployment, restart, or live-world mutation;
+those require a separate maintenance action.
 
 Console (SSH as vino; no public RCON):
 

@@ -46,9 +46,7 @@
   pluginsDir = "/srv/containers/minecraft/data/plugins";
   commandPanelsDir = "${pluginsDir}/CommandPanels";
   placeholderApiDir = "${pluginsDir}/PlaceholderAPI";
-  tradeRebalanceScript = ./disable-trade-rebalance.pl;
   grep = "${pkgs.gnugrep}/bin/grep";
-  perl = "${pkgs.perl}/bin/perl";
   sed = "${pkgs.gnused}/bin/sed";
   awk = "${pkgs.gawk}/bin/awk";
 in {
@@ -75,7 +73,6 @@ in {
         echo "Refusing to edit unexpected allow-flight property" >&2
         exit 1
       fi
-      ${perl} ${tradeRebalanceScript} /srv/containers/minecraft/data/world/level.dat
       viaConfig=${pluginsDir}/ViaVersion/config.yml
       if [ ! -f "$viaConfig" ]; then
         echo "Refusing to edit missing ViaVersion config" >&2
