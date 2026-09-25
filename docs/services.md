@@ -4,6 +4,10 @@ This is a compact, evidence-scoped map of the two hosts. It records what was
 declared in the repository and what Scout observed live; it is not a deployment
 or readiness claim.
 
+The [Obsidian infrastructure notes](infrastructure/obsidian/README.md) provide
+navigation to the host and Beszel notes without replacing this inventory or its
+dependency map.
+
 ## Status vocabulary
 
 - **declared** — present in the repository configuration; not necessarily active.

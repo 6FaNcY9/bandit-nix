@@ -12,6 +12,7 @@ service definitions.
 - [Minecraft administration](../runbooks/minecraft/ADMIN.md)
 - [Cloudflare access boundaries](../runbooks/cloudflare-access.md)
 - [Bandit-lab audit evidence](../runbooks/bandit-lab-audit-2026-09-21.md)
+- [Obsidian infrastructure notes](obsidian/README.md)
 
 ## Operating rule
 
