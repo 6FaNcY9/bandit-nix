@@ -163,8 +163,8 @@ boundary, verification, environment reassociation, and rollback procedures.
 
 ### bandit-lab Updates
 
-`bandit-lab` applies signed updates hourly via the `lab-update-apply.timer`;
-disable that timer when manual-only control is needed. To check for or apply a
+Automatic hourly updates of `bandit-lab` (`lab-update-apply.timer`) are
+currently paused; apply reviewed revisions manually. To check for or apply a
 reviewed revision immediately:
 
 ```bash

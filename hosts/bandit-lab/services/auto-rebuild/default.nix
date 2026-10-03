@@ -194,6 +194,11 @@ in {
 
     timers = {
       lab-update-apply = {
+        # Paused: updates are applied manually with `lab-update apply` until
+        # the hardening work lands. enable = false removes the unit, so
+        # activation also stops an already-running timer; set it back to true
+        # to resume the hourly cadence.
+        enable = false;
         description = "Automatically apply bandit-lab configuration updates";
         wantedBy = ["timers.target"];
         timerConfig = {

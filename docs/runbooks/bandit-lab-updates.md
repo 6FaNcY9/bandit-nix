@@ -1,12 +1,13 @@
 # bandit-lab updates and rollback
 
-One persistent timer manages updates:
+Automatic updates are **paused**: `lab-update-apply.timer` is disabled in
+`hosts/bandit-lab/services/auto-rebuild/default.nix` (`enable = false`), so
+nothing is applied until someone runs `sudo lab-update apply`. To resume the
+hourly signed update (up to ten minutes of randomized delay, fetching
+`origin/main` itself), set `enable = true` again and deploy that change.
 
-- `lab-update-apply.timer` attempts a signed update hourly, with up to ten
-  minutes of randomized delay. It fetches `origin/main` itself, so no separate
-  polling timer is needed.
-
-For manual-only control, disable the apply timer:
+Until the pause itself has been deployed, a timer that is already running on the
+host keeps firing. Stop it immediately with:
 
 ```bash
 sudo systemctl disable --now lab-update-apply.timer
