@@ -19,6 +19,9 @@
     ./starship.nix
   ];
 
+  # bandit-lab decrypts only secrets/lab.yaml (recipients: user + lab host key).
+  sops.defaultSopsFile = ../../secrets/lab.yaml;
+
   environment = {
     # ── Base server packages (no desktop/VM tools) ──────────────────────────
     systemPackages = with pkgs; [

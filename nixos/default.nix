@@ -1,6 +1,7 @@
 _: {
   imports = [
     ./sops.nix
+    ./secrets-workstation.nix
     ./cli-tools.nix
     ./core.nix
     ./theme.nix

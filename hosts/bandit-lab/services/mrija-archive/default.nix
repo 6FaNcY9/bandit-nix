@@ -4,7 +4,7 @@
   repoConfig,
   ...
 }: let
-  username = repoConfig.workstation.username;
+  inherit (repoConfig.workstation) homeDirectory username;
   maildir = "/srv/containers/mrija-archive/maildir";
   data = "/srv/containers/mrija-archive/data";
   envFile = config.sops.templates."mrija-archive.env".path;
@@ -13,6 +13,14 @@ in {
     secrets = {
       "mrija-api-key" = {};
       "mrija-password" = {};
+      # The archive container bind-mounts this SSH identity for the TheHost
+      # sync. The lab holds its own copy in secrets/lab.yaml (separate from
+      # the laptop's).
+      "thehost-sshkey" = {
+        owner = username;
+        path = "${homeDirectory}/.ssh/thehost_mrija";
+        mode = "0600";
+      };
     };
 
     templates."mrija-archive.env" = {
