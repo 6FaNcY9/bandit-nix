@@ -174,9 +174,10 @@ in {
       # Unattended apply: the lab-update script builds the candidate,
       # activates it with switch-to-configuration test, gates on
       # bandit-lab-health, and rolls back on any failure, so running it from
-      # a timer is safe. Disable with
-      # `systemctl disable --now lab-update-apply.timer` if manual control is
-      # needed.
+      # a timer is safe. On NixOS `systemctl disable` fails (read-only
+      # /etc/systemd/system); pause with
+      # `systemctl mask --runtime --now lab-update-apply.timer` until reboot,
+      # or persistently via the timer's `enable` option below.
       lab-update-apply = {
         description = "Apply available bandit-lab configuration updates";
         wants = ["network-online.target"];

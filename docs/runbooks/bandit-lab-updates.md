@@ -7,10 +7,14 @@ hourly signed update (up to ten minutes of randomized delay, fetching
 `origin/main` itself), set `enable = true` again and deploy that change.
 
 Until the pause itself has been deployed, a timer that is already running on the
-host keeps firing. Stop it immediately with:
+host keeps firing. `systemctl disable` does not work on NixOS (the unit links
+live in the read-only Nix store), so stop it with a runtime mask, which lasts
+until the next reboot:
 
 ```bash
-sudo systemctl disable --now lab-update-apply.timer
+sudo systemctl mask --runtime --now lab-update-apply.timer
+# undo before re-enabling the timer without a reboot:
+sudo systemctl unmask --runtime lab-update-apply.timer
 ```
 
 The `lab-update-check.service` unit still exists for on-demand checks
