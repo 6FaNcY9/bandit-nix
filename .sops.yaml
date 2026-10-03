@@ -4,10 +4,32 @@ keys:
   - &user  age134u5vtdts98pnept0k9v0uy4m6guthggfguw0ycvzn0evjeqgemsgl0krt
   - &host_bandit age1r6cncetmt3xx9mv2hedvwm8dwc2nhy9rmekhah747kxeguzygplq6a875l
   - &host_bandit_lab age1urtv4pr4sgg5dvpx9kpkxaq8ef2rx98mn37gmncnjtdnf7c2h9uslg820j
+# sops uses the FIRST matching rule, so specific rules come first and the
+# catch-all last. Per-host files: a host key may only appear in the files that
+# host consumes (docs/runbooks/sops-split.md). The catch-all encrypts to `user`
+# only, so a stray new file fails safe: no host can read it.
 creation_rules:
-  - path_regex: secrets/.*\.ya?ml
+  - path_regex: (^|/)secrets/lab\.yaml$
+    key_groups:
+      - age:
+          - *user
+          - *host_bandit_lab
+  - path_regex: (^|/)secrets/(bandit|github)\.yaml$
+    key_groups:
+      - age:
+          - *user
+          - *host_bandit
+  # TEMPORARY: legacy shared file, removed once both hosts run the split
+  # (docs/runbooks/sops-split.md, step "Cleanup"). Without this rule the
+  # catch-all would re-key it to `user` only on an accidental updatekeys and
+  # lock both hosts out.
+  - path_regex: (^|/)secrets/secrets\.yaml$
     key_groups:
       - age:
           - *user
           - *host_bandit
           - *host_bandit_lab
+  - path_regex: (^|/)secrets/.*\.ya?ml$
+    key_groups:
+      - age:
+          - *user

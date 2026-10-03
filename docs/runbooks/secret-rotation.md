@@ -25,6 +25,31 @@ wrapper initializes its separate CLI credential file only when absent: update
 that stored credential through Shodan's supported initialization command when
 rotating the SOPS source. None of these justify restarting unrelated daemons.
 
+## Exposed on bandit-lab (rotate after the secrets split)
+
+Until `docs/runbooks/sops-split.md` is complete, bandit-lab imports the
+laptop's `nixos/sops.nix`, so its sops key decrypts laptop-only secrets to disk
+(owner `vino`), and it holds the whole legacy `secrets.yaml` in its repository
+checkout, so it can decrypt every value in it, including keys no module
+declares. The split only protects values created afterwards: old commits stay
+decryptable by the lab key forever. Treat these as exposed and replace each at
+its provider, then store the new value in `secrets/bandit.yaml` (or
+`secrets/lab.yaml` where noted) with `sops set`:
+
+| Secret | Replace by |
+| --- | --- |
+| `github_ssh_key`, `github_ssh_key_banditstudent` | New SSH keypairs; add the public keys on GitHub, then delete the old ones there. Highest priority: the lab is internet-facing and these hold repository write access. |
+| `cloudflare-api-key` | Create a new Cloudflare API token, revoke the old one in the dashboard. |
+| `cachix-secret` | Regenerate the Cachix auth token and revoke the old one. |
+| `context7_api_key`, `firecrawl-api-key`, `shodan-api-key` | Regenerate at each provider and revoke the old key. |
+| `thehost-sshkey` | Create **two** keypairs (laptop in `bandit.yaml`, lab in `lab.yaml`), add both public keys to TheHost `authorized_keys`, then remove the old one. The lab's Mrija archive sync keeps working because the secret name and path stay the same. |
+| `digitalOcean-sshkey`, `tokenrouter-api-key` | Not declared by any module but present in the legacy file; revoke at the provider (or confirm they are dead) and replace if still used. |
+| `user-password` (laptop hash) | The laptop login hash was readable on the lab; set a new laptop password. The lab gets its own, separate hash during the split. |
+
+Keep `lab-update` paused while rotating and verify each consumer afterwards
+(`bandit-lab-health` on the lab; `ssh -T git@github.com`, `cachix`, the MCP
+wrappers on the laptop).
+
 ## AiiA database passwords
 
 MySQL stores users in `/srv/containers/aiia/mysql`. The container's

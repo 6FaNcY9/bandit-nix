@@ -89,6 +89,27 @@ After the backup exists:
 
 ---
 
+## Secret isolation between hosts (2026-10-03)
+
+- `secrets/secrets.yaml` is split into `bandit.yaml` + `github.yaml` (laptop key)
+  and `lab.yaml` (lab key); `user` can read all. Migration and rollback:
+  `docs/runbooks/sops-split.md`; exposed-secret rotation:
+  `docs/runbooks/secret-rotation.md`.
+- Each file gets its own data key (`sops rotate -i`); `updatekeys` alone would
+  not revoke a former recipient.
+- **Decision D1 (accepted risk):** the `user` age key stays on the laptop, so a
+  compromised *running* laptop can still decrypt `lab.yaml`. That attacker
+  already holds the admin SSH path to the lab, so a separate sops key alone
+  adds little; a *powered-off, stolen* laptop is covered once LUKS
+  (`docs/runbooks/bandit-luks-in-place.md`) is done, which is still pending.
+  Upgrade path: a hardware-backed recipient (age-plugin-yubikey) for
+  `lab.yaml` together with an `sk-` SSH key for lab access.
+- **Decision D2:** the orphan keys `digitalOcean-sshkey` and
+  `tokenrouter-api-key` move to `bandit.yaml` (laptop only); revoke them at
+  the provider if they are dead.
+
+---
+
 ## Phase 3 — Full-disk encryption with LUKS — DECISION REVERSED (2026-09-14)
 
 **Decision: Option A — in-place re-encryption with `cryptsetup reencrypt`.**
