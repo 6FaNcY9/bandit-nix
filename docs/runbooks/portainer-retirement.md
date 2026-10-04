@@ -49,6 +49,14 @@ package updates, persistent enable/disable changes, or edits to Nix-managed
 files in Cockpit. Persistent changes go through Git/Nix. Cockpit is privileged
 administration, and membership in the `vino` Docker group is root-equivalent.
 
+The operator completed this pilot on 2026-09-25. Cockpit displayed host,
+storage, network and service state; `systemctl --failed` reported zero failed
+units; service logs and `/srv/containers` were readable. With explicit
+approval, the operator restarted `beszel-agent.service` through Cockpit. The
+unit stopped cleanly, returned to `active (running)` at 14:10:30 CEST and
+reconnected to the local Beszel Hub at 14:10:31. No persistent setting was
+changed. The workflow is accepted for service and log operations.
+
 Dockge, Arcane and Komodo are rejected for this architecture: they restore
 `docker.sock` or competing mutation paths, or add unnecessary orchestration.
 
@@ -86,6 +94,13 @@ secret-file references and sync/systemd relationship. Export definitions from
 Portainer if available; otherwise save redacted `docker inspect` output and
 the UI's stack YAML. Never put secret values in Git.
 
+The operator reviewed Portainer's stack list and orphan/external-stack view on
+2026-09-25. It contained only `deploy` (Mrija Archive) and `monitoring`; both
+were marked as created outside Portainer with limited control. Their displayed
+containers matched the Compose projects captured in this repository. No
+Portainer-authored stack definition was found, so nothing needs exporting or
+removing through the Portainer UI.
+
 ## 2. Consistent Portainer backup
 
 First identify and approve a destination with the operator; do not guess one:
@@ -110,6 +125,18 @@ sudo systemctl start docker-portainer-agent.service docker-portainer.service
 Do not call the backup verified until the destination, archive listing, hash,
 ownership/permissions, and an operator-approved restore test are recorded.
 Retain `/var/lib/portainer`; this plan never deletes it.
+
+On 2026-09-25, the operator created the consistent local rollback archive
+`/srv/backups/portainer/portainer-20260925T121842Z.tar.gz` after stopping only
+the Portainer Server and Agent. The archive contained 21 entries, passed a
+full archive listing, and is owned by `root:root` with mode `0600`. Its SHA-256
+is `9a664d5c98cd1120ec1e0772843c26db7f7d4b51d0306034d65631f580e63854`.
+Both Portainer units and `/api/status` recovered afterward. This local Btrfs
+copy is rollback material, not off-host disaster recovery; retain the live
+`/var/lib/portainer` tree as well. The isolated extraction test then verified
+the stored checksum, restored all 20 stored objects, and found a non-empty
+`portainer.db`; its temporary extraction was removed. The local rollback
+backup is verified.
 
 ## 3. Establish host authority before stopping Portainer
 

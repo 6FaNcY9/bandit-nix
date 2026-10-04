@@ -11,6 +11,7 @@ docs/superpowers/
 # they may contain host-specific paths, experiments, or one-off cleanup logic.
 /script/
 docs/codebase-review.md
+docs/claude-code-setup-plan.md
 
 # Windows VM answer file contains a plaintext local-only password.
 # Commit only after encoding the password or replacing changeme.
