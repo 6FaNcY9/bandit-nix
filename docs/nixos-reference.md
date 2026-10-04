@@ -210,29 +210,34 @@ via `xfconf.settings` in HM (see `home/desktop/xfce-colors.nix`).
 ## sops-nix Patterns
 
 ```nix
-# nixos/sops.nix — system module
+# nixos/sops.nix — shared system module (no defaultSopsFile on purpose)
 sops = {
-  defaultSopsFile = ../secrets/secrets.yaml;
   age.keyFile = "/var/lib/sops-nix/key.txt";   # provisioned at first boot
-  secrets = {
-    user-password.neededForUsers = true;
-    github_ssh_key = {
-      owner = "vino";
-      path = "/home/vino/.ssh/github";
-    };
+  secrets.user-password.neededForUsers = true;
+};
+
+# nixos/secrets-workstation.nix — laptop only; bandit-lab sets
+# sops.defaultSopsFile = ../../secrets/lab.yaml in nixos/server/default.nix
+sops = {
+  defaultSopsFile = ../secrets/bandit.yaml;
+  secrets.github_ssh_key = {
+    sopsFile = ../secrets/github.yaml;
+    owner = "vino";
+    path = "/home/vino/.ssh/github";
   };
 };
 ```
 
 ```bash
-# Edit secrets (requires SOPS_AGE_KEY or gpg key in env)
-sops secrets/secrets.yaml
+# Edit secrets (requires SOPS_AGE_KEY or gpg key in env); pick the host's file
+sops secrets/bandit.yaml      # or github.yaml / lab.yaml
 
-# Rotate keys (updates .sops.yaml, re-encrypts)
-sops updatekeys secrets/secrets.yaml
+# Change recipients, then ALWAYS rotate: updatekeys alone does not revoke
+# access for a removed recipient (docs/runbooks/sops-split.md)
+sops updatekeys secrets/lab.yaml && sops rotate -i secrets/lab.yaml
 
 # Check what's decryptable
-sops --decrypt --extract '["secret_name"]' secrets/secrets.yaml
+sops --decrypt --extract '["secret_name"]' secrets/lab.yaml
 ```
 
 **First-boot provisioning:** Copy the age key to `/var/lib/sops-nix/key.txt`

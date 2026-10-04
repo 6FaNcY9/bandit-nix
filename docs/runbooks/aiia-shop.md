@@ -60,7 +60,7 @@ Cloudflare Tunnel at `https://aiia.bandit-lab.mrija.org`.
 4. **Stripe webhook** (test mode while `AIIA_ORDER_MODE=draft`): Stripe
    Dashboard → Webhooks → endpoint for `checkout.session.completed` →
    `https://aiia.bandit-lab.mrija.org/members/api/aiia/webhooks/stripe`.
-   Update `aiia-stripe-webhook-secret` in `secrets/secrets.yaml` with the new
+   Update `aiia-stripe-webhook-secret` in `secrets/lab.yaml` with the new
    signing secret.
 
 ## Updating the shop
@@ -72,7 +72,7 @@ artifact, then repeat step 2 and `git -C /etc/nixos/bandit-nix` does not change.
 
 1. Replace `aiia-stripe-secret-key` / `aiia-stripe-publishable-key` with the
    `sk_live_…` / `pk_live_…` pair and update the webhook secret (step 4, live
-   mode) in `secrets/secrets.yaml`.
+   mode) in `secrets/lab.yaml`.
 2. Set `AIIA_ORDER_MODE=live` in `hosts/bandit-lab/aiia.nix` (the
    `sops.templates."aiia.env"` content).
 3. Signed commit + push; `lab-update apply` (or wait for the hourly timer).

@@ -56,8 +56,9 @@ declarative system and user environment.
 │   ├── theme.nix          # Fonts and Stylix system targets
 │   ├── dev.nix            # Dev tooling, containers, VMs
 │   ├── users.nix          # User account and groups
-│   ├── sops.nix           # Secrets wiring
-│   └── server.nix         # Headless server base aggregator
+│   ├── sops.nix           # Shared sops/age settings and user-password
+│   ├── secrets-workstation.nix  # Laptop-only secrets (bandit.yaml, github.yaml)
+│   └── server/            # Headless server base (reads secrets/lab.yaml)
 ├── home/                  # Home Manager configuration
 │   ├── default.nix        # Aggregator and user packages
 │   ├── terminal/          # Zsh, Kitty, Starship, aliases
@@ -68,8 +69,10 @@ declarative system and user environment.
 │   ├── ssh.nix            # SSH client config
 │   └── qt.nix             # Qt/Kvantum theming
 ├── secrets/               # Encrypted secrets (sops-nix)
-│   ├── secrets.yaml
-│   └── github.yaml
+│   ├── bandit.yaml        # Laptop secrets (user + laptop key)
+│   ├── github.yaml        # Laptop GitHub keys
+│   ├── lab.yaml           # bandit-lab secrets (user + lab key)
+│   └── secrets.yaml       # Legacy shared file, removed in the split cleanup
 ├── script/                # Local, gitignored helper scripts (incl. installers)
 └── labs/security/         # Opt-in security practice VM (BloodHound CE, crAPI, Atomic Red Team)
 ```
@@ -129,7 +132,7 @@ sudo ./script/install-nixos.sh \
 
 - Tailscale: `sudo tailscale up`
 - Samba password: `sudo smbpasswd -a vino`
-- Provision Cloudflare Tunnel credentials in `secrets/secrets.yaml` as
+- Provision Cloudflare Tunnel credentials in `secrets/lab.yaml` as
   `cloudflare-tunnel-credentials`.
 - Rebuild: `sudo nixos-rebuild switch --flake .#bandit-lab`
 
@@ -205,9 +208,13 @@ nix flake update
 
 Secrets are managed with [sops-nix](https://github.com/Mic92/sops-nix) and age.
 
+Each host has its own file, encrypted to that host's key plus yours
+(`docs/runbooks/sops-split.md`):
+
 ```bash
-sops secrets/secrets.yaml
-sops secrets/github.yaml
+sops secrets/bandit.yaml   # laptop secrets
+sops secrets/github.yaml   # laptop GitHub keys
+sops secrets/lab.yaml      # bandit-lab secrets
 ```
 
 At runtime the host age key must exist at `/var/lib/sops-nix/key.txt`.
