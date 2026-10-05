@@ -105,6 +105,14 @@ After the backup exists:
   (`docs/runbooks/bandit-luks-in-place.md`) is done, which is still pending.
   Upgrade path: a hardware-backed recipient (age-plugin-yubikey) for
   `lab.yaml` together with an `sk-` SSH key for lab access.
+- **Decision D3 (2026-10-05):** `org.libvirt.unix.manage` now requires admin
+  authentication for the `libvirtd` group (`nixos/desktop.nix`).
+  `qemu:///system` is root-equivalent (a VM can mount the host disk).
+  NixOS's own libvirtd module (nixpkgs `libvirtd.nix`) appends an auto-approve
+  rule, so simply deleting the repo's duplicate changed nothing; the repo rule
+  now sits first (`lib.mkBefore`, first matching polkit rule wins) and returns
+  `AUTH_ADMIN_KEEP`. virt-manager and virsh prompt through the polkit agent in
+  the Hyprland session. The `local-privilege` check asserts the order.
 - **Decision D2:** the orphan keys `digitalOcean-sshkey` and
   `tokenrouter-api-key` move to `bandit.yaml` (laptop only); revoke them at
   the provider if they are dead.

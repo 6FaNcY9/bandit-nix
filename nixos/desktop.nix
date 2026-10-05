@@ -1,4 +1,8 @@
-{pkgs, ...}: {
+{
+  lib,
+  pkgs,
+  ...
+}: {
   services = {
     greetd = {
       enable = true;
@@ -35,14 +39,20 @@
     brightnessctl
   ];
 
-  # Polkit for privilege escalation in GUI apps (e.g. software updater)
+  # Polkit for privilege escalation in GUI apps (e.g. software updater).
+  # libvirt on qemu:///system is root-equivalent (a VM can mount the host
+  # disk). NixOS's own libvirtd module appends a rule that auto-approves
+  # org.libvirt.unix.manage for the libvirtd group; polkit uses the first rule
+  # that returns a result, so this one is placed before it (mkBefore) and
+  # demands admin authentication through the polkit agent in the Hyprland
+  # session instead. ci/local-privilege.nix keeps the order honest.
   security.polkit = {
     enable = true;
-    extraConfig = ''
+    extraConfig = lib.mkBefore ''
       polkit.addRule(function(action, subject) {
         if (action.id == "org.libvirt.unix.manage" &&
             subject.isInGroup("libvirtd")) {
-          return polkit.Result.YES;
+          return polkit.Result.AUTH_ADMIN_KEEP;
         }
       });
     '';
