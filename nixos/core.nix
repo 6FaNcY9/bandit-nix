@@ -1,47 +1,9 @@
 {
   lib,
-  pkgs,
   repoConfig,
   ...
-}: let
-  context7Mcp = pkgs.writeShellScriptBin "context7-mcp" ''
-    set -euo pipefail
-
-    secret=/run/secrets/context7_api_key
-    if [[ ! -r "$secret" ]]; then
-      printf 'context7-mcp: missing readable secret %s\n' "$secret" >&2
-      exit 1
-    fi
-
-    export CONTEXT7_API_KEY
-    CONTEXT7_API_KEY="$(< "$secret")"
-
-    exec ${lib.getExe pkgs.nix} shell nixpkgs#nodejs --command \
-      npx -y @upstash/context7-mcp@3.2.2 "$@"
-  '';
-
-  firecrawlMcp = pkgs.writeShellScriptBin "firecrawl-mcp" ''
-    set -euo pipefail
-
-    secret=/run/secrets/firecrawl-api-key
-    if [[ ! -r "$secret" ]]; then
-      printf 'firecrawl-mcp: missing readable secret %s\n' "$secret" >&2
-      exit 1
-    fi
-
-    export FIRECRAWL_API_KEY
-    FIRECRAWL_API_KEY="$(< "$secret")"
-
-    exec ${lib.getExe pkgs.nix} shell nixpkgs#nodejs --command \
-      npx -y firecrawl-mcp@3.23.3 "$@"
-  '';
-in {
+}: {
   nixpkgs.config.allowUnfreePredicate = repoConfig.allowUnfreePredicate;
-  environment.systemPackages = with pkgs; [
-    bubblewrap
-    context7Mcp
-    firecrawlMcp
-  ];
 
   i18n.defaultLocale = "en_US.UTF-8";
   time.timeZone = "Europe/Vienna";

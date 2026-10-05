@@ -113,6 +113,14 @@ After the backup exists:
   now sits first (`lib.mkBefore`, first matching polkit rule wins) and returns
   `AUTH_ADMIN_KEEP`. virt-manager and virsh prompt through the polkit agent in
   the Hyprland session. The `local-privilege` check asserts the order.
+- **MCP tools (2026-10-05):** `context7-mcp` and `firecrawl-mcp` no longer run
+  `npx -y` as `vino`. `nixos/mcp.nix` (laptop only; bandit-lab no longer ships
+  them) wraps the nixpkgs builds (context7-mcp 4.0.3, firecrawl-mcp 3.24.0 --
+  context7 was 3.2.2 before, a major jump) in bubblewrap: empty environment,
+  no `$HOME`, read-only `/nix/store`, the single API key bind-mounted read-only
+  and exported inside the sandbox only, network shared. Verified by handshake
+  with both servers; the `local-privilege` check forbids `npx`/`nix shell` in the
+  wrappers and keeps them off the lab.
 - **Decision D2:** the orphan keys `digitalOcean-sshkey` and
   `tokenrouter-api-key` move to `bandit.yaml` (laptop only); revoke them at
   the provider if they are dead.

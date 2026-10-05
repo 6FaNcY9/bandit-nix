@@ -30,6 +30,20 @@
     "${name}: the first polkit rule mentioning org.libvirt.unix.manage must demand authentication (NixOS's own libvirtd rule auto-approves it; ours must come first)";
     assert lib.assertMsg (lib.unique config.nix.settings.trusted-users == ["root"])
     "${name}: nix trusted-users must be [\"root\"] (a trusted Nix user is root-equivalent)"; true;
+  mcpNames = ["context7-mcp" "firecrawl-mcp"];
+  mcpIn = host: lib.filter (p: lib.elem (lib.getName p) mcpNames) hosts.${host}.config.environment.systemPackages;
 in
   assert lib.all (name: checkHost name hosts.${name}.config) (lib.attrNames hosts);
-    pkgs.writeText "local-privilege" "ok\n"
+  assert lib.assertMsg (lib.length (mcpIn "bandit") == 2)
+  "bandit must ship both MCP wrappers (nixos/mcp.nix)";
+  assert lib.assertMsg (mcpIn "bandit-lab" == [])
+  "bandit-lab must not ship the laptop's MCP wrappers (it has neither their secrets nor a use for them)";
+    pkgs.runCommand "local-privilege" {nativeBuildInputs = [pkgs.gnugrep];} ''
+      # The MCP wrappers must run inside the bubblewrap helper and must never
+      # fetch code at run time.
+      for w in ${lib.concatMapStringsSep " " (p: "${p}/bin/*") (mcpIn "bandit")}; do
+        grep -q mcp-sandbox "$w" || { echo "$w does not use mcp-sandbox" >&2; exit 1; }
+        if grep -qE 'npx|nix shell' "$w"; then echo "$w fetches code at run time" >&2; exit 1; fi
+      done
+      touch "$out"
+    ''
