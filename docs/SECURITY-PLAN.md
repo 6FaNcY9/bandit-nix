@@ -149,6 +149,31 @@ leaves the anchor one step behind; `check` exits 0 on a refused update.
 
 ---
 
+## bandit-lab attack surface (2026-10-06)
+
+Audit of the live lab (read-only `ss`/`docker ps`) found SSH on every
+interface, SMB and discovery on the Wi-Fi LAN and on every Docker bridge,
+Minecraft published on all interfaces, and LLMNR/mDNS listening. Decisions:
+
+- **D4:** retire Portainer (its Agent holds `docker.sock`, root on the host,
+  and the UI was on the tunnel), following `docs/runbooks/portainer-retirement.md`.
+  Dropping only `/:/host:ro` was rejected: it does not remove the root path.
+  Removal is a separate, supervised step; see that runbook.
+- **D5:** SMB over Tailscale only; NetBIOS and WS-Discovery off; Samba
+  `hosts allow` is loopback plus the tailnet.
+- **D6:** Minecraft bound to the tailnet address (Docker-published ports bypass
+  the host firewall, so the bind address is the control); SSH on `tailscale0`
+  only with no LAN fallback and the public SSH hostnames removed from the
+  tunnel mirror. `bandit-lab-health` now requires Tailscale `Running`.
+  Recovery is the machine's keyboard and screen (`bandit-lab-updates.md`).
+- LLMNR and mDNS are disabled on the server.
+- `ci/lab-surface.nix` enforces: no global firewall ports, ports on
+  `tailscale0` only, every Docker-published port bound to loopback or the
+  tailnet address, no SSH through the tunnel, no LAN ranges in Samba, LLMNR and
+  mDNS off. Hostname inventory: `docs/runbooks/cloudflare-access.md`.
+
+---
+
 ## Phase 3 — Full-disk encryption with LUKS — DECISION REVERSED (2026-09-14)
 
 **Decision: Option A — in-place re-encryption with `cryptsetup reencrypt`.**

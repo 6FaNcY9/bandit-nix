@@ -48,6 +48,7 @@ Follow imports to establish what is active; a directory's presence does not mean
 - Hyprland is owned by the system module; Home Manager configuration under `home/desktop/hyprland/` uses native Lua and structured bindings/rules. Preserve its `package = null` and `portalPackage = null` arrangement. Check local examples before editing.
 - Preserve explicit Stylix target ownership; hand-maintained Hyprland, Rofi, and Mako settings must not gain conflicting generated settings.
 - Keep PipeWire properties that require dotted names as literal keys (for example, `"default.clock.rate"`).
+- bandit-lab opens firewall ports on `tailscale0` only. Docker-published container ports bypass the NixOS firewall, so every `ports` entry must bind `127.0.0.1` or the tailnet address (`repoConfig.lab.tailscaleIp`); the `lab-surface` flake check enforces it.
 - Container privilege and deployment models differ between hosts. Inspect the affected host's modules and Compose definitions before changing them.
 
 ## Verification

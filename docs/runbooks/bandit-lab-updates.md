@@ -150,6 +150,32 @@ or compromised:
 5. Keep the lab on manual apply until this is done (the timer is paused
    already).
 
+## If Tailscale is down (SSH recovery)
+
+sshd, SMB and Minecraft are reachable over the tailnet only, and the public
+Cloudflare SSH route is gone. `bandit-lab-health` fails a deployment (and
+`lab-update` rolls back) when `tailscale status` is not `Running`, so a bad
+update cannot silently lock you out. If Tailscale breaks anyway (account
+expiry, outage, broken state), recover at the machine itself:
+
+1. Log in on the lab's own keyboard and screen (it is a laptop).
+2. Look at the service: `systemctl status tailscaled` and `tailscale status`.
+3. Restart it: `sudo systemctl restart tailscaled`. If it reports that the
+   machine needs to log in, run `sudo tailscale up` and open the printed link
+   on another device.
+4. Confirm from the laptop: `ssh bandit-lab`.
+5. If a configuration change caused it, roll back: `sudo nixos-rebuild switch
+   --rollback`, then `bandit-lab-health`.
+
+Do not add a LAN or public SSH route as a workaround; decision D6 chose
+Tailscale only.
+
+Prevent the commonest cause, node-key expiry: in the Tailscale admin console
+(machines list, the menu of `bandit-lab`) choose **Disable key expiry**, and
+check it with `tailscale status --json | jq .Self.KeyExpiry` (empty or null
+means no expiry). Also keep an eye on ACL changes, which can cut the laptop off
+without any change on the lab.
+
 ## Vaultwarden changes
 
 Automatic apply refuses a signed revision that changes

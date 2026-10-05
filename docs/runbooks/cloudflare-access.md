@@ -25,10 +25,6 @@ must be tested separately before changing its current Access protection.
    - `devices.bandit-lab.mrija.org` — WatchYourLAN network inventory. It has
      no built-in auth, and the LAN host list (names, MACs, vendors, online
      history) is exactly what an attacker wants for reconnaissance.
-   - `ssh-bandit-lab.mrija.org` — required for `ssh bandit-lab-wan`
-     (`cloudflared access ssh`). A plain Self-hosted app covering the hostname
-     is enough; browser-rendered SSH is optional. Without an Access app the
-     connection fails with `websocket: bad handshake`.
 2. Add an Allow policy for the intended identity group or email addresses
    (the existing `vino-allow` policy can be reused). Do not add a bypass
    policy for these hostnames.
@@ -94,7 +90,68 @@ from the catch-all rule.
 
 Because changes are instant, the lockout risk is fat-fingering the dashboard
 itself: never delete or repoint the route you are currently connected through
-(`ssh-bandit-lab.mrija.org` or a Tailscale/Access path) without a second
-working way in. After every dashboard edit, mirror it in the `ingress`
+without a second working way in. SSH is no longer published through the tunnel
+(see below); the admin path is Tailscale, with the machine's own keyboard and
+screen as the last resort. After every dashboard edit, mirror it in the `ingress`
 attrset in `hosts/bandit-lab/wan.nix` so the repo stays an accurate map of
 what is exposed.
+
+## Public SSH was removed (2026-10-06)
+
+The routes `ssh-bandit-lab.mrija.org` and `ssh.atmosphaere.at` are no longer
+declared in `hosts/bandit-lab/wan.nix`, and sshd on the lab listens only on the
+Tailscale interface (`docs/SECURITY-PLAN.md`, decision D6). Tailscale is the
+only admin path; the local client alias is `bandit-lab` (tailnet address, see
+`home/ssh.nix`). The `bandit-lab-wan` alias and the `cloudflared` client were
+removed from the laptop.
+
+The dashboard is the source of truth, so the live routes must be removed there
+by hand. Do this only after you have confirmed that `ssh bandit-lab` works over
+Tailscale from the laptop.
+
+Until the dashboard routes are deleted, public SSH stays reachable: the tunnel
+daemon connects to sshd on the loopback interface, which the firewall always
+allows, so removing the lines from `wan.nix` (a mirror) does not close it. While
+the routes exist they are also the break-glass path if tailnet SSH fails right
+after a deployment; the laptop no longer has the `cloudflared` client, so use
+`nix run nixpkgs#cloudflared -- access ssh --hostname ssh-bandit-lab.mrija.org`
+as an SSH `ProxyCommand`. Delete the routes only once you have confirmed
+`ssh bandit-lab` and a second new session work on the new generation.
+
+1. In the Cloudflare Zero Trust dashboard, open your tunnel `bandit-lab`.
+   (The repository's older wording was *Networks, Tunnels, bandit-lab, Public
+   Hostnames*. Cloudflare's current documentation calls this list **Published
+   applications**; the menu path may differ slightly from the old wording, so
+   look for the tunnel's list of hostnames.)
+2. Delete the two routes `ssh-bandit-lab.mrija.org` and `ssh.atmosphaere.at`.
+   Do not touch the other hostnames.
+3. In **Access controls, Applications**, delete the Self-hosted application that
+   covers those two hostnames, if one exists.
+4. Optionally remove the now-unused DNS records for those two hostnames.
+5. Verify from a network that is not your tailnet that
+   `ssh vino@ssh-bandit-lab.mrija.org` no longer connects, and from the laptop
+   that `ssh bandit-lab` still works.
+
+## Hostname inventory (2026-10-06)
+
+Source: `hosts/bandit-lab/wan.nix` (the documentation mirror of the live
+tunnel), the Traefik routers in the service modules, and the Access audit above.
+"Access status" restates the documented 2026-09-25 audit; the dashboard was not
+queried again for this table.
+
+| Hostname | Service | Public? | Access app required? | Status |
+| --- | --- | --- | --- | --- |
+| `bandit-lab.mrija.org` | Traefik entrypoint | yes | yes (no content of its own) | documented as gated |
+| `aiia.at`, `www.aiia.at`, `aiia.bandit-lab.mrija.org` | AiiA shop (Ghost) | yes, storefront | **no**, a storefront cannot sit behind a login; protect `/ghost/` separately | public by design |
+| `vault.atmosphaere.at` | Vaultwarden | yes | yes (live Access app; test native clients) | documented as gated |
+| `grafana.atmosphaere.at`, `grafana.bandit-lab.mrija.org` | Grafana | yes | yes | documented as gated |
+| `mail-archive.bandit-lab.mrija.org` | Mrija mail archive | yes | yes | documented as gated |
+| `devices.atmosphaere.at`, `devices.bandit-lab.mrija.org` | WatchYourLAN | yes | **yes, mandatory** (no auth of its own) | documented as gated |
+| `search.atmosphaere.at`, `search.bandit-lab.mrija.org` | SearXNG | yes | **yes, mandatory** (bot abuse) | documented as gated |
+| `portainer.atmosphaere.at`, `portainer.bandit-lab.mrija.org` | Portainer UI | yes | yes; being retired (D4, `portainer-retirement.md`) | documented as gated |
+| `juice.atmosphaere.at`, `cyberchef.atmosphaere.at`, `tools.atmosphaere.at` | Juice Shop, CyberChef, IT-Tools | yes | yes for the training targets (Juice Shop is deliberately vulnerable) | not individually verified |
+| `ssh-bandit-lab.mrija.org`, `ssh.atmosphaere.at` | SSH | **removed** | n/a | remove the live routes (steps above) |
+
+Open item: the three toolbox hostnames and the root `bandit-lab.mrija.org`
+route were not individually listed in the 2026-09-25 audit; confirm they sit
+behind an Access application (Juice Shop is intentionally vulnerable software).

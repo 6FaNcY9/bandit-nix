@@ -31,7 +31,7 @@ dependency map.
 | Cloudflare Tunnel | External HTTP ingress | NixOS systemd ([WAN config](../hosts/bandit-lab/wan.nix)) | Routes through Traefik; no made-up public domains are recorded here | **observed**; application authentication not verified |
 | Tailscale | Private overlay access | NixOS systemd | Wazuh agent traffic and administrative access | **observed**; exact full listeners unknown |
 | OpenSSH | Administration and tunnels | NixOS systemd | SSH on port 22; Wazuh dashboard is reached through an SSH tunnel | **observed**; dashboard authentication not verified |
-| Samba, Winbind, WSDD | LAN file sharing and discovery | NixOS services | Ports 139 and 445; all-interface exposure needs intentionality | **observed**; share access not verified |
+| Samba | File sharing over the tailnet only | NixOS services | TCP 139/445 on `tailscale0` only (decision D5) | **observed**; share access not verified |
 | PostgreSQL | Database service | NixOS systemd | Used by dependent applications; daily backup timer exists | **observed**; backup completed 2026-09-24; restore validity not verified |
 | CrowdSec and firewall bouncer | Detection and blocking | NixOS systemd | Reads service activity and applies firewall decisions | **observed**; scheduled updates exist |
 | Prometheus, Grafana, cAdvisor, node-exporter, blackbox-exporter | Metrics, dashboards, host/container/exporter probes | Docker; reviewed Git Compose asset ([monitoring runbook](runbooks/monitoring.md)); Portainer remains live owner until handoff | Grafana consumes Prometheus; no new dashboard is proposed | **observed**; monitoring is existing; alert correctness not fully verified |
@@ -115,9 +115,13 @@ socket. Minecraft and Wazuh exposure matched the current firewall rules.
 - The host firewall is enabled, denies ping, and logs refused connections.
   DNS uses `systemd-resolved` with Cloudflare and Quad9 DNS-over-TLS in
   opportunistic mode, including fallback behavior.
-- SMB/WSDD is intentionally LAN-exposed only on `enp44s0` and `wlo1`: TCP
-  `139/445/5357` and UDP `137/138/3702` are allowed on those interfaces.
-- Minecraft TCP `25565` is explicitly allowed. Wazuh manager traffic binds to
+- The host firewall opens ports on `tailscale0` only: SSH (22) and SMB
+  (139/445). Nothing is open on the Wi-Fi/LAN interfaces. NetBIOS (nmbd) and
+  WS-Discovery are off; mount the share by tailnet address. LLMNR and mDNS are
+  off. `ci/lab-surface.nix` enforces this.
+- Minecraft TCP `25565` is published on the Tailscale address only. Docker
+  published ports bypass the host firewall, so the bind address is the control;
+  every published port must bind `127.0.0.1` or the tailnet address. Wazuh manager traffic binds to
   the Tailscale address on TCP `1514/1515` and UDP `514`; its API, indexer, and
   dashboard remain loopback-published and are reached through SSH tunnels.
 - The `wan.nix` route mirror lists public storefront/vault routes:
@@ -129,7 +133,7 @@ socket. Minecraft and Wazuh exposure matched the current firewall rules.
   `grafana.atmosphaere.at`, `mail-archive.bandit-lab.mrija.org`,
   `portainer.bandit-lab.mrija.org`, `portainer.atmosphaere.at`,
   `search.bandit-lab.mrija.org`, `search.atmosphaere.at`,
-  `ssh-bandit-lab.mrija.org`, `ssh.atmosphaere.at`, `juice.atmosphaere.at`,
+  `juice.atmosphaere.at`,
   `cyberchef.atmosphaere.at`, and `tools.atmosphaere.at`; the source comments
   require Cloudflare Access for the sensitive routes. A read-only Cloudflare
   API audit on 2026-09-25 confirmed the configured Access applications and

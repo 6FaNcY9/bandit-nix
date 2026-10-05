@@ -145,8 +145,8 @@ bandit-lab.mrija.org
 *.bandit-lab.mrija.org
 ```
 
-SSH is also reachable from anywhere via Cloudflare Access at
-`ssh-bandit-lab.mrija.org`; the local SSH client config is in `home/ssh.nix`.
+SSH is reachable over Tailscale only (`ssh bandit-lab`; client config in
+`home/ssh.nix`). It is no longer published through the Cloudflare tunnel.
 
 Admin services (Cockpit, Portainer, Samba) are not port-forwarded. Access them
 via SSH/Tailscale tunnels:
