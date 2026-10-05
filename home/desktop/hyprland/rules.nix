@@ -17,6 +17,15 @@
 
   windowRules = map windowRule [
     {
+      # Ignore client requests to start maximized. kitty asks for it, which put
+      # every new terminal into the maximized state (full work area, bar still
+      # visible) until toggled twice with Mod+F. Same rule as Hyprland's own
+      # default configuration.
+      name = "ignore-client-maximize";
+      match.class = ".*";
+      suppress_event = "maximize";
+    }
+    {
       name = "pavucontrol";
       match.class = "^(pavucontrol|org.pulseaudio.pavucontrol)$";
       float = true;
