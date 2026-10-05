@@ -56,7 +56,10 @@ in {
     settings = {
       experimental-features = ["nix-command" "flakes"];
       allowed-users = [repoConfig.workstation.username];
-      trusted-users = ["root" repoConfig.workstation.username];
+      # Only root is trusted: a trusted Nix user is root-equivalent (it can add
+      # its own substituters and import unsigned store paths). Builds, devshells
+      # and `nh os switch` work for untrusted users through the daemon.
+      trusted-users = ["root"];
       # Pull prebuilt paths from the public github-bandit-nix Cachix cache
       # in addition to the official cache.nixos.org (kept via module defaults).
       substituters = [

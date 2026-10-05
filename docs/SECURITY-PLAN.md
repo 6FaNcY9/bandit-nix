@@ -20,11 +20,12 @@ in `hosts/bandit-lab/default.nix` (key-auth-only SSH) and the WAN runbooks.
   portals do not hard-fail.
 - [x] `nixos/sops.nix`: `generateKey = false` so a missing SOPS age key fails
   loudly instead of silently generating an unusable key.
-- [x] `nixos/core.nix`: `trusted-users` includes `root` and `vino` on the
-  laptop; removing `vino` there would require escalating every local rebuild to
-  root, an accepted convenience/security trade-off for a single-user laptop.
-  On `bandit-lab`, `hosts/bandit-lab/default.nix` forces `trusted-users` to
-  `root` only — `lab-update` runs as root, so `vino` needs no privilege.
+- [x] `nixos/core.nix`: `trusted-users = ["root"]` on both hosts (2026-10-05).
+  A trusted Nix user is root-equivalent, so `vino` is no longer trusted on the
+  laptop either. Trade-off: `vino` cannot pass `--option substituters`, use a
+  flake's `nixConfig`, or import unsigned store paths (e.g. `nix copy` into the
+  local store); builds, devshells, `nh os switch` and `cachix push` (token-based)
+  are unaffected. Enforced by the `local-privilege` flake check.
 - [x] `flake.nix`: `nixvim` is kept on its own pinned `nixpkgs`; upstream
   recommends against `inputs.nixpkgs.follows = "nixpkgs"`.
 
@@ -167,5 +168,5 @@ Decision needed: quick GRUB password first, or wait and do lanzaboote properly?
 - [x] Add kernel/sysctl hardening after testing compatibility (`nixos/hardening.nix`;
   `kernel.unprivileged_bpf_disabled` is enabled on bandit-lab only,
   `net.core.bpf_jit_harden` remains off pending workload testing).
-- [x] Review `vino` in `nix.settings.trusted-users`: kept on the laptop,
-  removed on bandit-lab (`hosts/bandit-lab/default.nix`).
+- [x] Review `vino` in `nix.settings.trusted-users`: removed on both hosts
+  (`nixos/core.nix`).

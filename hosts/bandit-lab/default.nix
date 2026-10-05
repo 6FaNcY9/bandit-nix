@@ -29,10 +29,6 @@
 
   networking.hostName = "bandit-lab";
 
-  # Server: only root may ask the nix daemon to build/substitute. lab-update
-  # already runs as root, so vino needs no trusted-user privilege here.
-  nix.settings.trusted-users = lib.mkForce ["root"];
-
   # The lab's workloads (Docker, Traefik, PostgreSQL, Vaultwarden) use no
   # unprivileged eBPF; disable it. bpf_jit_harden stays off pending testing.
   boot.kernel.sysctl."kernel.unprivileged_bpf_disabled" = 1;

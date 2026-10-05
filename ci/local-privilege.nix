@@ -15,7 +15,9 @@
     assert lib.assertMsg (sudoRulesWithNopasswd config == [])
     "${name}: security.sudo.extraRules must not contain NOPASSWD commands";
     assert lib.assertMsg config.security.sudo.wheelNeedsPassword
-    "${name}: wheel members must need a password for sudo"; true;
+    "${name}: wheel members must need a password for sudo";
+    assert lib.assertMsg (lib.unique config.nix.settings.trusted-users == ["root"])
+    "${name}: nix trusted-users must be [\"root\"] (a trusted Nix user is root-equivalent)"; true;
 in
   assert lib.all (name: checkHost name hosts.${name}.config) (lib.attrNames hosts);
     pkgs.writeText "local-privilege" "ok\n"
