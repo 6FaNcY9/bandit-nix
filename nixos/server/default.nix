@@ -1,7 +1,6 @@
 {
   lib,
   pkgs,
-  zellijMenu,
   ...
 }: {
   imports = [
@@ -14,7 +13,6 @@
     ../firmware.nix
     ../users.nix
     ./editor.nix
-    ./zellij.nix
     ./zsh.nix
     ./starship.nix
   ];
@@ -33,8 +31,6 @@
       dnsutils
       fzf
       zoxide
-      zellij
-      zellijMenu
       zsh-fzf-tab
     ];
 
