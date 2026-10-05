@@ -36,7 +36,13 @@
   services = {
     # Stable server uplink: fail closed if the configured public resolvers
     # cannot use TLS. Tailscale's per-link split DNS is configured separately.
-    resolved.settings.Resolve.DNSOverTLS = lib.mkForce "true";
+    resolved.settings.Resolve = {
+      DNSOverTLS = lib.mkForce "true";
+      # No LAN name-resolution protocols on a server (listened on every
+      # interface: 5355 LLMNR, 5353 mDNS).
+      LLMNR = "false";
+      MulticastDNS = "false";
+    };
 
     # Local recovery copies only; off-host backups still need a destination.
     # The native module retains the current and previous successful dump.
