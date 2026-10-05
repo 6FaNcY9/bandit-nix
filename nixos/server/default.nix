@@ -38,6 +38,8 @@
     enableAllTerminfo = true;
   };
 
+  networking.firewall.interfaces.tailscale0.allowedTCPPorts = [22];
+
   programs = {
     direnv = {
       enable = true;
@@ -49,7 +51,12 @@
   services = {
     openssh = {
       enable = true;
-      openFirewall = true;
+      # Not opened globally: port 22 is allowed on tailscale0 only (below), so
+      # the home LAN and anything else cannot reach sshd. Recovery if Tailscale
+      # is down is the machine's own keyboard and screen
+      # (docs/runbooks/bandit-lab-updates.md); bandit-lab-health refuses a
+      # deployment that leaves Tailscale not running.
+      openFirewall = false;
       settings = {
         PasswordAuthentication = false;
         KbdInteractiveAuthentication = false;

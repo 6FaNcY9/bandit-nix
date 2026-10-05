@@ -35,7 +35,7 @@
   ];
   healthCheck = pkgs.writeShellApplication {
     name = "bandit-lab-health";
-    runtimeInputs = [pkgs.coreutils pkgs.systemd pkgs.curl pkgs.docker config.services.postgresql.package];
+    runtimeInputs = [pkgs.coreutils pkgs.systemd pkgs.curl pkgs.docker pkgs.jq pkgs.tailscale config.services.postgresql.package];
     text = ''
       set -euo pipefail
 
@@ -81,6 +81,10 @@
         echo "Container $1 did not become healthy in time" >&2
         return 1
       }
+      # SSH, SMB and Minecraft are reachable over the tailnet only. A
+      # deployment that leaves Tailscale down would lock out remote access, so
+      # it must fail the health gate and roll back.
+      ready sh -c 'tailscale status --json | jq -e ".BackendState == \"Running\"" >/dev/null'
       container_healthy vaultwarden
       ready pg_isready -q -h /run/postgresql -t 3
       ready curl --fail --silent --show-error --output /dev/null --connect-timeout 2 --max-time 5 \

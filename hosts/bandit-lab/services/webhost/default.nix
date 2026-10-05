@@ -150,6 +150,9 @@ in {
     samba = {
       enable = true;
       openFirewall = false;
+      # SMB is reached over the tailnet by address, so the NetBIOS name
+      # service (UDP 137/138, LAN broadcast discovery) is not needed.
+      nmbd.enable = false;
       settings = {
         global = {
           security = "user";
@@ -158,11 +161,11 @@ in {
           # Legacy SMB1 has known remote-code-execution history; every
           # supported client speaks SMB2+.
           "server min protocol" = "SMB2";
-          # Defense in depth behind the per-interface firewall: even if a
-          # LAN rule ever misses, only loopback, private LAN ranges, and
-          # the tailnet may talk SMB.
-          "hosts allow" = "127.0.0.1 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10";
-          "hosts deny" = "0.0.0.0/0";
+          # Defense in depth behind the per-interface firewall: only loopback
+          # and the tailnet (IPv4 and IPv6) may talk SMB. `hosts deny = ALL`,
+          # not 0.0.0.0/0, which would leave every IPv6 client unmatched.
+          "hosts allow" = "127.0.0.1 ::1 100.64.0.0/10 fd7a:115c:a1e0::/48";
+          "hosts deny" = "ALL";
         };
         storage = {
           path = "/srv/storage";
@@ -173,14 +176,6 @@ in {
           "directory mask" = "0770";
         };
       };
-    };
-
-    samba-wsdd = {
-      enable = true;
-      openFirewall = false;
-      # No interface pin (default null = all): the lab runs on Wi-Fi (wlo1)
-      # since the location change and enp44s0 is unplugged; the per-interface
-      # firewall below gates actual reachability either way.
     };
 
     # ── PostgreSQL ─────────────────────────────────────────────────────────
@@ -197,19 +192,10 @@ in {
     };
   };
 
-  # LAN file sharing on both uplinks: the server runs on Wi-Fi (wlo1) since
-  # the location change and enp44s0 is unplugged; rules on a down interface
-  # are inert, and everything returns when the cable comes back.
-  networking.firewall.interfaces = let
-    # LAN file sharing is intentional; WAN service exposure stays behind Cloudflare Tunnel/Tailscale.
-    smbPorts = {
-      allowedTCPPorts = [139 445 5357]; # SMB + WSDD
-      allowedUDPPorts = [137 138 3702]; # NetBIOS + WSDD
-    };
-  in {
-    enp44s0 = smbPorts;
-    wlo1 = smbPorts;
-  };
+  # SMB is reachable over the tailnet only (decision D5, 2026-10-06): not on the
+  # home Wi-Fi/LAN uplinks. WS-Discovery and NetBIOS are off because they only
+  # advertise to the LAN; mount the share by tailnet address.
+  networking.firewall.interfaces.tailscale0.allowedTCPPorts = [139 445];
 
   # ── Docker ────────────────────────────────────────────────────────────────
   virtualisation.docker = {

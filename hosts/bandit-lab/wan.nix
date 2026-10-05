@@ -50,10 +50,6 @@
         # gets scraped/abused by bots within hours.
         "search.bandit-lab.mrija.org" = "http://localhost:80";
         "search.atmosphaere.at" = "http://localhost:80";
-        # Requires a Cloudflare Access application + policy in front of it;
-        # see docs/runbooks/cloudflare-access.md.
-        "ssh-bandit-lab.mrija.org" = "ssh://localhost:22";
-        "ssh.atmosphaere.at" = "ssh://localhost:22";
         # Canonical Vaultwarden hostname; the legacy public route was retired
         # after client migration verification.
         "vault.atmosphaere.at" = "http://localhost:80";

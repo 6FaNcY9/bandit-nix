@@ -1,11 +1,4 @@
-{
-  pkgs,
-  repoConfig,
-  ...
-}: {
-  # Client for the Cloudflare Access SSH path used by bandit-lab-wan below.
-  home.packages = [pkgs.cloudflared];
-
+{repoConfig, ...}: {
   programs.ssh = {
     enable = true;
     enableDefaultConfig = false;
@@ -45,25 +38,14 @@
         IdentityFile = "~/.ssh/thehost_mrija";
         IdentitiesOnly = true;
       };
-      # Default path — tailnet address, reachable from any network without
-      # the Cloudflare browser flow. The old direct-LAN IP was dropped when
-      # the lab moved networks; re-add a LAN alias if a reservation returns.
+      # The only path to the lab: its tailnet address, reachable from any
+      # network. sshd listens on tailscale0 only; the public Cloudflare SSH
+      # route and the direct-LAN path were removed (docs/runbooks/cloudflare-access.md).
       "bandit-lab bandit-lab-ts" = {
         Hostname = repoConfig.lab.tailscaleIp;
         User = repoConfig.workstation.username;
         IdentityFile = "~/.ssh/homelabKey";
         IdentitiesOnly = true;
-      };
-      # WAN path — same host, same key, tunnelled via Cloudflare Access.
-      # Works from anywhere, including behind CGNAT. Requires `cloudflared`
-      # locally and an Access policy on ssh-bandit-lab.mrija.org; the first
-      # connection opens a browser for authentication.
-      "bandit-lab-wan" = {
-        Hostname = "ssh-bandit-lab.mrija.org";
-        User = repoConfig.workstation.username;
-        IdentityFile = "~/.ssh/homelabKey";
-        IdentitiesOnly = true;
-        ProxyCommand = "${pkgs.cloudflared}/bin/cloudflared access ssh --hostname %h";
       };
     };
   };
