@@ -127,6 +127,28 @@ After the backup exists:
 
 ---
 
+## Updater downgrade protection (2026-10-05)
+
+`lab-update apply` refuses non-fast-forward updates (a signed but older commit,
+or rewritten history) before building anything; the manual override is
+`lab-update apply --allow-non-ff`, which no systemd unit may pass. Tests in
+`ci/test-lab-update.py` cover fast-forward, downgrade, diverged, the override,
+`check` output and argument errors; the `lab-update` flake check also fails if a
+unit passes the flag. GitHub branch protection for `main` and the procedure for
+a lost phone signing key are in `docs/runbooks/bandit-lab-updates.md` (manual
+steps for the owner). Found in review (`architect`) and fixed with a regression
+test: a git *tag* named `origin/main` outranks the branch in a bare
+`rev-parse origin/main`, so the updater now fetches with an explicit refspec
+and no tags and resolves `refs/remotes/origin/main^{commit}`; `--allow-non-ff`
+is also refused inside any systemd unit (`INVOCATION_ID`). Accepted residual
+risks: ancestry is enforced, not "was on `main`" (any trusted-key-signed
+descendant of the deployed commit is accepted, including signed reverts); only
+the tip signature is checked; re-cloning or hand-moving the mirror HEAD is
+trust-on-first-use; a power loss between `switch` and the mirror fast-forward
+leaves the anchor one step behind; `check` exits 0 on a refused update.
+
+---
+
 ## Phase 3 — Full-disk encryption with LUKS — DECISION REVERSED (2026-09-14)
 
 **Decision: Option A — in-place re-encryption with `cryptsetup reencrypt`.**

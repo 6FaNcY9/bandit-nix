@@ -83,6 +83,7 @@ Inspect `flake.nix` for targeted checks and the `bandit-ci` configuration when h
 - Confirm the target host before activation. `nixos-rebuild test` also changes the running system; it is not a read-only test.
 - Respect deployment authority already granted by the task. A code edit alone does not authorize a restart, activation, disk operation, or service removal.
 - Check `lab-update` and its current automation before publishing deployment-triggering changes. A push to a watched branch can trigger server activation; a no-deploy boundary includes that path.
+- `lab-update apply` deploys fast-forwards only: a signed but older commit or rewritten history is refused (see `docs/runbooks/bandit-lab-updates.md`). `--allow-non-ff` is a manual override for a reviewed rewrite and must never appear in a systemd unit; the `lab-update` flake check enforces that.
 - Preserve remote access, application data, volumes, and rollback options during host/service changes. Use the affected service's runbook and health checks; verify affected services after activation (`bandit-health` or `bandit-lab-health`, as appropriate).
 - For Cloudflare routing, read `docs/runbooks/cloudflare-access.md`; reconcile remote configuration with the repository mirror.
 - For encryption, installation, or recovery, read the relevant runbook and verify the actual disks/layout. Start with `docs/runbooks/bandit-luks-in-place.md` for laptop encryption. Never infer disk targets or migration status from historical notes.

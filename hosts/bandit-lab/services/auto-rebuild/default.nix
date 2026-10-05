@@ -8,15 +8,36 @@
     set -euo pipefail
 
     mode="''${1:-check}"
+    allow_non_ff=0
     repo="${repoDir}"
     git="${pkgs.git}/bin/git"
 
+    usage() {
+      echo "Usage: lab-update [check|apply [--allow-non-ff]]" >&2
+      exit 2
+    }
+    [[ $# -le 2 ]] || usage
     case "$mode" in
       check|apply) ;;
-      *)
-        echo "Usage: lab-update [check|apply]" >&2
-        exit 2
+      *) usage ;;
+    esac
+    case "''${2:-}" in
+      "") ;;
+      --allow-non-ff)
+        # Manual override for a reviewed history rewrite. Never used by the
+        # systemd units, and a flake check keeps it out of every ExecStart.
+        [[ "$mode" == apply ]] || usage
+        # systemd sets INVOCATION_ID for every unit (timers, systemd-run,
+        # wrapper scripts the flake lint cannot see into). sudo resets the
+        # environment, so a human running `sudo lab-update apply --allow-non-ff`
+        # is unaffected.
+        if [[ -n "''${INVOCATION_ID:-}" ]]; then
+          echo "--allow-non-ff is manual-only and refused inside a systemd unit" >&2
+          exit 2
+        fi
+        allow_non_ff=1
         ;;
+      *) usage ;;
     esac
 
     # Concurrent runs must be a harmless no-op, never a failure: the apply
@@ -31,7 +52,7 @@
 
     if [[ ! -d "$repo/.git" ]]; then
       install -d -m 0755 "$(dirname "$repo")"
-      "$git" clone ${repositoryUrl} "$repo"
+      "$git" clone --no-tags --single-branch --branch main ${repositoryUrl} "$repo"
     fi
 
     # This repository is public. Keep unattended reads independent of a
@@ -39,14 +60,35 @@
     "$git" -c safe.directory="$repo" -C "$repo" remote set-url origin ${repositoryUrl}
 
     before=$("$git" -c safe.directory="$repo" -C "$repo" rev-parse HEAD)
-    "$git" -c safe.directory="$repo" -C "$repo" fetch origin main --quiet
-    after=$("$git" -c safe.directory="$repo" -C "$repo" rev-parse origin/main)
+    # Fetch with an explicit refspec and no tags, and resolve only the fully
+    # qualified remote-tracking ref: a bare `origin/main` is ambiguous, and git
+    # prefers a TAG of that name (refs/tags/origin/main) over the branch, which
+    # would let a pushed tag steer what gets deployed. `^{commit}` peels it.
+    "$git" -c safe.directory="$repo" -C "$repo" fetch --no-tags --quiet origin \
+      '+refs/heads/main:refs/remotes/origin/main'
+    after=$("$git" -c safe.directory="$repo" -C "$repo" rev-parse --verify --quiet \
+      'refs/remotes/origin/main^{commit}')
+
+    # Only fast-forwards are deployed. A signed but older commit (downgrade) or
+    # rewritten history (force-push) is exactly what a compromised GitHub
+    # account could offer, e.g. a commit from before a password rotation.
+    update_kind=fast-forward
+    if [[ "$before" != "$after" ]] \
+      && ! "$git" -c safe.directory="$repo" -C "$repo" merge-base --is-ancestor "$before" "$after"; then
+      if "$git" -c safe.directory="$repo" -C "$repo" merge-base --is-ancestor "$after" "$before"; then
+        update_kind=downgrade
+      else
+        update_kind=diverged
+      fi
+    fi
 
     if [[ "$mode" == "check" ]]; then
       if [[ "$before" == "$after" ]]; then
         echo "Checkout matches $after; activation status is checked by lab-update apply"
-      else
+      elif [[ "$update_kind" == fast-forward ]]; then
         echo "Checkout update available: $before -> $after"
+      else
+        echo "Non-fast-forward ($update_kind) update $before -> $after: lab-update apply will refuse it" >&2
       fi
       exit 0
     fi
@@ -54,6 +96,12 @@
     if ! "$git" -c safe.directory="$repo" -C "$repo" diff --quiet \
       || ! "$git" -c safe.directory="$repo" -C "$repo" diff --cached --quiet; then
       echo "Refusing to update a dirty checkout: $repo" >&2
+      exit 1
+    fi
+
+    if [[ "$update_kind" != fast-forward && "$allow_non_ff" != 1 ]]; then
+      echo "Refusing $update_kind update $before -> $after: not a fast-forward of the deployed commit." >&2
+      echo "If this rewrite is intended and reviewed, run: lab-update apply --allow-non-ff" >&2
       exit 1
     fi
 
@@ -102,13 +150,12 @@
       exit 1
     fi
 
-    # The checkout is a clean read-only mirror — all changes are authored on
-    # the laptop — so rewritten upstream history (rebase/force-push) must not
-    # wedge the updater. Warn now and reset the mirror to the deployed commit
-    # once the candidate system has been activated successfully.
+    # The checkout is a clean read-only mirror, so an explicitly allowed
+    # history rewrite (--allow-non-ff) must not wedge the updater: reset the
+    # mirror to the deployed commit once the candidate has been activated.
     non_ff=0
-    if ! "$git" -c safe.directory="$repo" -C "$repo" merge-base --is-ancestor "$before" "$after"; then
-      echo "Warning: non-fast-forward update $before -> $after; will hard-reset the mirror checkout after a successful switch" >&2
+    if [[ "$update_kind" != fast-forward ]]; then
+      echo "Warning: $update_kind update $before -> $after allowed by --allow-non-ff; will hard-reset the mirror checkout after a successful switch" >&2
       non_ff=1
     fi
 
