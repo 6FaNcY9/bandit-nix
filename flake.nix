@@ -222,6 +222,12 @@
         hosts = {inherit (self.nixosConfigurations) bandit bandit-lab;};
       };
 
+      local-privilege = import ./ci/local-privilege.nix {
+        inherit pkgs;
+        inherit (nixpkgs) lib;
+        hosts = {inherit (self.nixosConfigurations) bandit bandit-lab;};
+      };
+
       theme-contract = import ./ci/theme-contract.nix {
         inherit pkgs repoConfig;
         inherit (nixpkgs) lib;

@@ -187,14 +187,14 @@ operational details.
 # Evaluate and lint everything (run before committing)
 nix flake check --no-update-lock-file
 
-# Build and activate the laptop configuration
-sudo nixos-rebuild switch --flake .#bandit
+# Build and activate the laptop configuration (nh asks for sudo itself)
+nh os switch .
 
 # Test the laptop configuration without making it the default boot entry
-sudo nixos-rebuild test --flake .#bandit
+nh os test .
 
-# Build and activate the homelab configuration
-sudo nixos-rebuild switch --flake .#bandit-lab
+# The homelab is never rebuilt from the laptop: push a signed commit to main,
+# then run `sudo lab-update apply` on bandit-lab (docs/runbooks/bandit-lab-updates.md)
 
 # Dry-run evaluation without downloading/building closures
 nix build .#nixosConfigurations.bandit.config.system.build.toplevel --dry-run --no-update-lock-file
@@ -243,7 +243,7 @@ After changing the Hyprland module, validate the flake before activating it:
 
 ```bash
 nix flake check --no-update-lock-file
-sudo nixos-rebuild switch --flake .#bandit
+nh os switch .
 ```
 
 The rebuild is the privileged boundary that installs the generated Lua file.

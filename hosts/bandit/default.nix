@@ -1,8 +1,4 @@
-{
-  lib,
-  repoConfig,
-  ...
-}: {
+{lib, ...}: {
   imports = [
     ./hardware.nix
   ];
@@ -10,10 +6,9 @@
   networking.hostName = "bandit";
   system.stateVersion = "25.11";
 
-  # Laptop-only: passwordless nixos-rebuild for quick iteration
-  security.sudo.extraConfig = ''
-    ${repoConfig.workstation.username} ALL=(root) NOPASSWD: /run/current-system/sw/bin/nixos-rebuild
-  '';
+  # No NOPASSWD sudo rule for nixos-rebuild: it would give any process running
+  # as the user passwordless root via `--flake /tmp/x`. Rebuild with `nh`
+  # (aliases ns/nt), which asks for the sudo password or fingerprint.
 
   # Gruvbox light variant — pick "light" from the GRUB menu, or switch live:
   # sudo /run/current-system/specialisation/light/bin/switch-to-configuration switch
