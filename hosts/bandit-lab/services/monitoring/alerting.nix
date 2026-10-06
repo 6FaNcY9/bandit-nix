@@ -195,6 +195,72 @@
                     datasource: {type: __expr__, uid: __expr__}
                     conditions:
                       - evaluator: {type: lt, params: [10]}
+            - uid: bandit-lab-backup-failed
+              title: Backup job failed
+              condition: C
+              for: 5m
+              noDataState: OK
+              labels:
+                severity: critical
+              annotations:
+                summary: "{{ $labels.name }} is in the failed state (off-host backup or integrity check)"
+              data:
+                - refId: A
+                  relativeTimeRange: {from: 300, to: 0}
+                  datasourceUid: prometheus
+                  model:
+                    editorMode: code
+                    expr: node_systemd_unit_state{name=~"restic-backups-lab.service|restic-check.service", state="failed"}
+                    instant: true
+                    range: false
+                    refId: A
+                    intervalMs: 1000
+                    maxDataPoints: 43200
+                - refId: C
+                  relativeTimeRange: {from: 300, to: 0}
+                  datasourceUid: __expr__
+                  model:
+                    type: threshold
+                    refId: C
+                    expression: A
+                    intervalMs: 1000
+                    maxDataPoints: 43200
+                    datasource: {type: __expr__, uid: __expr__}
+                    conditions:
+                      - evaluator: {type: gt, params: [0]}
+            - uid: bandit-lab-backup-stale
+              title: No backup run for 36 hours
+              condition: C
+              for: 10m
+              noDataState: OK
+              labels:
+                severity: critical
+              annotations:
+                summary: "The off-host backup timer has not fired for more than 36 hours"
+              data:
+                - refId: A
+                  relativeTimeRange: {from: 600, to: 0}
+                  datasourceUid: prometheus
+                  model:
+                    editorMode: code
+                    expr: time() - node_systemd_timer_last_trigger_seconds{name="restic-backups-lab.timer"}
+                    instant: true
+                    range: false
+                    refId: A
+                    intervalMs: 1000
+                    maxDataPoints: 43200
+                - refId: C
+                  relativeTimeRange: {from: 600, to: 0}
+                  datasourceUid: __expr__
+                  model:
+                    type: threshold
+                    refId: C
+                    expression: A
+                    intervalMs: 1000
+                    maxDataPoints: 43200
+                    datasource: {type: __expr__, uid: __expr__}
+                    conditions:
+                      - evaluator: {type: gt, params: [129600]}
     '';
   in
     pkgs.runCommand "grafana-provisioning" {} ''

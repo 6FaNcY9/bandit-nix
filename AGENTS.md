@@ -33,7 +33,7 @@ NixOS flake for `bandit` (Framework 13 AMD laptop) and `bandit-lab` (headless se
 | User environment | `home/` (`desktop/`, `terminal/`, `editor/`) |
 | Secrets wiring and encrypted data | `nixos/sops.nix`, `.sops.yaml`, `secrets/` |
 | Checks and CI | `ci/`, `.github/workflows/`, `.gitlab-ci.yml` |
-| Operational procedures | `docs/runbooks/`; security roadmap: `docs/SECURITY-PLAN.md` |
+| Operational procedures | `docs/runbooks/`; security roadmap: `docs/SECURITY-PLAN.md`; operator helpers: `tools/` |
 
 Follow imports to establish what is active; a directory's presence does not mean its service is deployed.
 

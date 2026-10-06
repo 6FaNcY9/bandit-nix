@@ -174,6 +174,18 @@ Minecraft published on all interfaces, and LLMNR/mDNS listening. Decisions:
 
 ---
 
+## Off-host backups (2026-10-06)
+
+Decision D7: restic to a Backblaze B2 bucket, encrypted with a repository
+password that lives in `secrets/lab.yaml` and offline. The module is committed
+but disabled until the four secrets are added (`docs/runbooks/backup-restore.md`),
+because enabling it without them would fail activation. The `lab-backup` flake
+check evaluates the enabled form (no inline secrets, consistent database
+snapshots, retention, integrity-check timer). Open point until the first drill:
+no restore has been tested yet; the runbook has the drill.
+
+---
+
 ## Phase 3 — Full-disk encryption with LUKS — DECISION REVERSED (2026-09-14)
 
 **Decision: Option A — in-place re-encryption with `cryptsetup reencrypt`.**
