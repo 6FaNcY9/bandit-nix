@@ -99,3 +99,19 @@ Rollback uses the previously reviewed Compose asset and recorded image IDs
 with the same project name and bind mounts. A Nix rollback does not revert an
 already recreated container definition. Never use `down -v` or prune as a
 rollback operation.
+
+## Cockpit "Metrics history": PCP is missing (known, by design)
+
+Cockpit's Metrics page shows live data from the host, but its *history* graphs
+need Performance Co-Pilot (PCP): Cockpit's channel imports the Python bindings
+`pcp.pmapi` and fails with "python3-pcp not installed" (Cockpit 366,
+`cockpit/channels/pcp.py`), and `pmlogger` has to be writing archives. nixpkgs
+does not package Performance Co-Pilot (the old `pcp` attribute was removed, and
+a search for the suite finds nothing under any other name), so there is nothing
+to enable. Making it work would mean maintaining a custom package of the whole
+PCP suite plus the `pmcd`/`pmlogger` services and patching Cockpit's Python
+environment to see the bindings. That was judged not worth it: this lab already
+keeps history in **Prometheus/Grafana** (host, containers, systemd units, probes,
+alerts) and **Beszel** (host resource history), and Cockpit stays the tool for
+live state, logs and service control (`portainer-retirement.md`). Use Grafana for
+history; the message in Cockpit is expected.
