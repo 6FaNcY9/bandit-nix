@@ -26,25 +26,36 @@ in {
     (modulesPath + "/installer/scan/not-detected.nix")
   ];
 
-  # ── Boot ──────────────────────────────────────────────────────────────────
-  # GRUB + separate /efi mount: kernels/initrds go to BTRFS (unlimited),
-  # only the ~2 MB GRUB EFI binary lands on the 100 MiB Windows-shared ESP.
-  boot.loader = {
-    grub = {
-      enable = true;
-      device = "nodev";
-      efiSupport = true;
-      useOSProber = false;
-      configurationLimit = 10;
+  boot = {
+    # ── Boot ────────────────────────────────────────────────────────────────
+    # GRUB + separate /efi mount: kernels/initrds go to BTRFS (unlimited),
+    # only the ~2 MB GRUB EFI binary lands on the 100 MiB Windows-shared ESP.
+    loader = {
+      grub = {
+        enable = true;
+        device = "nodev";
+        efiSupport = true;
+        useOSProber = false;
+        configurationLimit = 10;
+      };
+      efi = {
+        canTouchEfiVariables = true;
+        efiSysMountPoint = "/efi";
+      };
     };
-    efi = {
-      canTouchEfiVariables = true;
-      efiSysMountPoint = "/efi";
-    };
+
+    # ── Kernel ──────────────────────────────────────────────────────────────
+    # The default (LTS) kernel, not nixos/boot.nix's linuxPackages_latest: the
+    # lab combines an out-of-tree NVIDIA driver with unattended updates, and
+    # `switch` never loads a new kernel, so a kernel/driver mismatch would only
+    # show up at the next reboot. LTS moves slowly and nixpkgs builds the driver
+    # against it first. ci/lab-kernel.nix enforces this.
+    kernelPackages = lib.mkForce pkgs.linuxPackages;
+
+    # ── CPU ─────────────────────────────────────────────────────────────────
+    kernelModules = ["kvm-intel"];
   };
 
-  # ── CPU ───────────────────────────────────────────────────────────────────
-  boot.kernelModules = ["kvm-intel"];
   hardware = {
     cpu.intel.updateMicrocode = true;
 
@@ -61,7 +72,10 @@ in {
       # console, so modesetting must stay enabled — turning it off strips KMS
       # from the sole driver for that panel.
       modesetting.enable = true;
-      open = false;
+      # NVIDIA's open kernel modules (decision D8, 2026-10-06): recommended by
+      # NVIDIA for Turing and newer, which includes the RTX 4090 Laptop. Needs a
+      # reboot to take effect; the previous generation stays in the boot menu.
+      open = true;
       nvidiaSettings = false; # no graphical session — settings GUI is dead weight
       package = config.boot.kernelPackages.nvidiaPackages.stable;
       powerManagement.enable = false; # server: no suspend/resume; use nvidia-persistenced instead

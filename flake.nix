@@ -239,6 +239,12 @@
         hosts = {inherit (self.nixosConfigurations) bandit bandit-lab;};
       };
 
+      lab-kernel = import ./ci/lab-kernel.nix {
+        inherit pkgs;
+        inherit (nixpkgs) lib;
+        lab = self.nixosConfigurations.bandit-lab.config;
+      };
+
       lab-surface = import ./ci/lab-surface.nix {
         inherit pkgs repoConfig;
         inherit (nixpkgs) lib;
