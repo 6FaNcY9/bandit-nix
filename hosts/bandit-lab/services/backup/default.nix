@@ -20,6 +20,7 @@
   passwordFile = config.sops.secrets."restic-password".path;
   environmentFile = config.sops.templates."restic-b2.env".path;
   resticBin = "${pkgs.restic}/bin/restic";
+  minecraftSnapshot = "${(import ../minecraft/scripts.nix {inherit pkgs;}).snapshot}/bin/minecraft-snapshot";
 in {
   options.bandit-lab.backups.enable = lib.mkEnableOption "encrypted off-host restic backups to Backblaze B2";
 
@@ -91,6 +92,11 @@ in {
         ${docker} exec aiia-mysql sh -c \
           'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqldump --single-transaction --routines --events --all-databases -uroot' \
           | ${pkgs.gzip}/bin/gzip -c > ${staging}/aiia/mysql.sql.gz
+
+        # Minecraft: saves flushed and frozen while rsync copies the data
+        # directory, then re-enabled (a plain copy of a live world is torn).
+        # Runs last so a flush timeout cannot cancel the other dumps; it still fails the run instead of uploading an inconsistent world.
+        ${minecraftSnapshot} ${staging}/minecraft
       '';
       backupCleanupCommand = "find ${staging} -mindepth 1 -delete";
 
@@ -117,7 +123,7 @@ in {
       # and upload speed (raise it for the very first run if needed). The
       # databases are dumped from running containers, so start after them.
       services.restic-backups-lab = {
-        after = ["docker-aiia-mysql.service" "docker-vaultwarden.service"];
+        after = ["docker-aiia-mysql.service" "docker-vaultwarden.service" "docker-minecraft.service"];
         serviceConfig.TimeoutStartSec = "12h";
       };
 

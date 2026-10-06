@@ -1,170 +1,181 @@
 {
   config,
+  lib,
   pkgs,
   repoConfig,
   ...
 }: let
-  # Paper plugins pinned from Hangar (hangar.papermc.io), latest Release
-  # channel. ViaVersion lets newer clients join; ViaBackwards (requires
-  # ViaVersion) lets older clients join. Both support Paper 1.8/1.10-26.2.
-  viaVersion = pkgs.fetchurl {
-    url = "https://hangarcdn.papermc.io/plugins/ViaVersion/ViaVersion/versions/5.12.0/PAPER/ViaVersion-5.12.0.jar";
-    hash = "sha256-xNUS+pdg+kHRerrt3hKqH0yb3pINCpkv4PwBaWLxJr4=";
+  scripts = import ./scripts.nix {inherit pkgs;};
+
+  # Panel and map, pinned and owned by Nix (see stage.sh for the ownership
+  # split). VoxelDash is the browser admin panel (MIT, a Paper plugin that runs
+  # inside the server process); BlueMap (MIT) is the live map. Both are
+  # reachable only through the loopback ports published below and the tailnet
+  # HTTPS proxy.
+  voxelDashVersion = "1.2.1";
+  voxelDash = pkgs.fetchurl {
+    url = "https://github.com/gnmyt/VoxelDash/releases/download/v${voxelDashVersion}/voxeldash-spigot-${voxelDashVersion}.jar";
+    hash = "sha256-mwUYRpW1thF6zspu1rE7FvPwRYTjxNtZKYDzGC8hWLc=";
   };
-  viaBackwards = pkgs.fetchurl {
-    url = "https://hangarcdn.papermc.io/plugins/ViaVersion/ViaBackwards/versions/5.12.0/PAPER/ViaBackwards-5.12.0.jar";
-    hash = "sha256-+QL32n65nov69GH4AoPE4nULfZcn5rUI6ku5Fj9Vsds=";
+  blueMapVersion = "5.28";
+  blueMap = pkgs.fetchurl {
+    url = "https://github.com/BlueMap-Minecraft/BlueMap/releases/download/v${blueMapVersion}/bluemap-${blueMapVersion}-paper.jar";
+    hash = "sha256-TPtKmWMTLVvgqdsDGiipjp35Le7TfrsHVtOn3Ychq5g=";
   };
-  # Official Modrinth releases explicitly supporting Minecraft 26.2.
-  luckPerms = pkgs.fetchurl {
-    url = "https://cdn.modrinth.com/data/Vebnzrzj/versions/b0mk8uS6/LuckPerms-Bukkit-5.5.71.jar";
-    hash = "sha512-GIqR8KVD0jv9oyOF/KbbY9YeScikIr1FKiYL2cvGp9f+RQcRmen8qPPOQ8K0HuhP0xW9FUZFdwKP85UafU+rJw==";
+
+  # Plugins seeded once (first activation of the one-time seed) and then owned
+  # by the panel: pinned from Hangar / Modrinth / GitHub with exact hashes.
+  # ViaVersion lets newer clients join; ViaBackwards (requires ViaVersion)
+  # lets older clients join. Modrinth releases explicitly support 26.2.
+  seedPlugins = {
+    "ViaVersion-5.12.0.jar" = pkgs.fetchurl {
+      url = "https://hangarcdn.papermc.io/plugins/ViaVersion/ViaVersion/versions/5.12.0/PAPER/ViaVersion-5.12.0.jar";
+      hash = "sha256-xNUS+pdg+kHRerrt3hKqH0yb3pINCpkv4PwBaWLxJr4=";
+    };
+    "ViaBackwards-5.12.0.jar" = pkgs.fetchurl {
+      url = "https://hangarcdn.papermc.io/plugins/ViaVersion/ViaBackwards/versions/5.12.0/PAPER/ViaBackwards-5.12.0.jar";
+      hash = "sha256-+QL32n65nov69GH4AoPE4nULfZcn5rUI6ku5Fj9Vsds=";
+    };
+    "LuckPerms-Bukkit-5.5.71.jar" = pkgs.fetchurl {
+      url = "https://cdn.modrinth.com/data/Vebnzrzj/versions/b0mk8uS6/LuckPerms-Bukkit-5.5.71.jar";
+      hash = "sha512-GIqR8KVD0jv9oyOF/KbbY9YeScikIr1FKiYL2cvGp9f+RQcRmen8qPPOQ8K0HuhP0xW9FUZFdwKP85UafU+rJw==";
+    };
+    "SModeration-Paper-2.0.0.jar" = pkgs.fetchurl {
+      url = "https://cdn.modrinth.com/data/psWnUhHl/versions/oSGjnNOf/SModeration-Paper-2.0.0.jar";
+      hash = "sha512-lPfgeAqYZMZU4ACHBd4Hj7PtCCfcpfVUQ8jWHxwkrEWgO0aJve+jAQB0tjIZEJTw6VE1MalxwIGBwD63nAU2KA==";
+    };
+    "CommandPanels-4.2.4.jar" = pkgs.fetchurl {
+      url = "https://github.com/rockyhawk64/CommandPanels/releases/download/4.2.4/CommandPanels-4.2.4.jar";
+      hash = "sha256-I5BNRmQALJbL/9w5RCBl4iC09r0CKxXT+CsXgRUgYAE=";
+    };
+    "PlaceholderAPI-2.12.3.jar" = pkgs.fetchurl {
+      url = "https://hangarcdn.papermc.io/plugins/HelpChat/PlaceholderAPI/versions/2.12.3/PAPER/PlaceholderAPI-2.12.3.jar";
+      hash = "sha256-/eAyWfWvaTjzwz7rTYFAAKGtq/HSMEzhSXC+gfYJpDc=";
+    };
+    "InventoryRollbackPlus-1.8.4.jar" = pkgs.fetchurl {
+      url = "https://cdn.modrinth.com/data/XWKWAzd8/versions/2JWRgmoZ/InventoryRollbackPlus-1.8.4.jar";
+      hash = "sha512-UUS+wSYGcxIvG9yRwnQ/JsfSDeR0A8FWiY0pnQrhqV9KptWM/Sg6VH5RhiyRmxMb8JzMOA2iFbcOTuVrc5wbEA==";
+    };
+    "AxGraves-1.32.0.jar" = pkgs.fetchurl {
+      url = "https://cdn.modrinth.com/data/Cz6msz34/versions/TVfUUk5c/AxGraves-1.32.0.jar";
+      hash = "sha512-ZH1PTpLRu+6DkTgDLVM4DhfyCZTe9GfGZ5U1u44/k/fk2bGhuVDCx1Es1wA9azjxhSATFzEobtLYgMvpZOD1Lw==";
+    };
   };
-  sModeration = pkgs.fetchurl {
-    url = "https://cdn.modrinth.com/data/psWnUhHl/versions/oSGjnNOf/SModeration-Paper-2.0.0.jar";
-    hash = "sha512-lPfgeAqYZMZU4ACHBd4Hj7PtCCfcpfVUQ8jWHxwkrEWgO0aJve+jAQB0tjIZEJTw6VE1MalxwIGBwD63nAU2KA==";
+  seedExpansions = {
+    "PAPI-Expansion-Player_R5xV754.jar" = pkgs.fetchurl {
+      url = "https://dl.placeholderapi.com/PAPI-Expansion-Player_R5xV754.jar";
+      hash = "sha256-o1V0u76c6IaIIRVDcf11TmZAKjgox0U7jOMrxTborGw=";
+    };
   };
-  commandPanels = pkgs.fetchurl {
-    url = "https://github.com/rockyhawk64/CommandPanels/releases/download/4.2.4/CommandPanels-4.2.4.jar";
-    hash = "sha256-I5BNRmQALJbL/9w5RCBl4iC09r0CKxXT+CsXgRUgYAE=";
-  };
-  placeholderApi = pkgs.fetchurl {
-    url = "https://hangarcdn.papermc.io/plugins/HelpChat/PlaceholderAPI/versions/2.12.3/PAPER/PlaceholderAPI-2.12.3.jar";
-    hash = "sha256-/eAyWfWvaTjzwz7rTYFAAKGtq/HSMEzhSXC+gfYJpDc=";
-  };
-  placeholderApiPlayer = pkgs.fetchurl {
-    url = "https://dl.placeholderapi.com/PAPI-Expansion-Player_R5xV754.jar";
-    hash = "sha256-o1V0u76c6IaIIRVDcf11TmZAKjgox0U7jOMrxTborGw=";
-  };
-  inventoryRollbackPlus = pkgs.fetchurl {
-    url = "https://cdn.modrinth.com/data/XWKWAzd8/versions/2JWRgmoZ/InventoryRollbackPlus-1.8.4.jar";
-    hash = "sha512-UUS+wSYGcxIvG9yRwnQ/JsfSDeR0A8FWiY0pnQrhqV9KptWM/Sg6VH5RhiyRmxMb8JzMOA2iFbcOTuVrc5wbEA==";
-  };
-  axGraves = pkgs.fetchurl {
-    url = "https://cdn.modrinth.com/data/Cz6msz34/versions/TVfUUk5c/AxGraves-1.32.0.jar";
-    hash = "sha512-ZH1PTpLRu+6DkTgDLVM4DhfyCZTe9GfGZ5U1u44/k/fk2bGhuVDCx1Es1wA9azjxhSATFzEobtLYgMvpZOD1Lw==";
-  };
-  pluginsDir = "/srv/containers/minecraft/data/plugins";
-  commandPanelsDir = "${pluginsDir}/CommandPanels";
-  placeholderApiDir = "${pluginsDir}/PlaceholderAPI";
-  grep = "${pkgs.gnugrep}/bin/grep";
-  sed = "${pkgs.gnused}/bin/sed";
-  awk = "${pkgs.gawk}/bin/awk";
+
+  panelPort = "7867";
+  mapPort = "8100";
 in {
   systemd = {
     # Match the container's minecraft UID/GID so Paper can read player saves.
     tmpfiles.rules = [
       "d /srv/containers/minecraft/data 0750 1000 1000 -"
+      "d /srv/containers/minecraft/backups 0750 root root -"
     ];
 
-    # Stage pinned plugin JARs into the data volume before the container
-    # starts. Stale managed JARs are removed first so version bumps don't
-    # leave duplicates behind. Runs as root on the host; the container only
-    # sees plain files (a nix-store symlink would not resolve inside it).
-    services.minecraft-plugins = {
-      description = "Stage managed Minecraft Paper plugins";
-      before = ["docker-minecraft.service"];
-      requiredBy = ["docker-minecraft.service"];
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
+    services = {
+      # Stage the pinned panel/map and seed the panel-owned plugins before the
+      # container starts. Runs as root on the host; the container only sees plain
+      # files (a nix-store symlink would not resolve inside it). Ownership rules
+      # and the one-time seed are documented in stage.sh.
+      minecraft-plugins = {
+        description = "Stage Minecraft panel, map and one-time plugin seed";
+        before = ["docker-minecraft.service"];
+        requiredBy = ["docker-minecraft.service"];
+        environment = {
+          STAGE_VOXELDASH = voxelDash;
+          STAGE_VOXELDASH_VERSION = voxelDashVersion;
+          STAGE_BLUEMAP = blueMap;
+          STAGE_BLUEMAP_VERSION = blueMapVersion;
+          STAGE_BLUEMAP_CORE = ./bluemap-core.conf;
+          STAGE_PANELS = ./commandpanels;
+          STAGE_SEED = pkgs.linkFarm "minecraft-seed-plugins" seedPlugins;
+          STAGE_EXPANSIONS = pkgs.linkFarm "minecraft-seed-expansions" seedExpansions;
+        };
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = "${scripts.stage}/bin/minecraft-stage";
+        };
       };
-      script = ''
-        serverProperties=/srv/containers/minecraft/data/server.properties
-        if [ ! -f "$serverProperties" ] || [ "$(${grep} -Ec '^allow-flight=(true|false)$' "$serverProperties")" -ne 1 ]; then
-          echo "Refusing to edit unexpected allow-flight property" >&2
-          exit 1
-        fi
-        viaConfig=${pluginsDir}/ViaVersion/config.yml
-        if [ ! -f "$viaConfig" ]; then
-          echo "Refusing to edit missing ViaVersion config" >&2
-          exit 1
-        fi
-        packetLimiterBlock="$(${sed} -n '/^packet-limiter:[[:space:]]*$/,/^[^[:space:]#]/p' "$viaConfig")"
-        if [ "$(${grep} -Ec '^[[:space:]]+enabled:[[:space:]]*(true|false)[[:space:]]*$' <<<"$packetLimiterBlock")" -ne 1 ]; then
-          echo "Refusing to edit unexpected ViaVersion packet-limiter block" >&2
-          exit 1
-        fi
 
-        moderationConfig=${pluginsDir}/SModeration/config.yml
-        if [ ! -f "$moderationConfig" ] || [ "$(${grep} -Ec '^force-reason: (true|false)$' "$moderationConfig")" -ne 1 ]; then
-          echo "Refusing to edit unexpected SModeration config" >&2
-          exit 1
-        fi
-        for feature in punishments smodmenu invsee enderchestsee offlinetp socialspy vanish; do
-          if [ "$(${grep} -Ec "^[[:space:]]+$feature:[[:space:]]+true$" "$moderationConfig")" -ne 1 ]; then
-            echo "Refusing to edit missing or disabled SModeration feature: $feature" >&2
-            exit 1
-          fi
-        done
-        customPunishmentsBlock="$(${sed} -n '/^custom-punishments:[[:space:]]*$/,/^[^[:space:]#]/p' "$moderationConfig")"
-        if [ "$(${grep} -Ec '^[[:space:]]+enabled:[[:space:]]+(true|false)$' <<<"$customPunishmentsBlock")" -ne 1 ]; then
-          echo "Refusing to edit unexpected SModeration custom-punishments block" >&2
-          exit 1
-        fi
-        warnBlock="$(${awk} '/^  warn:[[:space:]]*$/ { found=1 } found && $0 !~ /^  / { exit } found { print }' "$moderationConfig")"
-        expectedWarnBlock=$'  warn:\n    timed: false\n    name: Warn\n    effects: []\n    commands:\n      - /warn\n      - /smodwarn'
-        if [ -n "$warnBlock" ] && [ "$warnBlock" != "$expectedWarnBlock" ]; then
-          echo "Refusing to overwrite unexpected SModeration warn definition" >&2
-          exit 1
-        fi
+      # The tailnet address must exist before Docker can publish on it. tailscaled
+      # being "started" does not guarantee the address is assigned yet, so retry
+      # indefinitely instead of giving up after the default start limit.
+      # Restart=always: a Stop from the panel (or a clean exit) brings the server
+      # back; `systemctl stop docker-minecraft` stays the way to keep it down.
+      docker-minecraft = {
+        after = ["tailscaled.service"];
+        wants = ["tailscaled.service"];
+        unitConfig.StartLimitIntervalSec = 0;
+        serviceConfig = {
+          Restart = lib.mkForce "always";
+          RestartSec = "10s";
+        };
+      };
 
-        ${sed} -E -i 's/^allow-flight=(true|false)$/allow-flight=true/' "$serverProperties"
-        if ! ${grep} -q '^allow-flight=true$' "$serverProperties"; then
-          echo "allow-flight validation failed" >&2
-          exit 1
-        fi
+      # Private HTTPS for the panel (443) and the map (8443): Tailscale Serve,
+      # tailnet only (never Funnel). Serve and "HTTPS Certificates" must be enabled
+      # once in the Tailscale admin console. Until then `tailscale serve --bg`
+      # blocks waiting for that, so each call is time-boxed, and the unit logs a
+      # warning and still succeeds: a missing console setting must not hang or
+      # fail a deployment. After enabling it, run
+      #   sudo systemctl restart minecraft-panel-https
+      # (bandit-lab-health warns while the panel has no HTTPS route). Meanwhile
+      # the panel is reachable through an SSH tunnel (docs/runbooks/minecraft/PANEL.md).
+      minecraft-panel-https = {
+        description = "Tailnet-only HTTPS for the Minecraft panel and map";
+        after = ["tailscaled.service" "docker-minecraft.service"];
+        wants = ["tailscaled.service"];
+        wantedBy = ["multi-user.target"];
+        path = [config.services.tailscale.package pkgs.coreutils];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          TimeoutStartSec = "90s";
+        };
+        script = ''
+          serve() {
+            if ! timeout 30 tailscale serve --bg --https="$1" "http://127.0.0.1:$2"; then
+              echo "WARNING: could not publish 127.0.0.1:$2 on tailnet HTTPS port $1; enable Serve and HTTPS Certificates in the Tailscale admin console, then restart this unit" >&2
+            fi
+          }
+          serve 443 ${panelPort}
+          serve 8443 ${mapPort}
+        '';
+        preStop = ''
+          timeout 30 tailscale serve --https=443 off || true
+          timeout 30 tailscale serve --https=8443 off || true
+        '';
+      };
 
-        ${sed} -i '/^packet-limiter:[[:space:]]*$/,/^[^[:space:]#]/ s/^\([[:space:]]*enabled:[[:space:]]*\)\(true\|false\)$/\1false/' "$viaConfig"
-        packetLimiterBlock="$(${sed} -n '/^packet-limiter:[[:space:]]*$/,/^[^[:space:]#]/p' "$viaConfig")"
-        if ! ${grep} -Eq '^[[:space:]]+enabled:[[:space:]]*false[[:space:]]*$' <<<"$packetLimiterBlock"; then
-          echo "ViaVersion packet-limiter validation failed" >&2
-          exit 1
-        fi
-
-        ${sed} -i -E 's/^force-reason: (true|false)$/force-reason: true/' "$moderationConfig"
-        ${sed} -i '/^custom-punishments:[[:space:]]*$/,/^[^[:space:]#]/ s/^  enabled: false$/  enabled: true/' "$moderationConfig"
-        if [ -z "$warnBlock" ]; then
-          ${sed} -i '/^custom-punishments:[[:space:]]*$/,/^[^[:space:]#]/ s|^  enabled: true$|  enabled: true\n\x20\x20warn:\n\x20\x20\x20\x20timed: false\n\x20\x20\x20\x20name: Warn\n\x20\x20\x20\x20effects: []\n\x20\x20\x20\x20commands:\n\x20\x20\x20\x20\x20\x20- /warn\n\x20\x20\x20\x20\x20\x20- /smodwarn|' "$moderationConfig"
-        fi
-        if ! ${grep} -q '^force-reason: true$' "$moderationConfig" || ! ${grep} -q '^  enabled: true$' <<<"$(${sed} -n '/^custom-punishments:[[:space:]]*$/,/^[^[:space:]#]/p' "$moderationConfig")"; then
-          echo "SModeration config validation failed" >&2
-          exit 1
-        fi
-        warnBlock="$(${awk} '/^  warn:[[:space:]]*$/ { found=1 } found && $0 !~ /^  / { exit } found { print }' "$moderationConfig")"
-        if [ "$warnBlock" != "$expectedWarnBlock" ]; then
-          echo "SModeration warn validation failed" >&2
-          exit 1
-        fi
-
-        mkdir -p ${pluginsDir}
-        rm -f ${pluginsDir}/ViaVersion-*.jar ${pluginsDir}/ViaBackwards-*.jar
-        rm -f ${pluginsDir}/LuckPerms-Bukkit-*.jar ${pluginsDir}/SModeration-Paper-*.jar ${pluginsDir}/InventoryRollbackPlus-*.jar ${pluginsDir}/AxGraves-*.jar ${pluginsDir}/CommandPanels-*.jar ${pluginsDir}/PlaceholderAPI-*.jar
-        install -m 0644 ${luckPerms} ${pluginsDir}/LuckPerms-Bukkit-5.5.71.jar
-        install -m 0644 ${sModeration} ${pluginsDir}/SModeration-Paper-2.0.0.jar
-        install -m 0644 ${inventoryRollbackPlus} ${pluginsDir}/InventoryRollbackPlus-1.8.4.jar
-        install -m 0644 ${axGraves} ${pluginsDir}/AxGraves-1.32.0.jar
-        install -m 0644 ${viaVersion} ${pluginsDir}/ViaVersion-5.12.0.jar
-        install -m 0644 ${viaBackwards} ${pluginsDir}/ViaBackwards-5.12.0.jar
-        install -d -o 1000 -g 1000 -m 0750 ${commandPanelsDir} ${commandPanelsDir}/panels
-        install -m 0644 ${commandPanels} ${pluginsDir}/CommandPanels-4.2.4.jar
-        install -o 1000 -g 1000 -m 0644 ${./commandpanels/admin.yml} ${commandPanelsDir}/panels/admin.yml
-        install -o 1000 -g 1000 -m 0644 ${./commandpanels/admin-player.yml} ${commandPanelsDir}/panels/admin-player.yml
-        install -d -o 1000 -g 1000 -m 0750 ${placeholderApiDir} ${placeholderApiDir}/expansions
-        rm -f ${placeholderApiDir}/expansions/PAPI-Expansion-Player_*.jar
-        install -m 0644 ${placeholderApi} ${pluginsDir}/PlaceholderAPI-2.12.3.jar
-        install -o 1000 -g 1000 -m 0644 ${placeholderApiPlayer} ${placeholderApiDir}/expansions/PAPI-Expansion-Player_R5xV754.jar
-      '';
+      # Consistent daily backup with checksum, listing test and retention. The
+      # off-host copy is the restic job (services/backup), which runs the same
+      # snapshot at 04:30.
+      minecraft-backup = {
+        description = "Consistent Minecraft backup (flush, snapshot, verify, prune)";
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = "${scripts.backup}/bin/minecraft-backup";
+          TimeoutStartSec = "2h";
+          Nice = 10;
+          IOSchedulingClass = "idle";
+        };
+      };
     };
 
-    # The tailnet address must exist before Docker can publish on it. tailscaled
-    # being "started" does not guarantee the address is assigned yet, so retry
-    # indefinitely instead of giving up after the default start limit.
-    services.docker-minecraft = {
-      after = ["tailscaled.service"];
-      wants = ["tailscaled.service"];
-      unitConfig.StartLimitIntervalSec = 0;
-      serviceConfig.RestartSec = "10s";
+    timers.minecraft-backup = {
+      wantedBy = ["timers.target"];
+      timerConfig = {
+        OnCalendar = "03:40";
+        Persistent = true;
+        RandomizedDelaySec = "10m";
+      };
     };
   };
 
@@ -172,34 +183,50 @@ in {
   # and 12 GiB so it can never starve Traefik/PostgreSQL/Wazuh & co. — the lab
   # (i9-14900HX, 62 GiB) barely notices it. Not proxied through Traefik:
   # Minecraft is a raw TCP protocol, so port 25565 is published directly.
+  # The container has no docker.sock, no privileges and a single mount: the
+  # panel runs as a plugin inside it and cannot reach the host.
   virtualisation.oci-containers.containers.minecraft = {
     # java25 tag: Minecraft 26.1+ refuses to start on anything older.
     image = "itzg/minecraft-server@sha256:769a826c340586e9d483a0eb6437b8e2c3611aea6a115ff072a2fe372d43e2be"; # java25
+    # itzg rewrites every server.properties key that has an environment
+    # variable here on each start, so only keys Nix must own are listed
+    # (max-players: capacity is sized against the resource cap; ops: admin
+    # identity). Everything else in server.properties belongs to the panel.
     environment = {
       EULA = "TRUE";
       # Paper over vanilla: same gameplay, much better tick performance.
       TYPE = "PAPER";
       VERSION = "26.2";
+      # Without a pin itzg downloads the newest Paper build on every start.
+      # Bump deliberately, after a backup (docs/runbooks/minecraft/PANEL.md).
+      PAPER_BUILD = "130";
       TZ = config.time.timeZone;
       # 8 GiB heap (Xms = Xmx) + Aikar GC flags = no GC stutter; container
       # cap below leaves headroom for off-heap/metaspace.
       MEMORY = "8G";
       USE_AIKAR_FLAGS = "true";
       MAX_PLAYERS = "12";
-      MOTD = "bandit-lab";
       OPS = "fancy8869";
       # Administer through the local console without exposing RCON.
       CREATE_CONSOLE_IN_PIPE = "true";
       ENABLE_RCON = "false";
     };
-    # Bound to the tailnet address (decision D6, 2026-10-06). Docker-published
-    # ports bypass the NixOS firewall (Docker's DNAT runs before INPUT), so the
-    # bind address is the only access control: players join over Tailscale.
-    ports = ["${repoConfig.lab.tailscaleIp}:25565:25565"];
+    # Game port bound to the tailnet address (decision D6, 2026-10-06). Docker-
+    # published ports bypass the NixOS firewall (Docker's DNAT runs before
+    # INPUT), so the bind address is the only access control: players join over
+    # Tailscale. Panel and map listen on loopback only; tailscale serve (above)
+    # is their sole network path.
+    ports = [
+      "${repoConfig.lab.tailscaleIp}:25565:25565"
+      "127.0.0.1:${panelPort}:7867"
+      "127.0.0.1:${mapPort}:8100"
+    ];
     volumes = ["/srv/containers/minecraft/data:/data"];
     extraOptions = [
       "--memory=12g"
       "--cpus=4"
+      # Room for a full world save on SIGTERM (docker's default is 10 s).
+      "--stop-timeout=60"
     ];
   };
 }

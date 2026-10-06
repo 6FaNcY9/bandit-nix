@@ -25,6 +25,7 @@ in
   assert lib.assertMsg (lib.all (p: lib.elem p b.paths) mustBackUp) "backup paths must include ${toString mustBackUp}";
   assert lib.assertMsg (lib.any (lib.hasPrefix "--keep-daily") b.pruneOpts && lib.any (lib.hasPrefix "--keep-monthly") b.pruneOpts) "retention must keep daily and monthly snapshots";
   assert lib.assertMsg (lib.hasInfix ".backup" prepare && lib.hasInfix "--single-transaction" prepare) "databases must be snapshotted consistently (sqlite .backup, mysqldump --single-transaction)";
+  assert lib.assertMsg (lib.hasInfix "minecraft-snapshot" prepare) "the Minecraft world must be captured through the save-flushing snapshot, never a plain copy";
   assert lib.assertMsg (!(lib.hasInfix " -p" prepare)) "no inline database password on a command line";
   assert lib.assertMsg (labOn.systemd.timers ? restic-check && lib.hasInfix "--read-data-subset" labOn.systemd.services.restic-check.script) "the weekly integrity check must exist";
     pkgs.runCommand "lab-backup" {nativeBuildInputs = [pkgs.gnugrep];} ''

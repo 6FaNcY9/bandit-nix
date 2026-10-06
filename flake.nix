@@ -256,6 +256,12 @@
         lab = self.nixosConfigurations.bandit-lab.config;
       };
 
+      lab-minecraft = import ./ci/lab-minecraft.nix {
+        inherit pkgs repoConfig;
+        inherit (nixpkgs) lib;
+        lab = self.nixosConfigurations.bandit-lab.config;
+      };
+
       lab-surface = import ./ci/lab-surface.nix {
         inherit pkgs repoConfig;
         inherit (nixpkgs) lib;

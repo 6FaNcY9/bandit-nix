@@ -21,6 +21,14 @@ it does not prove application-level recovery or off-host recoverability.
 
 ## Minecraft
 
+*Prepared, not yet deployed:* once the panel change is activated
+([minecraft/MIGRATION.md](minecraft/MIGRATION.md)), `minecraft-backup.timer` (03:40)
+writes a consistent archive (`save-off`, `save-all flush`, rsync, `save-on`, tar.zst)
+with a `.sha256` and keeps the newest 14 in `/srv/containers/minecraft/backups/auto`;
+the restic job calls the same snapshot script. `tools/minecraft-restore-test.sh
+ARCHIVE` is the restore drill (new directory, throwaway container, no published
+port). The manual procedure below stays valid for cold backups.
+
 1. Make a fresh consistent backup after `save-all flush` and a graceful stop.
 2. Extract a copy into an isolated temporary directory; never extract over
    `/srv/containers/minecraft/data`.
@@ -46,9 +54,10 @@ disabled until the secrets exist. Evaluated in its enabled form by the
 | AiiA / Ghost content | `/srv/containers/aiia/content-{images,media,files,data}` |
 | PostgreSQL | the existing 03:15 dumps in `/var/backup/postgresql` |
 | Mrija archive | `maildir/` plus an `sqlite3 .backup` snapshot of `mail_index.sqlite` |
+| Minecraft (once the panel change is deployed) | `minecraft-snapshot`: saves flushed and frozen while rsync copies the data directory (worlds, plugins, panel accounts), then re-enabled; excludes caches, logs, panel backups, BlueMap tiles |
 
-Not included on purpose: Portainer (retired; local rollback archive exists), the
-Minecraft world, `/srv/storage` (Samba share), Grafana/Prometheus data and the
+Not included on purpose: Portainer (retired; local rollback archive exists),
+`/srv/storage` (Samba share), Grafana/Prometheus data and the
 Wazuh indexer. Add a path in the module if you want one of them.
 
 Schedule: backup daily 04:30 (random delay up to 20 minutes), retention 7 daily,

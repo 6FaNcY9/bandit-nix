@@ -2,6 +2,18 @@
 
 Verified live on 2026-09-22 after activation. Existing server and worlds preserved.
 
+> **Prepared, not deployed (2026-10-06):** browser administration (VoxelDash panel,
+> BlueMap map), pinned Paper build, consistent backups and a plugin-ownership change
+> are in the working tree. They change several statements below once activated
+> (plugin versions become panel-owned, `minecraft-plugins` seeds once instead of
+> enforcing every start, `MOTD` is no longer an environment variable). See
+> [PANEL.md](PANEL.md) for the selection, matrix and daily use and
+> [MIGRATION.md](MIGRATION.md) for the maintenance runbook. Until the GO, the text
+> below describes production.
+> Read-only check on 2026-10-06: production runs Paper **26.2 build 130** (itzg floats
+> to the newest build on each start), not 127; `ops.json` also lists `MidariBread`
+> at level 4.
+
 ## Server and backup
 
 - Paper 26.2 build 127 (`ad9a034`); Temurin Java 25.0.4+7-LTS.

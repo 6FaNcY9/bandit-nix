@@ -85,6 +85,17 @@
       # deployment that leaves Tailscale down would lock out remote access, so
       # it must fail the health gate and roll back.
       ready sh -c 'tailscale status --json | jq -e ".BackendState == \"Running\"" >/dev/null'
+      # Minecraft panel and map answer on loopback (warn only: a panel or map
+      # problem must not roll back an unrelated deployment; the game server
+      # itself is gated by its systemd unit and Docker health state).
+      for probe in "Minecraft panel:7867" "Minecraft map:8100"; do
+        if ! curl --fail --silent --output /dev/null --connect-timeout 2 --max-time 5 "http://127.0.0.1:''${probe##*:}/"; then
+          echo "Warning: ''${probe%%:*} is not answering on 127.0.0.1:''${probe##*:}" >&2
+        fi
+      done
+      if ! tailscale serve status 2>/dev/null | grep -q '127.0.0.1:7867'; then
+        echo "Warning: the Minecraft panel has no tailnet HTTPS route (enable Serve in the Tailscale admin console, then restart minecraft-panel-https)" >&2
+      fi
       container_healthy vaultwarden
       ready pg_isready -q -h /run/postgresql -t 3
       ready curl --fail --silent --show-error --output /dev/null --connect-timeout 2 --max-time 5 \
