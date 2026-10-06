@@ -35,7 +35,7 @@
   ];
   healthCheck = pkgs.writeShellApplication {
     name = "bandit-lab-health";
-    runtimeInputs = [pkgs.coreutils pkgs.systemd pkgs.curl pkgs.docker pkgs.jq pkgs.tailscale config.services.postgresql.package];
+    runtimeInputs = [pkgs.bash pkgs.coreutils pkgs.systemd pkgs.curl pkgs.docker pkgs.jq pkgs.tailscale config.services.postgresql.package];
     text = ''
       set -euo pipefail
 
