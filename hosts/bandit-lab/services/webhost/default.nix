@@ -185,9 +185,15 @@ in {
       # NixOS defaults to Unix-socket access unless enableTCPIP is set.
       settings = {
         max_connections = 100;
-        shared_buffers = "4GB";
-        effective_cache_size = "48GB";
-        work_mem = "64MB";
+        # The host has 64 GiB but Postgres shares it with Minecraft (12 GiB cap),
+        # the Wazuh indexer (about 6 GiB RSS, 4 GiB heap) and Docker. Observed
+        # 2026-10-06: about 20 GiB used, about 43 GiB available, mostly page
+        # cache shared by everything. effective_cache_size is only a planner
+        # hint for how much of the data the OS cache can hold, so size it to a
+        # realistic share, not to total RAM.
+        shared_buffers = "2GB";
+        effective_cache_size = "16GB";
+        work_mem = "32MB";
       };
     };
   };

@@ -1,10 +1,34 @@
 {pkgs, ...}: {
   # bandit-lab is a 24/7 headless server — prevent any suspend/sleep.
-  systemd.targets = {
-    sleep.enable = false;
-    suspend.enable = false;
-    hibernate.enable = false;
-    "hybrid-sleep".enable = false;
+  systemd = {
+    targets = {
+      sleep.enable = false;
+      suspend.enable = false;
+      hibernate.enable = false;
+      "hybrid-sleep".enable = false;
+    };
+
+    # Energy-performance preference for intel_pstate (HWP): "balance_performance"
+    # keeps latency good for a 24/7 server without pinning clocks high on a
+    # laptop chassis. The kernel applies it per core; the `*` glob covers all of
+    # them (tmpfiles `w` accepts shell-style globs).
+    tmpfiles.rules = [
+      "w /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference - - - - balance_performance"
+    ];
+
+    services.disable-console-blanking = {
+      description = "Disable virtual console blanking on tty1";
+      wantedBy = ["multi-user.target"];
+      after = ["getty@tty1.service"];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        TTYPath = "/dev/tty1";
+        StandardOutput = "tty";
+        Environment = "TERM=linux";
+        ExecStart = "${pkgs.util-linux}/bin/setterm --blank 0 --powersave off";
+      };
+    };
   };
 
   # ── Console blanking ──────────────────────────────────────────────────────
@@ -21,20 +45,6 @@
   #     dormant until someone happens to reboot.
   boot.kernelParams = ["consoleblank=0"];
 
-  systemd.services.disable-console-blanking = {
-    description = "Disable virtual console blanking on tty1";
-    wantedBy = ["multi-user.target"];
-    after = ["getty@tty1.service"];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      TTYPath = "/dev/tty1";
-      StandardOutput = "tty";
-      Environment = "TERM=linux";
-      ExecStart = "${pkgs.util-linux}/bin/setterm --blank 0 --powersave off";
-    };
-  };
-
   services.logind.settings.Login = {
     HandleLidSwitch = "ignore";
     HandleLidSwitchExternalPower = "ignore";
@@ -44,6 +54,14 @@
     IdleAction = "ignore";
   };
 
-  # i9-14900HX on AC power: performance governor for consistent server latency.
-  powerManagement.cpuFreqGovernor = "performance";
+  # i9-14900HX in a laptop chassis, always on AC, running 24/7. With
+  # intel_pstate in active/HWP mode the `powersave` governor still lets the CPU
+  # boost on demand (the hardware picks the frequency); `performance` would keep
+  # clocks high and the chassis hot all day. Observed on the live lab
+  # (2026-10-06): governor powersave and preference balance_power although this
+  # file used to ask for `performance`, so the old setting was not what ran.
+  # Measure the effect: `sudo turbostat --quiet --interval 10 --num_iterations 6
+  # --show PkgWatt,Busy%,Bzy_MHz` at idle and under load, and watch the blackbox
+  # probe latencies in Grafana.
+  powerManagement.cpuFreqGovernor = "powersave";
 }
