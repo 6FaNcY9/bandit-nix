@@ -75,6 +75,11 @@
     };
   };
 
+  # The metadata refresh failed ("PolicyKit daemon is not available") when it
+  # fired while a switch had polkit stopped, and lab-update then rolled the whole
+  # deploy back. Firmware on the lab is updated by hand, so the timer is not needed.
+  systemd.timers.fwupd-refresh.enable = false;
+
   users.users.${repoConfig.workstation.username}.openssh.authorizedKeys.keys = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHOfT8hlUovvRJtHh5YKJzBhHZSK05WLGERQIq0H7GDt vino@bandit-homelab"
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG23qu5Tr1aUKcJIetthXoavOQZd1IJqnp7wwffivJ2i phone@bandit-lab"
