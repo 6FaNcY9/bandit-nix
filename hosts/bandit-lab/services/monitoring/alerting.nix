@@ -1,4 +1,15 @@
-{pkgs, ...}: let
+{
+  config,
+  pkgs,
+  ...
+}: let
+  # While the backup module is off the series do not exist, so "no data" must
+  # not alert; once it is on, missing data (units not exported, node-exporter
+  # not recreated) must alert instead of staying green forever.
+  backupNoData =
+    if config.bandit-lab.backups.enable
+    then "Alerting"
+    else "OK";
   # Datasource + dashboard provider + alert rules, file-provisioned so the
   # stack is reproducible from a fresh volume. NOTE: the result must contain
   # real files (cp -L), not symlinkJoin/linkFarm links — Docker bind-mounts
@@ -199,7 +210,7 @@
               title: Backup job failed
               condition: C
               for: 5m
-              noDataState: OK
+              noDataState: ${backupNoData}
               labels:
                 severity: critical
               annotations:
@@ -232,7 +243,7 @@
               title: No backup run for 36 hours
               condition: C
               for: 10m
-              noDataState: OK
+              noDataState: ${backupNoData}
               labels:
                 severity: critical
               annotations:

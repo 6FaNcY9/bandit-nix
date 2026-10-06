@@ -75,11 +75,15 @@ structure plus a rotating 5 % of the data). Staging lives in
    `hosts/bandit-lab/default.nix`, commit signed, push, and apply with
    `sudo lab-update apply`.
 5. **Let monitoring see it:** the Compose node-exporter flags and the Grafana
-   alert rules changed in the same release; the running containers keep the old
-   ones until they are recreated:
+   alert rules changed in the same release, and `compose-monitoring.service`
+   only *starts* existing containers, so `lab-update` never applies them. Force
+   the two containers to be recreated (Grafana reads its provisioned alert
+   files only when it starts):
    ```bash
-   sudo docker compose -p monitoring -f /etc/bandit-lab/monitoring.compose.yml up -d --pull never --no-build
+   sudo docker compose -p monitoring -f /etc/bandit-lab/monitoring.compose.yml up -d --pull never --no-build --force-recreate node-exporter grafana
    ```
+   Skipping this step leaves the backup alerts blind. Once backups are enabled,
+   missing data alerts too (see below), so skipping it is not silent.
 6. **First run and first check:**
    ```bash
    sudo systemctl start restic-backups-lab.service && sudo journalctl -fu restic-backups-lab.service
@@ -89,37 +93,78 @@ structure plus a rotating 5 % of the data). Staging lives in
 
 Two Grafana alerts exist: **Backup job failed** (the backup or check unit is in
 the failed state for 5 minutes) and **No backup run for 36 hours** (the timer
-stopped firing). Both treat missing data as OK, so they stay quiet while backups
-are disabled.
+stopped firing). While backups are disabled the series do not exist and missing
+data is treated as OK; once `bandit-lab.backups.enable = true`, missing data
+alerts instead, so a node-exporter that was not recreated cannot hide a failure.
+Expect the "no backup run" alert from enabling until the first scheduled 04:30
+run (the timer has not fired yet, and a manual `systemctl start` does not count).
+A backup or check that hangs is stopped by a timeout (12 h and 6 h) and so
+shows up as a failed unit; the weekly check waits up to 2 h for a running
+backup's repository lock instead of failing.
 
 ### Restore drill (do this once, then yearly)
 
-Never restore over live data to test. Restore into a scratch directory:
+Never restore over live data to test. The module installs a wrapper, `restic-lab`,
+that already knows the repository, password file and B2 credentials (plain
+`restic` is not on the PATH). Restore into a scratch directory:
 
 ```bash
-sudo -i
-export RESTIC_REPOSITORY="$(cat /run/secrets/restic-repository)"
-export RESTIC_PASSWORD_FILE=/run/secrets/restic-password
-set -a; . /run/secrets/rendered/restic-b2.env; set +a
-restic snapshots
-mkdir /root/restore-test && restic restore latest --target /root/restore-test
+sudo restic-lab snapshots
+sudo mkdir /root/restore-test
+sudo restic-lab restore latest --target /root/restore-test --include /var/backup
+sudo restic-lab restore latest --target /root/restore-test --include /srv/containers/aiia/content-data
 ```
 
-restic keeps absolute paths, so the files appear under
+Restoring only what you check keeps the drill small (do not restore the whole
+maildir just to test). restic keeps absolute paths, so the files appear under
 `/root/restore-test/var/backup/restic-staging/` and `/root/restore-test/srv/...`.
 Verify each dataset:
 
-- Vaultwarden: `sqlite3 /root/restore-test/var/backup/restic-staging/vaultwarden/db.sqlite3 'PRAGMA integrity_check; SELECT count(*) FROM users;'` prints `ok` and a plausible count.
-- AiiA database: `zcat /root/restore-test/var/backup/restic-staging/aiia/mysql.sql.gz | head -20` shows a valid dump header; `zcat ... | grep -c 'CREATE TABLE'` is not zero.
+- Vaultwarden: `sudo sqlite3 /root/restore-test/var/backup/restic-staging/vaultwarden/db.sqlite3 'PRAGMA integrity_check; SELECT count(*) FROM users;'` prints `ok` and a plausible count.
+- AiiA database: `zcat /root/restore-test/var/backup/restic-staging/aiia/mysql.sql.gz | head -20` shows a valid dump header, and `zcat ... | grep -c 'CREATE TABLE'` is not zero.
 - PostgreSQL: `zcat /root/restore-test/var/backup/postgresql/all.sql.gz | head`.
-- Files: spot-check `maildir` and the Ghost content directories against the live ones.
+- Files: spot-check a Ghost content directory and the Mrija data against the live ones.
 
-When satisfied: `rm -rf /root/restore-test` and note the date of the successful
-drill here. A real recovery is the same procedure, then stop the affected
-container, move the restored data into place (keep the old directory), and start
-it again. For a lost disk you additionally need your own sops age key to decrypt
-`secrets/lab.yaml` (it holds the repository password and the B2 key); the lab's
-own key in `/var/lib/sops-nix/key.txt` is not part of the backup.
+When satisfied: `sudo rm -rf /root/restore-test` and note the date of the
+successful drill here.
+
+### Real recovery (per dataset)
+
+Keep the old data (rename it) before putting anything back, stop the affected
+container first, and start it again afterwards.
+
+- **Vaultwarden:** the data comes from `restic-staging/vaultwarden/` (not from
+  `/srv/...`): restore that directory's contents into
+  `/srv/containers/vaultwarden/data/`, then start the container.
+- **AiiA database (SQL dump, must be imported, not copied):** with the MySQL
+  container running and empty:
+  `zcat .../aiia/mysql.sql.gz | docker exec -i aiia-mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot'`.
+  Ghost content comes back as plain files under `/srv/containers/aiia/content-*`.
+- **PostgreSQL (SQL dump):** `zcat .../postgresql/all.sql.gz | sudo -u postgres psql`.
+- **Mrija archive:** restore `maildir/` and the `data/` files; the SQLite index is
+  `restic-staging/mrija/mail_index.sqlite`.
+
+Not recoverable from this backup: the Wazuh indexer data and agent keys (agents
+must be enrolled again), Grafana and Prometheus history, and the lab's own sops
+age key (`/var/lib/sops-nix/key.txt`). For a lost disk you need your own sops age
+key to decrypt `secrets/lab.yaml` (it holds the repository password and the B2
+key); re-provision a lab key and re-key `.sops.yaml` afterwards
+(`sops-split.md`).
+
+### Accepted residual risks
+
+- The B2 application key on the lab must be able to delete (restic prunes), so a
+  fully compromised lab can destroy the backups. Real protection needs a second,
+  prune-only key used from another machine or an append-only target; a "keep
+  prior versions" lifecycle rule alone does not help because restic deletes all
+  versions, and Object Lock conflicts with restic's own lock files. Left as a
+  separate decision.
+- The repository password and B2 key live on the lab, protecting data the lab
+  already holds; the offline copy of the password is mandatory.
+- One failing dataset (for example the MySQL container being down) fails the
+  whole run, loudly, rather than skipping it silently. A catch-up run at boot
+  can fail once if it starts before MySQL is ready. restic exit code 3 (a file
+  vanished mid-run) also raises the failed alert.
 
 ## Current status
 

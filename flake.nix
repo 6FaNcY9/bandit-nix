@@ -247,6 +247,7 @@
             modules = [{bandit-lab.backups.enable = true;}];
           })
           .config;
+        labOff = self.nixosConfigurations.bandit-lab.config;
       };
 
       lab-kernel = import ./ci/lab-kernel.nix {

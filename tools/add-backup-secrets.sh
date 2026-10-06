@@ -16,7 +16,7 @@ done
 
 read -r -p "B2 bucket name (e.g. bandit-lab-backup): " bucket
 [[ $bucket =~ ^[A-Za-z0-9-]{6,}$ ]] || { echo "unexpected bucket name" >&2; exit 1; }
-put restic-repository "b2:${bucket}:/"
+put restic-repository "b2:${bucket}:restic"
 
 read -r -p "Generate the restic repository password now? [Y/n] " gen
 if [[ ${gen:-Y} =~ ^[Yy]$ ]]; then

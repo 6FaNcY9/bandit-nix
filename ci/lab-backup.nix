@@ -6,7 +6,12 @@
   pkgs,
   lib,
   labOn,
+  labOff,
 }: let
+  # The Grafana provisioning directory is symlinked by a tmpfiles rule; take its
+  # store path (with string context, so building this check builds it).
+  provisioningOf = cfg:
+    lib.last (lib.splitString " " (lib.findFirst (r: lib.hasInfix "grafana-provisioning " r) (throw "no grafana-provisioning tmpfiles rule") cfg.systemd.tmpfiles.rules));
   b = labOn.services.restic.backups.lab;
   prepare = b.backupPrepareCommand;
   secretNames = lib.filter (n: lib.hasPrefix "restic-" n) (lib.attrNames labOn.sops.secrets);
@@ -22,4 +27,11 @@ in
   assert lib.assertMsg (lib.hasInfix ".backup" prepare && lib.hasInfix "--single-transaction" prepare) "databases must be snapshotted consistently (sqlite .backup, mysqldump --single-transaction)";
   assert lib.assertMsg (!(lib.hasInfix " -p" prepare)) "no inline database password on a command line";
   assert lib.assertMsg (labOn.systemd.timers ? restic-check && lib.hasInfix "--read-data-subset" labOn.systemd.services.restic-check.script) "the weekly integrity check must exist";
-    pkgs.writeText "lab-backup" "ok\n"
+    pkgs.runCommand "lab-backup" {nativeBuildInputs = [pkgs.gnugrep];} ''
+      # Missing backup metrics must alert once backups are on, and stay quiet
+      # while they are off (the series do not exist yet).
+      grep -q 'noDataState: Alerting' ${provisioningOf labOn}/alerting/bandit-lab.yaml
+      grep -q 'noDataState: OK' ${provisioningOf labOff}/alerting/bandit-lab.yaml
+      ! grep -q 'noDataState: Alerting' ${provisioningOf labOff}/alerting/bandit-lab.yaml
+      touch "$out"
+    ''

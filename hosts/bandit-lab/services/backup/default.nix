@@ -41,6 +41,9 @@ in {
       '';
     };
 
+    # sqlite3 is needed on the host by the snapshot commands and the restore drill.
+    environment.systemPackages = [pkgs.sqlite];
+
     services.restic.backups.lab = {
       initialize = true;
       inherit repositoryFile passwordFile environmentFile;
@@ -75,7 +78,10 @@ in {
         ${sqlite} /srv/containers/vaultwarden/data/db.sqlite3 \
           ".backup '${staging}/vaultwarden/db.sqlite3'"
 
-        # Mrija archive SQLite index.
+        # Mrija archive: everything in data/ (audit log included) except the
+        # live SQLite index, which is snapshotted consistently.
+        ${rsync} -a --exclude 'mail_index.sqlite*' \
+          /srv/containers/mrija-archive/data/ ${staging}/mrija/
         if [ -e /srv/containers/mrija-archive/data/mail_index.sqlite ]; then
           ${sqlite} /srv/containers/mrija-archive/data/mail_index.sqlite \
             ".backup '${staging}/mrija/mail_index.sqlite'"
@@ -105,6 +111,16 @@ in {
       # Staging area for consistent snapshots; root only, emptied after each run.
       tmpfiles.rules = ["d ${staging} 0700 root root -"];
 
+      # A stalled B2 upload or a blocked repository lock would otherwise leave a
+      # oneshot "activating" forever: no failed state, no alert, and the timer
+      # silently does nothing. Fail instead. Size 12 h against the data volume
+      # and upload speed (raise it for the very first run if needed). The
+      # databases are dumped from running containers, so start after them.
+      services.restic-backups-lab = {
+        after = ["docker-aiia-mysql.service" "docker-vaultwarden.service"];
+        serviceConfig.TimeoutStartSec = "12h";
+      };
+
       # Integrity check: repository structure plus a rotating 5% sample of the
       # actual data every week (a full read-everything check would download the
       # whole repository from B2).
@@ -119,12 +135,14 @@ in {
           PrivateTmp = true;
           ProtectHome = true;
           CacheDirectory = "restic-check";
+          TimeoutStartSec = "6h";
         };
         script = ''
           export RESTIC_REPOSITORY="$(< ${repositoryFile})"
           export RESTIC_PASSWORD_FILE=${passwordFile}
           export RESTIC_CACHE_DIR=/var/cache/restic-check
-          ${resticBin} check --read-data-subset=5%
+          # Wait for a running backup/prune instead of failing with a false alert.
+          ${resticBin} --retry-lock 2h check --read-data-subset=5%
         '';
       };
       timers.restic-check = {
