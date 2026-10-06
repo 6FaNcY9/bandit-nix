@@ -116,7 +116,10 @@ in {
     # docker from contacting GHCR; updates repeat the artifact transfer and
     # restart docker-aiia-ghost.service.
     aiia-ghost = {
-      image = "ghcr.io/6fancy9/aiia:main";
+      # Pinned by digest (2026-10-06) so the deployed shop is reproducible; the
+      # tag is kept for readability and the digest wins. To ship a new build:
+      # docs/runbooks/aiia-shop.md, "Updating the shop".
+      image = "ghcr.io/6fancy9/aiia:main@sha256:95457b635a61d7f7154bbfb51f24a2a17ed5903453635f453e87138a8a344d74";
       pull = "never";
       dependsOn = ["aiia-mysql" "aiia-redis"];
       networks = ["aiia" "proxy"];

@@ -5,7 +5,7 @@ networks:
 
 services:
   grafana:
-    image: grafana/grafana-oss:13.0.2
+    image: grafana/grafana-oss:13.0.2@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2
     container_name: grafana
     restart: unless-stopped
     networks:
@@ -28,7 +28,7 @@ services:
       - prometheus
 
   prometheus:
-    image: prom/prometheus:v3.13.2
+    image: prom/prometheus:v3.13.2@sha256:508729e0e2d18e11fd742a5a5ca70e557b940a93948c3c95fd0123a6fd538b69
     container_name: prometheus
     restart: unless-stopped
     networks:
@@ -41,7 +41,7 @@ services:
       - /srv/containers/monitoring/prometheus:/prometheus
 
   blackbox-exporter:
-    image: prom/blackbox-exporter:v0.28.0
+    image: prom/blackbox-exporter:v0.28.0@sha256:e753ff9f3fc458d02cca5eddab5a77e1c175eee484a8925ac7d524f04366c2fc
     container_name: blackbox-exporter
     restart: unless-stopped
     networks:
@@ -53,7 +53,7 @@ services:
       - /srv/containers/monitoring/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
 
   node-exporter:
-    image: prom/node-exporter:v1.12.1
+    image: prom/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
     container_name: node-exporter
     restart: unless-stopped
     pid: host
@@ -73,7 +73,7 @@ services:
       - /run/dbus:/var/run/dbus:ro
 
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.55.1
+    image: gcr.io/cadvisor/cadvisor:v0.55.1@sha256:3de2bd5203120b866d74a9b283b2ffb8ec382fbf9dc321814700c6ea6f44ec57
     container_name: cadvisor
     restart: unless-stopped
     privileged: true

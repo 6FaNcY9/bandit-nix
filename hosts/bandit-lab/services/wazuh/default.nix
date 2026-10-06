@@ -6,6 +6,16 @@
 }: let
   username = repoConfig.workstation.username;
   version = "4.14.7";
+  # Manifest digests of the 4.14.7 images the lab runs (docker images
+  # --digests, 2026-10-06). Tag plus digest: readable, and the digest wins, so a
+  # retagged or poisoned upstream tag cannot change what runs. To bump: pull the
+  # new tag, read the digest from `docker images --digests`, update both.
+  digests = {
+    manager = "sha256:80cada6a192fcb8caa8b415a5b64e2155138dd8df1da3a7b227d7e5e4e7460c0";
+    indexer = "sha256:3bd92b2ea39b1f0cd979e12af4078ecb34980db3c99e4bbe2763965d56d52363";
+    dashboard = "sha256:a7b565642dcb88ebfc2fe411169bad1d39fd02de4e5e1fa70f4b441380e62f47";
+    agent = "sha256:7d47c5f4db3bba366095942b1aa42e4f5e2121ca6b87556f56ce28282d59abb3";
+  };
   # Manager agent ports listen on the tailnet only; API/indexer/dashboard on loopback.
   tailscaleIp = repoConfig.lab.tailscaleIp;
   stateDir = "/srv/containers/wazuh";
@@ -146,7 +156,7 @@ in {
 
   virtualisation.oci-containers.containers = {
     "wazuh.manager" = {
-      image = "wazuh/wazuh-manager:${version}";
+      image = "wazuh/wazuh-manager:${version}@${digests.manager}";
       hostname = "wazuh.manager";
       environment = {
         INDEXER_URL = "https://wazuh.indexer:9200";
@@ -189,7 +199,7 @@ in {
     };
 
     "wazuh.indexer" = {
-      image = "wazuh/wazuh-indexer:${version}";
+      image = "wazuh/wazuh-indexer:${version}@${digests.indexer}";
       hostname = "wazuh.indexer";
       environment = {
         OPENSEARCH_JAVA_OPTS = "-Xms4g -Xmx4g";
@@ -213,7 +223,7 @@ in {
     };
 
     "wazuh.dashboard" = {
-      image = "wazuh/wazuh-dashboard:${version}";
+      image = "wazuh/wazuh-dashboard:${version}@${digests.dashboard}";
       hostname = "wazuh.dashboard";
       environment = {
         INDEXER_USERNAME = "admin";
@@ -237,7 +247,7 @@ in {
     };
 
     "wazuh.agent" = {
-      image = "wazuh/wazuh-agent:${version}";
+      image = "wazuh/wazuh-agent:${version}@${digests.agent}";
       environment = {
         WAZUH_MANAGER_SERVER = "wazuh.manager";
         WAZUH_AGENT_NAME = "bandit-lab";

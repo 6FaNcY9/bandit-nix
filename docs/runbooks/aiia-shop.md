@@ -65,8 +65,27 @@ Cloudflare Tunnel at `https://aiia.bandit-lab.mrija.org`.
 
 ## Updating the shop
 
-Push to `main` on `6FaNcY9/AiiA`, wait for the CI `docker-image-production`
-artifact, then repeat step 2 and `git -C /etc/nixos/bandit-nix` does not change.
+The image is **pinned by digest** in `hosts/bandit-lab/services/aiia/default.nix`
+(`ghcr.io/6fancy9/aiia:main@sha256:...`, the digest wins over the tag). That
+makes the deployed shop reproducible and stops a moved tag or a wrong image from
+starting silently, but it also means a newly loaded image only runs once its
+digest is committed.
+
+1. Push to `main` on `6FaNcY9/AiiA`, wait for the CI `docker-image-production`
+   artifact, and transfer and load the image exactly as in step 2 above.
+2. Read the new digest on the lab:
+   `ssh bandit-lab 'docker image inspect ghcr.io/6fancy9/aiia:main --format "{{index .RepoDigests 0}}"'`
+3. Replace the digest in the `image = ...` line of the aiia module, run
+   `nix flake check --no-update-lock-file`, commit (signed), push, then apply with
+   `sudo lab-update apply` on the lab. `docker-aiia-ghost` is deliberately not
+   part of the health gate, so check the shop yourself afterwards.
+4. Verify: `docker inspect aiia-ghost --format '{{.Config.Image}}'` shows the new
+   digest, the storefront loads and `/ghost/` admin works.
+
+Rollback: the previous image stays loaded until `docker image prune`. Revert the
+commit (a revert is a fast-forward) and apply again. Do **not** `docker load` and
+restart the container without committing the digest: recreating the container
+uses the pinned (old) digest, and the new image never runs.
 
 ## Going live (real charges)
 
