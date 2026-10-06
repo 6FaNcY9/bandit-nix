@@ -95,6 +95,10 @@ in {
       ];
     };
     services = {
+      # `tailscale set` only runs at activation, so a manual `tailscale set
+      # --ssh` (or the admin console) would silently re-enable Tailscale SSH,
+      # which bypasses OpenSSH, fail2ban and the firewall. Re-assert hourly.
+      tailscaled-set.startAt = "hourly";
       docker-network-portainer-control = {
         description = "Create the private Portainer control network";
         after = ["docker.service"];
