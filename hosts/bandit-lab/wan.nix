@@ -53,9 +53,16 @@
         # Canonical Vaultwarden hostname; the legacy public route was retired
         # after client migration verification.
         "vault.atmosphaere.at" = "http://localhost:80";
+        # Toolbox (Juice Shop is deliberately vulnerable). Each name pair is
+        # covered by one Cloudflare Access application (verified 2026-10-06).
+        # The three bandit-lab.mrija.org names are legacy hostnames that are
+        # still live in the dashboard; Traefik serves them via legacyHost.
         "juice.atmosphaere.at" = "http://localhost:80";
+        "juice.bandit-lab.mrija.org" = "http://localhost:80";
         "cyberchef.atmosphaere.at" = "http://localhost:80";
+        "cyberchef.bandit-lab.mrija.org" = "http://localhost:80";
         "tools.atmosphaere.at" = "http://localhost:80";
+        "tools.bandit-lab.mrija.org" = "http://localhost:80";
       };
     };
   };

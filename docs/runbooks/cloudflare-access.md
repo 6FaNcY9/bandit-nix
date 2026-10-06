@@ -98,6 +98,16 @@ what is exposed.
 
 ## Public SSH was removed (2026-10-06)
 
+**Completed 2026-10-06.** The two live tunnel routes, the Access application
+`ssh-bandit-lab` (which covered exactly those two hostnames) and both DNS CNAME
+records were deleted; a read-only API check afterwards showed tunnel config
+version 23 with 20 hostname routes and no `ssh://` route, tunnel `healthy`, 10
+self-hosted Access applications, no DNS records for either name, and the other
+sites still redirecting to the Cloudflare Access login. The original objects
+are backed up in `~/cloudflare-backup-20261006-081049` on the laptop (tunnel
+config, Access app, DNS records) for rollback. The steps below remain the
+manual procedure and the record of what was done.
+
 The routes `ssh-bandit-lab.mrija.org` and `ssh.atmosphaere.at` are no longer
 declared in `hosts/bandit-lab/wan.nix`, and sshd on the lab listens only on the
 Tailscale interface (`docs/SECURITY-PLAN.md`, decision D6). Tailscale is the
@@ -150,8 +160,12 @@ queried again for this table.
 | `search.atmosphaere.at`, `search.bandit-lab.mrija.org` | SearXNG | yes | **yes, mandatory** (bot abuse) | documented as gated |
 | `portainer.atmosphaere.at`, `portainer.bandit-lab.mrija.org` | Portainer UI | yes | yes; being retired (D4, `portainer-retirement.md`) | documented as gated |
 | `juice.atmosphaere.at`, `cyberchef.atmosphaere.at`, `tools.atmosphaere.at` | Juice Shop, CyberChef, IT-Tools | yes | yes for the training targets (Juice Shop is deliberately vulnerable) | not individually verified |
-| `ssh-bandit-lab.mrija.org`, `ssh.atmosphaere.at` | SSH | **removed** | n/a | remove the live routes (steps above) |
+| `ssh-bandit-lab.mrija.org`, `ssh.atmosphaere.at` | SSH | **removed** | n/a | route, Access app and DNS deleted 2026-10-06 |
 
-Open item: the three toolbox hostnames and the root `bandit-lab.mrija.org`
-route were not individually listed in the 2026-09-25 audit; confirm they sit
-behind an Access application (Juice Shop is intentionally vulnerable software).
+Verified 2026-10-06 through the read-only Cloudflare API: every hostname in the
+table except the public shop names (`aiia.at`, `www.aiia.at`,
+`aiia.bandit-lab.mrija.org`, with `aiia.at/ghost` covered by its own app) and
+the bare `bandit-lab.mrija.org` root (Traefik has no router for it) is covered
+by an Access application with one `vino-allow` policy and a 24-hour session,
+including the three legacy toolbox names (`juice`, `cyberchef`, `tools` under
+`bandit-lab.mrija.org`), which share an app with their `atmosphaere.at` name.
