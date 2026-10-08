@@ -127,4 +127,4 @@ class Combat {
   }
 }
 
-module.exports = {Combat, weaponScore};
+module.exports = {Combat, weaponScore, AVOID_FOOD};
