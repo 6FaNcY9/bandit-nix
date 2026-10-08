@@ -2,6 +2,8 @@ _: {
   imports = [
     ./sops.nix
     ./secrets-workstation.nix
+    ./restic-peer-server.nix
+    ./backup-peer.nix
     ./mcp.nix
     ./cli-tools.nix
     ./core.nix

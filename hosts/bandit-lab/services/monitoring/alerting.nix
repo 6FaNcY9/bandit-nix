@@ -221,7 +221,7 @@
                   datasourceUid: prometheus
                   model:
                     editorMode: code
-                    expr: node_systemd_unit_state{name=~"restic-backups-lab.service|restic-check.service", state="failed"}
+                    expr: node_systemd_unit_state{name=~"restic-backups-lab.service|restic-check.service|restic-backups-peer.service|restic-peer-prune.service", state="failed"}
                     instant: true
                     range: false
                     refId: A

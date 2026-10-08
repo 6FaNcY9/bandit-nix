@@ -32,6 +32,19 @@ in {
     workstationTailscaleIp = "100.102.247.30";
   };
 
+  # Peer backups: bandit and bandit-lab each run a restic REST server on their
+  # own tailnet address and push to the other (docs/runbooks/backup-peer.md).
+  backupPeer = {
+    port = 8000;
+    # restic forget policy shared by the Backblaze job and both peer repos.
+    retention = [
+      "--keep-daily 7"
+      "--keep-weekly 5"
+      "--keep-monthly 12"
+      "--keep-yearly 2"
+    ];
+  };
+
   # Shared with the headless shell and editor modules.
   serverPalette = {
     base00 = "#111111";

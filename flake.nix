@@ -250,6 +250,12 @@
         labOff = self.nixosConfigurations.bandit-lab.config;
       };
 
+      backup-peer = import ./ci/backup-peer.nix {
+        inherit pkgs repoConfig;
+        inherit (nixpkgs) lib;
+        hosts = {inherit (self.nixosConfigurations) bandit bandit-lab;};
+      };
+
       lab-kernel = import ./ci/lab-kernel.nix {
         inherit pkgs;
         inherit (nixpkgs) lib;

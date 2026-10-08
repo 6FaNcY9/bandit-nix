@@ -14,7 +14,7 @@
     lib.last (lib.splitString " " (lib.findFirst (r: lib.hasInfix "grafana-provisioning " r) (throw "no grafana-provisioning tmpfiles rule") cfg.systemd.tmpfiles.rules));
   b = labOn.services.restic.backups.lab;
   prepare = b.backupPrepareCommand;
-  secretNames = lib.filter (n: lib.hasPrefix "restic-" n) (lib.attrNames labOn.sops.secrets);
+  secretNames = lib.filter (n: lib.hasPrefix "restic-" n && !lib.hasPrefix "restic-peer-" n) (lib.attrNames labOn.sops.secrets);
   expectedSecrets = ["restic-b2-account-id" "restic-b2-account-key" "restic-password" "restic-repository"];
   mustBackUp = ["/var/backup/postgresql" "/srv/containers/aiia/content-data" "/srv/containers/mrija-archive/maildir"];
 in
