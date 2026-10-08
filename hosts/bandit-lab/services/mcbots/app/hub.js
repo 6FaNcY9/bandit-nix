@@ -350,6 +350,12 @@ class Hub {
       this.world.noteBlock(by(x.by), x.type, {x: x.x, y: x.y, z: x.z}, str(x.dim, 32) || 'overworld');
     }
     for (const id of list(m.gone, 200, (v) => v)) if (Number.isFinite(id)) this.world.forgetMob(id);
+    // What a worker's bot saw in the supply chest (the keeper plans from it).
+    const st = obj(m.stock);
+    if (st) {
+      const items = Object.fromEntries(Object.entries(obj(st.items) || {}).slice(0, 80).filter(([k, v]) => BLOCK_RE.test(k) && Number.isInteger(v) && v >= 0).map(([k, v]) => [k, Math.min(v, 1e6)]));
+      this.world.noteStock(by(st.by), items);
+    }
   }
 
   // ---- hub to workers ----

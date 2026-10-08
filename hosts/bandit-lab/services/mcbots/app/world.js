@@ -49,6 +49,12 @@ class WorldModel {
     this.bluemap = {enabled: false, ok: false, error: '', t: 0};
     this.claims = new Map(); // `${dim}:${x},${y},${z}` -> {by, t}: blocks a bot is working on
     this.tally = new Map(); // bot -> {granted, refused, timedOut}: shown in /api/debug
+    this.stock = null; // what a bot last saw in the supply chest: {items: {name: count}, by, t}
+  }
+
+  // A bot that opened the supply chest reports its contents; the keeper plans from this.
+  noteStock(by, items) {
+    this.stock = {items, by, t: this.now()};
   }
 
   // Bots share one process, so claims are exact: a bot only takes a block no
