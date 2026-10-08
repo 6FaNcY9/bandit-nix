@@ -24,6 +24,8 @@
   .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
   progress { width:100%; height:10px; accent-color:var(--acc); }
   progress.hp { width:80px; accent-color:var(--bad); } progress.food { width:80px; accent-color:var(--warn); }
+  table { border-collapse:collapse; margin-top:6px; } td,th { padding:2px 12px 2px 0; text-align:left; font-weight:normal; vertical-align:middle; } th { color:var(--mut); }
+  td progress { width:110px; }
   .queue { margin:0; padding-left:18px; } .queue li { margin:2px 0; }
   input,select,button { font:inherit; color:inherit; background:var(--bg); border:1px solid var(--bd); border-radius:6px; padding:4px 8px; }
   input[type=number] { width:70px; } input.w { width:120px; } input.xyz { width:64px; }
@@ -50,6 +52,11 @@
   <button class="stop" id="stopall" title="Stop every bot and clear all queues">Stop all</button>
   <label>your player name <input id="me" class="w" maxlength="16"></label>
   <span id="msg" class="mut"></span>
+</div>
+<div class="bar" id="keeperbar" hidden>
+  <h3>Standing orders <label><input type="checkbox" id="kon"> keep the supply chest stocked</label> <span id="kmsg" class="mut"></span></h3>
+  <div class="mut" id="kinfo"></div>
+  <table id="ktable"></table>
 </div>
 <div id="bots" class="grid"></div>
 <div class="bar" id="allbar"><h3>Give the same job to several bots</h3><div id="allcomposer"></div></div>
@@ -103,6 +110,8 @@ const SPEC = {
   rearm: { label: 'Re-arm from chests', f: XYZ, chest: true },
   come: { label: 'Come to me', f: [], me: true },
   follow: { label: 'Follow a player', f: [['player', 'text', '']] },
+  withdraw: { label: 'Take from a chest', f: [['item', 'text', 'coal', 'items'], ['count', 'number', 8], ...XYZ], chest: true },
+  stock: { label: 'Count a chest', f: XYZ, chest: true },
   place: { label: 'Place a block', f: [['item', 'text', 'chest', 'items'], ...XYZ] },
   say: { label: 'Say in chat', f: [['text', 'text', '']] },
 };
@@ -218,6 +227,31 @@ function allComposer() {
   if (!allBuilt) { allBuilt = true; $('allcomposer').append(el('div', 'mut', 'Select bots (ctrl/shift-click), then pick a job. Nothing selected = all bots.'), allSel, composer(() => { const s = [...allSel.selectedOptions].map((o) => o.value); return s.length ? s : 'all'; })); }
 }
 
+// ---- standing orders (keeper): quotas, what the chest holds, who is fetching what ----
+$('kon').onchange = async () => {
+  try {
+    const r = await fetch('/api/keeper', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: $('kon').checked }) });
+    $('kmsg').textContent = r.ok ? '' : (await r.json()).error;
+  } catch (e) { $('kmsg').textContent = 'failed: ' + e.message; }
+};
+function renderKeeper(k) {
+  $('keeperbar').hidden = !k || !k.available;
+  if (!k || !k.available) return;
+  if (document.activeElement !== $('kon')) $('kon').checked = k.enabled;
+  const c = k.chest;
+  $('kinfo').textContent = `chest at ${c.x} ${c.y} ${c.z}` + (k.site ? `, work site ${k.site.x} ${k.site.y} ${k.site.z}` : '') + ' - ' +
+    (k.counting ? `${k.counting} is counting what is in it` : k.stockAgeS == null ? (k.enabled ? 'not counted yet' : 'off; switch on to count it') : `counted ${dur(k.stockAgeS)} ago by ${k.stockBy}`) + '. Off after every restart.';
+  const head = el('tr'); for (const h of ['item', 'in the chest', 'wanted', 'status']) head.append(el('th', '', h));
+  $('ktable').replaceChildren(head, ...k.quotas.map((q) => {
+    const tr = el('tr'), bar = el('progress');
+    bar.max = q.want; bar.value = q.have || 0;
+    const wanted = el('td'); wanted.append(bar, ' ' + q.want);
+    tr.append(el('td', '', q.item), el('td', '', q.have == null ? '?' : String(q.have)), wanted,
+      el('td', q.bot ? '' : 'mut', q.bot ? `${q.bot} is fetching ${q.fetching}` : q.have != null && q.have >= q.want ? 'ok' : q.note || (k.enabled ? 'waiting' : '')));
+    return tr;
+  }));
+}
+
 // ---- events: GET /api/events?since=<id>, kept to the last 200 ----
 let evs = [], evLast = 0;
 function renderEvents() {
@@ -241,7 +275,7 @@ function connect() {
   const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
   ws.onopen = () => { $('conn').textContent = ''; };
   ws.onmessage = (e) => {
-    const m = JSON.parse(e.data); last = m; render(m.bots, m.now); allComposer(); radar();
+    const m = JSON.parse(e.data); last = m; render(m.bots, m.now); renderKeeper(m.keeper); allComposer(); radar();
     if (m.lastEventId !== evLast) pollEvents();
   };
   ws.onclose = () => { $('conn').textContent = '(reconnecting...)'; setTimeout(connect, 2000); };
