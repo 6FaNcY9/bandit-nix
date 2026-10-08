@@ -426,7 +426,9 @@ in {
     ];
     extraOptions = [
       "--network=minecraft"
-      "--network=mcbots"
+      # Fixed address: the mcbots container pins `velocity` to it (it is also on
+      # the minecraft network, where BotGate would refuse the source).
+      "--network=name=mcbots,ip=10.250.77.2"
       "--user=1000:1000"
       "--memory=1g"
       "--cpus=1"

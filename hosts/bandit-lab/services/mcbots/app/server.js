@@ -6,10 +6,13 @@ const path = require('node:path');
 const {WebSocketServer} = require('ws');
 const {loadConfig} = require('./config');
 const {BotRunner} = require('./bots');
+const {WorldModel, startBlueMap} = require('./world');
 
 const cfg = loadConfig();
 const log = (who, msg) => console.log(`${new Date().toISOString()} [${who}] ${msg}`);
-const runners = new Map(cfg.names.map((n) => [n, new BotRunner(n, {host: cfg.mcHost, port: cfg.mcPort, log, protectedAreas: cfg.protectedAreas})]));
+const world = new WorldModel();
+const stopBlueMap = startBlueMap(world, cfg.bluemapUrl, log);
+const runners = new Map(cfg.names.map((n) => [n, new BotRunner(n, {host: cfg.mcHost, port: cfg.mcPort, log, world, protectedAreas: cfg.protectedAreas})]));
 const page = fs.readFileSync(path.join(__dirname, 'public', 'index.html'));
 
 // tailscale serve sets Tailscale-User-Login for tailnet users. When
@@ -25,7 +28,7 @@ const sameOrigin = (req) => {
     return false;
   }
 };
-const state = () => [...runners.values()].map((r) => r.snapshot());
+const state = () => ({bots: [...runners.values()].map((r) => r.snapshot()), world: world.snapshot(), protectedAreas: cfg.protectedAreas});
 
 function readJson(req) {
   return new Promise((resolve, reject) => {
@@ -57,6 +60,7 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   if (req.method === 'GET' && url.pathname === '/') return send(200, 'text/html; charset=utf-8', page);
   if (req.method === 'GET' && url.pathname === '/api/state') return json(200, state());
+  if (req.method === 'GET' && url.pathname === '/api/world') return json(200, world.snapshot());
   if (req.method === 'POST' && url.pathname === '/api/job') {
     if (!sameOrigin(req) || !String(req.headers['content-type']).startsWith('application/json')) return json(403, {error: 'bad origin'});
     try {
@@ -98,6 +102,7 @@ function shutdown() {
   if (closing) return;
   closing = true;
   clearInterval(tick);
+  stopBlueMap();
   for (const r of runners.values()) r.shutdown();
   for (const c of wss.clients) c.close();
   server.close();

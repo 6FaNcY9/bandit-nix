@@ -16,6 +16,9 @@ function loadConfig(env = process.env) {
     if (n.length !== 4 || n.some((v) => !Number.isInteger(v))) throw new Error(`bad PROTECTED_AREAS box: ${b}`);
     return [Math.min(n[0], n[2]), Math.min(n[1], n[3]), Math.max(n[0], n[2]), Math.max(n[1], n[3])];
   });
+  // Optional BlueMap webserver base URL for global player positions.
+  const bluemapUrl = (env.BLUEMAP_URL || '').trim();
+  if (bluemapUrl && !/^https?:\/\/[^\s/]+(:\d+)?(\/\S*)?$/.test(bluemapUrl)) throw new Error(`bad BLUEMAP_URL: ${bluemapUrl}`);
   const host = env.DASHBOARD_HOST || '127.0.0.1';
   if (!allowed.length && host !== '127.0.0.1') {
     throw new Error('DASHBOARD_HOST other than 127.0.0.1 requires ALLOWED_TS_LOGINS');
@@ -28,6 +31,7 @@ function loadConfig(env = process.env) {
     port: Number(env.DASHBOARD_PORT || 8095),
     allowed,
     protectedAreas,
+    bluemapUrl: bluemapUrl.replace(/\/+$/, ''),
   };
 }
 

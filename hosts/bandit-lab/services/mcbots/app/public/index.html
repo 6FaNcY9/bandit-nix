@@ -22,6 +22,7 @@
   button.stop { background:var(--bad); border-color:var(--bad); }
   .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
   #msg { margin-left:8px; }
+  canvas { width:100%; max-width:640px; height:auto; aspect-ratio:1; background:var(--bg); border:1px solid var(--bd); border-radius:6px; display:block; margin-top:8px; touch-action:none; }
 </style>
 </head>
 <body>
@@ -39,8 +40,16 @@
   <form data-job="deposit">deposit into chest <input name="x" type="number" placeholder="x" required><input name="y" type="number" placeholder="y" required><input name="z" type="number" placeholder="z" required><button>Deposit</button></form>
   <form data-job="say">say <input name="text" placeholder="text" maxlength="200" required><button>Say</button></form>
 </div>
+<div class="bar">
+  <div class="row"><b>Map</b> centre <select id="centre"></select>
+    <label>zoom <input id="zoom" type="range" min="-2" max="3" step="0.25" value="0"></label>
+    <span id="mapinfo" class="mut"></span></div>
+  <canvas id="radar" width="640" height="640"></canvas>
+  <div class="mut">green = bots, blue = players (BlueMap), red = hostile mobs, yellow = chests/ores, hatched = protected areas</div>
+</div>
 <div id="bots" class="grid"></div>
 <script>
+let last = { bots: [], world: { players: [], mobs: [], blocks: [], bluemap: {} }, protectedAreas: [] };
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 try { $('me').value = localStorage.getItem('me') || ''; } catch {}
@@ -86,8 +95,49 @@ function render(bots) {
 function connect() {
   const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
   ws.onopen = () => { $('conn').textContent = ''; };
-  ws.onmessage = (e) => render(JSON.parse(e.data));
+  ws.onmessage = (e) => { const m = JSON.parse(e.data); last = m; render(m.bots); radar(); };
   ws.onclose = () => { $('conn').textContent = '(reconnecting...)'; setTimeout(connect, 2000); };
+}
+
+// ---- radar: top-down, north up (-z), centred on a bot or player ----
+const cv = $('radar'), g = cv.getContext('2d');
+$('zoom').oninput = radar;
+cv.onwheel = (e) => { e.preventDefault(); const z = $('zoom'); z.value = +z.value + (e.deltaY < 0 ? 0.25 : -0.25); radar(); };
+function radar() {
+  const { bots, world, protectedAreas } = last;
+  const sel = $('centre'), cur = sel.value;
+  const names = [...bots.map((b) => b.name), ...world.players.filter((p) => !bots.some((b) => b.name === p.name)).map((p) => p.name)];
+  if (names.join() !== [...sel.options].map((o) => o.value).join()) {
+    sel.replaceChildren(...names.map((n) => new Option(n, n)));
+    sel.value = names.includes(cur) ? cur : (names[0] || '');
+  }
+  const bot = bots.find((b) => b.name === sel.value && b.pos);
+  const pl = world.players.find((p) => p.name === sel.value);
+  const c = bot ? { x: bot.pos[0], z: bot.pos[2], dim: bot.dimension } : pl ? { x: pl.x, z: pl.z, dim: pl.dim } : null;
+  const W = cv.width, H = cv.height;
+  const css = getComputedStyle(document.body);
+  g.clearRect(0, 0, W, H);
+  g.fillStyle = css.backgroundColor; g.fillRect(0, 0, W, H);
+  const bm = world.bluemap;
+  $('mapinfo').textContent = c ? `${c.dim} @ ${Math.round(c.x)} ${Math.round(c.z)}  | BlueMap: ` + (!bm.enabled ? 'off' : bm.ok ? 'ok' : 'unavailable (' + bm.error + ')') : 'nothing to centre on';
+  if (!c) return;
+  const k = 2 * Math.pow(2, +$('zoom').value); // pixels per block
+  const px = (x) => W / 2 + (x - c.x) * k, pz = (z) => H / 2 + (z - c.z) * k;
+  g.strokeStyle = css.getPropertyValue('--bd'); g.fillStyle = css.getPropertyValue('--mut'); g.font = '12px system-ui';
+  g.lineWidth = 1;
+  const step = [16, 32, 64, 128, 256, 512, 1024].find((s) => s * k >= 48) || 1024; // grid, in blocks
+  for (let x = Math.ceil((c.x - W / 2 / k) / step) * step; px(x) < W; x += step) { g.beginPath(); g.moveTo(px(x), 0); g.lineTo(px(x), H); g.stroke(); g.fillText(x, px(x) + 2, 10); }
+  for (let z = Math.ceil((c.z - H / 2 / k) / step) * step; pz(z) < H; z += step) { g.beginPath(); g.moveTo(0, pz(z)); g.lineTo(W, pz(z)); g.stroke(); g.fillText(z, 2, pz(z) - 2); }
+  // protected areas apply to every dimension's x/z, drawn only in the overworld
+  if (c.dim === 'overworld') for (const [x1, z1, x2, z2] of protectedAreas) {
+    g.fillStyle = 'rgba(220,38,38,0.12)'; g.strokeStyle = '#dc2626';
+    g.fillRect(px(x1), pz(z1), (x2 - x1) * k, (z2 - z1) * k); g.strokeRect(px(x1), pz(z1), (x2 - x1) * k, (z2 - z1) * k);
+  }
+  const dot = (x, z, r, col, label) => { g.fillStyle = col; g.beginPath(); g.arc(px(x), pz(z), r, 0, 7); g.fill(); if (label) { g.fillStyle = css.color; g.fillText(label, px(x) + r + 2, pz(z) + 4); } };
+  for (const b of world.blocks) if (b.dim === c.dim) dot(b.x, b.z, 3, '#eab308');
+  for (const m of world.mobs) if (m.dim === c.dim) { g.globalAlpha = Math.max(0.3, 1 - m.age / 30); dot(m.x, m.z, 4, '#dc2626', k >= 2 ? m.type : ''); g.globalAlpha = 1; }
+  for (const p of world.players) if (p.dim === c.dim && !bots.some((b) => b.name === p.name)) dot(p.x, p.z, 5, '#2563eb', p.name);
+  for (const b of bots) if (b.pos && b.dimension === c.dim) dot(b.pos[0], b.pos[2], 5, '#16a34a', b.name);
 }
 connect();
 </script>

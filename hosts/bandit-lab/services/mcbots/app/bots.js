@@ -5,6 +5,8 @@
 const mineflayer = require('mineflayer');
 const {pathfinder, Movements, goals} = require('mineflayer-pathfinder');
 const {plugin: collectBlock} = require('mineflayer-collectblock');
+const {Combat} = require('./combat');
+const {normDim, deadlineMs} = require('./world');
 
 const NAME_RE = /^bot[0-9]{1,2}$/; // BotGate's pattern (Velocity plugin)
 const LOGIN_GAP_MS = 4500; // Velocity rate-limits logins
@@ -54,8 +56,10 @@ const VALIDATE = {
 class Cancelled extends Error {}
 
 class BotRunner {
-  constructor(name, {host, port, log, protectedAreas = []}) {
+  constructor(name, {host, port, log, world, protectedAreas = []}) {
     this.name = name;
+    this.world = world;
+    this.combat = {busy: false, epoch: 0}; // replaced by a Combat per connection
     this.host = host;
     this.protectedAreas = protectedAreas;
     this.port = port;
@@ -89,6 +93,7 @@ class BotRunner {
     bot.loadPlugin(pathfinder);
     bot.loadPlugin(collectBlock);
     let spawnedAt = 0;
+    this.combat = new Combat(this);
     bot.once('spawn', () => {
       spawnedAt = Date.now();
       this.online = true;
@@ -97,6 +102,7 @@ class BotRunner {
       bot.collectBlock.movements = mv;
       this.log(this.name, 'spawned');
     });
+    bot.on('entityGone', (e) => this.world.forgetMob(e.id));
     bot.on('death', () => {
       this.lastError = 'died';
       this.cancel();
@@ -112,6 +118,7 @@ class BotRunner {
     });
     bot.once('end', (why) => {
       this.online = false;
+      this.combat.stop();
       this.cancel();
       this.bot = null;
       if (spawnedAt && Date.now() - spawnedAt > 60000) this.backoff = BACKOFF_START;
@@ -160,7 +167,18 @@ class BotRunner {
     job.progress = '';
     try {
       if (!this.online) throw new Error('bot is offline');
-      await JOBS[job.type](this, job);
+      for (let tries = 0; ; tries++) {
+        const epoch = this.combat.epoch;
+        try {
+          await JOBS[job.type](this, job);
+          break;
+        } catch (e) {
+          // Combat took over the pathfinder mid-job (retreat / creeper): wait
+          // until calm, then resume instead of failing.
+          if (job.cancelled || this.combat.epoch === epoch || tries >= 5) throw e;
+          await waitCalm(this, job);
+        }
+      }
       job.status = job.cancelled ? 'stopped' : 'done';
     } catch (e) {
       job.status = job.cancelled ? 'stopped' : 'failed';
@@ -186,7 +204,8 @@ class BotRunner {
       health: this.online ? b.health : null,
       food: this.online ? b.food : null,
       pos: this.online && b.entity ? ['x', 'y', 'z'].map((k) => Math.round(b.entity.position[k])) : null,
-      dimension: this.online ? b.game?.dimension : null,
+      dimension: this.online ? normDim(b.game?.dimension) : null,
+      combat: this.combat.mode || null,
       job: this.current && {label: label(this.current), progress: this.current.progress},
       queue: this.queue.map(label),
       inventory: top.slice(0, 8).map(([n, c]) => `${n} x${c}`),
@@ -224,12 +243,33 @@ const guard = (job) => {
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Jobs pause while combat has the pathfinder (retreating from a hostile).
+async function waitCalm(r, job) {
+  while (r.combat.busy) {
+    guard(job);
+    await sleep(300);
+  }
+  guard(job);
+}
+
+// Another bot reported a hostile within 8 blocks of where we are headed:
+// give it up to 10 s to move on or die (reports expire), then go anyway.
+async function waitSafe(r, job, x, z) {
+  const dim = normDim(r.bot.game?.dimension);
+  for (let i = 0; i < 10 && r.world.hostilesNear(x, z, dim, 8).length; i++) {
+    job.progress = 'waiting: hostile near target';
+    await waitCalm(r, job);
+    await sleep(1000);
+  }
+}
+
 async function goNear(r, job, x, y, z, dist) {
   guard(job);
   // Unreachable goals make the pathfinder retry partial paths
   // forever, so every walk has a deadline.
   const deadline = setTimeout(() => r.bot?.pathfinder.stop(), GOTO_TIMEOUT_MS);
   try {
+    await waitSafe(r, job, x, z);
     await r.bot.pathfinder.goto(new goals.GoalNear(x, y, z, dist));
   } catch (e) {
     guard(job);
@@ -243,53 +283,88 @@ async function collect(r, job, matching, count, what) {
   const {bot} = r;
   const ids = matching.map((n) => bot.registry.blocksByName[n]?.id).filter((i) => i !== undefined);
   if (!ids.length) throw new Error(`unknown block: ${what}`);
-  let got = 0;
+  let got = job.collected || 0; // survives a combat interruption + resume
   while (got < count) {
-    guard(job);
+    await waitCalm(r, job);
     const pos = bot.findBlocks({matching: ids, maxDistance: 64, count: 1})[0];
     if (!pos) throw new Error(`no ${what} within 64 blocks (collected ${got}/${count})`);
+    await waitSafe(r, job, pos.x, pos.z);
     try {
       await bot.collectBlock.collect(bot.blockAt(pos));
     } catch (e) {
       guard(job);
       throw e;
     }
-    job.progress = `${++got}/${count}`;
+    job.collected = ++got;
+    job.progress = `${got}/${count}`;
+  }
+}
+
+const dist3 = (a, p) => Math.hypot(a.x - p.x, a.y - p.y, a.z - p.z);
+
+// come/follow. Entity tracking only reaches the server's tracking range, so a
+// farther player is approached via BlueMap's position (same dimension only)
+// and the live entity takes over once it is visible. `stop` cancels the job.
+async function chase(r, job, follow) {
+  const {bot} = r;
+  const name = job.args.player;
+  const start = Date.now();
+  let maxDist = 0;
+  let mode = null; // what the current pathfinder goal chases
+  let goalAt = null;
+  let epoch = r.combat.epoch;
+  try {
+    for (;;) {
+      guard(job);
+      if (!r.online) throw new Error('bot went offline');
+      await waitCalm(r, job);
+      if (epoch !== r.combat.epoch) {
+        epoch = r.combat.epoch;
+        mode = null; // combat replaced our goal; re-issue it
+      }
+      const me = bot.entity.position;
+      const e = bot.players[name]?.entity;
+      if (e) {
+        if (mode !== 'entity') {
+          bot.pathfinder.setGoal(new goals.GoalFollow(e, 2), true);
+          mode = 'entity';
+          job.progress = follow ? 'following' : 'tracking';
+        }
+        maxDist = Math.max(maxDist, dist3(me, e.position));
+        if (!follow && dist3(me, e.position) <= 3) return;
+      } else {
+        const p = r.world.player(name);
+        if (!p) throw new Error(`${name} is not visible and not on the map (offline, or BlueMap unavailable)`);
+        const dim = normDim(bot.game?.dimension);
+        if (p.dim !== dim) throw new Error(`${name} is in ${p.dim}, the bot is in ${dim}`);
+        const d = Math.hypot(me.x - p.x, me.z - p.z);
+        maxDist = Math.max(maxDist, d);
+        if (!follow && d <= 3) return;
+        if (mode !== 'map' || Math.hypot(goalAt.x - p.x, goalAt.z - p.z) > 4) {
+          bot.pathfinder.setGoal(new goals.GoalNearXZ(p.x, p.z, 2));
+          mode = 'map';
+          goalAt = p;
+          job.progress = `to map position, ${Math.round(d)} blocks`;
+        }
+      }
+      if (!follow && Date.now() - start > deadlineMs(maxDist)) {
+        throw new Error(`could not reach ${name} within ${Math.round(deadlineMs(maxDist) / 1000)} s`);
+      }
+      await sleep(500);
+    }
+  } finally {
+    r.bot?.pathfinder?.stop();
   }
 }
 
 const JOBS = {
   goto: (r, job) => goNear(r, job, job.args.x, job.args.y, job.args.z, 1),
 
-  // Chases the player's live position (they may move), done within 3 blocks.
-  async come(r, job) {
-    const e = r.bot.players[job.args.player]?.entity;
-    if (!e) throw new Error(`${job.args.player} is not within render distance`);
-    r.bot.pathfinder.setGoal(new goals.GoalFollow(e, 2), true);
-    const until = Date.now() + GOTO_TIMEOUT_MS;
-    try {
-      while (r.bot.entity.position.distanceTo(e.position) > 3) {
-        guard(job);
-        if (!r.bot.players[job.args.player]?.entity) throw new Error(`lost ${job.args.player}`);
-        if (Date.now() > until) throw new Error(`could not reach ${job.args.player} within 90 s`);
-        await sleep(500);
-      }
-    } finally {
-      r.bot.pathfinder.stop();
-    }
-  },
+  // Walks to the player (live entity when tracked, else the BlueMap position)
+  // and is done within 3 blocks.
+  come: (r, job) => chase(r, job, false),
 
-  async follow(r, job) {
-    const e = r.bot.players[job.args.player]?.entity;
-    if (!e) throw new Error(`${job.args.player} is not within render distance`);
-    r.bot.pathfinder.setGoal(new goals.GoalFollow(e, 2), true);
-    job.progress = 'following';
-    while (!job.cancelled && r.online) {
-      await sleep(500);
-      if (!r.bot.players[job.args.player]?.entity) throw new Error(`lost ${job.args.player}`);
-    }
-    r.bot.pathfinder.stop();
-  },
+  follow: (r, job) => chase(r, job, true),
 
   mine: (r, job) => collect(r, job, [job.args.block], job.args.count, job.args.block),
 

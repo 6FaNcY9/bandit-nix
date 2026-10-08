@@ -35,6 +35,9 @@ in {
         DASHBOARD_PORT = dashboardPort;
         # tailscale serve identifies the tailnet user; everything else gets 403.
         ALLOWED_TS_LOGINS = "6FaNcY9@github";
+        # Global player positions (read-only JSON) from BlueMap in the minecraft
+        # container, reachable over the `minecraft` network.
+        BLUEMAP_URL = "http://minecraft:8100";
         # Bots never dig or place inside these x1,z1,x2,z2 boxes: the main base
         # around spawn and MidariBread's base (from BlueMap light data, +16).
         PROTECTED_AREAS = "-80,-144,80,80;112,368,272,592";
@@ -43,6 +46,13 @@ in {
       ports = ["127.0.0.1:${dashboardPort}:${dashboardPort}"];
       extraOptions = [
         "--network=mcbots"
+        # Second network only to read BlueMap at minecraft:8100. Paper there
+        # accepts logins only with Velocity's forwarding secret. With two
+        # networks the name `velocity` could resolve to its minecraft-network
+        # address (BotGate refuses that source), so pin it to Velocity's
+        # mcbots-network address (gateway .1, velocity .2 of 10.250.77.0/29).
+        "--network=minecraft"
+        "--add-host=velocity:10.250.77.2"
         "--memory=2g"
         "--cpus=2"
         "--pids-limit=256"
@@ -53,8 +63,8 @@ in {
 
     systemd.services = {
       docker-mcbots = {
-        after = ["docker-network-mcbots.service" "docker-velocity.service"];
-        requires = ["docker-network-mcbots.service"];
+        after = ["docker-network-mcbots.service" "docker-network-minecraft.service" "docker-velocity.service"];
+        requires = ["docker-network-mcbots.service" "docker-network-minecraft.service"];
         unitConfig.StartLimitIntervalSec = 0;
         serviceConfig = {
           Restart = lib.mkForce "always";
