@@ -57,7 +57,7 @@ const VALIDATE = {
 class Cancelled extends Error {}
 
 class BotRunner {
-  constructor(name, {host, port, log, world, protectedAreas = []}) {
+  constructor(name, {host, port, log, world, protectedAreas = [], supplyChest = null}) {
     this.name = name;
     this.world = world;
     this.combat = {busy: false, epoch: 0}; // replaced by a Combat per connection
