@@ -7,6 +7,7 @@ const {WebSocketServer} = require('ws');
 const {loadConfig} = require('./config');
 const {BotRunner} = require('./bots');
 const {WorldModel, startBlueMap} = require('./world');
+const {WINDOW_MS} = require('./debug');
 
 const cfg = loadConfig();
 const log = (who, msg) => console.log(`${new Date().toISOString()} [${who}] ${msg}`);
@@ -61,6 +62,16 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/') return send(200, 'text/html; charset=utf-8', page);
   if (req.method === 'GET' && url.pathname === '/api/state') return json(200, state());
   if (req.method === 'GET' && url.pathname === '/api/world') return json(200, world.snapshot());
+  if (req.method === 'GET' && url.pathname === '/api/debug') {
+    const bots = [...runners.values()].map((r) => {
+      try {
+        return r.debug();
+      } catch (e) {
+        return {name: r.name, error: String(e.message || e)};
+      }
+    });
+    return json(200, {generatedAt: new Date().toISOString(), windowS: WINDOW_MS / 1000, bots});
+  }
   if (req.method === 'POST' && url.pathname === '/api/job') {
     if (!sameOrigin(req) || !String(req.headers['content-type']).startsWith('application/json')) return json(403, {error: 'bad origin'});
     try {

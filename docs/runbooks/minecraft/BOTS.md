@@ -47,6 +47,22 @@ The page shows every bot (online, health/food, position and dimension, job and
 queue, inventory summary, last error). Pick a target (one bot or `all`), then
 enqueue jobs. "Come to me" uses the player name typed into "your player name".
 
+### Debug panel and `GET /api/debug`
+
+The "Debug" section on the dashboard (collapsed by default; polls every 2 s while
+open) shows per bot: how often the server pulled the bot back in the last 30 s
+(red from 10), the current job step with its running time, pathfinder and
+physics state (on ground, wall contact, velocity, pressed keys), the last error
+with its age, and the last 30 s of positions as a small track. "Copy
+/api/debug JSON" copies the same data for a bug report.
+
+`GET /api/debug` returns `{generatedAt, windowS, bots: [{name, online, pos,
+dimension, job{type,args,status,progress,runningS}, queue, combat, physics,
+pathfinder, positions[{agoS,x,y,z}], corrections{total,last30s,lastAgoS},
+lastError{message,agoS}}]}`. It sits behind the same login check as the rest of
+the dashboard. Positions are sampled every 500 ms (rounded to 0.01) and kept for
+30 s. The bot cards also show "pulled back N x in 30 s" when it is not zero.
+
 ## Laptop
 
 ```bash

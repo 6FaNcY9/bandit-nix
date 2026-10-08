@@ -22,6 +22,11 @@
   button.stop { background:var(--bad); border-color:var(--bad); }
   .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
   #msg { margin-left:8px; }
+  details.bar summary { cursor:pointer; font-weight:600; }
+  .dbg { border-top:1px solid var(--bd); padding:8px 0; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start; }
+  .dbg .t { flex:1; min-width:260px; font:12px/1.5 ui-monospace,monospace; word-break:break-word; }
+  .dbg svg { width:130px; height:130px; background:var(--bg); border:1px solid var(--bd); border-radius:6px; }
+  .warn { color:var(--bad); font-weight:600; }
   canvas { width:100%; max-width:640px; height:auto; aspect-ratio:1; background:var(--bg); border:1px solid var(--bd); border-radius:6px; display:block; margin-top:8px; touch-action:none; }
 </style>
 </head>
@@ -52,6 +57,10 @@
   <canvas id="radar" width="640" height="640"></canvas>
   <div class="mut">green = bots, blue = players (BlueMap), red = hostile mobs, yellow = chests/ores, hatched = protected areas</div>
 </div>
+<details id="dbg" class="bar"><summary>Debug: last 30 s per bot (server pull-backs, job step, last error)</summary>
+  <div class="row"><button id="dbgcopy" type="button">Copy /api/debug JSON</button><span id="dbgmsg" class="mut"></span></div>
+  <div id="dbgbots"></div>
+</details>
 <div id="bots" class="grid"></div>
 <script>
 let last = { bots: [], world: { players: [], mobs: [], blocks: [], bluemap: {} }, protectedAreas: [] };
@@ -93,6 +102,7 @@ function render(bots) {
     c.append(el('div', '', 'job: ' + (b.job ? `${b.job.label} ${b.job.progress || ''}` : 'idle')));
     if (b.queue.length) c.append(el('div', 'mut', 'queue: ' + b.queue.join(' | ')));
     c.append(el('div', 'mut', 'inv: ' + (b.inventory.join(', ') || 'empty') + (b.inventoryKinds > b.inventory.length ? ', ...' : '')));
+    if (b.pullbacks) c.append(el('div', 'warn', `pulled back by the server ${b.pullbacks}x in 30 s`));
     if (b.lastError) c.append(el('div', 'err', 'error: ' + b.lastError));
     return c;
   }));
@@ -144,6 +154,51 @@ function radar() {
   for (const p of world.players) if (p.dim === c.dim && !bots.some((b) => b.name === p.name)) dot(p.x, p.z, 5, '#2563eb', p.name);
   for (const b of bots) if (b.pos && b.dimension === c.dim) dot(b.pos[0], b.pos[2], 5, '#16a34a', b.name);
 }
+// ---- debug panel: GET /api/debug while the panel is open ----
+let dbgData = null;
+const SVGNS = 'http://www.w3.org/2000/svg';
+function track(positions) {
+  const svg = document.createElementNS(SVGNS, 'svg'); svg.setAttribute('viewBox', '0 0 130 130');
+  if (positions.length < 2) return svg;
+  const xs = positions.map((p) => p.x), zs = positions.map((p) => p.z);
+  const x0 = Math.min(...xs), z0 = Math.min(...zs), span = Math.max(Math.max(...xs) - x0, Math.max(...zs) - z0, 2);
+  const pt = (p) => `${(10 + (p.x - x0) / span * 110).toFixed(1)},${(10 + (p.z - z0) / span * 110).toFixed(1)}`;
+  const line = document.createElementNS(SVGNS, 'polyline');
+  line.setAttribute('points', positions.map(pt).join(' ')); line.setAttribute('fill', 'none'); line.setAttribute('stroke', '#2563eb'); line.setAttribute('stroke-width', '1.5');
+  const end = document.createElementNS(SVGNS, 'circle');
+  const [cx, cy] = pt(positions[positions.length - 1]).split(',');
+  end.setAttribute('cx', cx); end.setAttribute('cy', cy); end.setAttribute('r', '3'); end.setAttribute('fill', '#16a34a');
+  svg.append(line, end);
+  return svg;
+}
+function renderDebug(d) {
+  $('dbgbots').replaceChildren(...d.bots.map((b) => {
+    const row = el('div', 'dbg'), t = el('div', 't');
+    const line = (txt, cls) => t.append(el('div', cls || '', txt));
+    if (b.error) { line(`${b.name}: ${b.error}`, 'err'); row.append(t); return row; }
+    const c = b.corrections;
+    line(`${b.name}  ${b.online ? 'online' : 'offline'}  pos ${b.pos ? b.pos.join(' ') : '?'} ${b.dimension || ''}`);
+    line(`pull-backs: ${c.last30s} in 30 s, ${c.total} total` + (c.lastAgoS != null ? `, last ${c.lastAgoS}s ago` : ''), c.last30s >= 10 ? 'warn' : 'mut');
+    line('job: ' + (b.job ? `${b.job.type} ${Object.values(b.job.args).join(' ')} [${b.job.status}, ${b.job.runningS}s] ${b.job.progress}` : 'idle') + (b.combat ? `  combat: ${b.combat}` : ''));
+    if (b.queue.length) line('queue: ' + b.queue.join(' | '), 'mut');
+    if (b.pathfinder) line(`pathfinder: ${b.pathfinder.moving ? 'moving' : 'idle'}${b.pathfinder.mining ? ', mining' : ''}${b.pathfinder.building ? ', building' : ''}${b.pathfinder.goal ? ', goal ' + b.pathfinder.goal : ''}`, 'mut');
+    if (b.physics) line(`physics: ${b.physics.onGround ? 'on ground' : 'airborne'}${b.physics.collidedHorizontally ? ', wall' : ''}, vel ${b.physics.velocity.join(' ')}, keys ${b.physics.controls.join('+') || '-'}`, 'mut');
+    line(b.lastError ? `last error (${b.lastError.agoS}s ago): ${b.lastError.message}` : 'last error: none', b.lastError ? 'err' : 'mut');
+    line('positions (s ago): ' + b.positions.filter((_, i, a) => i % 6 === a.length % 6 || i === a.length - 1).map((p) => `-${p.agoS}s ${p.x} ${p.y} ${p.z}`).join(' | '), 'mut');
+    row.append(track(b.positions), t);
+    return row;
+  }));
+}
+async function pollDebug() {
+  if (!$('dbg').open) return;
+  try { const r = await fetch('/api/debug', { cache: 'no-store' }); dbgData = await r.json(); renderDebug(dbgData); } catch {}
+}
+$('dbg').ontoggle = pollDebug;
+setInterval(pollDebug, 2000);
+$('dbgcopy').onclick = async () => {
+  try { await pollDebug(); await navigator.clipboard.writeText(JSON.stringify(dbgData, null, 1)); $('dbgmsg').textContent = 'copied'; }
+  catch { $('dbgmsg').textContent = 'copy failed - open /api/debug instead'; }
+};
 connect();
 </script>
 </body>

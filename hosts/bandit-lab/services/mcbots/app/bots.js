@@ -8,6 +8,7 @@ const {pathfinder, Movements, goals} = require('mineflayer-pathfinder');
 const {plugin: collectBlock} = require('mineflayer-collectblock');
 const {Combat} = require('./combat');
 require('./physicsfix');
+const {BotTrace, SAMPLE_MS, round} = require('./debug');
 const {normDim, deadlineMs} = require('./world');
 
 const NAME_RE = /^bot[0-9]{1,2}$/; // BotGate's pattern (Velocity plugin)
@@ -74,6 +75,8 @@ const VALIDATE = {
 
 class Cancelled extends Error {}
 
+const jobLabel = (j) => `${j.type} ${Object.values(j.args).join(' ')}`;
+
 class BotRunner {
   constructor(name, {host, port, log, world, protectedAreas = [], supplyChest = null, loginSeed = null}) {
     this.name = name;
@@ -90,11 +93,21 @@ class BotRunner {
     this.online = false;
     this.queue = [];
     this.current = null;
+    this.trace = new BotTrace();
     this.lastError = '';
     this.backoff = BACKOFF_START;
     this.timer = null;
     this.stopped = false; // process shutdown
     this.jobSeq = 0;
+  }
+
+  // lastError lives in the trace so the debug panel knows when it happened.
+  get lastError() {
+    return this.trace.error?.message || '';
+  }
+
+  set lastError(v) {
+    this.trace.setError(v);
   }
 
   start() {
@@ -116,6 +129,10 @@ class BotRunner {
     bot.loadPlugin(collectBlock);
     require('./crafting').fixCraftTiming(bot);
     unwedge(bot);
+    bot.on('forcedMove', () => this.trace.correction());
+    const sampler = setInterval(() => this.trace.sample(bot.entity?.position), SAMPLE_MS);
+    sampler.unref();
+    bot.once('end', () => clearInterval(sampler));
     let spawnedAt = 0;
     this.combat = new Combat(this);
     bot.once('spawn', () => {
@@ -217,6 +234,7 @@ class BotRunner {
     if (this.current || !this.queue.length) return;
     const job = (this.current = this.queue.shift());
     job.status = 'running';
+    job.startedAt = Date.now();
     job.progress = '';
     try {
       if (!this.online) throw new Error('bot is offline');
@@ -249,7 +267,7 @@ class BotRunner {
     const inv = {};
     if (this.online) for (const it of b.inventory.items()) inv[it.name] = (inv[it.name] || 0) + it.count;
     const top = Object.entries(inv).sort((a, c) => c[1] - a[1]);
-    const label = (j) => `${j.type} ${Object.values(j.args).join(' ')}`;
+    const label = jobLabel;
     return {
       name: this.name,
       online: this.online,
@@ -263,6 +281,26 @@ class BotRunner {
       inventory: top.map(([n, c]) => `${n} x${c}`),
       inventoryKinds: top.length,
       lastError: this.lastError,
+      pullbacks: this.trace.recentCorrections(),
+    };
+  }
+
+  // Everything needed to see why a bot is not moving (GET /api/debug).
+  debug() {
+    const b = this.bot, e = b?.entity, j = this.current;
+    const live = this.online && !!e;
+    const pf = live && b.pathfinder;
+    return {
+      name: this.name,
+      online: this.online,
+      pos: live ? ['x', 'y', 'z'].map((k) => round(e.position[k])) : null,
+      dimension: live ? normDim(b.game?.dimension) : null,
+      job: j && {id: j.id, type: j.type, args: j.args, status: j.status, progress: j.progress || '', runningS: round((Date.now() - (j.startedAt || Date.now())) / 1000, 1)},
+      queue: this.queue.map(jobLabel),
+      combat: this.combat.mode || null,
+      physics: live ? {onGround: !!e.onGround, collidedHorizontally: !!e.isCollidedHorizontally, velocity: ['x', 'y', 'z'].map((k) => round(e.velocity?.[k], 3)), controls: Object.keys(b.controlState || {}).filter((k) => b.controlState[k])} : null,
+      pathfinder: pf ? {moving: !!pf.isMoving?.(), mining: !!pf.isMining?.(), building: !!pf.isBuilding?.(), goal: pf.goal?.constructor?.name || null} : null,
+      ...this.trace.snapshot(),
     };
   }
 }

@@ -101,6 +101,103 @@ require('./crafting');
   const zp = (z) => new AABB(-4.8, 58, z - 0.3, -4.2, 59.8, z + 0.3);
   assert.ok(zwall.computeOffsetZ(zp(-3.5), -1) > -0.2 && zwall.computeOffsetZ(zp(-3.5), -1) < -0.2 + 2 * GAP);
 }
+// ---- debug trace + /api/debug ----
+{
+  const {BotTrace} = require('./debug');
+  let now = 1000000;
+  const tr = new BotTrace(() => now);
+  tr.sample({x: 1, y: 64, z: 2});
+  now += 10000; tr.sample({x: 2.123456, y: 64, z: 3});
+  tr.correction(); now += 1000; tr.correction();
+  now += 25000; // the first sample is 36 s old, the corrections 26 s / 25 s
+  tr.setError('boom');
+  let s = tr.snapshot();
+  assert.deepStrictEqual(s.positions, [{agoS: 26, x: 2.12, y: 64, z: 3}]); // 30 s window, 2 decimals
+  assert.deepStrictEqual(s.corrections, {total: 2, last30s: 2, lastAgoS: 25});
+  assert.deepStrictEqual(s.lastError, {message: 'boom', agoS: 0});
+  now += 6000; // corrections age out of the window, the total stays
+  s = tr.snapshot();
+  assert.deepStrictEqual(s.corrections, {total: 2, last30s: 0, lastAgoS: 31});
+  assert.strictEqual(tr.recentCorrections(), 0);
+  tr.setError('');
+  assert.strictEqual(tr.snapshot().lastError, null);
+
+  // offline runner: nothing live, still a full shape
+  const off = new BotRunner('bot1', {host: 'x', port: 1, log: () => {}, world: null});
+  off.lastError = 'kicked: test';
+  let d = off.debug();
+  assert.strictEqual(d.online, false);
+  assert.strictEqual(d.pos, null);
+  assert.strictEqual(d.physics, null);
+  assert.strictEqual(d.pathfinder, null);
+  assert.strictEqual(d.job, null);
+  assert.strictEqual(d.lastError.message, 'kicked: test');
+  assert.strictEqual(off.lastError, 'kicked: test'); // accessor keeps working for the old callers
+  assert.strictEqual(off.snapshot().pullbacks, 0);
+
+  // online runner with a stub bot: job step, pathfinder, physics, controls
+  class GoalNear {}
+  const on = new BotRunner('bot2', {host: 'x', port: 1, log: () => {}, world: null});
+  on.online = true;
+  on.bot = {
+    entity: {position: {x: 1.234, y: 60, z: -3.5}, velocity: {x: 0, y: -0.0784, z: 0}, onGround: true, isCollidedHorizontally: true},
+    game: {dimension: 'minecraft:overworld'},
+    controlState: {forward: true, jump: false, back: false},
+    pathfinder: {isMoving: () => true, isMining: () => false, isBuilding: () => false, goal: new GoalNear()},
+  };
+  on.current = {id: 3, type: 'goto', args: {x: 1, y: 2, z: 3}, status: 'running', progress: '12 blocks', startedAt: Date.now() - 2500};
+  on.queue = [{id: 4, type: 'say', args: {text: 'hi'}}];
+  on.trace.sample(on.bot.entity.position);
+  on.trace.correction();
+  d = on.debug();
+  assert.deepStrictEqual(d.pos, [1.23, 60, -3.5]);
+  assert.strictEqual(d.dimension, 'overworld');
+  assert.deepStrictEqual(d.physics, {onGround: true, collidedHorizontally: true, velocity: [0, -0.078, 0], controls: ['forward']});
+  assert.deepStrictEqual(d.pathfinder, {moving: true, mining: false, building: false, goal: 'GoalNear'});
+  assert.strictEqual(d.job.type, 'goto');
+  assert.strictEqual(d.job.progress, '12 blocks');
+  assert.ok(d.job.runningS >= 2.4 && d.job.runningS < 4, String(d.job.runningS));
+  assert.deepStrictEqual(d.queue, ['say hi']);
+  assert.strictEqual(d.corrections.last30s, 1);
+  assert.strictEqual(d.positions.length, 1);
+  assert.doesNotThrow(() => JSON.stringify(d));
+}
+
+// GET /api/debug end to end: start the real server, hit it with and without a tailscale login.
+(async () => {
+  const {spawn} = require('node:child_process');
+  const net = require('node:net');
+  const port = await new Promise((res) => { const s = net.createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); });
+  const child = spawn(process.execPath, [require('node:path').join(__dirname, 'server.js')], {
+    env: {PATH: process.env.PATH, NODE_PATH: process.env.NODE_PATH || '', BOT_NAMES: 'bot1,bot2', DASHBOARD_PORT: String(port), DASHBOARD_HOST: '127.0.0.1', ALLOWED_TS_LOGINS: 'a@github', MC_HOST: '127.0.0.1', MC_PORT: '1', BOT_PASSWORD_SEED: 'test'},
+    stdio: ['ignore', 'pipe', 'inherit'],
+  });
+  try {
+    await new Promise((res, rej) => {
+      const to = setTimeout(() => rej(new Error('server did not start')), 8000);
+      child.stdout.on('data', (b) => { if (String(b).includes('listening')) { clearTimeout(to); res(); } });
+      child.on('exit', (c) => rej(new Error(`server exited early (${c})`)));
+    });
+    const base = `http://127.0.0.1:${port}/api/debug`;
+    assert.strictEqual((await fetch(base)).status, 403, 'no login -> 403');
+    assert.strictEqual((await fetch(base, {headers: {'tailscale-user-login': 'evil@github'}})).status, 403);
+    const r = await fetch(base, {headers: {'tailscale-user-login': 'a@github'}});
+    assert.strictEqual(r.status, 200);
+    assert.ok(/json/.test(r.headers.get('content-type')));
+    const j = await r.json();
+    assert.strictEqual(j.windowS, 30);
+    assert.ok(!Number.isNaN(Date.parse(j.generatedAt)));
+    assert.deepStrictEqual(j.bots.map((b) => b.name), ['bot1', 'bot2']);
+    for (const b of j.bots) {
+      assert.strictEqual(b.online, false);
+      assert.deepStrictEqual(Object.keys(b.corrections).sort(), ['last30s', 'lastAgoS', 'total']);
+      assert.ok(Array.isArray(b.positions) && Array.isArray(b.queue));
+    }
+    assert.strictEqual((await fetch(base, {method: 'POST', headers: {'tailscale-user-login': 'a@github'}})).status, 404);
+  } finally {
+    child.kill('SIGKILL');
+  }
+})();
 // A job queued after "stop" must survive the stopped job winding down.
 (async () => {
   const {JOBS} = require('./bots');
