@@ -127,6 +127,9 @@ function makeCrafting({goNear, guard}) {
     const timesOf = (recipe) => Math.ceil((want - have) / recipe.result.count);
     const recipe = [...all].sort((a, b) => missing(a, timesOf(a)) - missing(b, timesOf(b)))[0];
     const times = timesOf(recipe);
+    // The table first: its 4 planks must not come out of the planks made for the recipe.
+    let where = null;
+    if (recipe.requiresTable) where = await station(r, job, 'crafting_table', depth);
     // Planks last: making sticks eats planks, so planks made first fall short.
     const rank = (d) => (isPlanks(bot.registry.items[d.id].name) ? 1 : 0);
     for (const d of recipe.delta.filter((x) => x.count < 0).sort((a, b) => rank(a) - rank(b))) {
@@ -135,8 +138,6 @@ function makeCrafting({goNear, guard}) {
       if (isPlanks(ing) && !isPlanks(name)) await ensurePlanks(r, job, need);
       else await ensureItem(r, job, ing, need, depth + 1);
     }
-    let where = null;
-    if (recipe.requiresTable) where = await station(r, job, 'crafting_table', depth);
     const ready = bot.recipesFor(item.id, null, 1, where);
     if (!ready.length) throw new Error(`have the ingredients but no matching recipe for ${name}`);
     job.progress = `crafting ${name}`;
