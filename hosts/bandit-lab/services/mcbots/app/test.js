@@ -220,6 +220,17 @@ require('./crafting');
     assert.strictEqual((await post({bots: 'all', type: 'stop'})).status, 200);
     await poll(() => got.find((m) => m.t === 'job' && m.type === 'stop'), 'stop reached the worker');
     assert.strictEqual((await post({bots: ['bot5'], type: 'goto', args: {x: 1, y: 2, z: 3}})).status, 200);
+    // events: the worker's own (only for its bots, kinds and sizes cleaned) and the hub's "worker connected"
+    wk.send(JSON.stringify({t: 'status', bots: [], events: [{bot: 'bot5', kind: 'done', text: 'finished: goto 1 2 3'}, {bot: 'bot1', kind: 'done', text: 'not my bot'}, {bot: 'bot5', kind: 'weird', text: 'x'.repeat(500)}, 7]}));
+    const ev = await poll(async () => { const j = await (await fetch(`http://127.0.0.1:${port}/api/events?since=0`, {headers: {'tailscale-user-login': 'a@github'}})).json(); return j.events.length >= 3 && j; }, 'events arrived');
+    assert.deepStrictEqual(ev.events.map((e) => [e.bot, e.kind]), [['bot5', 'hub'], ['bot5', 'done'], ['bot5', 'info']]);
+    assert.strictEqual(ev.events[2].text.length, 200);
+    assert.strictEqual(ev.lastId, ev.events.at(-1).id);
+    const after = await (await fetch(`http://127.0.0.1:${port}/api/events?since=${ev.lastId}`, {headers: {'tailscale-user-login': 'a@github'}})).json();
+    assert.deepStrictEqual(after.events, []);
+    // the page may only run its own two inline blocks
+    const csp = (await fetch(`http://127.0.0.1:${port}/`, {headers: {'tailscale-user-login': 'a@github'}})).headers.get('content-security-policy');
+    assert.match(csp, /default-src 'none'; script-src 'sha256-[\w+/=]{44}'; style-src 'sha256-[\w+/=]{44}'; connect-src 'self'/);
     wk.close();
     const gone = await poll(async () => (await state()).find((b) => b.name === 'bot5' && !b.connected), 'bot5 offline');
     assert.deepStrictEqual([gone.online, gone.host, gone.lastSeen > 0], [false, 'laptop', true]);
@@ -498,6 +509,64 @@ require('./crafting');
   }
 })();
 
+// ---- event log, activity line, queue removal ----
+{
+  const {EventLog, clean, MAX} = require('./events');
+  let t = 0;
+  const log = new EventLog({now: () => ++t});
+  for (let i = 0; i < MAX + 30; i++) log.add('bot1', 'job', `n${i}`);
+  assert.strictEqual(log.items.length, MAX); // ring buffer: never more than MAX
+  assert.strictEqual(log.items[0].text, 'n30');
+  assert.strictEqual(log.lastId, MAX + 30);
+  assert.deepStrictEqual(log.since(MAX + 28).map((e) => e.text), [`n${MAX + 28}`, `n${MAX + 29}`]);
+  assert.strictEqual(log.add('bot1', 'nonsense', 'x'.repeat(999)).kind, 'info');
+  assert.strictEqual(log.items.at(-1).text.length, 200);
+  assert.strictEqual(clean({bot: 'bot9', kind: 'done', text: 'x'}, new Set(['bot5'])), null);
+  assert.strictEqual(clean({bot: 'bot5', kind: 'done', text: 5}, new Set(['bot5'])), null);
+  assert.deepStrictEqual(clean({bot: 'bot5', kind: 'x', text: 'y', extra: 1}, new Set(['bot5'])), {bot: 'bot5', kind: 'info', text: 'y'});
+
+  const seen = [];
+  const r = new BotRunner('bot3', {host: 'x', port: 1, log: () => {}, world: null, supplyChest: {x: 1, y: 2, z: 3}, onEvent: (b, k, x) => seen.push([b, k, x])});
+  assert.strictEqual(r.activity(), 'connecting...');
+  r.lastSeen = 1;
+  assert.strictEqual(r.activity(), 'offline');
+  r.online = true;
+  r.bot = {inventory: {items: () => [], emptySlotCount: () => 36}, heldItem: {name: 'stone_pickaxe', durabilityUsed: 50}, registry: {itemsByName: {stone_pickaxe: {maxDurability: 131}}}, entity: null};
+  assert.strictEqual(r.activity(), 'idle - no job');
+  assert.deepStrictEqual(r.tool(), {name: 'stone_pickaxe', max: 131, left: 81});
+  r.queue = [{id: 7, type: 'goto', args: {x: 1, y: 2, z: 3}}, {id: 8, type: 'chop', args: {count: 4}}];
+  assert.strictEqual(r.activity(), 'starting the next job');
+  r.enqueue('remove', {id: 7});
+  assert.deepStrictEqual(r.snapshot().queueIds, [8]); // a running job is not removed, queued ones are
+  r.queue = [];
+  r.current = {id: 9, type: 'mine', args: {block: 'stone', count: 8}, progress: '2/8', startedAt: Date.now() - 5000, t: {doing: 'mining stone 2/8 near 1 2 3', done: 2, total: 8}};
+  let sn = r.snapshot();
+  assert.deepStrictEqual([sn.activity, sn.job.done, sn.job.total, sn.job.type], ['mining stone 2/8 near 1 2 3', 2, 8, 'mine']);
+  r.dead = true;
+  assert.strictEqual(r.activity(), 'dead - respawning');
+  r.dead = false;
+  r.emit('death', 'died');
+  r.onEvent = () => { throw new Error('a broken listener must not kill the bot'); };
+  assert.doesNotThrow(() => r.emit('death', 'again'));
+  assert.deepStrictEqual(seen, [['bot3', 'death', 'died']]);
+  // several refusals in a row are one event
+  r.onEvent = (b, k, x) => seen.push([b, k, x]);
+  seen.length = 0;
+  for (let i = 0; i < 5; i++) r.conflict();
+  assert.strictEqual(seen.length, 1);
+  assert.match(seen[0][2], /^1 block skipped/);
+  // the hub passes the new fields through and refuses wrong types
+  const {cleanSnapshot} = require('./hub');
+  const cs = cleanSnapshot({...sn, tool: {name: 5, max: -1, left: 'x'}, queueIds: [1, 'a', -3], activity: 'x'.repeat(999)});
+  assert.deepStrictEqual([cs.tool, cs.queueIds, cs.activity.length, cs.job.done, cs.job.total], [{name: '', max: 0, left: null}, [1, 0, 0], 200, 2, 8]);
+  assert.deepStrictEqual(cleanSnapshot(null).queueIds, []);
+  const {RemoteRunner} = require('./hub');
+  const sent = [];
+  const rr = new RemoteRunner('bot5');
+  rr.conn = {ws: {send: (m) => sent.push(JSON.parse(m))}};
+  rr.enqueue('remove', {id: '12'});
+  assert.deepStrictEqual(sent[0], {t: 'job', bot: 'bot5', type: 'remove', args: {id: 12}, replace: false});
+}
 // A job queued after "stop" must survive the stopped job winding down.
 (async () => {
   const {JOBS} = require('./bots');

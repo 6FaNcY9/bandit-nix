@@ -75,11 +75,17 @@ const VALIDATE = {
 
 class Cancelled extends Error {}
 
+const at = (c) => `${Math.round(c.x)} ${Math.round(c.y)} ${Math.round(c.z)}`;
+// "the supply chest" when x,y,z is the configured one, else the coordinates.
+const place = (r, c) => (r.supplyChest && r.supplyChest.x === c.x && r.supplyChest.y === c.y && r.supplyChest.z === c.z ? 'the supply chest' : at(c));
 const jobLabel = (j) => `${j.type} ${Object.values(j.args).join(' ')}`;
 
 class BotRunner {
-  constructor(name, {host, port, log, world, protectedAreas = [], supplyChest = null, loginSeed = null, hostLabel = ''}) {
+  constructor(name, {host, port, log, world, protectedAreas = [], supplyChest = null, loginSeed = null, hostLabel = '', onEvent = null}) {
     this.name = name;
+    this.onEvent = onEvent; // (bot, kind, text) -> dashboard event log
+    this.dead = false;
+    this.conflicts = {n: 0, at: 0};
     this.hostLabel = hostLabel; // machine this bot runs on, shown in the dashboard
     this.lastSeen = 0;
     this.world = world;
@@ -114,6 +120,23 @@ class BotRunner {
 
   start() {
     this.schedule(0);
+  }
+
+  emit(kind, text) {
+    try {
+      this.onEvent?.(this.name, kind, text);
+    } catch {}
+  }
+
+  // Several bots digging one area refuse each other's blocks all the time;
+  // report that as one event per 15 s, not one per refusal.
+  conflict() {
+    const c = this.conflicts;
+    c.n++;
+    if (Date.now() - c.at < 15000) return;
+    this.emit('claim', `${c.n} block${c.n > 1 ? 's' : ''} skipped: another bot is working on ${c.n > 1 ? 'them' : 'it'}`);
+    c.n = 0;
+    c.at = Date.now();
   }
 
   schedule(ms) {
@@ -151,6 +174,14 @@ class BotRunner {
       bot.pathfinder.searchRadius = 80;
       bot.collectBlock.movements = mv;
       this.log(this.name, 'spawned');
+      this.emit('connect', 'joined the game');
+    });
+    // After a death the next spawn is the respawn; a stale "died" is not an error any more.
+    bot.on('spawn', () => {
+      if (!this.dead) return;
+      this.dead = false;
+      if (this.lastError === 'died') this.lastError = '';
+      this.emit('respawn', 'respawned');
     });
     // VeloAuth holds players without a Minecraft account until /login (or
     // /register the first time). Prompts are matched in English.
@@ -170,7 +201,10 @@ class BotRunner {
     });
     bot.on('entityGone', (e) => this.world.forgetMob(e.id));
     bot.on('death', () => {
+      this.dead = true;
       this.lastError = 'died';
+      const p = bot.entity?.position;
+      this.emit('death', `died${p ? ` at ${Math.round(p.x)} ${Math.round(p.y)} ${Math.round(p.z)}` : ''}`);
       this.cancel();
       // Re-equip from the supply chest first thing after respawning.
       if (this.supplyChest) this.queue.unshift({id: ++this.jobSeq, type: 'rearm', args: this.supplyChest, status: 'queued'});
@@ -186,6 +220,8 @@ class BotRunner {
     });
     bot.once('end', (why) => {
       this.online = false;
+      this.dead = false;
+      if (spawnedAt) this.emit('disconnect', `left the game (${why})`); // failed connection attempts are not news
       this.combat.stop();
       this.cancel();
       this.bot = null;
@@ -210,13 +246,17 @@ class BotRunner {
   // replace: drop the queue and the running job first, so a click means "do
   // this now" instead of waiting behind earlier clicks.
   enqueue(type, args = {}, {replace = false} = {}) {
-    if (replace && type !== 'stop') {
+    if (replace && type !== 'stop' && type !== 'remove') {
       this.queue = [];
       this.cancel();
     }
     if (type === 'stop') {
       this.queue = [];
       this.cancel();
+      return;
+    }
+    if (type === 'remove') {
+      this.queue = this.queue.filter((j) => j.id !== Number(args.id)); // queued jobs only; "stop" ends the running one
       return;
     }
     if (!VALIDATE[type]) throw new Error(`unknown job type: ${type}`);
@@ -241,6 +281,8 @@ class BotRunner {
     job.status = 'running';
     job.startedAt = Date.now();
     job.progress = '';
+    job.t = {doing: '', done: 0, total: 0, open: false}; // live detail; sub-jobs share it through the prototype
+    this.emit('job', `started: ${jobLabel(job)}`);
     try {
       if (!this.online) throw new Error('bot is offline');
       for (let tries = 0; ; tries++) {
@@ -263,6 +305,10 @@ class BotRunner {
         this.log(this.name, this.lastError);
       }
     }
+    const took = Math.round((Date.now() - job.startedAt) / 1000);
+    if (job.status === 'done') this.emit('done', `finished: ${jobLabel(job)} (${took} s)`);
+    else if (job.status === 'stopped') this.emit('stop', `stopped: ${jobLabel(job)}`);
+    else this.emit('fail', `failed: ${jobLabel(job)} - ${this.lastError.replace(/^\w+: /, '')}`);
     this.current = null;
     setImmediate(() => this.pump());
   }
@@ -283,13 +329,37 @@ class BotRunner {
       pos: this.online && b.entity ? ['x', 'y', 'z'].map((k) => Math.round(b.entity.position[k])) : null,
       dimension: this.online ? normDim(b.game?.dimension) : null,
       combat: this.combat.mode || null,
-      job: this.current && {label: label(this.current), progress: this.current.progress},
+      job: this.current && {label: label(this.current), progress: this.current.progress, type: this.current.type, done: this.current.t?.done || 0, total: this.current.t?.total || 0, runningS: Math.round((Date.now() - (this.current.startedAt || Date.now())) / 1000)},
+      activity: this.activity(),
+      dead: this.dead,
+      tool: this.tool(),
+      freeSlots: this.online ? b.inventory.emptySlotCount() : null,
       queue: this.queue.map(label),
+      queueIds: this.queue.map((j) => j.id),
       inventory: top.map(([n, c]) => `${n} x${c}`),
       inventoryKinds: top.length,
       lastError: this.lastError,
+      lastErrorAgoS: this.trace.error ? Math.round((Date.now() - this.trace.error.t) / 1000) : null,
       pullbacks: this.trace.recentCorrections(),
     };
+  }
+
+  // One plain-language line for the dashboard: what is this bot doing now?
+  activity() {
+    if (!this.online) return this.lastSeen ? 'offline' : 'connecting...';
+    if (this.dead) return 'dead - respawning';
+    if (this.combat.busy) return `fighting or retreating (${this.combat.mode || 'combat'})`;
+    const j = this.current;
+    if (!j) return this.queue.length ? 'starting the next job' : 'idle - no job';
+    return j.t?.doing || `${jobLabel(j)} ${j.progress || ''}`.trim();
+  }
+
+  // Held tool and what is left of it (durability), or null with empty hands.
+  tool() {
+    const it = this.online && this.bot.heldItem;
+    if (!it) return null;
+    const max = this.bot.registry.itemsByName[it.name]?.maxDurability || 0;
+    return {name: it.name, max, left: max ? Math.max(0, max - (it.durabilityUsed || 0)) : null};
   }
 
   // Everything needed to see why a bot is not moving (GET /api/debug).
@@ -377,13 +447,15 @@ async function waitSafe(r, job, x, z) {
   const dim = normDim(r.bot.game?.dimension);
   for (let i = 0; i < 10 && r.world.hostilesNear(x, z, dim, 8).length; i++) {
     job.progress = 'waiting: hostile near target';
+    job.t.doing = 'waiting: a hostile mob is near the target';
     await waitCalm(r, job);
     await sleep(1000);
   }
 }
 
-async function goNear(r, job, x, y, z, dist, {brave = false, goal = null} = {}) {
+async function goNear(r, job, x, y, z, dist, {brave = false, goal = null, doing = null} = {}) {
   guard(job);
+  if (job.t) job.t.doing = doing || `walking to ${at({x, y, z})}`;
   // Unreachable goals make the pathfinder retry partial paths
   // forever, so every walk has a deadline.
   let timedOut = false;
@@ -423,10 +495,11 @@ async function digAt(r, job, pos) {
   if (tools && !bot.inventory.items().some((i) => tools.includes(i.type))) {
     throw new Error(`needs a tool that can harvest ${block.name} (for stone and ore: a pickaxe)`);
   }
-  await goNear(r, job, pos.x, pos.y, pos.z, 4, {goal: new goals.GoalLookAtBlock(pos, bot.world, {reach: 4})});
+  await goNear(r, job, pos.x, pos.y, pos.z, 4, {goal: new goals.GoalLookAtBlock(pos, bot.world, {reach: 4}), doing: `walking to ${block.name} near ${at(pos)}${tally(job)}`});
   guard(job);
   block = bot.blockAt(pos);
   if (!block || block.name.endsWith('air')) return;
+  job.t.doing = `mining ${block.name}${tally(job)} near ${at(pos)}`;
   await bot.tool.equipForBlock(block, {}).catch(() => {});
   await bot.dig(block, true);
   // Walk over the drops near the block (items merge and fly a little).
@@ -434,7 +507,7 @@ async function digAt(r, job, pos) {
   const drops = Object.values(bot.entities).filter((e) => e.name === 'item' && e.position.distanceTo(pos) <= 4);
   for (const d of drops) {
     guard(job);
-    await goNear(r, job, d.position.x, d.position.y, d.position.z, 0.8).catch(() => {});
+    await goNear(r, job, d.position.x, d.position.y, d.position.z, 0.8, {doing: 'picking up the drops'}).catch(() => {});
   }
 }
 
@@ -443,6 +516,7 @@ async function collect(r, job, matching, count, what) {
   const ids = matching.map((n) => bot.registry.blocksByName[n]?.id).filter((i) => i !== undefined);
   if (!ids.length) throw new Error(`unknown block: ${what}`);
   let got = job.collected || 0; // survives a combat interruption + resume
+  if (!job.t.open) Object.assign(job.t, {done: got, total: count});
   while (got < count) {
     await waitCalm(r, job);
     // Nearest block that no other bot is working on, so bots spread out
@@ -459,7 +533,10 @@ async function collect(r, job, matching, count, what) {
       // Digging a target is direct (not pathfinder), so protection is checked here too.
       if (insideAreas(r.protectedAreas, p.x, p.z)) continue;
       const k = keyOf(p);
-      if (r.world && !(await r.world.claim(r.name, k))) continue;
+      if (r.world && !(await r.world.claim(r.name, k))) {
+        r.conflict();
+        continue;
+      }
       pos = p;
       key = k;
       break;
@@ -476,9 +553,12 @@ async function collect(r, job, matching, count, what) {
     }
     job.collected = ++got;
     job.progress = `${got}/${count}`;
+    if (!job.t.open) Object.assign(job.t, {done: got, total: count});
   }
 }
 
+// " 12/32" for jobs that count their blocks, else "".
+const tally = (job) => (job.t?.total ? ` ${job.t.done}/${job.t.total}` : '');
 const dist3 = (a, p) => Math.hypot(a.x - p.x, a.y - p.y, a.z - p.z);
 
 // come/follow. Entity tracking only reaches the server's tracking range, so a
@@ -560,7 +640,8 @@ const JOBS = {
   async deposit(r, job) {
     const {bot} = r;
     const {x, y, z} = job.args;
-    await goNear(r, job, x, y, z, 3);
+    await goNear(r, job, x, y, z, 3, {doing: `walking to ${place(r, job.args)} to deposit`});
+    job.t.doing = `depositing at ${place(r, job.args)}`;
     const block = bot.blockAt(new (require('vec3').Vec3)(x, y, z));
     if (!block || !/chest|barrel/.test(block.name)) throw new Error(`no chest at ${x} ${y} ${z} (found ${block?.name})`);
     const chest = await bot.openContainer(block);
@@ -577,6 +658,7 @@ const JOBS = {
           throw new Error(`chest full or deposit failed after ${moved} items: ${e.message}`);
         }
       }
+      if (moved) r.emit('deposit', `deposited ${moved} items at ${place(r, job.args)}`);
     } finally {
       chest.close();
     }
@@ -591,7 +673,7 @@ const JOBS = {
     const Vec3 = require('vec3').Vec3;
     const centre = new Vec3(x, y, z);
     const ids = ['chest', 'trapped_chest', 'barrel'].map((n) => bot.registry.blocksByName[n]?.id).filter((i) => i !== undefined);
-    await goNear(r, job, x, y, z, 3, {brave: true}); // getting armour is the safety step
+    await goNear(r, job, x, y, z, 3, {brave: true, doing: `walking to ${place(r, job.args)} to re-arm`}); // getting armour is the safety step
     const spots = bot.findBlocks({matching: ids, point: centre, maxDistance: 6, count: 64});
     if (!spots.length) throw new Error(`no chests within 6 blocks of ${x} ${y} ${z}`);
     const tier = (n) => ['wooden', 'leather', 'golden', 'stone', 'chainmail', 'iron', 'diamond', 'netherite'].findIndex((t) => n.startsWith(t));
@@ -606,7 +688,8 @@ const JOBS = {
       // A double chest is two blocks but one inventory; skip the second half.
       if ([...opened].some((k) => pos.distanceTo(k) <= 1.01)) continue;
       opened.add(pos);
-      await goNear(r, job, pos.x, pos.y, pos.z, 3, {brave: true});
+      job.t.doing = `re-arming from ${place(r, job.args)}`;
+      await goNear(r, job, pos.x, pos.y, pos.z, 3, {brave: true, doing: job.t.doing});
       const box = await bot.openContainer(bot.blockAt(pos));
       try {
         for (const re of WANT) {
@@ -645,6 +728,7 @@ const JOBS = {
     // progress, so one stop ends everything.
     const sub = (extra) => Object.assign(Object.create(job), extra);
     let total = 0;
+    job.t.open = true; // no end: the dashboard shows a count, not a bar
     for (;;) {
       guard(job);
       if (bot.inventory.emptySlotCount() < 4) {
@@ -655,6 +739,7 @@ const JOBS = {
       }
       if (!logs && !bot.inventory.items().some((i) => i.name.endsWith('_pickaxe'))) {
         job.progress = 'crafting a pickaxe';
+        job.t.doing = 'crafting a pickaxe';
         try {
           await crafting.ensureItem(r, sub({}), 'stone_pickaxe', 1);
         } catch {
@@ -665,6 +750,7 @@ const JOBS = {
       await collect(r, round, matching, 8, job.args.block);
       total += 8;
       job.progress = `${total} ${job.args.block} mined`;
+      job.t.done = total;
     }
   },
 

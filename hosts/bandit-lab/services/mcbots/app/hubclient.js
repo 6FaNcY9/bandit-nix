@@ -134,7 +134,12 @@ class HubClient {
     this.wsOptions = wsOptions;
     this.world = new RemoteWorld();
     this.world.mine = new Set(names);
-    this.makeRunner = makeRunner || ((name, {protectedAreas, supplyChest}) => new BotRunner(name, {host: mcHost, port: mcPort, log, world: this.world, protectedAreas, supplyChest, loginSeed, hostLabel}));
+    this.outEvents = []; // dashboard events waiting for the next status frame (capped)
+    const onEvent = (bot, kind, text) => {
+      this.outEvents.push({bot, kind, text});
+      if (this.outEvents.length > 100) this.outEvents.shift();
+    };
+    this.makeRunner = makeRunner || ((name, {protectedAreas, supplyChest}) => new BotRunner(name, {host: mcHost, port: mcPort, log, world: this.world, protectedAreas, supplyChest, loginSeed, hostLabel, onEvent}));
     this.runners = [];
     this.ws = null;
     this.stopped = false;
@@ -225,7 +230,7 @@ class HubClient {
   }
 
   report() {
-    this.send({t: 'status', bots: this.runners.map((r) => ({...r.snapshot(), debug: r.debug()}))});
+    this.send({t: 'status', bots: this.runners.map((r) => ({...r.snapshot(), debug: r.debug()})), events: this.outEvents.splice(0)});
     this.world.flush();
   }
 
