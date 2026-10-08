@@ -11,4 +11,6 @@ assert.deepStrictEqual(VALIDATE.goto({x: '1', y: 64, z: -3}), {x: 1, y: 64, z: -
 assert.throws(() => VALIDATE.goto({x: 'a', y: 1, z: 1}));
 assert.throws(() => VALIDATE.say({text: '/op me'}));
 assert.throws(() => VALIDATE.mine({block: 'Iron Ore'}));
+assert.deepStrictEqual(loadConfig({BOT_NAMES: 'bot1', PROTECTED_AREAS: '10,5,-10,-5; 1,2,3,4'}).protectedAreas, [[-10, -5, 10, 5], [1, 2, 3, 4]]);
+assert.throws(() => loadConfig({BOT_NAMES: 'bot1', PROTECTED_AREAS: '1,2,3'}));
 console.log('ok');

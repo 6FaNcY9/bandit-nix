@@ -9,7 +9,7 @@ const {BotRunner} = require('./bots');
 
 const cfg = loadConfig();
 const log = (who, msg) => console.log(`${new Date().toISOString()} [${who}] ${msg}`);
-const runners = new Map(cfg.names.map((n) => [n, new BotRunner(n, {host: cfg.mcHost, port: cfg.mcPort, log})]));
+const runners = new Map(cfg.names.map((n) => [n, new BotRunner(n, {host: cfg.mcHost, port: cfg.mcPort, log, protectedAreas: cfg.protectedAreas})]));
 const page = fs.readFileSync(path.join(__dirname, 'public', 'index.html'));
 
 // tailscale serve sets Tailscale-User-Login for tailnet users. When

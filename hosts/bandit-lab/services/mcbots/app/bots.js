@@ -54,9 +54,10 @@ const VALIDATE = {
 class Cancelled extends Error {}
 
 class BotRunner {
-  constructor(name, {host, port, log}) {
+  constructor(name, {host, port, log, protectedAreas = []}) {
     this.name = name;
     this.host = host;
+    this.protectedAreas = protectedAreas;
     this.port = port;
     this.log = log;
     this.bot = null;
@@ -91,12 +92,9 @@ class BotRunner {
     bot.once('spawn', () => {
       spawnedAt = Date.now();
       this.online = true;
-      const mv = new Movements(bot);
-      mv.canDig = false; // never tunnel through builds while pathing
-      mv.scafoldingBlocks = []; // never place blocks while pathing
+      const mv = safeMovements(bot, this.protectedAreas);
       bot.pathfinder.setMovements(mv);
-      bot.collectBlock.movements.canDig = false;
-      bot.collectBlock.movements.scafoldingBlocks = [];
+      bot.collectBlock.movements = mv;
       this.log(this.name, 'spawned');
     });
     bot.on('death', () => {
@@ -198,6 +196,28 @@ class BotRunner {
   }
 }
 
+
+// Pathing may dig only natural terrain (never planks, glass, cobblestone or
+// anything else players place) and may pillar with dirt/cobblestone it
+// carries. Inside protected areas (player bases) it neither digs nor places.
+const NATURAL = new Set(['dirt', 'grass_block', 'coarse_dirt', 'rooted_dirt', 'podzol', 'mycelium', 'mud',
+  'sand', 'red_sand', 'gravel', 'clay', 'stone', 'deepslate', 'granite', 'diorite', 'andesite', 'tuff',
+  'calcite', 'netherrack', 'snow', 'snow_block', 'short_grass', 'tall_grass', 'fern', 'large_fern', 'dead_bush']);
+function safeMovements(bot, areas) {
+  const mv = new Movements(bot);
+  mv.canDig = true;
+  for (const b of bot.registry.blocksArray) {
+    if (!NATURAL.has(b.name) && !b.name.endsWith('_leaves')) mv.blocksCantBreak.add(b.id);
+  }
+  mv.scafoldingBlocks = ['dirt', 'cobblestone'].map((n) => bot.registry.itemsByName[n].id);
+  const inside = (blk) => areas.some(([x1, z1, x2, z2]) =>
+    blk.position.x >= x1 && blk.position.x <= x2 && blk.position.z >= z1 && blk.position.z <= z2);
+  const veto = (blk) => (inside(blk) ? 100 : 0);
+  mv.exclusionAreasBreak = [veto];
+  mv.exclusionAreasPlace = [veto];
+  return mv;
+}
+
 // ---- job implementations: (runner, job) => Promise; throw on failure ----
 const guard = (job) => {
   if (job.cancelled) throw new Cancelled('stopped');
@@ -206,7 +226,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function goNear(r, job, x, y, z, dist) {
   guard(job);
-  // Unreachable goals (canDig is off) make the pathfinder retry partial paths
+  // Unreachable goals make the pathfinder retry partial paths
   // forever, so every walk has a deadline.
   const deadline = setTimeout(() => r.bot?.pathfinder.stop(), GOTO_TIMEOUT_MS);
   try {
@@ -241,10 +261,22 @@ async function collect(r, job, matching, count, what) {
 const JOBS = {
   goto: (r, job) => goNear(r, job, job.args.x, job.args.y, job.args.z, 1),
 
+  // Chases the player's live position (they may move), done within 3 blocks.
   async come(r, job) {
     const e = r.bot.players[job.args.player]?.entity;
     if (!e) throw new Error(`${job.args.player} is not within render distance`);
-    await goNear(r, job, e.position.x, e.position.y, e.position.z, 2);
+    r.bot.pathfinder.setGoal(new goals.GoalFollow(e, 2), true);
+    const until = Date.now() + GOTO_TIMEOUT_MS;
+    try {
+      while (r.bot.entity.position.distanceTo(e.position) > 3) {
+        guard(job);
+        if (!r.bot.players[job.args.player]?.entity) throw new Error(`lost ${job.args.player}`);
+        if (Date.now() > until) throw new Error(`could not reach ${job.args.player} within 90 s`);
+        await sleep(500);
+      }
+    } finally {
+      r.bot.pathfinder.stop();
+    }
   },
 
   async follow(r, job) {

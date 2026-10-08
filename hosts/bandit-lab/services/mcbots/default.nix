@@ -35,6 +35,9 @@ in {
         DASHBOARD_PORT = dashboardPort;
         # tailscale serve identifies the tailnet user; everything else gets 403.
         ALLOWED_TS_LOGINS = "6FaNcY9@github";
+        # Bots never dig or place inside these x1,z1,x2,z2 boxes: the main base
+        # around spawn and MidariBread's base (from BlueMap light data, +16).
+        PROTECTED_AREAS = "-80,-144,80,80;112,368,272,592";
         NODE_OPTIONS = "--max-old-space-size=1536";
       };
       ports = ["127.0.0.1:${dashboardPort}:${dashboardPort}"];
