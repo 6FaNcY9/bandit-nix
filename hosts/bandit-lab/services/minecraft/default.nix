@@ -180,7 +180,7 @@ in {
   };
 
   # Minecraft Java server (Paper) for ~12 players. Hard-capped at 4 CPU cores
-  # and 12 GiB so it can never starve Traefik/PostgreSQL/Wazuh & co. — the lab
+  # and 12 GiB so it can never starve Traefik/PostgreSQL & co. — the lab
   # (i9-14900HX, 62 GiB) barely notices it. Not proxied through Traefik:
   # Minecraft is a raw TCP protocol, so port 25565 is published directly.
   # The container has no docker.sock, no privileges and a single mount: the

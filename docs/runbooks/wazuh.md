@@ -1,5 +1,7 @@
 # Wazuh on bandit-lab
 
+> **Retired:** Wazuh is no longer deployed on bandit-lab (Nix module removed). This runbook is historical.
+
 Wazuh is the self-hosted SIEM/XDR: log ingestion, MITRE ATT&CK-mapped
 detection rules, file-integrity monitoring, and vulnerability detection, with
 agents on every machine you want watched.

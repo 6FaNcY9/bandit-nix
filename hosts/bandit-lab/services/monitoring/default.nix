@@ -22,7 +22,7 @@
   };
   users.groups.grafana.gid = 472;
 
-  # Consumed by the Portainer "monitoring" stack via bind mount
+  # Consumed by the "monitoring" Compose stack via bind mount
   # (GF_SECURITY_ADMIN_PASSWORD__FILE).
   sops.secrets."grafana-admin-password" = {
     owner = "grafana";
@@ -42,7 +42,7 @@
     "d /srv/containers/monitoring 0755 root root -"
     "d /srv/containers/monitoring/grafana 0750 472 472 -"
     "d /srv/containers/monitoring/prometheus 0750 65534 65534 -"
-    # Stable paths for Portainer bind mounts; targets update on rebuild.
+    # Stable paths for Compose bind mounts; targets update on rebuild.
     "L+ /srv/containers/monitoring/prometheus.yml - - - - ${prometheusYml}"
     "L+ /srv/containers/monitoring/blackbox.yml - - - - ${blackboxYml}"
     "L+ /srv/containers/monitoring/grafana-provisioning - - - - ${grafanaProvisioning}"

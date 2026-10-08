@@ -4,8 +4,8 @@ The canonical reviewed Compose asset is
 [`hosts/bandit-lab/services/monitoring/compose.yml`](../../hosts/bandit-lab/services/monitoring/compose.yml),
 with project name `monitoring`. It preserves the live node-exporter unit
 include, including `ollama`, and publishes no Grafana host port; Grafana is
-reached through Traefik/Cloudflare. Until the adoption revision is deployed,
-Portainer remains the live owner of the running stack.
+reached through Traefik/Cloudflare. Portainer has been retired; the running stack
+keeps its containers and is managed with Compose on the host.
 
 Nix exposes the asset at `/etc/bandit-lab/monitoring.compose.yml` and declares
 the initially disabled manual lifecycle unit `compose-monitoring`. The unit

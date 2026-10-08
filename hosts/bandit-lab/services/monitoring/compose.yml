@@ -81,6 +81,13 @@ services:
       - monitoring
     command:
       - --containerd=/var/run/docker/containerd/containerd.sock
+      # CPU: default 1s housekeeping dominated the host's background load.
+      # 30s housekeeping plus fewer collectors keeps the 15s scrape useful.
+      - --housekeeping_interval=30s
+      - --max_housekeeping_interval=60s
+      - --docker_only=true
+      - --store_container_labels=false
+      - --disable_metrics=advtcp,cpu_topology,hugetlb,percpu,process,referenced_memory,resctrl,sched,tcp,udp
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro

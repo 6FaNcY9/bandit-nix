@@ -13,15 +13,11 @@
     ./services/monitoring
     ./services/beszel
     ./services/vaultwarden
-    ./services/searxng
-    ./services/watchyourlan
     ./services/minecraft
     ./power.nix
     ./services/aiia
     ./services/auto-rebuild
     ./services/crowdsec
-    ./services/wazuh
-    ./services/toolbox
     ./services/health-check
     ./services/backup
     # Sideloading is on hold (cable/hardware issues) — services/anisette stays

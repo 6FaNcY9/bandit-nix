@@ -15,10 +15,7 @@
     "docker-aiia-mysql.service"
     "docker-aiia-redis.service"
     "docker-network-aiia.service"
-    "docker-network-portainer-control.service"
     "docker-network-proxy.service"
-    "docker-portainer-agent.service"
-    "docker-portainer.service"
     "docker-vaultwarden.service"
     "docker.service"
     # Access path and brute-force protection: a config that silently kills
@@ -98,8 +95,6 @@
       fi
       container_healthy vaultwarden
       ready pg_isready -q -h /run/postgresql -t 3
-      ready curl --fail --silent --show-error --output /dev/null --connect-timeout 2 --max-time 5 \
-        -H 'Host: portainer.atmosphaere.at' http://127.0.0.1/api/status
       ready curl --fail --silent --show-error --output /dev/null --connect-timeout 2 --max-time 5 \
         -H 'Host: vault.atmosphaere.at' http://127.0.0.1/alive
 

@@ -1,6 +1,6 @@
 {pkgs, ...}: let
   # Prometheus scrape configuration, linked to a stable path for the
-  # Portainer-managed monitoring stack (docs/runbooks/monitoring.md).
+  # host-managed monitoring stack (docs/runbooks/monitoring.md).
   prometheusYml = pkgs.writeText "prometheus.yml" ''
     global:
       scrape_interval: 15s
@@ -29,7 +29,6 @@
               - https://vault.atmosphaere.at
               - https://grafana.atmosphaere.at
               - https://mail-archive.bandit-lab.mrija.org
-              - https://portainer.atmosphaere.at
         relabel_configs:
           - source_labels: [__address__]
             target_label: __param_target

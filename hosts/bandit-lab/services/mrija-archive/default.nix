@@ -27,9 +27,9 @@ in {
       owner = username;
       group = "users";
       mode = "0400";
-      # No restartUnits: the container is Portainer-managed (not defined in
+      # No restartUnits: the container is host-managed Compose (not defined in
       # this repo), so after a sops rotation restart the mrija-archive
-      # container manually (Portainer UI or `docker restart`).
+      # container manually (`docker restart`).
       content = ''
         MRIJA_API_KEY=${config.sops.placeholder."mrija-api-key"}
         MRIJA_PASSWORD=${config.sops.placeholder."mrija-password"}

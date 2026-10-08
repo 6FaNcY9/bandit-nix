@@ -18,13 +18,6 @@ must be tested separately before changing its current Access protection.
    - `mail-archive.bandit-lab.mrija.org` — mrija-archive has its own login,
      but the archived email behind it warrants the extra Access gate. (The
      bare `mail.` prefix is reserved for a future real mail server.)
-   - `portainer.bandit-lab.mrija.org` — Docker admin UI; never publish it
-     without this gate.
-   - `search.bandit-lab.mrija.org` — SearXNG has no login of its own, and a
-     public metasearch instance is scraped/abused by bots within hours.
-   - `devices.bandit-lab.mrija.org` — WatchYourLAN network inventory. It has
-     no built-in auth, and the LAN host list (names, MACs, vendors, online
-     history) is exactly what an attacker wants for reconnaissance.
 2. Add an Allow policy for the intended identity group or email addresses
    (the existing `vino-allow` policy can be reused). Do not add a bypass
    policy for these hostnames.
@@ -33,9 +26,7 @@ must be tested separately before changing its current Access protection.
 4. Keep admin services without an Access app off the WAN entirely. Cockpit's
    socket is loopback-only; reach it through an SSH tunnel:
    `ssh -L 9090:localhost:9090 bandit-lab` → `https://localhost:9090`.
-   Portainer is WAN-published behind its Access app, and also remains
-   reachable via `ssh -L 9443:localhost:9443 bandit-lab` →
-   `https://localhost:9443` as a fallback. Tailscale works too.
+   Tailscale works too.
 5. Vaultwarden is served at the canonical hostname
    `vault.atmosphaere.at`, which is represented by an Access application in
    the live account. The legacy public hostname was retired after client
@@ -156,10 +147,6 @@ queried again for this table.
 | `vault.atmosphaere.at` | Vaultwarden | yes | yes (live Access app; test native clients) | documented as gated |
 | `grafana.atmosphaere.at`, `grafana.bandit-lab.mrija.org` | Grafana | yes | yes | documented as gated |
 | `mail-archive.bandit-lab.mrija.org` | Mrija mail archive | yes | yes | documented as gated |
-| `devices.atmosphaere.at`, `devices.bandit-lab.mrija.org` | WatchYourLAN | yes | **yes, mandatory** (no auth of its own) | documented as gated |
-| `search.atmosphaere.at`, `search.bandit-lab.mrija.org` | SearXNG | yes | **yes, mandatory** (bot abuse) | documented as gated |
-| `portainer.atmosphaere.at`, `portainer.bandit-lab.mrija.org` | Portainer UI | yes | yes; being retired (D4, `portainer-retirement.md`) | documented as gated |
-| `juice.atmosphaere.at`, `cyberchef.atmosphaere.at`, `tools.atmosphaere.at` | Juice Shop, CyberChef, IT-Tools | yes | yes for the training targets (Juice Shop is deliberately vulnerable) | not individually verified |
 | `ssh-bandit-lab.mrija.org`, `ssh.atmosphaere.at` | SSH | **removed** | n/a | route, Access app and DNS deleted 2026-10-06 |
 
 Verified 2026-10-06 through the read-only Cloudflare API: every hostname in the
@@ -169,3 +156,13 @@ the bare `bandit-lab.mrija.org` root (Traefik has no router for it) is covered
 by an Access application with one `vino-allow` policy and a 24-hour session,
 including the three legacy toolbox names (`juice`, `cyberchef`, `tools` under
 `bandit-lab.mrija.org`), which share an app with their `atmosphaere.at` name.
+
+## Retired routes (manual Cloudflare cleanup)
+
+WatchYourLAN (`devices.*`), SearXNG (`search.*`), Portainer (`portainer.*`),
+Juice Shop (`juice.*`), CyberChef (`cyberchef.*`) and IT-Tools (`tools.*`) are
+no longer deployed and their tunnel ingress is removed from `hosts/bandit-lab/wan.nix`.
+The Cloudflare Access applications and DNS records for the `atmosphaere.at`
+and `bandit-lab.mrija.org` names of these services must be deleted by hand in
+the dashboard (the tunnel is locally managed, so the Nix ingress is the route
+source of truth).

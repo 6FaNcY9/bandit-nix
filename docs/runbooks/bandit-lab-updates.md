@@ -188,36 +188,6 @@ consistent, verified backup of that data. Confirm the backup can be restored
 before using a supervised deployment procedure; the unattended apply guard
 must not be bypassed casually.
 
-## Post-apply Portainer checks
-
-After an update that changes Portainer, verify both services and the declared
-socket boundary:
-
-```bash
-systemctl --no-pager --full status \
-  docker-portainer.service docker-portainer-agent.service
-sudo docker inspect -f '{{range .Mounts}}{{println .Source "->" .Destination}}{{end}}' \
-  portainer
-sudo docker inspect -f '{{range .Mounts}}{{println .Source "->" .Destination}}{{end}}' \
-  portainer-agent
-sudo docker inspect -f '{{json .NetworkSettings.Networks}}' \
-  portainer | jq
-sudo docker inspect -f '{{json .NetworkSettings.Networks}}' \
-  portainer-agent | jq
-```
-
-Expected state:
-
-- Portainer Server mounts `/var/lib/portainer` at `/data`, but does not mount
-  `/var/run/docker.sock`.
-- Portainer Agent retains `/var/run/docker.sock`, the Docker volumes path, and
-  the read-only host-root mount.
-- Both containers join `portainer-control`; Server also joins `proxy`.
-- The UI shows `bandit-lab` as **Up**, using **Agent** at
-  `portainer-agent:9001`, with the expected stacks and containers.
-
-See [Portainer Agent](portainer-agent.md) for deeper validation and rollback.
-
 ## Inspect failures
 
 ```bash

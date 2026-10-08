@@ -33,36 +33,12 @@
         # both hostnames route to the same Traefik service.
         "aiia.at" = "http://localhost:80";
         "www.aiia.at" = "http://localhost:80";
-        # WatchYourLAN device inventory — must have a Cloudflare Access
-        # application (docs/runbooks/cloudflare-access.md); it has no auth
-        # of its own and the host list is sensitive network metadata.
-        "devices.bandit-lab.mrija.org" = "http://localhost:80";
-        "devices.atmosphaere.at" = "http://localhost:80";
         "grafana.bandit-lab.mrija.org" = "http://localhost:80";
         "grafana.atmosphaere.at" = "http://localhost:80";
         "mail-archive.bandit-lab.mrija.org" = "http://localhost:80";
-        # Admin UI — must have a Cloudflare Access application in front of it
-        # (docs/runbooks/cloudflare-access.md); never expose it directly.
-        "portainer.bandit-lab.mrija.org" = "http://localhost:80";
-        "portainer.atmosphaere.at" = "http://localhost:80";
-        # Metasearch — needs a Cloudflare Access application
-        # (docs/runbooks/cloudflare-access.md). A public SearXNG instance
-        # gets scraped/abused by bots within hours.
-        "search.bandit-lab.mrija.org" = "http://localhost:80";
-        "search.atmosphaere.at" = "http://localhost:80";
         # Canonical Vaultwarden hostname; the legacy public route was retired
         # after client migration verification.
         "vault.atmosphaere.at" = "http://localhost:80";
-        # Toolbox (Juice Shop is deliberately vulnerable). Each name pair is
-        # covered by one Cloudflare Access application (verified 2026-10-06).
-        # The three bandit-lab.mrija.org names are legacy hostnames that are
-        # still live in the dashboard; Traefik serves them via legacyHost.
-        "juice.atmosphaere.at" = "http://localhost:80";
-        "juice.bandit-lab.mrija.org" = "http://localhost:80";
-        "cyberchef.atmosphaere.at" = "http://localhost:80";
-        "cyberchef.bandit-lab.mrija.org" = "http://localhost:80";
-        "tools.atmosphaere.at" = "http://localhost:80";
-        "tools.bandit-lab.mrija.org" = "http://localhost:80";
       };
     };
   };

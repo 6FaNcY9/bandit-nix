@@ -29,22 +29,17 @@ dependency map.
 | Docker | Container runtime | NixOS systemd and Docker | Host runtime for the container services | **observed**; 22 active containers |
 | Traefik, read-only proxy | HTTP routing and service exposure | Docker, configured by the lab host | Front door for most web apps; Cloudflare Tunnel depends on it | **observed**; exact full listener set unknown |
 | Cloudflare Tunnel | External HTTP ingress | NixOS systemd ([WAN config](../hosts/bandit-lab/wan.nix)) | Routes through Traefik; no made-up public domains are recorded here | **observed**; application authentication not verified |
-| Tailscale | Private overlay access | NixOS systemd | Wazuh agent traffic and administrative access | **observed**; exact full listeners unknown |
-| OpenSSH | Administration and tunnels | NixOS systemd | SSH on port 22; Wazuh dashboard is reached through an SSH tunnel | **observed**; dashboard authentication not verified |
+| Tailscale | Private overlay access | NixOS systemd | Administrative access | **observed**; exact full listeners unknown |
+| OpenSSH | Administration and tunnels | NixOS systemd | SSH on port 22 | **observed**; dashboard authentication not verified |
 | Samba | File sharing over the tailnet only | NixOS services | TCP 139/445 on `tailscale0` only (decision D5) | **observed**; share access not verified |
 | PostgreSQL | Database service | NixOS systemd | Used by dependent applications; daily backup timer exists | **observed**; backup completed 2026-09-24; restore validity not verified |
 | CrowdSec and firewall bouncer | Detection and blocking | NixOS systemd | Reads service activity and applies firewall decisions | **observed**; scheduled updates exist |
-| Prometheus, Grafana, cAdvisor, node-exporter, blackbox-exporter | Metrics, dashboards, host/container/exporter probes | Docker; reviewed Git Compose asset ([monitoring runbook](runbooks/monitoring.md)); Portainer remains live owner until handoff | Grafana consumes Prometheus; no new dashboard is proposed | **observed**; monitoring is existing; alert correctness not fully verified |
+| Prometheus, Grafana, cAdvisor, node-exporter, blackbox-exporter | Metrics, dashboards, host/container/exporter probes | Docker; reviewed Git Compose asset ([monitoring runbook](runbooks/monitoring.md)); Portainer retired, containers keep running and are managed with host Compose | Grafana consumes Prometheus; no new dashboard is proposed | **observed**; monitoring is existing; alert correctness not fully verified |
 | Beszel | Lightweight host resource history | Native NixOS hub and agent ([Beszel module](../hosts/bandit-lab/services/beszel/default.nix)) | Loopback-only hub `127.0.0.1:8090`; access through SSH forwarding; no Docker socket | **observed 2026-09-25**; host metrics, history, restart recovery, and in-app alert verified; container metrics intentionally disabled |
-| Wazuh manager, indexer, dashboard, agent | SIEM/XDR, indexing, dashboard, agent coverage | Docker via the Wazuh Nix module ([Wazuh module](../hosts/bandit-lab/services/wazuh/default.nix)) | Agent traffic on Tailscale UDP 514 and TCP 1514–1515; dashboard loopback via SSH tunnel | **observed**; authenticated indexer green with 0 unassigned shards, API authentication succeeded, manager core processes healthy, and the lab agent active/current. A sample of 489 recent alerts was mostly levels 7/3 with no high/critical alerts; dashboard browser login and alert delivery remain unverified |
-| Portainer server and agent | Docker administration | Docker; agent uses the Docker socket | Agent access is host-root-equivalent; server/agent manage the container runtime | **observed**; ownership and live-connect details need care |
 | Vaultwarden | Password manager | Docker | Traefik/Cloudflare path | **observed** as part of the live container set; external login not verified |
 | Minecraft | Paper game server | Docker ([Minecraft module](../hosts/bandit-lab/services/minecraft/default.nix)); browser panel and map prepared, not deployed ([panel runbook](runbooks/minecraft/PANEL.md), [migration](runbooks/minecraft/MIGRATION.md)) | Port 25565 on the tailnet address; panel/map on loopback behind Tailscale Serve once deployed | **observed**; live datapacks were vanilla, `minecraft:improvements`, and `paper`; `trade_rebalance` was absent; restart was healthy; an isolated archive extraction restore drill passed; gameplay restore remains unverified |
 | AiiA Ghost, MySQL, Redis | Storefront and its dependencies | Docker | Internal service network and Traefik path | **observed**; external login and application checks not verified |
-| SearXNG | Private metasearch | Docker | Loopback/Traefik/Cloudflare path | **observed**; external access not verified |
-| WatchYourLAN | LAN device discovery | Docker | LAN-oriented service path | **observed**; discovery completeness not verified |
-| Juice Shop, CyberChef, IT Tools | Practice and analyst web tools | Docker | Mostly loopback/Traefik/Cloudflare | **observed**; access controls not verified |
-| Mrija Archive | Archive and synchronization service | Docker plus scheduled host sync; reviewed Git Compose asset ([runbook](runbooks/mrija-archive.md)); Portainer remains live owner until handoff | Traefik/Cloudflare path; daily sync | **observed**; historical sync runs included timeouts and HTTP 401s, but the 2026-09-25 sync completed with 29,802 emails; archive completeness remains unknown; latest image uses a mutable tag |
+| Mrija Archive | Archive and synchronization service | Docker plus scheduled host sync; reviewed Git Compose asset ([runbook](runbooks/mrija-archive.md)); Portainer retired, containers keep running and are managed with host Compose | Traefik/Cloudflare path; daily sync | **observed**; historical sync runs included timeouts and HTTP 401s, but the 2026-09-25 sync completed with 29,802 emails; archive completeness remains unknown; latest image uses a mutable tag |
 
 Persistent data is mainly under `/srv/containers`. Minecraft data and backups
 are known there. Scheduled maintenance includes PostgreSQL daily backups,
@@ -56,6 +51,8 @@ provides the host health check. The [auto-rebuild module](../hosts/bandit-lab/se
 owns the lab update path.
 
 ## Dependency map
+
+> 2026-10-08: Wazuh, Portainer, SearXNG, WatchYourLAN, Juice Shop, CyberChef and IT-Tools were retired (unused) and are no longer deployed. Audit evidence below that mentions them is historical.
 
 ```mermaid
 flowchart TD
@@ -73,11 +70,6 @@ flowchart TD
   docker --> web
   docker --> monitor[Prometheus + Grafana + exporters]
   monitor --> web
-  docker --> wazuh[Wazuh manager + indexer + dashboard + agent]
-  tailscale --> wazuh
-  ssh --> wazuh
-  docker --> portainer[Portainer server + agent]
-  portainer --> docker
   docker --> data[/srv/containers]
   postgres --> backups[Daily PostgreSQL backup]
   mrija[Mrija Archive] --> sync[Daily Mrija sync]

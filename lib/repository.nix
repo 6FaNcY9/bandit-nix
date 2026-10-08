@@ -90,8 +90,7 @@ in {
   # Inspect-then-create Docker network as a oneshot systemd unit. A plain
   # `docker network create ... || true` would mask real daemon failures,
   # leaving dependent container units to fail later with an obscure
-  # "network not found". Used for proxy/wazuh/aiia on bandit-lab;
-  # portainer-control keeps a custom variant (verifies --internal).
+  # "network not found". Used for proxy/aiia on bandit-lab.
   mkDockerNetwork = pkgs: name: let
     script = pkgs.writeShellScript "ensure-${name}-network" ''
       set -euo pipefail

@@ -1,5 +1,7 @@
 # Portainer Agent on bandit-lab
 
+> **Retired:** Portainer is no longer deployed on bandit-lab (Nix module removed). This runbook is historical.
+
 Portainer Server manages the local Docker engine through Portainer Agent at
 `portainer-agent:9001`. Both containers share the private, internal
 `portainer-control` Docker network. Server also joins `proxy` so Traefik can

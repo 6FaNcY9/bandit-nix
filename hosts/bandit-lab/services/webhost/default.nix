@@ -1,76 +1,14 @@
 # Homelab services for bandit-lab.
-# Provides: server UI, PostgreSQL, Docker + Portainer, Tailscale VPN, SMB storage.
+# Provides: server UI, PostgreSQL, Docker, Tailscale VPN, SMB storage.
 # HTTP routing handled by Traefik (traefik.nix). TLS terminated by Cloudflare.
 {
-  config,
   lib,
   pkgs,
   repoConfig,
   ...
 }: let
   username = repoConfig.workstation.username;
-  canonicalDockerSocket = "/run/docker.sock";
-  normalizeRunPath = path: let
-    trimmedPath =
-      if path != "/"
-      then lib.removeSuffix "/" path
-      else path;
-  in
-    if trimmedPath == "/var/run"
-    then "/run"
-    else if lib.hasPrefix "/var/run/" trimmedPath
-    then "/run/${lib.removePrefix "/var/run/" trimmedPath}"
-    else trimmedPath;
-  volumePaths = volume: let
-    parts = lib.splitString ":" volume;
-  in {
-    source = normalizeRunPath (builtins.head parts);
-    target =
-      if builtins.length parts > 1
-      then normalizeRunPath (builtins.elemAt parts 1)
-      else "";
-  };
-  exposesDockerSocket = lib.any (volume: let
-    inherit (volumePaths volume) source;
-  in
-    source
-    == canonicalDockerSocket
-    || source == "/"
-    || (lib.hasPrefix "/" source
-      && lib.hasPrefix "${source}/" canonicalDockerSocket));
-  mountsDockerSocket = lib.any (volume: let
-    paths = volumePaths volume;
-  in
-    paths.source
-    == canonicalDockerSocket
-    && paths.target == canonicalDockerSocket);
-  ensurePortainerControlNetwork = pkgs.writeShellScript "ensure-portainer-control-network" ''
-    set -euo pipefail
-
-    network_state="$(${pkgs.docker}/bin/docker network inspect --format '{{.Internal}}' portainer-control 2>/dev/null || true)"
-    case "$network_state" in
-      true) ;;
-      "")
-        ${pkgs.docker}/bin/docker network create --internal portainer-control
-        ;;
-      *)
-        echo "Docker network portainer-control exists but is not internal" >&2
-        exit 1
-        ;;
-    esac
-  '';
 in {
-  assertions = [
-    {
-      assertion = !exposesDockerSocket config.virtualisation.oci-containers.containers.portainer.volumes;
-      message = "Portainer Server must not mount the Docker socket or a parent host path; use the dedicated Portainer Agent";
-    }
-    {
-      assertion = mountsDockerSocket config.virtualisation.oci-containers.containers."portainer-agent".volumes;
-      message = "Portainer Agent must retain /var/run/docker.sock to manage the local Docker environment";
-    }
-  ];
-
   # bandit-lab: vino needs docker group for container management.
   # Keep server group scope tighter than the desktop laptop profile.
   users.users.${repoConfig.workstation.username}.extraGroups = lib.mkForce ["wheel" "networkmanager" "docker"];
@@ -83,7 +21,6 @@ in {
       # monitoring stack setup. Subdirs stay user-owned where declared.
       "d /srv/containers 0755 root root -"
       "d /srv/storage 0770 ${username} users -"
-      "d /var/lib/portainer 0750 root root -"
     ];
 
     # Cockpit is admin-only. Keep the systemd socket loopback-bound and access it via SSH/Tailscale tunnels.
@@ -99,31 +36,6 @@ in {
       # --ssh` (or the admin console) would silently re-enable Tailscale SSH,
       # which bypasses OpenSSH, fail2ban and the firewall. Re-assert hourly.
       tailscaled-set.startAt = "hourly";
-      docker-network-portainer-control = {
-        description = "Create the private Portainer control network";
-        after = ["docker.service"];
-        requires = ["docker.service"];
-        wantedBy = ["multi-user.target"];
-        serviceConfig = {
-          Type = "oneshot";
-          RemainAfterExit = true;
-          ExecStart = ensurePortainerControlNetwork;
-        };
-      };
-      docker-portainer = {
-        after = [
-          "docker-network-portainer-control.service"
-          "docker-network-proxy.service"
-        ];
-        requires = [
-          "docker-network-portainer-control.service"
-          "docker-network-proxy.service"
-        ];
-      };
-      docker-portainer-agent = {
-        after = ["docker-network-portainer-control.service"];
-        requires = ["docker-network-portainer-control.service"];
-      };
     };
   };
 
@@ -189,9 +101,9 @@ in {
       # NixOS defaults to Unix-socket access unless enableTCPIP is set.
       settings = {
         max_connections = 100;
-        # The host has 64 GiB but Postgres shares it with Minecraft (12 GiB cap),
-        # the Wazuh indexer (about 6 GiB RSS, 4 GiB heap) and Docker. Observed
-        # 2026-10-06: about 20 GiB used, about 43 GiB available, mostly page
+        # The host has 64 GiB but Postgres shares it with Minecraft (12 GiB cap)
+        # and Docker. Observed 2026-10-06 (before Wazuh was retired): about
+        # 20 GiB used, about 43 GiB available, mostly page
         # cache shared by everything. effective_cache_size is only a planner
         # hint for how much of the data the OS cache can hold, so size it to a
         # realistic share, not to total RAM.
@@ -220,45 +132,7 @@ in {
       "userland-proxy" = false; # use iptables hairpin NAT instead
     };
   };
-  virtualisation.oci-containers = {
-    backend = "docker";
-    containers = {
-      portainer = {
-        image = "portainer/portainer-ce:2.39.6@sha256:3fa8750ac2b98ce56784ca292df1adc3ec38f0062fd572811ea4b2221beee310";
-        # WAN-published through Traefik + Cloudflare Tunnel, gated by a
-        # Cloudflare Access application (docs/runbooks/cloudflare-access.md).
-        # Loopback HTTPS stays available: ssh -L 9443:localhost:9443 bandit-lab.
-        ports = ["127.0.0.1:9443:9443"];
-        volumes = [
-          "/var/lib/portainer:/data"
-        ];
-        extraOptions = [
-          "--network=proxy"
-          "--network=portainer-control"
-          "--label=traefik.enable=true"
-          "--label=traefik.http.routers.portainer.rule=Host(`portainer.atmosphaere.at`) || Host(`portainer.bandit-lab.mrija.org`)"
-          "--label=traefik.http.routers.portainer.entrypoints=web"
-          "--label=traefik.http.services.portainer.loadbalancer.server.port=9000"
-        ];
-      };
-
-      "portainer-agent" = {
-        image = "portainer/agent:2.39.6@sha256:98bbc9d39f415fe917723999c8db0fef66f2f2f00a76230fab0b01f7fa782ff6";
-        volumes = [
-          "/var/run/docker.sock:/var/run/docker.sock"
-          "/srv/containers/docker/volumes:/var/lib/docker/volumes"
-          # Host filesystem view for the Portainer "host overview" — strictly
-          # read-only: this container also holds the docker socket, so a
-          # writable rootfs mount would be root-equivalent on the host
-          # (including /etc, /nix/store and the sops age key).
-          "/:/host:ro"
-        ];
-        # Only Portainer shares this internal network with the Agent; no host
-        # or firewall port is exposed.
-        extraOptions = ["--network=portainer-control"];
-      };
-    };
-  };
+  virtualisation.oci-containers.backend = "docker";
 
   environment.systemPackages = with pkgs; [
     cifs-utils

@@ -148,21 +148,14 @@ bandit-lab.mrija.org
 SSH is reachable over Tailscale only (`ssh bandit-lab`; client config in
 `home/ssh.nix`). It is no longer published through the Cloudflare tunnel.
 
-Admin services (Cockpit, Portainer, Samba) are not port-forwarded. Access them
+Admin services (Cockpit, Samba) are not port-forwarded. Access them
 via SSH/Tailscale tunnels:
 
 ```bash
-ssh -L 9090:127.0.0.1:9090 -L 9443:127.0.0.1:9443 vino@bandit-lab.mrija.org
+ssh -L 9090:127.0.0.1:9090 vino@bandit-lab.mrija.org
 ```
 
-Then open `https://127.0.0.1:9090` and `https://127.0.0.1:9443`.
-
-Portainer manages the local Docker engine through `portainer-agent:9001` on
-the private `portainer-control` network. Portainer Server does not mount the
-Docker socket; the Agent is the only Portainer component with that
-host-root-equivalent access and is not published on a host port. See the
-[Portainer Agent runbook](docs/runbooks/portainer-agent.md) for the trust
-boundary, verification, environment reassociation, and rollback procedures.
+Then open `https://127.0.0.1:9090`.
 
 ### bandit-lab Updates
 
