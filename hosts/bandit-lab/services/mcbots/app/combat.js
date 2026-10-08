@@ -68,7 +68,9 @@ class Combat {
     const seen = Object.values(bot.entities).filter((e) => e !== bot.entity && isHostile(e) && e.position.distanceTo(me) <= SEE_RANGE);
     for (const e of seen) r.world.noteMob(r.name, e, dim);
     if (this.ticks % SCAN_EVERY === 0) this.scanBlocks(dim);
-    const near = seen.sort((a, b) => a.position.distanceTo(me) - b.position.distanceTo(me))[0];
+    // Only mobs that actually threaten the bot drive retreat/back-off/attack;
+    // endermen, piglins and the like are seen and shared but left alone.
+    const near = seen.filter(shouldFight).sort((a, b) => a.position.distanceTo(me) - b.position.distanceTo(me))[0];
     const dist = near ? near.position.distanceTo(me) : Infinity;
 
     // Retreat until healthy again or nothing hostile is close.

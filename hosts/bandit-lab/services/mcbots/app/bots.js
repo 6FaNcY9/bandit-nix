@@ -216,19 +216,18 @@ class BotRunner {
 }
 
 
-// Pathing may dig only natural terrain (never planks, glass, cobblestone or
-// anything else players place) and may pillar with dirt/cobblestone it
-// carries. Inside protected areas (player bases) it neither digs nor places.
-const NATURAL = new Set(['dirt', 'grass_block', 'coarse_dirt', 'rooted_dirt', 'podzol', 'mycelium', 'mud',
-  'sand', 'red_sand', 'gravel', 'clay', 'stone', 'deepslate', 'granite', 'diorite', 'andesite', 'tuff',
-  'calcite', 'netherrack', 'snow', 'snow_block', 'short_grass', 'tall_grass', 'fern', 'large_fern', 'dead_bush']);
+// Pathing uses mineflayer's default movement (it may dig and pillar outside
+// bases). Inside protected areas (player bases) it neither digs nor places.
+// A custom unbreakable-block list made the pathfinder plan routes it then
+// refused to walk (2026-10-08), so protection is by area only.
 function safeMovements(bot, areas) {
   const mv = new Movements(bot);
-  mv.canDig = true;
-  for (const b of bot.registry.blocksArray) {
-    if (!NATURAL.has(b.name) && !b.name.endsWith('_leaves')) mv.blocksCantBreak.add(b.id);
-  }
-  mv.scafoldingBlocks = ['dirt', 'cobblestone'].map((n) => bot.registry.itemsByName[n].id);
+  // Bots speak 26.1 to a 26.2 server through ViaBackwards; sprinting, parkour
+  // jumps and diagonal corner-cutting make the server reject the move and pull
+  // the bot back (277 corrections in 15 s vs 0 without them, 2026-10-08).
+  mv.allowSprinting = false;
+  mv.allowParkour = false;
+  mv.getMoveDiagonal = () => {};
   const inside = (blk) => areas.some(([x1, z1, x2, z2]) =>
     blk.position.x >= x1 && blk.position.x <= x2 && blk.position.z >= z1 && blk.position.z <= z2);
   const veto = (blk) => (inside(blk) ? 100 : 0);
