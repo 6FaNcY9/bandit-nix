@@ -262,6 +262,41 @@ before chopping or mining). Without `SUPPLY_CHEST` or quotas the panel is absent
 - API: `GET /api/keeper`, `POST /api/keeper {"enabled": true|false}` (same-origin
   JSON only); the state is also part of every `/api/state` and WebSocket frame.
 
+## Schematic building (design only, not built)
+
+Status: designed in the autopilot run, deliberately not implemented. The owner's
+test rule (a build of at most 5x5x3 within 40 blocks of spawn, outside the
+protected areas, with no player-made block within 10 blocks, removed afterwards)
+needs a look at the lab's spawn surroundings that a laptop run cannot make
+safely, and a `build` job writes to the live world. The pieces it needs already
+exist: `place` (one block), block claims, `upkeep`, the queue and the dashboard.
+
+- **Blueprint**: JSON `{"origin": {"x","y","z"}, "blocks": [{"x","y","z","block"}]}`
+  with x, y, z relative to the origin, `block` a plain block name (no states, no
+  containers, no gravity blocks, no liquids, no doors). At most 75 blocks and a
+  5x5x3 bounding box; the origin must not be inside a protected area, and every
+  target position must be air (or replaceable: grass, flowers) with a solid or
+  already planned block under or beside it.
+- **Order**: bottom layer first (y ascending), then z, then x, so every block has
+  a neighbour to be placed against. A block waits until that neighbour exists.
+- **Scaffolding**: none. The height limit of 3 keeps every target within reach
+  (4.5 blocks) from the ground beside the structure; bots stand outside the
+  footprint (`GoalPlaceBlock`), never pillar, never dig to make room. A target
+  that is not reachable from the ground is reported, not worked around.
+- **Several bots**: each takes the next free block through the existing claim
+  table (key `dim:x,y,z`, the same as for digging, so a dig and a placement can
+  never meet on one block), places it, releases it, and takes the next one. A
+  `build` job is "place blocks of this blueprint until none is left", so any
+  idle bot can join by queueing the same job.
+- **Material**: counted up front from the blueprint; the job fails before
+  placing anything when the inventory lacks it (a later phase may withdraw from
+  the supply chest like the keeper does).
+- **Undo**: a `build` with `remove: true` digs the same blueprint top-down with
+  the same claims and keeps the blocks; the live test would end with it.
+- **Tests first**: pure functions for validation (bounds, protected areas,
+  allowed blocks), ordering and the "has a neighbour" rule, with a fake world,
+  before any bot places a block.
+
 ## Limits
 
 - Bots defend themselves against hostile mobs only (see above); they do not
