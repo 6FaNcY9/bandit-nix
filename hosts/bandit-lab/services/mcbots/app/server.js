@@ -75,7 +75,15 @@ const server = http.createServer(async (req, res) => {
         return {name: r.name, error: String(e.message || e)};
       }
     });
-    return json(200, {generatedAt: new Date().toISOString(), generatedAtMs: Date.now(), windowS: WINDOW_MS / 1000, bots});
+    // Reservation counters summed per worker host (remote bots only).
+    const workers = {};
+    for (const b of bots) {
+      if (!b.remote || !b.claims) continue;
+      const w = (workers[b.host] ||= {bots: [], granted: 0, refused: 0, timedOut: 0});
+      w.bots.push(b.name);
+      for (const k of ['granted', 'refused', 'timedOut']) w[k] += b.claims[k];
+    }
+    return json(200, {generatedAt: new Date().toISOString(), generatedAtMs: Date.now(), windowS: WINDOW_MS / 1000, bots, workers});
   }
   if (req.method === 'POST' && url.pathname === '/api/job') {
     if (!sameOrigin(req) || !String(req.headers['content-type']).startsWith('application/json')) return json(403, {error: 'bad origin'});

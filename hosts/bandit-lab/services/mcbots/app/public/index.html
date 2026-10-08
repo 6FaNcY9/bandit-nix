@@ -187,6 +187,7 @@ function renderDebug(d) {
     const c = b.corrections;
     line(`${b.name}${b.host ? ' @' + b.host : ''}  ${b.online ? 'online' : 'offline'}${!b.online && b.lastSeen ? ', last seen ' + ago(b.lastSeen, dbgData.generatedAtMs) : ''}  pos ${b.pos ? b.pos.join(' ') : '?'} ${b.dimension || ''}`);
     line(`pull-backs: ${c.last30s} in 30 s, ${c.total} total` + (c.lastAgoS != null ? `, last ${c.lastAgoS}s ago` : ''), c.last30s >= 10 ? 'warn' : 'mut');
+    if (b.claims) line(`reservations: ${b.claims.granted} granted, ${b.claims.refused} refused, ${b.claims.timedOut} timed out`, b.claims.timedOut ? 'warn' : 'mut');
     line('job: ' + (b.job ? `${b.job.type} ${Object.values(b.job.args).join(' ')} [${b.job.status}, ${b.job.runningS}s] ${b.job.progress}` : 'idle') + (b.combat ? `  combat: ${b.combat}` : ''));
     if (b.queue.length) line('queue: ' + b.queue.join(' | '), 'mut');
     if (b.pathfinder) line(`pathfinder: ${b.pathfinder.moving ? 'moving' : 'idle'}${b.pathfinder.mining ? ', mining' : ''}${b.pathfinder.building ? ', building' : ''}${b.pathfinder.goal ? ', goal ' + b.pathfinder.goal : ''}`, 'mut');

@@ -72,6 +72,9 @@ assert.ok(!claims.claim('bot2', 'o:1,2,3'));
 assert.ok(claims.claimedByOther('bot2', 'o:1,2,3'));
 claims.release('bot1', 'o:1,2,3');
 assert.ok(claims.claim('bot2', 'o:1,2,3'));
+assert.deepStrictEqual(claims.claimStats('bot1'), {granted: 1, refused: 0, timedOut: 0});
+assert.deepStrictEqual(claims.claimStats('bot2'), {granted: 1, refused: 1, timedOut: 0});
+assert.deepStrictEqual(claims.claimStats('nobody'), {granted: 0, refused: 0, timedOut: 0});
 // Login passwords are stable per seed and name, and differ between bots.
 const pw = (n) => new BotRunner(n, {host: 'x', port: 1, log: () => {}, world: null, loginSeed: 'seed'}).password;
 assert.strictEqual(pw('bot1'), pw('bot1'));
@@ -191,6 +194,7 @@ require('./crafting');
     for (const b of j.bots) {
       assert.strictEqual(b.online, false);
       assert.deepStrictEqual(Object.keys(b.corrections).sort(), ['last30s', 'lastAgoS', 'total']);
+      assert.deepStrictEqual(b.claims, {granted: 0, refused: 0, timedOut: 0});
       assert.ok(Array.isArray(b.positions) && Array.isArray(b.queue));
     }
     assert.strictEqual((await fetch(base, {method: 'POST', headers: {'tailscale-user-login': 'a@github'}})).status, 404);
@@ -321,7 +325,7 @@ require('./crafting');
     assert.ok(r5 instanceof RemoteRunner);
     assert.strictEqual(r5.snapshot().online, false, 'not online until the bot reports in');
     a.send({t: 'status', bots: [
-      {name: 'bot5', online: true, health: 18, food: 'lots', pos: [1, 64, 3], dimension: 'overworld', job: {label: 'mine stone 3', progress: '1/3'}, queue: ['say hi'], inventory: Array(500).fill('x'.repeat(500)), lastError: 'e'.repeat(5000), pullbacks: 3, debug: {pos: [1, 64, 3], corrections: {total: 7, last30s: 2, lastAgoS: 1.5}, positions: [{agoS: 1, x: 1, y: 64, z: 3}], job: {id: 1, type: 'mine', args: {block: 'stone', evil: {a: 1}}, status: 'running', progress: '1/3', runningS: 2}}},
+      {name: 'bot5', online: true, health: 18, food: 'lots', pos: [1, 64, 3], dimension: 'overworld', job: {label: 'mine stone 3', progress: '1/3'}, queue: ['say hi'], inventory: Array(500).fill('x'.repeat(500)), lastError: 'e'.repeat(5000), pullbacks: 3, debug: {pos: [1, 64, 3], corrections: {total: 7, last30s: 2, lastAgoS: 1.5}, claims: {granted: 4, refused: -1, timedOut: 'x', evil: 9}, positions: [{agoS: 1, x: 1, y: 64, z: 3}], job: {id: 1, type: 'mine', args: {block: 'stone', evil: {a: 1}}, status: 'running', progress: '1/3', runningS: 2}}},
       {name: 'bot1', online: true, health: 1}, // not this worker's bot: ignored
       {name: 'bot9', online: true}, // not announced: ignored
     ]});
@@ -336,6 +340,7 @@ require('./crafting');
     assert.ok(!runners.has('bot9') && runners.get('bot1') === labBot);
     const d5 = r5.debug();
     assert.deepStrictEqual(d5.corrections, {total: 7, last30s: 2, lastAgoS: 1.5});
+    assert.deepStrictEqual(d5.claims, {granted: 4, refused: 0, timedOut: 0}, 'claim counters are sanitised to non-negative ints, unknown keys dropped');
     assert.strictEqual(d5.job.args.evil, '[object Object]'.slice(0, 200));
     assert.doesNotThrow(() => JSON.stringify([s5, d5]));
 
@@ -464,6 +469,13 @@ require('./crafting');
     hub.broadcastWorld();
     await until(() => client.world.claimedByOther('bot6', 'overworld:41,60,5'), 'lab claim mirrored to the worker');
     assert.strictEqual(await client.world.claim('bot6', 'overworld:41,60,5'), false, 'worker cannot take a lab bot block');
+    assert.deepStrictEqual(client.world.claimStats('bot6'), {granted: 1, refused: 1, timedOut: 0}, 'worker counts hub answers and mirror refusals');
+    {
+      const mute = new RemoteWorld();
+      mute.attach(() => {}); // a hub that never answers
+      assert.strictEqual(await mute.claim('bot6', 'overworld:1,1,1'), false);
+      assert.strictEqual(mute.claimStats('bot6').timedOut, 1);
+    }
     client.world.release('bot6', 'overworld:40,60,5');
     await until(() => !world.claims.has('overworld:40,60,5'), 'worker release reached the hub');
     // hub link drops: reservations are refused until it is back

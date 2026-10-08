@@ -44,16 +44,21 @@ class RemoteWorld extends WorldModel {
 
   claim(by, key) {
     if (!this.link) return Promise.resolve(false);
-    if (this.claimedByOther(by, key)) return Promise.resolve(false); // mirror says taken
+    if (this.claimedByOther(by, key)) {
+      this.count(by, 'refused'); // mirror says taken
+      return Promise.resolve(false);
+    }
     const id = ++this.seq;
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         this.waiting.delete(id);
+        this.count(by, 'timedOut');
         resolve(false);
       }, CLAIM_TIMEOUT_MS);
       this.waiting.set(id, (ok) => {
         clearTimeout(timer);
-        if (ok) WorldModel.prototype.claim.call(this, by, key);
+        this.count(by, ok ? 'granted' : 'refused');
+        if (ok) this.claims.set(key, {by, t: this.now()});
         resolve(ok);
       });
       this.link.send({t: 'claim', id, key, by});

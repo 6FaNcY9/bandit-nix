@@ -45,15 +45,30 @@ class WorldModel {
     this.blocks = new Map(); // `${dim}:${x},${y},${z}` -> {type, x, y, z, dim, by, t}
     this.bluemap = {enabled: false, ok: false, error: '', t: 0};
     this.claims = new Map(); // `${dim}:${x},${y},${z}` -> {by, t}: blocks a bot is working on
+    this.tally = new Map(); // bot -> {granted, refused, timedOut}: shown in /api/debug
   }
 
   // Bots share one process, so claims are exact: a bot only takes a block no
   // other bot holds. Claims expire after CLAIM_TTL_MS in case a bot dies.
   claim(by, key) {
     const c = this.claims.get(key);
-    if (c && c.by !== by && this.now() - c.t < CLAIM_TTL_MS) return false;
+    if (c && c.by !== by && this.now() - c.t < CLAIM_TTL_MS) {
+      this.count(by, 'refused');
+      return false;
+    }
     this.claims.set(key, {by, t: this.now()});
+    this.count(by, 'granted');
     return true;
+  }
+
+  count(by, kind) {
+    const t = this.tally.get(by) || {granted: 0, refused: 0, timedOut: 0};
+    t[kind]++;
+    this.tally.set(by, t);
+  }
+
+  claimStats(by) {
+    return {...(this.tally.get(by) || {granted: 0, refused: 0, timedOut: 0})};
   }
 
   release(by, key) {

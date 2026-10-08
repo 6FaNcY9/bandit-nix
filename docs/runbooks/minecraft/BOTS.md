@@ -183,6 +183,10 @@ Each bot runs its queue one job at a time. Chat is never read as a command.
 - The dashboard trusts the `Tailscale-User-Login` header. Only `tailscale serve`
   (host) and containers on `mcbots` (Velocity) can reach it; keep it that way.
 
+Reservation counters: `/api/debug` shows per bot `claims {granted, refused,
+timedOut}` (timeouts = the hub did not answer within 3 s) and, for remote bots,
+a `workers` summary per host; the Debug panel prints them as "reservations".
+
 ## Shipping to the lab
 
 `tools/ship-claude [--dry-run] SHA...` prepares a ship from a branch: clean
