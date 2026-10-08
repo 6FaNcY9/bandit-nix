@@ -348,13 +348,18 @@ async function chase(r, job, follow) {
       const me = bot.entity.position;
       const e = bot.players[name]?.entity;
       if (e) {
-        if (mode !== 'entity') {
-          bot.pathfinder.setGoal(new goals.GoalFollow(e, 2), true);
+        // A dynamic GoalFollow never started walking with our movement
+        // settings (2026-10-08); a fixed GoalNear re-issued whenever the player
+        // has moved does.
+        const d = dist3(me, e.position);
+        maxDist = Math.max(maxDist, d);
+        if (!follow && d <= 3) return;
+        if (d > 3 && (mode !== 'entity' || !bot.pathfinder.isMoving() || dist3(goalAt, e.position) > 2)) {
+          bot.pathfinder.setGoal(new goals.GoalNear(e.position.x, e.position.y, e.position.z, 2));
           mode = 'entity';
-          job.progress = follow ? 'following' : 'tracking';
+          goalAt = e.position.clone();
         }
-        maxDist = Math.max(maxDist, dist3(me, e.position));
-        if (!follow && dist3(me, e.position) <= 3) return;
+        job.progress = `${follow ? 'following' : 'tracking'}, ${Math.round(d)} blocks`;
       } else {
         const p = r.world.player(name);
         if (!p) throw new Error(`${name} is not visible and not on the map (offline, or BlueMap unavailable)`);
