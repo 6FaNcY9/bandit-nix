@@ -271,18 +271,22 @@ class BotRunner {
 // bases). Inside protected areas (player bases) it neither digs nor places.
 // A custom unbreakable-block list made the pathfinder plan routes it then
 // refused to walk (2026-10-08), so protection is by area only.
-// A bot can end up a hair from a wall where client and server collision
-// disagree: the server then pulls it back every tick (~20 forced moves/s) and
-// the pathfinder never gets moving again. Re-centre it in its block when that
-// starts (seen after stopping a mining job in a 1-wide pit, 2026-10-08).
+// Climbing a block, the server sometimes pulls the bot back to the start of
+// its jump with zero speed; the pathfinder keeps walking into the block while
+// it falls, gets pulled back again, and loops (~20 corrections/s) until the
+// walk times out. Breaking that loop: stop the path (goNear walks again),
+// let go of the keys and step to the middle of the block, so the bot lands
+// in place. Seen climbing out of mining pits on 26.2, 2026-10-08.
 function unwedge(bot) {
   let times = [];
   bot.on('forcedMove', () => {
     const now = Date.now();
     times = times.filter((t) => now - t < 1000);
     times.push(now);
-    if (times.length < 10) return;
+    if (times.length < 4) return;
     times = [];
+    bot.pathfinder?.stop();
+    bot.clearControlStates();
     const pos = bot.entity.position;
     const feet = bot.blockAt(pos.floored());
     const head = bot.blockAt(pos.floored().offset(0, 1, 0));

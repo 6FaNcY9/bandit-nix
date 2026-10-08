@@ -1,0 +1,42 @@
+--- a/index.js
++++ b/index.js
+@@ -212,15 +212,36 @@
+     }
+     playerBB.offset(0, dy, 0)
+ 
++    // Vanilla order (Entity.collideWithShapes): Y, then the smaller of X/Z
++    // last, so sliding along a wall matches the server.
++    // A wall stops the bot 1e-7 short: touching exactly, the position
++    // (minX + halfWidth) can round a hair into the block and the server
++    // pulls the bot back on every move.
++    const wantX = dx
++    const wantZ = dz
++    const gap = (got, want) => (got !== want ? got - Math.sign(want) * 1e-4 : got)
++    const zFirst = Math.abs(dx) < Math.abs(dz)
++    if (zFirst) {
++      for (const blockBB of surroundingBBs) {
++        dz = blockBB.computeOffsetZ(playerBB, dz)
++      }
++      dz = gap(dz, wantZ)
++      playerBB.offset(0, 0, dz)
++    }
++
+     for (const blockBB of surroundingBBs) {
+       dx = blockBB.computeOffsetX(playerBB, dx)
+     }
++    dx = gap(dx, wantX)
+     playerBB.offset(dx, 0, 0)
+ 
+-    for (const blockBB of surroundingBBs) {
+-      dz = blockBB.computeOffsetZ(playerBB, dz)
++    if (!zFirst) {
++      for (const blockBB of surroundingBBs) {
++        dz = blockBB.computeOffsetZ(playerBB, dz)
++      }
++      dz = gap(dz, wantZ)
++      playerBB.offset(0, 0, dz)
+     }
+-    playerBB.offset(0, 0, dz)
+ 
+     // Step on block if height < stepHeight
+     if (physics.stepHeight > 0 &&

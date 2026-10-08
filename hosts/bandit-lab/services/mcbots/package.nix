@@ -16,5 +16,11 @@ buildNpmPackage {
   npmDepsHash = "sha256-Gemg3W0kL+4JCdQCOptq922Il9g8DgSfFBq+1Wo6cM0=";
   dontNpmBuild = true;
   npmFlags = ["--ignore-scripts"];
+  # prismarine-physics resolves collisions Y, X, Z; the server does Y, then
+  # the smaller of X/Z last. Sliding along a wall mid-jump then lands
+  # differently and the server pulls the bot back in a loop (2026-10-08).
+  postInstall = ''
+    patch -d $out/lib/node_modules/mcbots/node_modules/prismarine-physics -p1 < ${./prismarine-physics-axis-order.patch}
+  '';
   meta.mainProgram = "mcbots";
 }
