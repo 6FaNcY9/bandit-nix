@@ -6,7 +6,7 @@ require('./itemfix'); // must load before mineflayer
 const mineflayer = require('mineflayer');
 const {pathfinder, Movements, goals} = require('mineflayer-pathfinder');
 const {plugin: collectBlock} = require('mineflayer-collectblock');
-const {Combat} = require('./combat');
+const {Combat, AVOID_FOOD} = require('./combat');
 require('./physicsfix');
 const {BotTrace, SAMPLE_MS, round} = require('./debug');
 const {normDim, deadlineMs, insideAreas} = require('./world');
@@ -18,6 +18,10 @@ const BACKOFF_START = 5000;
 const BACKOFF_CAP = 300000;
 // Kept on deposit: what a bot needs to craft a replacement tool or light a mine.
 const KEEP_RE = /^(stick|[a-z_]+_planks|coal|charcoal|torch|crafting_table|furnace)$/;
+const FOOD_BELOW = 14; // fetch food from the supply chest when hungry and carrying none
+const FOOD_RETRY_MS = 600000; // an empty chest is not worth a walk every minute
+const RESUMABLE = new Set(['mine', 'chop', 'shift', 'goto', 'deposit', 'follow', 'come']);
+const MAX_INTERRUPTIONS = 3; // deaths/disconnects of one job before it is given up
 const TOOL_RE = /_(pickaxe|axe|shovel|hoe|sword)$|^(shears|bow|crossbow|fishing_rod|shield|trident|flint_and_steel|elytra)$/;
 
 // Global login stagger shared by all runners in this process.
@@ -65,6 +69,10 @@ const VALIDATE = {
     if (!/^[a-z_]{1,48}$/.test(a.block || '')) throw new Error('block must be a block name like stone, or logs');
     return {block: a.block, ...xyz(a)};
   },
+  place: (a) => {
+    if (!/^[a-z_]{1,48}$/.test(a.item || '')) throw new Error('item must be a block name like chest');
+    return {item: a.item, ...xyz(a)};
+  },
   say: (a) => {
     const text = String(a.text ?? '').trim();
     if (!text || text.length > 200) throw new Error('text must be 1..200 characters');
@@ -85,6 +93,7 @@ class BotRunner {
     this.name = name;
     this.onEvent = onEvent; // (bot, kind, text) -> dashboard event log
     this.dead = false;
+    this.skip = new Map(); // block key -> time until which collect() leaves it alone
     this.conflicts = {n: 0, at: 0};
     this.hostLabel = hostLabel; // machine this bot runs on, shown in the dashboard
     this.lastSeen = 0;
@@ -175,6 +184,7 @@ class BotRunner {
       bot.collectBlock.movements = mv;
       this.log(this.name, 'spawned');
       this.emit('connect', 'joined the game');
+      this.pump(); // a job kept across a disconnect continues now
     });
     // After a death the next spawn is the respawn; a stale "died" is not an error any more.
     bot.on('spawn', () => {
@@ -182,6 +192,7 @@ class BotRunner {
       this.dead = false;
       if (this.lastError === 'died') this.lastError = '';
       this.emit('respawn', 'respawned');
+      this.pump(); // nothing runs while dead
     });
     // VeloAuth holds players without a Minecraft account until /login (or
     // /register the first time). Prompts are matched in English.
@@ -205,7 +216,9 @@ class BotRunner {
       this.lastError = 'died';
       const p = bot.entity?.position;
       this.emit('death', `died${p ? ` at ${Math.round(p.x)} ${Math.round(p.y)} ${Math.round(p.z)}` : ''}`);
+      const was = this.current && !this.current.cancelled ? this.current : null; // a job the user stopped stays stopped
       this.cancel();
+      this.resumeLater(was, 'died');
       // Re-equip from the supply chest first thing after respawning.
       if (this.supplyChest) this.queue.unshift({id: ++this.jobSeq, type: 'rearm', args: this.supplyChest, status: 'queued'});
     });
@@ -223,7 +236,9 @@ class BotRunner {
       this.dead = false;
       if (spawnedAt) this.emit('disconnect', `left the game (${why})`); // failed connection attempts are not news
       this.combat.stop();
+      const was = this.current && !this.current.cancelled ? this.current : null; // a job the user stopped stays stopped
       this.cancel();
+      this.resumeLater(was, 'disconnected');
       this.bot = null;
       if (spawnedAt && Date.now() - spawnedAt > 60000) this.backoff = BACKOFF_START;
       const wait = this.backoff;
@@ -270,21 +285,52 @@ class BotRunner {
     const b = this.bot;
     try {
       b?.pathfinder?.stop();
+      b?.pathfinder?.setGoal(null); // stop() alone is ignored while no path is active, and goto() then never settles
       b?.collectBlock?.cancelTask().catch(() => {});
       b?.stopDigging?.();
     } catch {}
   }
 
+  // A job cut short by a death or a disconnect goes back to the front of the
+  // queue (after the re-arm), keeps its progress (job.collected) and walks back
+  // to where it was working first. A job that keeps killing the bot is dropped.
+  resumeLater(j, why) {
+    if (!j || !RESUMABLE.has(j.type)) return;
+    j.interrupted = true;
+    const n = (j.interruptions || 0) + 1;
+    if (n > MAX_INTERRUPTIONS) {
+      this.emit('fail', `gave up: ${jobLabel(j)} (${why} ${n} times)`);
+      return;
+    }
+    const area = j.t?.area || j.startPos;
+    this.queue.unshift({...j, status: 'queued', cancelled: false, interrupted: false, interruptions: n, resume: area || true, t: undefined});
+  }
+
   async pump() {
     if (this.current || !this.queue.length) return;
+    if (this.dead) return; // the respawn handler pumps again
+    if (!this.online && this.queue[0].resume) return; // resumed jobs wait for the reconnect
     const job = (this.current = this.queue.shift());
     job.status = 'running';
     job.startedAt = Date.now();
     job.progress = '';
     job.t = {doing: '', done: 0, total: 0, open: false}; // live detail; sub-jobs share it through the prototype
-    this.emit('job', `started: ${jobLabel(job)}`);
+    const p = this.bot?.entity?.position;
+    job.startPos ||= p ? {x: Math.round(p.x), y: Math.round(p.y), z: Math.round(p.z)} : null;
+    this.emit('job', `${job.resume ? 'resumed' : 'started'}: ${jobLabel(job)}`);
     try {
       if (!this.online) throw new Error('bot is offline');
+      if (job.resume) {
+        const at = job.resume;
+        job.resume = null;
+        if (at.x !== undefined) {
+          try {
+            await goNear(this, job, at.x, at.y, at.z, 6, {doing: 'returning to the job area'});
+          } catch (e) {
+            if (job.cancelled) throw e; // a stop wins; a failed walk back just starts from here
+          }
+        }
+      }
       for (let tries = 0; ; tries++) {
         const epoch = this.combat.epoch;
         try {
@@ -306,7 +352,8 @@ class BotRunner {
       }
     }
     const took = Math.round((Date.now() - job.startedAt) / 1000);
-    if (job.status === 'done') this.emit('done', `finished: ${jobLabel(job)} (${took} s)`);
+    if (job.interrupted) this.emit('info', `interrupted: ${jobLabel(job)} (it continues after the respawn/reconnect)`);
+    else if (job.status === 'done') this.emit('done', `finished: ${jobLabel(job)} (${took} s)`);
     else if (job.status === 'stopped') this.emit('stop', `stopped: ${jobLabel(job)}`);
     else this.emit('fail', `failed: ${jobLabel(job)} - ${this.lastError.replace(/^\w+: /, '')}`);
     this.current = null;
@@ -462,6 +509,7 @@ async function goNear(r, job, x, y, z, dist, {brave = false, goal = null, doing 
   const deadline = setTimeout(() => {
     timedOut = true;
     r.bot?.pathfinder.stop();
+    r.bot?.pathfinder.setGoal(null); // makes a pending goto() reject; stop() alone left one hanging for minutes (2026-10-08)
   }, GOTO_TIMEOUT_MS);
   try {
     // Something else (combat, a block update) can stop the path mid-walk; walk
@@ -501,7 +549,15 @@ async function digAt(r, job, pos) {
   if (!block || block.name.endsWith('air')) return;
   job.t.doing = `mining ${block.name}${tally(job)} near ${at(pos)}`;
   await bot.tool.equipForBlock(block, {}).catch(() => {});
-  await bot.dig(block, true);
+  // A dig the server never answers hangs forever: give it 25 s, then try another block.
+  let digTimer;
+  const gave = await Promise.race([bot.dig(block, true).then(() => false), new Promise((res) => (digTimer = setTimeout(() => res(true), 25000)))]);
+  clearTimeout(digTimer);
+  if (gave) {
+    bot.stopDigging();
+    r.emit('info', `digging ${block.name} at ${at(pos)} got no answer: skipped`);
+    return;
+  }
   // Walk over the drops near the block (items merge and fly a little).
   await sleep(400);
   const drops = Object.values(bot.entities).filter((e) => e.name === 'item' && e.position.distanceTo(pos) <= 4);
@@ -511,14 +567,98 @@ async function digAt(r, job, pos) {
   }
 }
 
+// Where a job may empty the inventory: a shift's own chest, else the supply chest.
+const chestOf = (r, job) => (job.type === 'shift' ? {x: job.args.x, y: job.args.y, z: job.args.z} : r.supplyChest);
+const edible = (bot, it) => bot.registry.foodsByName[it.name] && !AVOID_FOOD.has(it.name);
+const canHarvest = (bot, id) => {
+  const tools = bot.registry.blocks[id]?.harvestTools;
+  return !tools || bot.inventory.items().some((i) => tools[i.type]);
+};
+// A child job: shares cancellation with `job`, has its own counters and arguments.
+const child = (job, extra = {}) => Object.assign(Object.create(job), {collected: 0, progress: '', ...extra});
+
+// Keep a long job going without the owner: replace a broken pickaxe, fetch food
+// when hungry and carrying none, empty a full inventory. Called before every
+// block of collect(); the helpers below may call collect themselves (logs for
+// a new pickaxe), hence the guard.
+async function upkeep(r, job, ids) {
+  if (job.t.upkeep) return;
+  job.t.upkeep = true;
+  const shown = {done: job.t.done, total: job.t.total};
+  try {
+    const {bot} = r;
+    const need = ids.find((id) => !canHarvest(bot, id));
+    if (need !== undefined) await replacePickaxe(r, job);
+    if (bot.food < FOOD_BELOW && r.supplyChest && !bot.inventory.items().some((i) => edible(bot, i)) && Date.now() - (r.foodTriedAt || 0) > FOOD_RETRY_MS) {
+      r.foodTriedAt = Date.now();
+      r.emit('info', `hungry (food ${bot.food}) and no food: fetching some from the supply chest`);
+      await JOBS.rearm(r, child(job, {type: 'rearm', args: r.supplyChest})).catch((e) => {
+        guard(job);
+        r.emit('info', `no food fetched: ${e.message}`); // keep working; the retry timer asks again later
+      });
+    }
+    if (bot.inventory.emptySlotCount() < 2) {
+      const chest = chestOf(r, job);
+      if (!chest) throw new Error('inventory is full and there is no supply chest to deposit into');
+      await JOBS.deposit(r, child(job, {type: 'deposit', args: chest}));
+      if (bot.inventory.emptySlotCount() < 2) throw new Error('inventory still full after depositing (chest full?)');
+    }
+  } finally {
+    job.t.upkeep = false;
+    Object.assign(job.t, shown); // helper jobs borrowed the counters
+  }
+}
+
+// No tool that can harvest: craft a stone pickaxe, else a wooden one (chopping
+// logs first when there is no wood), else take one from the supply chest.
+async function replacePickaxe(r, job) {
+  const {bot} = r;
+  job.t.doing = 'replacing the pickaxe';
+  r.emit('info', 'no pickaxe left: making a new one');
+  const has = () => bot.inventory.items().some((i) => i.name.endsWith('_pickaxe'));
+  let why = '';
+  for (const item of ['stone_pickaxe', 'wooden_pickaxe']) {
+    try {
+      await crafting.ensureItem(r, child(job), item, 1);
+      if (has()) return;
+    } catch (e) {
+      guard(job);
+      why = e.message;
+    }
+  }
+  const logs = Object.keys(bot.registry.blocksByName).filter((n) => n.endsWith('_log'));
+  if (!bot.inventory.items().some((i) => /_(log|planks)$/.test(i.name))) {
+    try {
+      await collect(r, child(job), logs, 3, 'logs');
+      await crafting.ensureItem(r, child(job), 'wooden_pickaxe', 1);
+      if (has()) return;
+    } catch (e) {
+      guard(job);
+      why = e.message;
+    }
+  }
+  if (r.supplyChest) {
+    try {
+      await JOBS.rearm(r, child(job, {type: 'rearm', args: r.supplyChest}));
+    } catch (e) {
+      guard(job);
+      why = e.message;
+    }
+    if (has()) return;
+  }
+  throw new Error(`no pickaxe and could not make one: ${why}`);
+}
+
 async function collect(r, job, matching, count, what) {
   const {bot} = r;
   const ids = matching.map((n) => bot.registry.blocksByName[n]?.id).filter((i) => i !== undefined);
   if (!ids.length) throw new Error(`unknown block: ${what}`);
   let got = job.collected || 0; // survives a combat interruption + resume
+  let misses = 0;
   if (!job.t.open) Object.assign(job.t, {done: got, total: count});
   while (got < count) {
     await waitCalm(r, job);
+    await upkeep(r, job, ids);
     // Nearest block that no other bot is working on, so bots spread out
     // instead of all walking to the same ore.
     const dim = normDim(bot.game?.dimension);
@@ -530,6 +670,7 @@ async function collect(r, job, matching, count, what) {
     let pos = null;
     let key = null;
     for (const p of bot.findBlocks({matching: ids, maxDistance: 64, count: 48})) {
+      if ((r.skip.get(keyOf(p)) || 0) > Date.now()) continue; // could not get there lately
       // Digging a target is direct (not pathfinder), so protection is checked here too.
       if (insideAreas(r.protectedAreas, p.x, p.z)) continue;
       const k = keyOf(p);
@@ -539,15 +680,22 @@ async function collect(r, job, matching, count, what) {
       }
       pos = p;
       key = k;
+      job.t.area = {x: p.x, y: p.y, z: p.z}; // where a resumed job walks back to
       break;
     }
     if (!pos) throw new Error(`no free ${what} within 64 blocks (collected ${got}/${count})`);
     try {
       await waitSafe(r, job, pos.x, pos.z);
       await digAt(r, job, pos);
+      misses = 0;
     } catch (e) {
       guard(job);
-      throw e;
+      // One block nobody can walk to must not end a long job: skip it for 5 min, give up after 5 in a row.
+      if (!/could not reach/.test(e.message) || ++misses > 5) throw e;
+      for (const [k, until] of r.skip) if (until < Date.now()) r.skip.delete(k);
+      r.skip.set(key, Date.now() + 300000);
+      r.emit('info', `skipped a ${what} block that cannot be reached (${at(pos)})`);
+      continue;
     } finally {
       r.world?.release(r.name, key);
     }
@@ -752,6 +900,29 @@ const JOBS = {
       job.progress = `${total} ${job.args.block} mined`;
       job.t.done = total;
     }
+  },
+
+  // Put one block (a chest, a crafting table, ...) at x,y,z on top of a solid
+  // block; crafts it first when the bot has none and a recipe exists.
+  async place(r, job) {
+    const {bot} = r;
+    const {item, x, y, z} = job.args;
+    if (insideAreas(r.protectedAreas, x, z)) throw new Error(`${x} ${z} is inside a protected area`);
+    const Vec3 = require('vec3').Vec3;
+    const at = new Vec3(x, y, z);
+    if (bot.blockAt(at)?.name === item) return; // already there
+    await crafting.ensureItem(r, job, item, 1);
+    await goNear(r, job, x, y, z, 3, {goal: new goals.GoalPlaceBlock(at, bot.world, {range: 4}), doing: `walking to ${x} ${y} ${z} to place ${item}`});
+    const below = bot.blockAt(at.offset(0, -1, 0));
+    const here = bot.blockAt(at);
+    if (!below || below.boundingBox !== 'block') throw new Error(`nothing solid under ${x} ${y} ${z}`);
+    if (here && here.boundingBox !== 'empty') throw new Error(`${here.name} is in the way at ${x} ${y} ${z}`);
+    job.t.doing = `placing ${item} at ${x} ${y} ${z}`;
+    await bot.equip(bot.inventory.items().find((i) => i.name === item), 'hand');
+    await bot.placeBlock(below, new Vec3(0, 1, 0)).catch(() => {}); // 26.x may not echo the update in time
+    for (let i = 0; i < 20 && bot.blockAt(at)?.name !== item; i++) await sleep(100);
+    if (bot.blockAt(at)?.name !== item) throw new Error(`placing ${item} did not take`);
+    r.emit('info', `placed ${item} at ${x} ${y} ${z}`);
   },
 
   async say(r, job) {

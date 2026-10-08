@@ -604,6 +604,49 @@ require('./crafting');
   rr.enqueue('remove', {id: '12'});
   assert.deepStrictEqual(sent[0], {t: 'job', bot: 'bot5', type: 'remove', args: {id: 12}, replace: false});
 }
+// ---- a death or disconnect keeps the job; the user's stop does not ----
+(async () => {
+  const mk = () => new BotRunner('bot1', {host: 'x', port: 1, log: () => {}, world: null, onEvent: () => {}});
+  const r = mk();
+  const job = {id: 5, type: 'mine', args: {block: 'stone', count: 40}, collected: 12, status: 'running', t: {area: {x: 1, y: 2, z: 3}}, startPos: {x: 9, y: 9, z: 9}};
+  r.resumeLater(job, 'died');
+  assert.strictEqual(r.queue.length, 1);
+  const back = r.queue[0];
+  assert.deepStrictEqual([back.id, back.type, back.collected, back.status, back.cancelled, back.resume, back.interruptions], [5, 'mine', 12, 'queued', false, {x: 1, y: 2, z: 3}, 1]);
+  assert.strictEqual(job.interrupted, true);
+  r.queue = [];
+  r.resumeLater({...job, t: undefined}, 'disconnected'); // no dig yet: back to where the job started
+  assert.deepStrictEqual(r.queue[0].resume, {x: 9, y: 9, z: 9});
+  r.queue = [];
+  r.resumeLater({id: 6, type: 'craft', args: {item: 'torch', count: 4}}, 'died'); // crafting is not resumed
+  r.resumeLater({id: 7, type: 'rearm', args: {x: 1, y: 2, z: 3}}, 'died');
+  r.resumeLater(null, 'died');
+  assert.strictEqual(r.queue.length, 0);
+  let j = job;
+  for (let i = 0; i < 3; i++) { r.resumeLater(j, 'died'); j = r.queue.shift(); }
+  assert.strictEqual(j.interruptions, 3);
+  r.resumeLater(j, 'died'); // the fourth time it is given up
+  assert.strictEqual(r.queue.length, 0);
+  // nothing runs while dead or (for a resumed job) offline
+  const q = mk();
+  let ran = 0;
+  const {JOBS} = require('./bots');
+  const goto = JOBS.goto;
+  JOBS.goto = () => { ran++; };
+  q.online = true; q.dead = true;
+  q.queue = [{id: 1, type: 'goto', args: {x: 1, y: 2, z: 3}, status: 'queued'}];
+  q.pump();
+  assert.strictEqual(ran, 0);
+  q.dead = false; q.online = false;
+  q.queue[0].resume = true;
+  q.pump();
+  assert.strictEqual(ran, 0);
+  q.online = true;
+  q.pump();
+  await new Promise((res) => setTimeout(res, 50));
+  assert.strictEqual(ran, 1);
+  JOBS.goto = goto;
+})();
 // A job queued after "stop" must survive the stopped job winding down.
 (async () => {
   const {JOBS} = require('./bots');
