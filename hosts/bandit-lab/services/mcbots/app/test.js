@@ -496,6 +496,12 @@ require('./crafting');
       assert.strictEqual(await mute.claim('bot6', 'overworld:1,1,1'), false);
       assert.strictEqual(mute.claimStats('bot6').timedOut, 1);
     }
+    // what a worker's bot saw in the supply chest reaches the hub's picture (cleaned: bad names and counts dropped)
+    client.world.noteStock('bot6', {coal: 3, oak_log: 20, 'Bad Name': 5, stone: -1, dirt: 1.5});
+    client.world.flush();
+    await until(() => world.stock?.items.coal === 3, 'stock reached the hub');
+    assert.deepStrictEqual(world.stock.items, {coal: 3, oak_log: 20});
+    assert.strictEqual(world.stock.by, 'bot6');
     client.world.release('bot6', 'overworld:40,60,5');
     await until(() => !world.claims.has('overworld:40,60,5'), 'worker release reached the hub');
     // hub link drops: reservations are refused until it is back
