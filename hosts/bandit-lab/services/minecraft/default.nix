@@ -92,32 +92,31 @@
 
   # Applied by itzg to Paper's config at every start (PATCH_DEFINITIONS); the
   # secret is resolved from the environment file, never written to the store.
+  # PATCH_DEFINITIONS points at a directory, and itzg reads every file there as
+  # one patch definition ({file, ops}); a {patches = [...]} patch set is only
+  # accepted as a single file and made Paper fail to start (2026-10-08).
   velocityPatch = pkgs.writeText "velocity-patch.json" (builtins.toJSON {
-    patches = [
+    file = "/data/config/paper-global.yml";
+    ops = [
       {
-        file = "/data/config/paper-global.yml";
-        ops = [
-          {
-            "$set" = {
-              path = "$.proxies.velocity.enabled";
-              value = true;
-              value-type = "bool";
-            };
-          }
-          {
-            "$set" = {
-              path = "$.proxies.velocity.online-mode";
-              value = true;
-              value-type = "bool";
-            };
-          }
-          {
-            "$set" = {
-              path = "$.proxies.velocity.secret";
-              value = "\${CFG_VELOCITY_SECRET}";
-            };
-          }
-        ];
+        "$set" = {
+          path = "$.proxies.velocity.enabled";
+          value = true;
+          value-type = "bool";
+        };
+      }
+      {
+        "$set" = {
+          path = "$.proxies.velocity.online-mode";
+          value = true;
+          value-type = "bool";
+        };
+      }
+      {
+        "$set" = {
+          path = "$.proxies.velocity.secret";
+          value = "\${CFG_VELOCITY_SECRET}";
+        };
       }
     ];
   });
