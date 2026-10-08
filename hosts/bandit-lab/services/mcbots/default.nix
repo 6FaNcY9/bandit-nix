@@ -47,6 +47,10 @@ in {
         NODE_OPTIONS = "--max-old-space-size=1536";
       };
       ports = ["127.0.0.1:${dashboardPort}:${dashboardPort}"];
+      # BOT_PASSWORD_SEED for the VeloAuth /register + /login of each bot,
+      # derived one-way from the Velocity secret by mcbots-seed below; the
+      # container never sees the secret itself.
+      environmentFiles = ["/run/mcbots/seed.env"];
       extraOptions = [
         "--network=mcbots"
         # Second network only to read BlueMap at minecraft:8100. Paper there
@@ -65,9 +69,23 @@ in {
     };
 
     systemd.services = {
+      mcbots-seed = {
+        description = "Derive the bots' login password seed";
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          UMask = "0077";
+        };
+        path = [pkgs.coreutils];
+        script = ''
+          install -d -m 0700 /run/mcbots
+          seed=$(printf 'mcbots-login:%s' "$(cat ${config.sops.secrets."minecraft-velocity-secret".path})" | sha256sum | cut -c1-64)
+          printf 'BOT_PASSWORD_SEED=%s\n' "$seed" > /run/mcbots/seed.env
+        '';
+      };
       docker-mcbots = {
-        after = ["docker-network-mcbots.service" "docker-network-minecraft.service" "docker-velocity.service"];
-        requires = ["docker-network-mcbots.service" "docker-network-minecraft.service"];
+        after = ["docker-network-mcbots.service" "docker-network-minecraft.service" "docker-velocity.service" "mcbots-seed.service"];
+        requires = ["docker-network-mcbots.service" "docker-network-minecraft.service" "mcbots-seed.service"];
         unitConfig.StartLimitIntervalSec = 0;
         serviceConfig = {
           Restart = lib.mkForce "always";

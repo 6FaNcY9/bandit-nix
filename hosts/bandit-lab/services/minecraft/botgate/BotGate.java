@@ -4,6 +4,7 @@ import com.google.inject.Inject;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.connection.PreLoginEvent;
 import com.velocitypowered.api.event.connection.PreLoginEvent.PreLoginComponentResult;
+import com.velocitypowered.api.proxy.ProxyServer;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
@@ -34,11 +35,13 @@ public final class BotGate {
     }
 
     private final Logger log;
+    private final ProxyServer proxy;
     private final List<Cidr> sources = new ArrayList<>();
 
     @Inject
-    public BotGate(Logger log) throws Exception {
+    public BotGate(Logger log, ProxyServer proxy) throws Exception {
         this.log = log;
+        this.proxy = proxy;
         String env = System.getenv("BOTGATE_SOURCES");
         if (env == null || env.isBlank()) throw new IllegalStateException("BOTGATE_SOURCES is not set");
         for (String s : env.split(",")) {
@@ -52,17 +55,31 @@ public final class BotGate {
         }
     }
 
-    @Subscribe
+    // Runs last (lowest priority): VeloAuth forces online mode for names Mojang
+    // knows, and an allowlisted bot must still end up offline.
+    @Subscribe(priority = Short.MIN_VALUE)
     public void onPreLogin(PreLoginEvent e) {
-        if (!e.getResult().isAllowed() || !BOT.matcher(e.getUsername()).matches()) return;
-        if (!(e.getConnection().getRemoteAddress() instanceof InetSocketAddress a)) return;
+        if (!e.getResult().isAllowed()) return;
+        if (isAllowlistedBot(e)) {
+            e.setResult(PreLoginComponentResult.forceOfflineMode());
+            log.info("botgate: offline login {}", e.getUsername());
+            return;
+        }
+        // Velocity runs online-mode = false and relies on VeloAuth to force
+        // Mojang auth for premium names. If VeloAuth is not loaded, fail
+        // closed: everyone who is not an allowlisted bot needs Mojang auth.
+        if (proxy.getPluginManager().getPlugin("veloauth").isEmpty()) {
+            e.setResult(PreLoginComponentResult.forceOnlineMode());
+        }
+    }
+
+    private boolean isAllowlistedBot(PreLoginEvent e) {
+        if (!BOT.matcher(e.getUsername()).matches()) return false;
+        if (!(e.getConnection().getRemoteAddress() instanceof InetSocketAddress a)) return false;
         byte[] ip = a.getAddress().getAddress();
         for (Cidr c : sources) {
-            if (c.contains(ip)) {
-                e.setResult(PreLoginComponentResult.forceOfflineMode());
-                log.info("botgate: offline login {} from {}", e.getUsername(), a.getAddress().getHostAddress());
-                return;
-            }
+            if (c.contains(ip)) return true;
         }
+        return false;
     }
 }

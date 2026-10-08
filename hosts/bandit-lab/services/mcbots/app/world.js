@@ -35,6 +35,8 @@ function parsePlayers(json, dim) {
   return out;
 }
 
+const CLAIM_TTL_MS = 120000;
+
 class WorldModel {
   constructor({now = Date.now} = {}) {
     this.now = now;
@@ -42,6 +44,25 @@ class WorldModel {
     this.mobs = new Map(); // `${dim}:${id}` -> {id, type, x, y, z, dim, by, t}
     this.blocks = new Map(); // `${dim}:${x},${y},${z}` -> {type, x, y, z, dim, by, t}
     this.bluemap = {enabled: false, ok: false, error: '', t: 0};
+    this.claims = new Map(); // `${dim}:${x},${y},${z}` -> {by, t}: blocks a bot is working on
+  }
+
+  // Bots share one process, so claims are exact: a bot only takes a block no
+  // other bot holds. Claims expire after CLAIM_TTL_MS in case a bot dies.
+  claim(by, key) {
+    const c = this.claims.get(key);
+    if (c && c.by !== by && this.now() - c.t < CLAIM_TTL_MS) return false;
+    this.claims.set(key, {by, t: this.now()});
+    return true;
+  }
+
+  release(by, key) {
+    if (this.claims.get(key)?.by === by) this.claims.delete(key);
+  }
+
+  claimedByOther(by, key) {
+    const c = this.claims.get(key);
+    return !!c && c.by !== by && this.now() - c.t < CLAIM_TTL_MS;
   }
 
   setPlayers(list) {
@@ -99,6 +120,7 @@ class WorldModel {
       players: [...this.players.values()].map(age),
       mobs: [...this.mobs.values()].map(age),
       blocks: [...this.blocks.values()].map(age),
+      claims: [...this.claims].map(([key, c]) => ({key, by: c.by})),
     };
   }
 }

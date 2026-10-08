@@ -2,6 +2,25 @@
 // Environment -> validated config. Throws on anything unsafe.
 const {NAME_RE} = require('./bots');
 
+// Laptop runs have no BOT_PASSWORD_SEED: keep a random one in
+// $XDG_STATE_HOME/mcbots/seed so a bot name keeps its VeloAuth password.
+function localSeed(env) {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const dir = path.join(env.XDG_STATE_HOME || path.join(env.HOME || '/nonexistent', '.local/state'), 'mcbots');
+  try {
+    return fs.readFileSync(path.join(dir, 'seed'), 'utf8').trim();
+  } catch {}
+  try {
+    const seed = require('node:crypto').randomBytes(32).toString('hex');
+    fs.mkdirSync(dir, {recursive: true, mode: 0o700});
+    fs.writeFileSync(path.join(dir, 'seed'), seed, {mode: 0o600, flag: 'wx'});
+    return seed;
+  } catch {
+    return null;
+  }
+}
+
 function loadConfig(env = process.env) {
   const list = (s) => (s || '').split(',').map((x) => x.trim()).filter(Boolean);
   const names = list(env.BOT_NAMES);
@@ -26,6 +45,7 @@ function loadConfig(env = process.env) {
     if (n.length !== 3 || n.some((v) => !Number.isInteger(v))) throw new Error('SUPPLY_CHEST must be x,y,z');
     supplyChest = {x: n[0], y: n[1], z: n[2]};
   }
+  const loginSeed = env.BOT_PASSWORD_SEED || localSeed(env);
   const host = env.DASHBOARD_HOST || '127.0.0.1';
   if (!allowed.length && host !== '127.0.0.1') {
     throw new Error('DASHBOARD_HOST other than 127.0.0.1 requires ALLOWED_TS_LOGINS');
@@ -39,6 +59,7 @@ function loadConfig(env = process.env) {
     allowed,
     protectedAreas,
     supplyChest,
+    loginSeed,
     bluemapUrl: bluemapUrl.replace(/\/+$/, ''),
   };
 }

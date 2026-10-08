@@ -12,7 +12,7 @@ const cfg = loadConfig();
 const log = (who, msg) => console.log(`${new Date().toISOString()} [${who}] ${msg}`);
 const world = new WorldModel();
 const stopBlueMap = startBlueMap(world, cfg.bluemapUrl, log);
-const runners = new Map(cfg.names.map((n) => [n, new BotRunner(n, {host: cfg.mcHost, port: cfg.mcPort, log, world, protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest})]));
+const runners = new Map(cfg.names.map((n) => [n, new BotRunner(n, {host: cfg.mcHost, port: cfg.mcPort, log, world, protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest, loginSeed: cfg.loginSeed})]));
 const page = fs.readFileSync(path.join(__dirname, 'public', 'index.html'));
 
 // tailscale serve sets Tailscale-User-Login for tailnet users. When

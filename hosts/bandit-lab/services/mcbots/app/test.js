@@ -64,4 +64,17 @@ assert.deepStrictEqual(VALIDATE.rearm({x: 1, y: 2, z: 3}), {x: 1, y: 2, z: 3});
 const {BotRunner} = require('./bots');
 const runner = new BotRunner('bot1', {host: 'x', port: 1, log: () => {}, world: null, protectedAreas: [], supplyChest: {x: 1, y: 2, z: 3}});
 assert.deepStrictEqual(runner.supplyChest, {x: 1, y: 2, z: 3});
+// Block claims: a second bot cannot take a block the first one holds.
+const {WorldModel} = require('./world');
+const claims = new WorldModel();
+assert.ok(claims.claim('bot1', 'o:1,2,3'));
+assert.ok(!claims.claim('bot2', 'o:1,2,3'));
+assert.ok(claims.claimedByOther('bot2', 'o:1,2,3'));
+claims.release('bot1', 'o:1,2,3');
+assert.ok(claims.claim('bot2', 'o:1,2,3'));
+// Login passwords are stable per seed and name, and differ between bots.
+const pw = (n) => new BotRunner(n, {host: 'x', port: 1, log: () => {}, world: null, loginSeed: 'seed'}).password;
+assert.strictEqual(pw('bot1'), pw('bot1'));
+assert.notStrictEqual(pw('bot1'), pw('bot2'));
+assert.strictEqual(pw('bot1').length, 32);
 console.log('ok');

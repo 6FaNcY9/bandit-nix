@@ -80,6 +80,27 @@
   };
   botgate = import ./botgate {inherit pkgs;};
 
+  # VeloAuth 1.6.2 (MIT): login for players without a Minecraft account
+  # (owner's decision, 2026-10-08). Names Mojang knows are still forced through
+  # Mojang auth, so nobody can take fancy8869 or any other bought name; other
+  # players register with /register in VeloAuth's embedded holding area.
+  # Premium players skip that area.
+  veloauthJar = pkgs.fetchurl {
+    url = "https://cdn.modrinth.com/data/awl91tjn/versions/utSLTyeT/veloauth-latest.jar";
+    hash = "sha512-EGCHlYZvGO71TzY+7TS78zyITmlCptHzeP7tSjw1BLKZGlQu4CzvDRc3f9CnmqPHCOvgN8JfDDx/fayx5ETGpQ==";
+  };
+  # Upstream default config (keeps its comments) with three changes; the grep
+  # guards fail the build if upstream renames a key.
+  veloauthConfig = pkgs.runCommand "veloauth-config.yml" {nativeBuildInputs = [pkgs.unzip];} ''
+    unzip -p ${veloauthJar} default-config.yml > cfg
+    grep -q '^  mode: external$' cfg
+    grep -q '^  bypass-auth-server: false$' cfg
+    grep -q '^  ip-limit-registrations: 3$' cfg
+    sed -e 's/^  mode: external$/  mode: embedded/' \
+      -e 's/^  bypass-auth-server: false$/  bypass-auth-server: true/' \
+      -e 's/^  ip-limit-registrations: 3$/  ip-limit-registrations: 20/' cfg > $out
+  '';
+
   # Dedicated /29 for in-lab Mineflayer bots (containers join `mcbots`, connect
   # to velocity:25565). Docker's pools hand out 172.17-31.x.x/16 and then
   # 192.168.x.x; 10.250.77.0/29 collides with none of them nor with the other
@@ -125,7 +146,9 @@
     config-version = "2.8"
     bind = "0.0.0.0:25565"
     # Mojang authentication for everyone; BotGate flips single logins offline.
-    online-mode = true
+    # VeloAuth decides per connection: Mojang auth for premium names, its own
+    # /register + /login for everyone else.
+    online-mode = false
     player-info-forwarding-mode = "modern"
     ping-passthrough = "ALL"
 
@@ -423,6 +446,8 @@ in {
       "${velocityToml}:/config/velocity.toml:ro"
       "${velocityJar}:/opt/velocity.jar:ro"
       "${botgate}:/server/plugins/botgate.jar:ro"
+      "${veloauthJar}:/server/plugins/veloauth.jar:ro"
+      "${veloauthConfig}:/config/plugins/veloauth/config.yml:ro"
     ];
     extraOptions = [
       "--network=minecraft"

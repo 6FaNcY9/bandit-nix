@@ -57,13 +57,15 @@ const VALIDATE = {
 class Cancelled extends Error {}
 
 class BotRunner {
-  constructor(name, {host, port, log, world, protectedAreas = [], supplyChest = null}) {
+  constructor(name, {host, port, log, world, protectedAreas = [], supplyChest = null, loginSeed = null}) {
     this.name = name;
     this.world = world;
     this.combat = {busy: false, epoch: 0}; // replaced by a Combat per connection
     this.host = host;
     this.protectedAreas = protectedAreas;
     this.supplyChest = supplyChest;
+    // VeloAuth account password, derived per bot from a shared seed.
+    this.password = loginSeed ? require('node:crypto').createHash('sha256').update(`${loginSeed}:${name}`).digest('hex').slice(0, 32) : null;
     this.port = port;
     this.log = log;
     this.bot = null;
@@ -103,6 +105,20 @@ class BotRunner {
       bot.pathfinder.setMovements(mv);
       bot.collectBlock.movements = mv;
       this.log(this.name, 'spawned');
+    });
+    // VeloAuth holds players without a Minecraft account until /login (or
+    // /register the first time). Prompts are matched in English.
+    let authed = false;
+    bot.on('spawn', () => {
+      if (!authed && this.password) setTimeout(() => !authed && bot.chat(`/login ${this.password}`), 1500);
+    });
+    bot.on('messagestr', (msg) => {
+      if (!this.password || authed) return;
+      if (/not registered/i.test(msg)) bot.chat(`/register ${this.password} ${this.password}`);
+      else if (/logged in successfully|registered successfully|already logged in/i.test(msg)) {
+        authed = true;
+        this.log(this.name, 'logged in to VeloAuth');
+      } else if (/incorrect password/i.test(msg)) this.lastError = 'VeloAuth: wrong password for this bot name';
     });
     bot.on('entityGone', (e) => this.world.forgetMob(e.id));
     bot.on('death', () => {
@@ -309,14 +325,23 @@ async function collect(r, job, matching, count, what) {
   let got = job.collected || 0; // survives a combat interruption + resume
   while (got < count) {
     await waitCalm(r, job);
-    const pos = bot.findBlocks({matching: ids, maxDistance: 64, count: 1})[0];
-    if (!pos) throw new Error(`no ${what} within 64 blocks (collected ${got}/${count})`);
+    // Nearest block that no other bot is working on, so bots spread out
+    // instead of all walking to the same ore.
+    const dim = normDim(bot.game?.dimension);
+    const keyOf = (p) => `${dim}:${p.x},${p.y},${p.z}`;
+    const pos = bot.findBlocks({matching: ids, maxDistance: 64, count: 48})
+      .find((p) => !r.world?.claimedByOther(r.name, keyOf(p)));
+    if (!pos) throw new Error(`no free ${what} within 64 blocks (collected ${got}/${count})`);
+    const key = keyOf(pos);
+    r.world?.claim(r.name, key);
     await waitSafe(r, job, pos.x, pos.z);
     try {
       await bot.collectBlock.collect(bot.blockAt(pos));
     } catch (e) {
       guard(job);
       throw e;
+    } finally {
+      r.world?.release(r.name, key);
     }
     job.collected = ++got;
     job.progress = `${got}/${count}`;

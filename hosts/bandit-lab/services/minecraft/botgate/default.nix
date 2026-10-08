@@ -8,7 +8,7 @@ in
   pkgs.runCommand "botgate.jar" {nativeBuildInputs = [pkgs.jdk21_headless];} ''
     mkdir classes
     cp ${./BotGate.java} BotGate.java
-    javac --release 21 -proc:none -Xlint:all -Werror -cp ${velocityJar} -d classes BotGate.java
+    javac --release 21 -proc:none -Xlint:all,-classfile -Werror -cp ${velocityJar} -d classes BotGate.java
     cp ${./velocity-plugin.json} classes/velocity-plugin.json
     jar --create --file $out --date 1980-01-01T00:00:02Z -C classes .
   ''
