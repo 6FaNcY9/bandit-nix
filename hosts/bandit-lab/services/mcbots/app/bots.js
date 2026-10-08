@@ -1,4 +1,5 @@
 'use strict';
+require('./itemfix'); // must load before mineflayer
 // One BotRunner per bot: connection lifecycle plus a sequential job queue.
 // Adding a job type (crafting, building, ...) = add one entry to JOBS and one
 // to VALIDATE; nothing else changes.
@@ -103,6 +104,10 @@ class BotRunner {
       this.online = true;
       const mv = safeMovements(bot, this.protectedAreas);
       bot.pathfinder.setMovements(mv);
+      // Unbounded searches toward buried targets ran the bot process out of
+      // memory (2026-10-08); cap planning time and radius.
+      bot.pathfinder.thinkTimeout = 4000;
+      bot.pathfinder.searchRadius = 80;
       bot.collectBlock.movements = mv;
       this.log(this.name, 'spawned');
     });
@@ -185,6 +190,7 @@ class BotRunner {
     try {
       b?.pathfinder?.stop();
       b?.collectBlock?.cancelTask().catch(() => {});
+      b?.stopDigging?.();
     } catch {}
   }
 
@@ -290,7 +296,7 @@ async function waitSafe(r, job, x, z) {
   }
 }
 
-async function goNear(r, job, x, y, z, dist, {brave = false} = {}) {
+async function goNear(r, job, x, y, z, dist, {brave = false, goal = null} = {}) {
   guard(job);
   // Unreachable goals make the pathfinder retry partial paths
   // forever, so every walk has a deadline.
@@ -305,7 +311,7 @@ async function goNear(r, job, x, y, z, dist, {brave = false} = {}) {
     for (let tries = 0; ; tries++) {
       try {
         if (!brave) await waitSafe(r, job, x, z);
-        await r.bot.pathfinder.goto(new goals.GoalNear(x, y, z, dist));
+        await r.bot.pathfinder.goto(goal || new goals.GoalNear(x, y, z, dist));
         return;
       } catch (e) {
         guard(job);
@@ -317,6 +323,32 @@ async function goNear(r, job, x, y, z, dist, {brave = false} = {}) {
     }
   } finally {
     clearTimeout(deadline);
+  }
+}
+
+// Mine one block and pick up what drops. Replaces mineflayer-collectblock,
+// which froze the bot process (synchronous loop until out of memory) when
+// asked to mine stone without a pickaxe (2026-10-08).
+async function digAt(r, job, pos) {
+  const {bot} = r;
+  let block = bot.blockAt(pos);
+  if (!block || block.name.endsWith('air')) return;
+  const tools = block.harvestTools ? Object.keys(block.harvestTools).map(Number) : null;
+  if (tools && !bot.inventory.items().some((i) => tools.includes(i.type))) {
+    throw new Error(`needs a tool that can harvest ${block.name} (for stone and ore: a pickaxe)`);
+  }
+  await goNear(r, job, pos.x, pos.y, pos.z, 4, {goal: new goals.GoalLookAtBlock(pos, bot.world, {reach: 4})});
+  guard(job);
+  block = bot.blockAt(pos);
+  if (!block || block.name.endsWith('air')) return;
+  await bot.tool.equipForBlock(block, {}).catch(() => {});
+  await bot.dig(block, true);
+  // Walk over the drops near the block (items merge and fly a little).
+  await sleep(400);
+  const drops = Object.values(bot.entities).filter((e) => e.name === 'item' && e.position.distanceTo(pos) <= 4);
+  for (const d of drops) {
+    guard(job);
+    await goNear(r, job, d.position.x, d.position.y, d.position.z, 0.8).catch(() => {});
   }
 }
 
@@ -338,7 +370,7 @@ async function collect(r, job, matching, count, what) {
     r.world?.claim(r.name, key);
     await waitSafe(r, job, pos.x, pos.z);
     try {
-      await bot.collectBlock.collect(bot.blockAt(pos));
+      await digAt(r, job, pos);
     } catch (e) {
       guard(job);
       throw e;

@@ -77,4 +77,7 @@ const pw = (n) => new BotRunner(n, {host: 'x', port: 1, log: () => {}, world: nu
 assert.strictEqual(pw('bot1'), pw('bot1'));
 assert.notStrictEqual(pw('bot1'), pw('bot2'));
 assert.strictEqual(pw('bot1').length, 32);
+const {normalize} = require('./itemfix');
+assert.deepStrictEqual(normalize({enchantments: [{id: 1, level: 5}]}, {enchantments: {1: {name: 'efficiency'}}}), [{name: 'efficiency', lvl: 5}]);
+assert.deepStrictEqual(normalize([{name: 'x', lvl: 1}], {}), [{name: 'x', lvl: 1}]);
 console.log('ok');
