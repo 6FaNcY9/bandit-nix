@@ -140,6 +140,7 @@ function makeCrafting({goNear, guard}) {
     const ready = bot.recipesFor(item.id, null, 1, where);
     if (!ready.length) throw new Error(`have the ingredients but no matching recipe for ${name}`);
     job.progress = `crafting ${name}`;
+    if (job.t) job.t.doing = `crafting ${name}`;
     // ponytail: blind retry; the result slot sometimes is not filled yet when mineflayer clicks it.
     for (let attempt = 1; ; attempt++) {
       await holding(r, () => bot.craft(ready[0], times, where));
@@ -159,6 +160,7 @@ function makeCrafting({goNear, guard}) {
     const spare = (f) => count(bot, f) - (f === input ? n : 0);
     const fuel = FUELS.find((f) => spare(f) >= needOf(f));
     if (!fuel) throw new Error(`not enough fuel to smelt ${n} (coal, charcoal, planks or logs)`);
+    if (job.t) job.t.doing = `smelting ${n} ${input}`;
     const block = await station(r, job, 'furnace', 0);
     r.inventoryBusy = (r.inventoryBusy || 0) + 1;
     const furnace = await bot.openFurnace(block).catch((e) => {

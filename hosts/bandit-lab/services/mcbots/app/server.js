@@ -9,16 +9,22 @@ const {BotRunner} = require('./bots');
 const {WorldModel, startBlueMap} = require('./world');
 const {WINDOW_MS} = require('./debug');
 const {Hub, RemoteRunner, createWorkerServer} = require('./hub');
+const {EventLog} = require('./events');
 
 const cfg = loadConfig();
 const log = (who, msg) => console.log(`${new Date().toISOString()} [${who}] ${msg}`);
 const world = new WorldModel();
+const events = new EventLog();
 const stopBlueMap = startBlueMap(world, cfg.bluemapUrl, log);
-const runners = new Map(cfg.names.map((n) => [n, new BotRunner(n, {host: cfg.mcHost, port: cfg.mcPort, log, world, protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest, loginSeed: cfg.loginSeed, hostLabel: cfg.hostLabel})]));
+const runners = new Map(cfg.names.map((n) => [n, new BotRunner(n, {host: cfg.mcHost, port: cfg.mcPort, log, world, protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest, loginSeed: cfg.loginSeed, hostLabel: cfg.hostLabel, onEvent: (b, k, t) => events.add(b, k, t)})]));
 const page = fs.readFileSync(path.join(__dirname, 'public', 'index.html'));
+// The page is one file with inline script and style: allow exactly those two
+// bodies by hash and nothing else (no CDN, no eval, no other origin).
+const sha = (re) => `'sha256-${require('node:crypto').createHash('sha256').update(String(page).match(re)?.[1] ?? '').digest('base64')}'`;
+const CSP = `default-src 'none'; script-src ${sha(/<script>([\s\S]*?)<\/script>/)}; style-src ${sha(/<style>([\s\S]*?)<\/style>/)}; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`;
 // Remote workers register themselves in `runners` (see hub.js), so the
 // dashboard, /api/state and /api/debug list them next to the lab's bots.
-const hub = cfg.workerToken ? new Hub({world, runners, token: cfg.workerToken, log, protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest}) : null;
+const hub = cfg.workerToken ? new Hub({world, runners, token: cfg.workerToken, log, protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest, events}) : null;
 const workerServer = hub ? createWorkerServer(hub) : null;
 
 // tailscale serve sets Tailscale-User-Login for tailnet users. When
@@ -34,7 +40,7 @@ const sameOrigin = (req) => {
     return false;
   }
 };
-const state = () => ({now: Date.now(), bots: [...runners.values()].map((r) => r.snapshot()), world: world.snapshot(), protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest});
+const state = () => ({now: Date.now(), lastEventId: events.lastId, bots: [...runners.values()].map((r) => r.snapshot()), world: world.snapshot(), protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest});
 
 function readJson(req) {
   return new Promise((resolve, reject) => {
@@ -58,7 +64,7 @@ function readJson(req) {
 
 const server = http.createServer(async (req, res) => {
   const send = (code, type, body) => {
-    res.writeHead(code, {'Content-Type': type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'});
+    res.writeHead(code, {'Content-Type': type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': CSP, 'Referrer-Policy': 'no-referrer'});
     res.end(body);
   };
   const json = (code, obj) => send(code, 'application/json', JSON.stringify(obj));
@@ -66,6 +72,7 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   if (req.method === 'GET' && url.pathname === '/') return send(200, 'text/html; charset=utf-8', page);
   if (req.method === 'GET' && url.pathname === '/api/state') return json(200, state());
+  if (req.method === 'GET' && url.pathname === '/api/events') return json(200, {lastId: events.lastId, events: events.since(Number(url.searchParams.get('since')) || 0)});
   if (req.method === 'GET' && url.pathname === '/api/world') return json(200, world.snapshot());
   if (req.method === 'GET' && url.pathname === '/api/debug') {
     const bots = [...runners.values()].map((r) => {

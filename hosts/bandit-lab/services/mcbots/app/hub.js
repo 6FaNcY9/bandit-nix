@@ -15,6 +15,7 @@ const crypto = require('node:crypto');
 const http = require('node:http');
 const {WebSocketServer} = require('ws');
 const {NAME_RE, VALIDATE} = require('./bots');
+const {clean: cleanEvent} = require('./events');
 
 const PROTOCOL = 1;
 const MAX_FRAME = 256 * 1024;
@@ -52,11 +53,17 @@ function cleanSnapshot(s) {
     pos: vec(s.pos),
     dimension: optStr(s.dimension, 32),
     combat: optStr(s.combat, 32),
-    job: job && {label: str(job.label, 160), progress: str(job.progress, 160)},
+    job: job && {label: str(job.label, 160), progress: str(job.progress, 160), type: str(job.type, 32), done: int(job.done), total: int(job.total), runningS: int(job.runningS)},
+    activity: str(s.activity, 200),
+    dead: bool(s.dead),
+    tool: obj(s.tool) && {name: str(s.tool.name, 48), max: int(s.tool.max), left: num(s.tool.left)},
+    freeSlots: num(s.freeSlots),
     queue: list(s.queue, 20, (q) => str(q, 160)),
+    queueIds: list(s.queueIds, 20, int),
     inventory: list(s.inventory, 80, (q) => str(q, 60)),
     inventoryKinds: int(s.inventoryKinds),
     lastError: str(s.lastError, 300),
+    lastErrorAgoS: num(s.lastErrorAgoS),
     pullbacks: int(s.pullbacks),
   };
 }
@@ -138,7 +145,8 @@ class RemoteRunner {
   enqueue(type, args = {}, {replace = false} = {}) {
     if (!this.conn) throw new Error(`${this.name} is offline (its worker is not connected)`);
     let clean = {};
-    if (type !== 'stop') {
+    if (type === 'remove') clean = {id: int(Number(args?.id))};
+    else if (type !== 'stop') {
       if (!VALIDATE[type]) throw new Error(`unknown job type: ${type}`);
       clean = VALIDATE[type](args || {});
     }
@@ -147,7 +155,8 @@ class RemoteRunner {
 }
 
 class Hub {
-  constructor({world, runners, token, log = () => {}, protectedAreas = [], supplyChest = null, now = Date.now}) {
+  constructor({world, runners, token, log = () => {}, protectedAreas = [], supplyChest = null, now = Date.now, events = null}) {
+    this.events = events; // EventLog of the dashboard (optional)
     if (typeof token !== 'string' || !/^[\w-]{32,128}$/.test(token)) throw new Error('worker token must be 32..128 characters of [A-Za-z0-9_-]');
     this.world = world;
     this.runners = runners;
@@ -256,6 +265,7 @@ class Hub {
           r.dbg = cleanDebug(b.debug);
           r.lastSeen = this.now();
         }
+        for (const e of list(m.events, 50, (x) => cleanEvent(x, conn.bots))) if (e) this.events?.add(e.bot, e.kind, e.text);
         return;
       case 'observe':
         return this.observe(conn, m);
@@ -323,6 +333,7 @@ class Hub {
     }
     conn.ws.send(JSON.stringify({t: 'welcome', v: PROTOCOL, protectedAreas: this.protectedAreas, supplyChest: this.supplyChest}));
     this.log('hub', `worker ${host} connected: ${names.join(', ')}`);
+    for (const n of names) this.events?.add(n, 'hub', `worker ${host} connected`);
   }
 
   observe(conn, m) {
@@ -371,6 +382,7 @@ class Hub {
       r.snap = {...r.snap, online: false};
       this.world.releaseAll(n);
       this.log('hub', `worker ${conn.host}: ${n} offline`);
+      this.events?.add(n, 'hub', `worker ${conn.host} disconnected`);
     }
   }
 
