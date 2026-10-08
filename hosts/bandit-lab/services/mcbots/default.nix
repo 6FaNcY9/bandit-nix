@@ -49,6 +49,10 @@ in {
         # Chest next to the bots' respawn point (spawnpoint -36 64 -197); after a
         # death a bot re-equips armour, sword and food from it.
         SUPPLY_CHEST = "-37,65,-200";
+        # Standing orders (dashboard switch, off after every restart): what the
+        # keeper keeps in the supply chest, item:amount. Optional KEEPER_SITE
+        # "x,y,z" makes the bots walk there before they chop or mine.
+        KEEPER_QUOTAS = "logs:64,cobblestone:128,coal:32,torch:64";
         # Bots never dig or place inside these x1,z1,x2,z2 boxes: the main base
         # around spawn and MidariBread's base (from BlueMap light data, +16).
         PROTECTED_AREAS = "-80,-144,80,80;112,368,272,592";

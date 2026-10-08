@@ -1,6 +1,7 @@
 'use strict';
 // Environment -> validated config. Throws on anything unsafe.
 const {NAME_RE} = require('./bots');
+const {parseQuotas} = require('./keeper');
 
 // Laptop runs have no BOT_PASSWORD_SEED: keep a random one in
 // $XDG_STATE_HOME/mcbots/seed so a bot name keeps its VeloAuth password.
@@ -45,6 +46,15 @@ function loadConfig(env = process.env) {
     if (n.length !== 3 || n.some((v) => !Number.isInteger(v))) throw new Error('SUPPLY_CHEST must be x,y,z');
     supplyChest = {x: n[0], y: n[1], z: n[2]};
   }
+  // Standing orders (keeper.js): "logs:64,cobblestone:128,..." wanted in the supply
+  // chest, and an optional "x,y,z" the bots walk to before they chop or mine.
+  const keeperQuotas = parseQuotas(env.KEEPER_QUOTAS);
+  let keeperSite = null;
+  if (env.KEEPER_SITE) {
+    const n = env.KEEPER_SITE.split(',').map(Number);
+    if (n.length !== 3 || n.some((v) => !Number.isInteger(v))) throw new Error('KEEPER_SITE must be x,y,z');
+    keeperSite = {x: n[0], y: n[1], z: n[2]};
+  }
   const loginSeed = env.BOT_PASSWORD_SEED || localSeed(env);
   // Optional hub for remote workers (laptop bots): a second listener that only
   // accepts the WebSocket on /worker, guarded by a bearer token.
@@ -66,6 +76,8 @@ function loadConfig(env = process.env) {
     allowed,
     protectedAreas,
     supplyChest,
+    keeperQuotas,
+    keeperSite,
     loginSeed,
     bluemapUrl: bluemapUrl.replace(/\/+$/, ''),
     workerToken,

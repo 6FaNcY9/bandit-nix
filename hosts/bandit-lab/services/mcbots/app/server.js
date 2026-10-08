@@ -10,6 +10,7 @@ const {WorldModel, startBlueMap} = require('./world');
 const {WINDOW_MS} = require('./debug');
 const {Hub, RemoteRunner, createWorkerServer} = require('./hub');
 const {EventLog} = require('./events');
+const {Keeper} = require('./keeper');
 
 const cfg = loadConfig();
 const log = (who, msg) => console.log(`${new Date().toISOString()} [${who}] ${msg}`);
@@ -29,6 +30,8 @@ const workerServer = hub ? createWorkerServer(hub) : null;
 
 // tailscale serve sets Tailscale-User-Login for tailnet users. When
 // ALLOWED_TS_LOGINS is set, nothing is served without it.
+// Standing orders: only with a supply chest and at least one quota; switched off at every start.
+const keeper = cfg.supplyChest && cfg.keeperQuotas.length ? new Keeper({runners, world, chest: cfg.supplyChest, quotas: cfg.keeperQuotas, site: cfg.keeperSite, events, log}) : null;
 const authorized = (req) => !cfg.allowed.length || cfg.allowed.includes(req.headers['tailscale-user-login']);
 // Cross-site guard: browsers send Origin on POST/WS; it must match Host.
 const sameOrigin = (req) => {
@@ -40,7 +43,7 @@ const sameOrigin = (req) => {
     return false;
   }
 };
-const state = () => ({now: Date.now(), lastEventId: events.lastId, bots: [...runners.values()].map((r) => r.snapshot()), world: world.snapshot(), protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest});
+const state = () => ({now: Date.now(), lastEventId: events.lastId, keeper: keeper?.state() || null, bots: [...runners.values()].map((r) => r.snapshot()), world: world.snapshot(), protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest});
 
 function readJson(req) {
   return new Promise((resolve, reject) => {
@@ -92,6 +95,20 @@ const server = http.createServer(async (req, res) => {
     }
     return json(200, {generatedAt: new Date().toISOString(), generatedAtMs: Date.now(), windowS: WINDOW_MS / 1000, bots, workers});
   }
+  if (req.method === 'GET' && url.pathname === '/api/keeper') return json(200, keeper ? keeper.state() : {available: false});
+  if (req.method === 'POST' && url.pathname === '/api/keeper') {
+    if (!sameOrigin(req) || !String(req.headers['content-type']).startsWith('application/json')) return json(403, {error: 'bad origin'});
+    try {
+      if (!keeper) throw new Error('standing orders are not configured (needs SUPPLY_CHEST and KEEPER_QUOTAS)');
+      const {enabled} = await readJson(req);
+      if (typeof enabled !== 'boolean') throw new Error('enabled must be true or false');
+      keeper.setEnabled(enabled);
+      broadcast();
+      return json(200, keeper.state());
+    } catch (e) {
+      return json(400, {error: e.message});
+    }
+  }
   if (req.method === 'POST' && url.pathname === '/api/job') {
     if (!sameOrigin(req) || !String(req.headers['content-type']).startsWith('application/json')) return json(403, {error: 'bad origin'});
     try {
@@ -136,6 +153,13 @@ const tick = setInterval(() => {
   broadcast();
   hub?.broadcastWorld();
 }, 1000);
+const keeperTick = setInterval(() => {
+  try {
+    keeper?.tick();
+  } catch (e) {
+    log('keeper', `error: ${e.message}`);
+  }
+}, 5000);
 
 server.listen(cfg.port, cfg.host, () => {
   log('dashboard', `listening on ${cfg.host}:${cfg.port} (${cfg.allowed.length ? `tailscale logins: ${cfg.allowed.join(',')}` : 'local only'})`);
@@ -148,6 +172,7 @@ function shutdown() {
   if (closing) return;
   closing = true;
   clearInterval(tick);
+  clearInterval(keeperTick);
   stopBlueMap();
   hub?.close();
   for (const r of runners.values()) r.shutdown();

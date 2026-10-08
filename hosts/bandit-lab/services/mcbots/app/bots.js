@@ -53,7 +53,12 @@ const VALIDATE = {
     return {block: a.block, count: num(a.count ?? 1, 1, 2048, 'count')};
   },
   chop: (a) => ({count: num(a.count ?? 1, 1, 2048, 'count')}),
-  deposit: xyz,
+  // `only` (optional): put just that kind into the chest, even what a normal
+  // deposit keeps (coal, torches); used by the keeper.
+  deposit: (a) => {
+    if (a.only !== undefined && !/^[a-z_]{1,48}$/.test(a.only)) throw new Error('only must be an item name like torch, or logs');
+    return {...xyz(a), ...(a.only ? {only: a.only} : {})};
+  },
   rearm: xyz,
   craft: (a) => {
     if (!/^[a-z_]{1,48}$/.test(a.item || '')) throw new Error('item must be an item name like stone_pickaxe');
@@ -68,6 +73,11 @@ const VALIDATE = {
   shift: (a) => {
     if (!/^[a-z_]{1,48}$/.test(a.block || '')) throw new Error('block must be a block name like stone, or logs');
     return {block: a.block, ...xyz(a)};
+  },
+  stock: xyz, // read what is in the chest (the keeper's inventory count)
+  withdraw: (a) => {
+    if (!/^[a-z_]{1,48}$/.test(a.item || '')) throw new Error('item must be an item name like coal, or logs');
+    return {item: a.item, count: num(a.count ?? 1, 1, 1728, 'count'), ...xyz(a)};
   },
   place: (a) => {
     if (!/^[a-z_]{1,48}$/.test(a.item || '')) throw new Error('item must be a block name like chest');
@@ -567,6 +577,17 @@ async function digAt(r, job, pos) {
   }
 }
 
+// Report the supply chest's contents to the shared picture (the keeper plans from it).
+const isSupply = (r, c) => !!r.supplyChest && r.supplyChest.x === c.x && r.supplyChest.y === c.y && r.supplyChest.z === c.z;
+function noteStock(r, job, chest) {
+  if (!isSupply(r, job.args)) return;
+  const items = {};
+  for (const it of chest.containerItems()) items[it.name] = (items[it.name] || 0) + it.count;
+  r.world?.noteStock(r.name, items);
+}
+// "logs" stands for every kind of log; anything else is an exact item name.
+const itemMatcher = (what) => (what === 'logs' ? (n) => n.endsWith('_log') : what === 'coal' ? (n) => n === 'coal' || n === 'charcoal' : (n) => n === what);
+
 // Where a job may empty the inventory: a shift's own chest, else the supply chest.
 const chestOf = (r, job) => (job.type === 'shift' ? {x: job.args.x, y: job.args.y, z: job.args.z} : r.supplyChest);
 const edible = (bot, it) => bot.registry.foodsByName[it.name] && !AVOID_FOOD.has(it.name);
@@ -795,9 +816,10 @@ const JOBS = {
     const chest = await bot.openContainer(block);
     try {
       let moved = 0;
+      const only = job.args.only && itemMatcher(job.args.only);
       for (const it of bot.inventory.items()) {
         guard(job);
-        if (TOOL_RE.test(it.name) || KEEP_RE.test(it.name) || bot.registry.foodsByName[it.name]) continue;
+        if (only ? !only(it.name) : TOOL_RE.test(it.name) || KEEP_RE.test(it.name) || bot.registry.foodsByName[it.name]) continue;
         try {
           await chest.deposit(it.type, it.metadata, it.count);
           moved += it.count;
@@ -807,6 +829,50 @@ const JOBS = {
         }
       }
       if (moved) r.emit('deposit', `deposited ${moved} items at ${place(r, job.args)}`);
+      noteStock(r, job, chest);
+    } finally {
+      chest.close();
+    }
+  },
+
+  // Open the chest and report what is in it; changes nothing.
+  async stock(r, job) {
+    const {bot} = r;
+    const {x, y, z} = job.args;
+    await goNear(r, job, x, y, z, 3, {doing: `walking to ${place(r, job.args)} to count its contents`});
+    const block = bot.blockAt(new (require('vec3').Vec3)(x, y, z));
+    if (!block || !/chest|barrel/.test(block.name)) throw new Error(`no chest at ${x} ${y} ${z} (found ${block?.name})`);
+    job.t.doing = `counting what is in ${place(r, job.args)}`;
+    const chest = await bot.openContainer(block);
+    try {
+      noteStock(r, job, chest);
+    } finally {
+      chest.close();
+    }
+  },
+
+  // Take up to `count` of an item (or "logs") out of the chest.
+  async withdraw(r, job) {
+    const {bot} = r;
+    const {x, y, z, item, count} = job.args;
+    await goNear(r, job, x, y, z, 3, {doing: `walking to ${place(r, job.args)} to take ${item}`});
+    const block = bot.blockAt(new (require('vec3').Vec3)(x, y, z));
+    if (!block || !/chest|barrel/.test(block.name)) throw new Error(`no chest at ${x} ${y} ${z} (found ${block?.name})`);
+    job.t.doing = `taking ${item} from ${place(r, job.args)}`;
+    const chest = await bot.openContainer(block);
+    try {
+      let taken = 0;
+      const match = itemMatcher(item);
+      for (const it of chest.containerItems().filter((i) => match(i.name))) {
+        guard(job);
+        if (taken >= count) break;
+        const n = Math.min(count - taken, it.count);
+        await chest.withdraw(it.type, it.metadata, n);
+        taken += n;
+        job.progress = `${taken}/${count}`;
+      }
+      if (!taken) throw new Error(`no ${item} in the chest`);
+      noteStock(r, job, chest);
     } finally {
       chest.close();
     }

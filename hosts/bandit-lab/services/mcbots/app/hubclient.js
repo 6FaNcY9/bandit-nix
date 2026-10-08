@@ -26,6 +26,7 @@ class RemoteWorld extends WorldModel {
     this.outMobs = new Map();
     this.outBlocks = new Map();
     this.gone = new Set();
+    this.outStock = null;
   }
 
   get unreachable() {
@@ -88,6 +89,11 @@ class RemoteWorld extends WorldModel {
     this.outBlocks.set(`${dim}:${pos.x},${pos.y},${pos.z}`, {type, x: pos.x, y: pos.y, z: pos.z, dim, by});
   }
 
+  noteStock(by, items) {
+    super.noteStock(by, items);
+    this.outStock = {by, items};
+  }
+
   forgetMob(id) {
     super.forgetMob(id);
     for (const k of this.outMobs.keys()) if (k.endsWith(`:${id}`)) this.outMobs.delete(k);
@@ -96,8 +102,9 @@ class RemoteWorld extends WorldModel {
 
   // One batched frame per report interval instead of one per observation.
   flush() {
-    if (!this.link || !(this.outMobs.size || this.outBlocks.size || this.gone.size)) return;
-    this.link.send({t: 'observe', mobs: [...this.outMobs.values()], blocks: [...this.outBlocks.values()], gone: [...this.gone]});
+    if (!this.link || !(this.outMobs.size || this.outBlocks.size || this.gone.size || this.outStock)) return;
+    this.link.send({t: 'observe', mobs: [...this.outMobs.values()], blocks: [...this.outBlocks.values()], gone: [...this.gone], stock: this.outStock});
+    this.outStock = null;
     this.outMobs.clear();
     this.outBlocks.clear();
     this.gone.clear();
