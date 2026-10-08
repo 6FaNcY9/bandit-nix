@@ -60,6 +60,18 @@ class WorldModel {
     if (this.claims.get(key)?.by === by) this.claims.delete(key);
   }
 
+  // A disconnected bot (or worker) must not keep blocks reserved.
+  releaseAll(by) {
+    for (const [k, c] of this.claims) if (c.by === by) this.claims.delete(k);
+  }
+
+  // True when claims cannot be checked against the shared table (a worker that
+  // lost the hub): jobs that dig refuse to start instead of risking a block
+  // another bot holds.
+  get unreachable() {
+    return false;
+  }
+
   claimedByOther(by, key) {
     const c = this.claims.get(key);
     return !!c && c.by !== by && this.now() - c.t < CLAIM_TTL_MS;

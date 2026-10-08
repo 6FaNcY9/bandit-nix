@@ -4,13 +4,16 @@
 # Velocity's secret), and every bot name matches BotGate's pattern (otherwise
 # Velocity refuses it).
 {
+  pkgs,
   lib,
   lab,
+  repoConfig,
 }: let
   c = lab.virtualisation.oci-containers.containers.mcbots;
   extra = lib.concatStringsSep " " c.extraOptions;
   names = lib.splitString "," c.environment.BOT_NAMES;
   units = lab.systemd.services;
+  workerServe = toString repoConfig.lab.mcbotsWorkerServePort;
 in
   assert lib.assertMsg (c.ports != [] && lib.all (lib.hasPrefix "127.0.0.1:") c.ports) "mcbots may publish only on 127.0.0.1: ${toString c.ports}";
   assert lib.assertMsg (!(lib.hasInfix "privileged" extra) && !(lib.hasInfix "cap-add" extra) && !(lib.hasInfix "--network=host" extra) && !(lib.hasInfix "--pid=" extra)) "mcbots must stay unprivileged: ${extra}";
@@ -23,5 +26,12 @@ in
   assert lib.assertMsg (lib.all (n: builtins.match "bot[0-9]{1,2}" n != null) names) "BOT_NAMES must match BotGate's ^bot[0-9]{1,2}$: ${c.environment.BOT_NAMES}";
   assert lib.assertMsg (c.environment.ALLOWED_TS_LOGINS != "") "the dashboard must require a Tailscale login allowlist";
   assert lib.assertMsg (lib.hasInfix "tailscale serve" units.mcbots-https.script && !(lib.hasInfix "funnel" units.mcbots-https.script)) "the dashboard is exposed by Tailscale Serve only, never Funnel";
+  # Remote-worker hub: its own loopback port behind Tailscale Serve, token from
+  # the sops-fed env file (never the plain environment), distinct from the dashboard.
+  assert lib.assertMsg (c.environment.WORKER_PORT != c.environment.DASHBOARD_PORT && lib.elem "127.0.0.1:${c.environment.WORKER_PORT}:${c.environment.WORKER_PORT}" c.ports) "the hub port must be its own loopback-published port: ${toString c.ports}";
+  assert lib.assertMsg (!(c.environment ? WORKER_TOKEN) && !(c.environment ? WORKER_TOKEN_FILE)) "the hub token must reach the container only through the env file, not the environment";
+  assert lib.assertMsg (lib.elem "/run/mcbots/seed.env" c.environmentFiles && lib.hasInfix "WORKER_TOKEN=" units.mcbots-seed.script && lib.hasInfix lab.sops.secrets."mcbots-worker-token".path units.mcbots-seed.script) "mcbots-seed must hand the mcbots-worker-token secret to the container through /run/mcbots/seed.env";
+  assert lib.assertMsg (lab.sops.secrets."mcbots-worker-token".mode == "0400") "the hub token must stay mode 0400";
+  assert lib.assertMsg (lib.hasInfix "--https=${workerServe} http://127.0.0.1:${c.environment.WORKER_PORT}" units.mcbots-https.script && workerServe != "8445") "the hub is exposed by Tailscale Serve on its own HTTPS port, loopback upstream";
   assert lib.assertMsg (lib.elem "docker-network-mcbots.service" units.docker-mcbots.after && lib.elem "docker-velocity.service" units.docker-mcbots.after) "docker-mcbots starts after the network and Velocity";
-    builtins.toFile "lab-mcbots" "ok"
+    pkgs.runCommand "lab-mcbots" {} "touch $out"

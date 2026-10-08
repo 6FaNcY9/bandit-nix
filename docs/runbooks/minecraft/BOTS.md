@@ -63,7 +63,53 @@ lastError{message,agoS}}]}`. It sits behind the same login check as the rest of
 the dashboard. Positions are sampled every 500 ms (rounded to 0.01) and kept for
 30 s. The bot cards also show "pulled back N x in 30 s" when it is not zero.
 
-## Laptop
+## Hub: bots on other machines (laptop bot5)
+
+The lab app is also the hub. A worker on another machine runs its own bots
+(Mineflayer on that machine, joining Velocity from its tailnet address) and
+reports to the hub; the dashboard then lists them next to bot1..bot4 with host,
+online state and last-seen, sends their jobs, and the hub decides every block
+reservation so lab and laptop bots never dig the same block.
+
+```bash
+nix run .#mcbots-worker -- bot5          # on the laptop; Ctrl-C stops the bot
+```
+
+- Names must match BotGate (`bot5`..`bot99`) and not be one of the lab's
+  `BOT_NAMES`. The laptop is admitted by its tailnet address as before.
+- Wiring: the container publishes the worker port on `127.0.0.1:8096`;
+  `mcbots-https` exposes it with `tailscale serve --https=8446` (tailnet only,
+  never Funnel). The port serves nothing but the WebSocket upgrade on `/worker`
+  and needs `Authorization: Bearer <token>`; everything else is 404. The
+  dashboard (8445) stays limited to `ALLOWED_TS_LOGINS` and has no worker route.
+- Token: sops secret `mcbots-worker-token` in `secrets/lab.yaml` and
+  `secrets/bandit.yaml` (same value). The lab hands it to the container through
+  `/run/mcbots/seed.env` (never the plain environment); the laptop reads
+  `/run/secrets/mcbots-worker-token` (`nixos/secrets-workstation.nix`, owner
+  `vino`, 0400; needs one `nrs` after the first pull). Rotate by setting both
+  keys again, deploying the lab, `sudo systemctl restart mcbots-seed docker-mcbots`
+  and `nrs` on the laptop.
+- What a worker may do: act only for the names in its hello, claim at most 8
+  blocks per bot, report mobs/blocks/status. Everything it sends is
+  re-validated and size-capped on the hub (`hub.js`). Jobs go the other way
+  and are validated on the hub first, then again on the worker.
+- Reservations: the hub's `WorldModel` is the only table. A worker asks per
+  block (about one tailnet round trip) before it digs; if the hub is
+  unreachable it refuses ("hub unreachable: not digging without block
+  reservations") instead of guessing. Claims of a worker that disconnects are
+  freed at once; otherwise they expire after 2 min.
+- Offline: a worker that disconnects (or goes silent for 30 s) stays in the
+  list as offline with its last-seen time. `Stop` for "all" skips absent
+  workers; naming an absent bot is an error. A worker keeps its bots playing
+  while the hub is away and reconnects with back-off (1 s .. 30 s).
+- Protected areas and the supply chest come from the hub (`welcome`), so the
+  laptop needs no copy of them.
+- Troubleshooting: `HTTP 401` = wrong or missing token; `HTTP 404` on
+  `/worker` = old image or Serve not published (`tailscale serve status`, then
+  `sudo systemctl restart mcbots-https`); hub log lines start with `[hub]`
+  (`sudo docker logs --tail 50 mcbots | grep '\[hub\]'`).
+
+## Laptop (stand-alone, without the hub)
 
 ```bash
 BOT_NAMES=bot5,bot6 MC_HOST=100.125.161.81 nix run .#mcbots

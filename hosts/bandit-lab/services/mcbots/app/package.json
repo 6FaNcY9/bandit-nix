@@ -4,7 +4,7 @@
   "private": true,
   "description": "Mineflayer bots controlled from a small web dashboard",
   "main": "server.js",
-  "bin": {"mcbots": "server.js"},
+  "bin": {"mcbots": "server.js", "mcbots-worker": "worker.js"},
   "engines": {"node": ">=22"},
   "scripts": {"start": "node server.js", "test": "node test.js"},
   "dependencies": {

@@ -84,7 +84,13 @@ document.querySelectorAll('form').forEach((f) => f.onsubmit = (e) => {
 document.querySelectorAll('button[data-job]').forEach((b) => b.onclick = () =>
   send(b.dataset.job, b.dataset.job === 'come' ? { player: $('me').value } : {}));
 
-function render(bots) {
+// "5 min ago (13:42:01)", relative to the hub's clock so a skewed laptop clock cannot confuse it.
+function ago(ms, now) {
+  const s = Math.max(0, Math.round(((now || Date.now()) - ms) / 1000));
+  const rel = s < 90 ? `${s} s` : s < 5400 ? `${Math.round(s / 60)} min` : `${Math.round(s / 3600)} h`;
+  return `${rel} ago (${new Date(ms).toLocaleTimeString()})`;
+}
+function render(bots, now) {
   const sel = $('target'), cur = sel.value;
   const names = ['all', ...bots.map((b) => b.name)];
   if (names.join() !== [...sel.options].map((o) => o.value).join()) {
@@ -94,11 +100,13 @@ function render(bots) {
   $('bots').replaceChildren(...bots.map((b) => {
     const c = el('div', 'card' + (b.online ? ' on' : ''));
     const h = el('h2'); h.append(el('span', 'dot'), b.name, el('span', 'mut', b.online ? 'online' : 'offline'));
+    if (b.host) h.append(el('span', 'mut', '@' + b.host + (b.remote ? ' (remote worker)' : '')));
     c.append(h);
     if (b.online) {
       c.append(el('div', '', `health ${Math.round(b.health)}/20  food ${b.food}/20`));
       c.append(el('div', '', `pos ${b.pos ? b.pos.join(' ') : '?'}  ${b.dimension || ''}`));
     }
+    if (!b.online && b.lastSeen) c.append(el('div', 'mut', 'last seen ' + ago(b.lastSeen, now)));
     c.append(el('div', '', 'job: ' + (b.job ? `${b.job.label} ${b.job.progress || ''}` : 'idle')));
     if (b.queue.length) c.append(el('div', 'mut', 'queue: ' + b.queue.join(' | ')));
     c.append(el('div', 'mut', 'inv: ' + (b.inventory.join(', ') || 'empty') + (b.inventoryKinds > b.inventory.length ? ', ...' : '')));
@@ -110,7 +118,7 @@ function render(bots) {
 function connect() {
   const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
   ws.onopen = () => { $('conn').textContent = ''; };
-  ws.onmessage = (e) => { const m = JSON.parse(e.data); last = m; render(m.bots); radar(); };
+  ws.onmessage = (e) => { const m = JSON.parse(e.data); last = m; render(m.bots, m.now); radar(); };
   ws.onclose = () => { $('conn').textContent = '(reconnecting...)'; setTimeout(connect, 2000); };
 }
 
@@ -177,7 +185,7 @@ function renderDebug(d) {
     const line = (txt, cls) => t.append(el('div', cls || '', txt));
     if (b.error) { line(`${b.name}: ${b.error}`, 'err'); row.append(t); return row; }
     const c = b.corrections;
-    line(`${b.name}  ${b.online ? 'online' : 'offline'}  pos ${b.pos ? b.pos.join(' ') : '?'} ${b.dimension || ''}`);
+    line(`${b.name}${b.host ? ' @' + b.host : ''}  ${b.online ? 'online' : 'offline'}${!b.online && b.lastSeen ? ', last seen ' + ago(b.lastSeen, dbgData.generatedAtMs) : ''}  pos ${b.pos ? b.pos.join(' ') : '?'} ${b.dimension || ''}`);
     line(`pull-backs: ${c.last30s} in 30 s, ${c.total} total` + (c.lastAgoS != null ? `, last ${c.lastAgoS}s ago` : ''), c.last30s >= 10 ? 'warn' : 'mut');
     line('job: ' + (b.job ? `${b.job.type} ${Object.values(b.job.args).join(' ')} [${b.job.status}, ${b.job.runningS}s] ${b.job.progress}` : 'idle') + (b.combat ? `  combat: ${b.combat}` : ''));
     if (b.queue.length) line('queue: ' + b.queue.join(' | '), 'mut');

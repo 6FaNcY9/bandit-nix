@@ -44,6 +44,11 @@ in {
         owner = username;
         mode = "0400";
       };
+      # Bearer token for `nix run .#mcbots-worker` (same value as the lab's).
+      "mcbots-worker-token" = {
+        owner = username;
+        mode = "0400";
+      };
     };
   };
 }

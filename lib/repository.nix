@@ -30,6 +30,10 @@ in {
     # Tailscale IP of the owner laptop `bandit`; BotGate (Minecraft Velocity
     # proxy) lets bot1..bot99 skip Mojang login from this address only.
     workstationTailscaleIp = "100.102.247.30";
+    # MagicDNS name of bandit-lab and the HTTPS port `tailscale serve` uses for
+    # the mcbots hub (remote workers; the dashboard is on 8445).
+    tailnetFqdn = "bandit-lab.tail7facc9.ts.net";
+    mcbotsWorkerServePort = 8446;
   };
 
   # Peer backups: bandit and bandit-lab each run a restic REST server on their

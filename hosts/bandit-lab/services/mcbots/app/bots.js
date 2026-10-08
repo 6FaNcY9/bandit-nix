@@ -78,8 +78,10 @@ class Cancelled extends Error {}
 const jobLabel = (j) => `${j.type} ${Object.values(j.args).join(' ')}`;
 
 class BotRunner {
-  constructor(name, {host, port, log, world, protectedAreas = [], supplyChest = null, loginSeed = null}) {
+  constructor(name, {host, port, log, world, protectedAreas = [], supplyChest = null, loginSeed = null, hostLabel = ''}) {
     this.name = name;
+    this.hostLabel = hostLabel; // machine this bot runs on, shown in the dashboard
+    this.lastSeen = 0;
     this.world = world;
     this.combat = {busy: false, epoch: 0}; // replaced by a Combat per connection
     this.host = host;
@@ -130,7 +132,10 @@ class BotRunner {
     require('./crafting').fixCraftTiming(bot);
     unwedge(bot);
     bot.on('forcedMove', () => this.trace.correction());
-    const sampler = setInterval(() => this.trace.sample(bot.entity?.position), SAMPLE_MS);
+    const sampler = setInterval(() => {
+      this.trace.sample(bot.entity?.position);
+      if (this.online) this.lastSeen = Date.now();
+    }, SAMPLE_MS);
     sampler.unref();
     bot.once('end', () => clearInterval(sampler));
     let spawnedAt = 0;
@@ -270,6 +275,8 @@ class BotRunner {
     const label = jobLabel;
     return {
       name: this.name,
+      host: this.hostLabel,
+      lastSeen: this.online ? Date.now() : this.lastSeen,
       online: this.online,
       health: this.online ? b.health : null,
       food: this.online ? b.food : null,
@@ -292,6 +299,8 @@ class BotRunner {
     const pf = live && b.pathfinder;
     return {
       name: this.name,
+      host: this.hostLabel,
+      lastSeen: this.online ? Date.now() : this.lastSeen,
       online: this.online,
       pos: live ? ['x', 'y', 'z'].map((k) => round(e.position[k])) : null,
       dimension: live ? normDim(b.game?.dimension) : null,
@@ -440,13 +449,23 @@ async function collect(r, job, matching, count, what) {
     // instead of all walking to the same ore.
     const dim = normDim(bot.game?.dimension);
     const keyOf = (p) => `${dim}:${p.x},${p.y},${p.z}`;
-    const pos = bot.findBlocks({matching: ids, maxDistance: 64, count: 48})
-      .find((p) => !r.world?.claimedByOther(r.name, keyOf(p)));
+    // A reservation is only valid once the shared table granted it: on a
+    // remote worker the hub decides (one round trip), so a lab bot and a
+    // laptop bot never dig the same block.
+    if (r.world?.unreachable) throw new Error('hub unreachable: not digging without block reservations');
+    let pos = null;
+    let key = null;
+    for (const p of bot.findBlocks({matching: ids, maxDistance: 64, count: 48})) {
+      const k = keyOf(p);
+      if (r.world?.claimedByOther(r.name, k)) continue;
+      if (r.world && !(await r.world.claim(r.name, k))) continue;
+      pos = p;
+      key = k;
+      break;
+    }
     if (!pos) throw new Error(`no free ${what} within 64 blocks (collected ${got}/${count})`);
-    const key = keyOf(pos);
-    r.world?.claim(r.name, key);
-    await waitSafe(r, job, pos.x, pos.z);
     try {
+      await waitSafe(r, job, pos.x, pos.z);
       await digAt(r, job, pos);
     } catch (e) {
       guard(job);

@@ -8,13 +8,18 @@ const {loadConfig} = require('./config');
 const {BotRunner} = require('./bots');
 const {WorldModel, startBlueMap} = require('./world');
 const {WINDOW_MS} = require('./debug');
+const {Hub, RemoteRunner, createWorkerServer} = require('./hub');
 
 const cfg = loadConfig();
 const log = (who, msg) => console.log(`${new Date().toISOString()} [${who}] ${msg}`);
 const world = new WorldModel();
 const stopBlueMap = startBlueMap(world, cfg.bluemapUrl, log);
-const runners = new Map(cfg.names.map((n) => [n, new BotRunner(n, {host: cfg.mcHost, port: cfg.mcPort, log, world, protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest, loginSeed: cfg.loginSeed})]));
+const runners = new Map(cfg.names.map((n) => [n, new BotRunner(n, {host: cfg.mcHost, port: cfg.mcPort, log, world, protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest, loginSeed: cfg.loginSeed, hostLabel: cfg.hostLabel})]));
 const page = fs.readFileSync(path.join(__dirname, 'public', 'index.html'));
+// Remote workers register themselves in `runners` (see hub.js), so the
+// dashboard, /api/state and /api/debug list them next to the lab's bots.
+const hub = cfg.workerToken ? new Hub({world, runners, token: cfg.workerToken, log, protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest}) : null;
+const workerServer = hub ? createWorkerServer(hub) : null;
 
 // tailscale serve sets Tailscale-User-Login for tailnet users. When
 // ALLOWED_TS_LOGINS is set, nothing is served without it.
@@ -29,7 +34,7 @@ const sameOrigin = (req) => {
     return false;
   }
 };
-const state = () => ({bots: [...runners.values()].map((r) => r.snapshot()), world: world.snapshot(), protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest});
+const state = () => ({now: Date.now(), bots: [...runners.values()].map((r) => r.snapshot()), world: world.snapshot(), protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest});
 
 function readJson(req) {
   return new Promise((resolve, reject) => {
@@ -70,16 +75,27 @@ const server = http.createServer(async (req, res) => {
         return {name: r.name, error: String(e.message || e)};
       }
     });
-    return json(200, {generatedAt: new Date().toISOString(), windowS: WINDOW_MS / 1000, bots});
+    return json(200, {generatedAt: new Date().toISOString(), generatedAtMs: Date.now(), windowS: WINDOW_MS / 1000, bots});
   }
   if (req.method === 'POST' && url.pathname === '/api/job') {
     if (!sameOrigin(req) || !String(req.headers['content-type']).startsWith('application/json')) return json(403, {error: 'bad origin'});
     try {
       const {bots, type, args, replace} = await readJson(req);
-      const targets = bots === 'all' ? [...runners.values()] : (Array.isArray(bots) ? bots : []).map((n) => runners.get(n));
+      // "all" skips remote bots whose worker is away, so a Stop reaches every
+      // bot that can still hear it; naming an offline bot is an error.
+      const all = bots === 'all';
+      const targets = all ? [...runners.values()].filter((r) => !(r instanceof RemoteRunner) || r.conn) : (Array.isArray(bots) ? bots : []).map((n) => runners.get(n));
       if (!targets.length || targets.includes(undefined)) throw new Error('unknown bot');
-      for (const r of targets) r.enqueue(type, args || {}, {replace: replace === true});
+      const errors = [];
+      for (const r of targets) {
+        try {
+          r.enqueue(type, args || {}, {replace: replace === true});
+        } catch (e) {
+          errors.push(`${r.name}: ${e.message}`); // one bot failing must not keep the others from getting the job
+        }
+      }
       broadcast();
+      if (errors.length) throw new Error(errors.join('; '));
       return json(200, {ok: true});
     } catch (e) {
       return json(400, {error: e.message});
@@ -101,12 +117,16 @@ function broadcast() {
   const msg = JSON.stringify(state());
   for (const c of wss.clients) if (c.readyState === 1) c.send(msg);
 }
-const tick = setInterval(broadcast, 1000);
+const tick = setInterval(() => {
+  broadcast();
+  hub?.broadcastWorld();
+}, 1000);
 
 server.listen(cfg.port, cfg.host, () => {
   log('dashboard', `listening on ${cfg.host}:${cfg.port} (${cfg.allowed.length ? `tailscale logins: ${cfg.allowed.join(',')}` : 'local only'})`);
   for (const r of runners.values()) r.start();
 });
+workerServer?.listen(cfg.workerPort, cfg.workerHost, () => log('hub', `workers: ws on ${cfg.workerHost}:${cfg.workerPort}/worker (bearer token required)`));
 
 let closing = false;
 function shutdown() {
@@ -114,9 +134,11 @@ function shutdown() {
   closing = true;
   clearInterval(tick);
   stopBlueMap();
+  hub?.close();
   for (const r of runners.values()) r.shutdown();
   for (const c of wss.clients) c.close();
   server.close();
+  workerServer?.close();
   setTimeout(() => process.exit(0), 500);
 }
 process.on('SIGTERM', shutdown);
