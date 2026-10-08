@@ -31,6 +31,7 @@
   <div class="row"><b>Target</b>
     <select id="target"></select>
     <label>your player name <input id="me" class="w" maxlength="16"></label>
+    <label title="A new job replaces the running one and the queue instead of waiting behind them"><input type="checkbox" id="replace" checked> replace current jobs</label>
     <button class="stop" data-job="stop">Stop</button><span id="msg" class="mut"></span>
   </div>
   <form data-job="goto">goto <input name="x" type="number" placeholder="x" required><input name="y" type="number" placeholder="y" required><input name="z" type="number" placeholder="z" required><button>Go</button></form>
@@ -38,6 +39,7 @@
   <form data-job="mine">mine <input name="block" class="w" placeholder="iron_ore" required><input name="count" type="number" value="8" min="1"><button>Mine</button></form>
   <form data-job="chop">chop logs <input name="count" type="number" value="8" min="1"><button>Chop</button></form>
   <form data-job="deposit">deposit into chest <input name="x" type="number" placeholder="x" required><input name="y" type="number" placeholder="y" required><input name="z" type="number" placeholder="z" required><button>Deposit</button></form>
+  <form data-job="rearm">re-arm from chest <input name="x" type="number" placeholder="x" required><input name="y" type="number" placeholder="y" required><input name="z" type="number" placeholder="z" required><button>Re-arm</button></form>
   <form data-job="say">say <input name="text" placeholder="text" maxlength="200" required><button>Say</button></form>
 </div>
 <div class="bar">
@@ -58,7 +60,7 @@ $('me').oninput = () => { try { localStorage.setItem('me', $('me').value); } cat
 async function send(type, args) {
   const t = $('target').value;
   const r = await fetch('/api/job', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ bots: t === 'all' ? 'all' : [t], type, args }) });
+    body: JSON.stringify({ bots: t === 'all' ? 'all' : [t], type, args, replace: $('replace').checked }) });
   const j = await r.json();
   $('msg').textContent = r.ok ? 'sent' : j.error;
   $('msg').className = r.ok ? 'mut' : 'err';

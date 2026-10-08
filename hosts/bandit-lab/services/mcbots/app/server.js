@@ -12,7 +12,7 @@ const cfg = loadConfig();
 const log = (who, msg) => console.log(`${new Date().toISOString()} [${who}] ${msg}`);
 const world = new WorldModel();
 const stopBlueMap = startBlueMap(world, cfg.bluemapUrl, log);
-const runners = new Map(cfg.names.map((n) => [n, new BotRunner(n, {host: cfg.mcHost, port: cfg.mcPort, log, world, protectedAreas: cfg.protectedAreas})]));
+const runners = new Map(cfg.names.map((n) => [n, new BotRunner(n, {host: cfg.mcHost, port: cfg.mcPort, log, world, protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest})]));
 const page = fs.readFileSync(path.join(__dirname, 'public', 'index.html'));
 
 // tailscale serve sets Tailscale-User-Login for tailnet users. When
@@ -28,7 +28,7 @@ const sameOrigin = (req) => {
     return false;
   }
 };
-const state = () => ({bots: [...runners.values()].map((r) => r.snapshot()), world: world.snapshot(), protectedAreas: cfg.protectedAreas});
+const state = () => ({bots: [...runners.values()].map((r) => r.snapshot()), world: world.snapshot(), protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest});
 
 function readJson(req) {
   return new Promise((resolve, reject) => {
@@ -64,10 +64,10 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/job') {
     if (!sameOrigin(req) || !String(req.headers['content-type']).startsWith('application/json')) return json(403, {error: 'bad origin'});
     try {
-      const {bots, type, args} = await readJson(req);
+      const {bots, type, args, replace} = await readJson(req);
       const targets = bots === 'all' ? [...runners.values()] : (Array.isArray(bots) ? bots : []).map((n) => runners.get(n));
       if (!targets.length || targets.includes(undefined)) throw new Error('unknown bot');
-      for (const r of targets) r.enqueue(type, args || {});
+      for (const r of targets) r.enqueue(type, args || {}, {replace: replace === true});
       broadcast();
       return json(200, {ok: true});
     } catch (e) {

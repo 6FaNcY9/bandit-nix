@@ -45,6 +45,7 @@ const VALIDATE = {
   },
   chop: (a) => ({count: num(a.count ?? 1, 1, 2048, 'count')}),
   deposit: xyz,
+  rearm: xyz,
   say: (a) => {
     const text = String(a.text ?? '').trim();
     if (!text || text.length > 200) throw new Error('text must be 1..200 characters');
@@ -62,6 +63,7 @@ class BotRunner {
     this.combat = {busy: false, epoch: 0}; // replaced by a Combat per connection
     this.host = host;
     this.protectedAreas = protectedAreas;
+    this.supplyChest = supplyChest;
     this.port = port;
     this.log = log;
     this.bot = null;
@@ -106,6 +108,8 @@ class BotRunner {
     bot.on('death', () => {
       this.lastError = 'died';
       this.cancel();
+      // Re-equip from the supply chest first thing after respawning.
+      if (this.supplyChest) this.queue.unshift({id: ++this.jobSeq, type: 'rearm', args: this.supplyChest, status: 'queued'});
     });
     bot.on('error', (e) => {
       this.lastError = String(e.message || e);
@@ -139,7 +143,13 @@ class BotRunner {
   }
 
   // ---- jobs ----
-  enqueue(type, args = {}) {
+  // replace: drop the queue and the running job first, so a click means "do
+  // this now" instead of waiting behind earlier clicks.
+  enqueue(type, args = {}, {replace = false} = {}) {
+    if (replace && type !== 'stop') {
+      this.queue = [];
+      this.cancel();
+    }
     if (type === 'stop') {
       this.queue = [];
       this.cancel();
@@ -393,6 +403,42 @@ const JOBS = {
     } finally {
       chest.close();
     }
+  },
+
+  // Take armour, a sword and food from a chest and wear/hold them.
+  async rearm(r, job) {
+    const {bot} = r;
+    const {x, y, z} = job.args;
+    await goNear(r, job, x, y, z, 3);
+    const block = bot.blockAt(new (require('vec3').Vec3)(x, y, z));
+    if (!block || !/chest|barrel/.test(block.name)) throw new Error(`no chest at ${x} ${y} ${z} (found ${block?.name})`);
+    const tier = (n) => ['leather', 'golden', 'chainmail', 'iron', 'diamond', 'netherite'].findIndex((t) => n.startsWith(t));
+    const has = (re) => bot.inventory.items().some((i) => re.test(i.name));
+    const want = [
+      [/_helmet$/, 'head'], [/_chestplate$/, 'torso'], [/_leggings$/, 'legs'], [/_boots$/, 'feet'], [/_sword$/, null],
+    ];
+    const chest = await bot.openContainer(block);
+    try {
+      for (const [re] of want) {
+        guard(job);
+        if (has(re)) continue;
+        const best = chest.containerItems().filter((i) => re.test(i.name)).sort((a, b) => tier(b.name) - tier(a.name))[0];
+        if (best) await chest.withdraw(best.type, best.metadata, 1);
+      }
+      const food = chest.containerItems().find((i) => bot.registry.foodsByName[i.name] && !/rotten|spider_eye|poisonous|golden_apple/.test(i.name));
+      const haveFood = bot.inventory.items().filter((i) => bot.registry.foodsByName[i.name]).reduce((n, i) => n + i.count, 0);
+      if (food && haveFood < 16) await chest.withdraw(food.type, food.metadata, Math.min(16 - haveFood, food.count));
+    } finally {
+      chest.close();
+    }
+    for (const [re, slot] of want) {
+      const it = bot.inventory.items().filter((i) => re.test(i.name)).sort((a, b) => tier(b.name) - tier(a.name))[0];
+      if (it && slot) await bot.equip(it, slot).catch(() => {});
+    }
+    const sword = bot.inventory.items().find((i) => /_sword$/.test(i.name));
+    if (sword) await bot.equip(sword, 'hand').catch(() => {});
+    const worn = ['head', 'torso', 'legs', 'feet'].filter((s) => bot.inventory.slots[bot.getEquipmentDestSlot(s)]).length;
+    job.progress = `armour ${worn}/4${sword ? ', sword' : ''}`;
   },
 
   async say(r, job) {

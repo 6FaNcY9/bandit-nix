@@ -38,6 +38,9 @@ in {
         # Global player positions (read-only JSON) from BlueMap in the minecraft
         # container, reachable over the `minecraft` network.
         BLUEMAP_URL = "http://minecraft:8100";
+        # Chest next to the bots' respawn point (spawnpoint -100 71 12); after a
+        # death a bot re-equips armour, sword and food from it.
+        SUPPLY_CHEST = "-98,71,12";
         # Bots never dig or place inside these x1,z1,x2,z2 boxes: the main base
         # around spawn and MidariBread's base (from BlueMap light data, +16).
         PROTECTED_AREAS = "-80,-144,80,80;112,368,272,592";
