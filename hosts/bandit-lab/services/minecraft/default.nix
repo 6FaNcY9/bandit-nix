@@ -226,6 +226,40 @@ in {
         };
       };
 
+      # Plugins that resolve Maven libraries at start (Citizens, Jarvis) fail to
+      # load when the container briefly gets "Network is unreachable" right
+      # after start (seen 3 of ~8 starts on 2026-10-08; host shows no network
+      # event, cause not found). One automatic restart recovers it.
+      # ponytail: retry-once workaround; replace once the startup egress fault
+      # is understood.
+      minecraft-plugin-check = {
+        description = "Restart Minecraft once if a plugin failed to load at start";
+        after = ["docker-minecraft.service"];
+        wantedBy = ["docker-minecraft.service"];
+        path = [pkgs.systemd pkgs.coreutils pkgs.gnugrep];
+        serviceConfig = {
+          # simple: never blocks a deploy while it waits for the server.
+          Type = "simple";
+        };
+        script = ''
+          since=$(systemctl show -p ActiveEnterTimestamp --value docker-minecraft.service)
+          log() { journalctl -u docker-minecraft.service --since "$since" --no-pager -o cat; }
+          for _ in $(seq 60); do
+            log | grep -q 'Done (' && break
+            sleep 5
+          done
+          log | grep -q 'Could not load plugin' || exit 0
+          marker=/run/minecraft-plugin-retry
+          if [ -e "$marker" ] && [ $(( $(date +%s) - $(stat -c %Y "$marker") )) -lt 900 ]; then
+            echo "A plugin failed to load again; not retrying within 15 minutes" >&2
+            exit 0
+          fi
+          touch "$marker"
+          echo "A plugin failed to load; restarting Minecraft once" >&2
+          systemctl restart --no-block docker-minecraft.service
+        '';
+      };
+
       # Private HTTPS for the panel (443) and the map (8443): Tailscale Serve,
       # tailnet only (never Funnel). Serve and "HTTPS Certificates" must be enabled
       # once in the Tailscale admin console. Until then `tailscale serve --bg`
@@ -379,6 +413,8 @@ in {
       MEMORY = "512M";
       TZ = config.time.timeZone;
       BOTGATE_SOURCES = botgateSources;
+      # The image health check pings 25577 unless told the port Velocity binds.
+      SERVER_PORT = "25565";
     };
     environmentFiles = [config.sops.templates."minecraft-velocity.env".path];
     ports = ["${repoConfig.lab.tailscaleIp}:25565:25565"];
