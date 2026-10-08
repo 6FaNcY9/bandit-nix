@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Prepare a ship to bandit-lab (docs/runbooks/minecraft/BOTS.md, "Shipping").
+#   tools/ship-claude [--dry-run] [--repo DIR] [--remote NAME] SHA...
+# Builds a clean detached worktree on <remote>/main, cherry-picks the SHAs
+# (re-signed with your GPG key), checks the signature, builds the committed
+# bandit-lab revision, then PRINTS the push line and stops. It never pushes:
+# a push to main deploys to the lab within the hour. The dirty tree in --repo
+# cannot leak in because nothing is read from it but the object database.
+# --dry-run skips signing, the signature check and the build (for tests).
+set -euo pipefail
+
+dry=0 repo=. remote=origin
+while [[ ${1:-} == --* ]]; do
+  case $1 in
+    --dry-run) dry=1 ;;
+    --repo) repo=${2:?--repo DIR}; shift ;;
+    --remote) remote=${2:?--remote NAME}; shift ;;
+    *) echo "unknown option: $1" >&2; exit 2 ;;
+  esac
+  shift
+done
+(($#)) || { echo "usage: ship-claude [--dry-run] [--repo DIR] [--remote NAME] SHA..." >&2; exit 2; }
+
+repo=$(realpath "$repo")
+git -C "$repo" fetch -q "$remote" main
+for sha in "$@"; do git -C "$repo" cat-file -e "$sha^{commit}" 2>/dev/null || { echo "not a commit: $sha" >&2; exit 1; }; done
+
+wt=$(mktemp -u "${TMPDIR:-/tmp}/ship-XXXXXX")
+git -C "$repo" worktree add -q --detach "$wt" "$remote/main"
+ok=0
+trap '((ok)) || git -C "$repo" worktree remove --force "$wt" 2>/dev/null' EXIT
+
+sign=(-S)
+((dry)) && sign=()
+git -C "$wt" cherry-pick "${sign[@]}" "$@" >/dev/null
+
+if ((dry)); then
+  echo "dry run: skipped signing, signature check and build"
+else
+  sig=$(git -C "$wt" log --show-signature -"$#" | grep -E "^commit|Good signature|BAD" || true)
+  echo "$sig"
+  [[ $(grep -c "Good signature" <<<"$sig") -eq $# ]] || { echo "every commit needs a good signature" >&2; exit 1; }
+  rev=$(git -C "$wt" rev-parse HEAD)
+  nix build "git+file://$wt?rev=$rev#nixosConfigurations.bandit-lab.config.system.build.toplevel" --no-link --no-update-lock-file
+fi
+
+# shellcheck disable=SC2034 # read by the EXIT trap
+ok=1
+echo "ready: $(git -C "$wt" rev-parse --short HEAD) on $remote/main in $wt"
+echo "THIS DEPLOYS (changes restarting docker-minecraft disconnect players). You run:"
+echo "  git -C $wt push $remote HEAD:main"
+echo "afterwards:"
+echo "  git -C $repo worktree remove $wt"

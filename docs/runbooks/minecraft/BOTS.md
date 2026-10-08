@@ -183,6 +183,16 @@ Each bot runs its queue one job at a time. Chat is never read as a command.
 - The dashboard trusts the `Tailscale-User-Login` header. Only `tailscale serve`
   (host) and containers on `mcbots` (Velocity) can reach it; keep it that way.
 
+## Shipping to the lab
+
+`tools/ship-claude [--dry-run] SHA...` prepares a ship from a branch: clean
+detached worktree on `origin/main`, `cherry-pick -S` (your GPG key), signature
+check, build of the committed `bandit-lab` revision, then it prints the exact
+`git push origin HEAD:main` line and stops. It never pushes; the push deploys
+within the hour. `--dry-run` skips signing and the build. Test:
+`tools/ship-claude.test.sh` (throw-away repos, asserts nothing is pushed and the
+dirty tree does not leak).
+
 ## Troubleshooting
 
 - Bot offline, "logging in too fast" / throttled: wait; the runner backs off
