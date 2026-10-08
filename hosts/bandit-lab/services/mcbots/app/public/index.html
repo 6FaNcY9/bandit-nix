@@ -103,6 +103,7 @@ const SPEC = {
   rearm: { label: 'Re-arm from chests', f: XYZ, chest: true },
   come: { label: 'Come to me', f: [], me: true },
   follow: { label: 'Follow a player', f: [['player', 'text', '']] },
+  place: { label: 'Place a block', f: [['item', 'text', 'chest', 'items'], ...XYZ] },
   say: { label: 'Say in chat', f: [['text', 'text', '']] },
 };
 function composer(targets) { // targets(): array of bot names or 'all'
