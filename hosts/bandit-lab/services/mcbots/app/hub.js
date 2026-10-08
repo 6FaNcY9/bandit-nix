@@ -24,6 +24,8 @@ const STALE_MS = 30000; // no frame and no pong for this long: the worker is gon
 const MAX_BOTS_PER_WORKER = 8;
 const MAX_REMOTE_BOTS = 16;
 const MAX_CLAIMS_PER_BOT = 8;
+const MAX_CONNS = 24; // authenticated sockets, hello or not
+const MAX_MSGS_PER_S = 200; // a real worker sends a handful per second
 const AUTH_FAILS = 20; // per minute, then 429 until the window passes
 const KEY_RE = /^[a-z_]{1,32}:-?\d{1,9},-?\d{1,4},-?\d{1,9}$/;
 const HOST_RE = /^[\w.-]{1,40}$/;
@@ -187,6 +189,7 @@ class Hub {
     }
     if (path !== '/worker') return deny(404, 'Not Found');
     if (this.throttled()) return deny(429, 'Too Many Requests');
+    if (this.conns.size >= MAX_CONNS) return deny(503, 'Service Unavailable');
     if (!this.tokenOk(req.headers.authorization)) {
       this.fails.push(this.now());
       return deny(401, 'Unauthorized');
@@ -195,7 +198,7 @@ class Hub {
   }
 
   onConnection(ws) {
-    const conn = {ws, hello: false, host: '', bots: new Set(), alive: true, lastMsg: this.now()};
+    const conn = {ws, hello: false, host: '', bots: new Set(), alive: true, lastMsg: this.now(), winStart: this.now(), winCount: 0};
     this.conns.add(conn);
     const helloTimer = setTimeout(() => !conn.hello && ws.close(4000, 'hello timeout'), HELLO_MS);
     ws.on('pong', () => {
@@ -204,6 +207,12 @@ class Hub {
     });
     ws.on('message', (data, isBinary) => {
       if (isBinary) return ws.close(1003, 'text frames only');
+      const t = this.now();
+      if (t - conn.winStart >= 1000) {
+        conn.winStart = t;
+        conn.winCount = 0;
+      }
+      if (++conn.winCount > MAX_MSGS_PER_S) return ws.close(1008, 'too many messages');
       let m;
       try {
         m = JSON.parse(String(data));
@@ -291,7 +300,10 @@ class Hub {
     // A reconnect replaces the old connection (it may be a dead NAT mapping).
     for (const n of names) {
       const old = this.runners.get(n)?.conn;
-      if (old && old !== conn) old.ws.close(4001, 'replaced by a new connection');
+      if (old && old !== conn) {
+        old.bots.delete(n); // the stale socket may still deliver frames: it no longer speaks for n
+        old.ws.close(4001, 'replaced by a new connection');
+      }
     }
     conn.hello = true;
     conn.host = host;

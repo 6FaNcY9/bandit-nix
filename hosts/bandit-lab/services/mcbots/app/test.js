@@ -397,6 +397,43 @@ require('./crafting');
     fresh.ws.close();
     await until(() => !r5.snapshot().connected, 'offline again');
 
+    // a replaced connection must not keep acting for the bot it lost
+    {
+      const o = await open(auth);
+      o.send({t: 'hello', v: 1, host: 'a', bots: ['bot8']});
+      await until(() => o.msgs.find((m) => m.t === 'welcome'), 'welcome old');
+      const n = await open(auth);
+      n.send({t: 'hello', v: 1, host: 'b', bots: ['bot8']});
+      await until(() => n.msgs.find((m) => m.t === 'welcome'), 'welcome new');
+      o.send({t: 'claim', id: 1, key: 'overworld:70,60,5', by: 'bot8'});
+      o.send({t: 'ping'});
+      await sleep(300);
+      assert.ok(!world.claims.has('overworld:70,60,5'), 'a replaced connection cannot claim');
+      n.ws.close();
+      await until(() => !runners.get('bot8').snapshot().connected, 'bot8 offline');
+    }
+
+    // a flooding worker is cut off
+    {
+      const f = await open(auth);
+      f.send({t: 'hello', v: 1, host: 'flood', bots: ['bot9']});
+      await until(() => f.msgs.find((m) => m.t === 'welcome'), 'welcome flood');
+      for (let i = 0; i < 1000; i++) f.send({t: 'ping'});
+      assert.strictEqual(await f.closed, 1008, 'message flood closes the connection');
+    }
+
+    // connections are capped (each costs memory before it has said hello)
+    {
+      const socks = [];
+      let refused = false;
+      for (let i = 0; i < 40 && !refused; i++) {
+        try { socks.push(await open(auth)); } catch (e) { refused = /503/.test(e.message); if (!refused) throw e; }
+      }
+      assert.ok(refused, 'too many connections are refused with 503');
+      for (const x of socks) x.ws.terminate();
+      await until(() => hub.conns.size === 0, 'sockets closed');
+    }
+
     // a worker with the wrong token keeps retrying with back-off and never gets a runner
     const badLogs = [];
     const bad = new HubClient({url, token: 'bad'.repeat(20), names: ['bot7'], hostLabel: 'lap', log: (w, m) => badLogs.push(m), makeRunner: () => assert.fail('no runner without a welcome')});
