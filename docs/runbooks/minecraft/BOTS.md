@@ -197,9 +197,70 @@ Each bot runs its queue one job at a time. Chat is never read as a command.
 | `come` | player | walks to the player (BlueMap position when far); 90 s + 1 s/block, max 10 min |
 | `mine` | block, count | `mine iron_ore 8`; nearest block within 64, best tool is equipped |
 | `chop` | count | any `*_log` within 64 blocks |
-| `deposit` | x y z | puts everything except tools and food into the chest/barrel there |
+| `deposit` | x y z, optional `only` | puts everything except tools, food and crafting stock (planks, sticks, coal, torches, table, furnace) into the chest/barrel there; with `only` (an item name, `logs` or `coal`) just that kind, including what is normally kept |
+| `withdraw` | item, count, x y z | takes up to `count` of an item (or `logs`) out of the chest/barrel |
+| `stock` | x y z | opens the chest and reports its contents (changes nothing); for the supply chest the numbers go to the keeper |
+| `place` | item, x y z | puts one block (chest, crafting table, ...) on top of the solid block under x y z; crafts it first when missing; refused inside protected areas |
 | `say` | text | up to 200 characters; text starting with `/` is rejected |
 | `stop` | | clears the queue and stops walking/digging |
+
+## Long runs
+
+What a bot does on its own while a `mine`, `chop` or `shift` job runs (`upkeep()`
+in `app/bots.js`, checked before every block):
+
+- **Broken tool**: no pickaxe that can harvest the block: craft a stone pickaxe,
+  else a wooden one (chopping 3 logs first when it has no wood), else take one
+  from the supply chest; then carry on where it was. Chopping without an axe is
+  fine, so a broken axe is not replaced.
+- **Hunger**: food below 14, none in the inventory and a supply chest set: walk
+  there and take food (the `rearm` routine), at most once per 10 min. The
+  existing combat loop eats from the inventory below 15.
+- **Full inventory** (fewer than 2 free slots) in a job that is not a `shift`:
+  deposit into the supply chest and carry on. A `shift` deposits into its own
+  chest. Without a chest the job fails with a clear message.
+- **Death or disconnect**: the running job (`mine`, `chop`, `shift`, `goto`,
+  `deposit`, `follow`, `come`) goes back to the front of the queue behind the
+  re-arm, keeps its count (`collected`), and the bot first walks back to the
+  last block it worked on. Nothing runs while the bot is dead. A job interrupted
+  more than 3 times is given up ("gave up" event). A job you stopped is never
+  resumed. `craft`/`smelt` are short and start over.
+- **Unreachable block** (`could not reach`): skipped for 5 min; five in a row end
+  the job. A dig the server never answers is abandoned after 25 s; a walk that
+  never settles is ended by the 90 s deadline (`pathfinder.stop()` alone does not
+  settle a pending `goto`, `setGoal(null)` does).
+- **Claims** that expired no longer count toward the per-bot cap of 8 and are
+  pruned; a remote bot offline for over an hour leaves the list; a wrong token
+  earns the guesser a 429 after 20 tries a minute but never locks the real
+  worker out.
+
+## Standing orders (keeper)
+
+A switch on the dashboard ("Standing orders") that keeps the supply chest stocked
+(`app/keeper.js`). Quotas are declared in `default.nix` (`KEEPER_QUOTAS`, now
+`logs:64,cobblestone:128,coal:32,torch:64`; optional `KEEPER_SITE=x,y,z` to walk to
+before chopping or mining). Without `SUPPLY_CHEST` or quotas the panel is absent.
+
+- **Off after every restart.** Switching on does nothing but read the chest and
+  plan; switching off stops planning (bots finish their jobs; use Stop to end them).
+- **Stock** comes from whichever bot last opened the chest (`deposit`,
+  `withdraw`, `stock` jobs, also from laptop workers). Numbers older than 15 min
+  or unknown: an idle bot is sent to count (`stock` job).
+- **Planning** every 5 s: the first quota below target with nobody on it goes to an
+  idle bot (idle for 10 s, no queue, not dead, online; lab bots and connected workers
+  alike), at most two bots at once, at most 64 items per chain, as normal queued
+  jobs: logs = `chop` + `deposit only logs`; cobblestone = `mine stone` + `deposit
+  only cobblestone`; coal = `mine coal_ore` + `deposit only coal`; torch = `withdraw
+  coal`, `withdraw logs`, `craft torch`, `deposit only torch` (only when the chest
+  already holds the coal and a log). Everything shows up in the cards, the event log
+  ("keeper") and can be stopped like any other job.
+- A chain that ends without the chest getting more of the item puts that item on a
+  10 min cooldown (no ore nearby must not become a loop). Items without a recipe
+  in the keeper show "no way to make this".
+- Bots dig where they stand (nearest blocks within 64); set `KEEPER_SITE` if the
+  spawn surroundings should stay untouched. Protected areas stay protected.
+- API: `GET /api/keeper`, `POST /api/keeper {"enabled": true|false}` (same-origin
+  JSON only); the state is also part of every `/api/state` and WebSocket frame.
 
 ## Limits
 
