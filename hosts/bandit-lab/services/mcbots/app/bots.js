@@ -14,6 +14,8 @@ const LOGIN_GAP_MS = 4500; // Velocity rate-limits logins
 const GOTO_TIMEOUT_MS = 90000;
 const BACKOFF_START = 5000;
 const BACKOFF_CAP = 300000;
+// Kept on deposit: what a bot needs to craft a replacement tool or light a mine.
+const KEEP_RE = /^(stick|[a-z_]+_planks|coal|charcoal|torch|crafting_table|furnace)$/;
 const TOOL_RE = /_(pickaxe|axe|shovel|hoe|sword)$|^(shears|bow|crossbow|fishing_rod|shield|trident|flint_and_steel|elytra)$/;
 
 // Global login stagger shared by all runners in this process.
@@ -47,6 +49,20 @@ const VALIDATE = {
   chop: (a) => ({count: num(a.count ?? 1, 1, 2048, 'count')}),
   deposit: xyz,
   rearm: xyz,
+  craft: (a) => {
+    if (!/^[a-z_]{1,48}$/.test(a.item || '')) throw new Error('item must be an item name like stone_pickaxe');
+    return {item: a.item, count: num(a.count ?? 1, 1, 64, 'count')};
+  },
+  smelt: (a) => {
+    if (!/^[a-z_]{1,48}$/.test(a.item || '')) throw new Error('item must be what goes in, like raw_iron');
+    return {item: a.item, count: num(a.count ?? 1, 1, 64, 'count')};
+  },
+  // Work shift: mine a block (or "logs") until stopped, depositing into the
+  // chest at x,y,z whenever the inventory fills up.
+  shift: (a) => {
+    if (!/^[a-z_]{1,48}$/.test(a.block || '')) throw new Error('block must be a block name like stone, or logs');
+    return {block: a.block, ...xyz(a)};
+  },
   say: (a) => {
     const text = String(a.text ?? '').trim();
     if (!text || text.length > 200) throw new Error('text must be 1..200 characters');
@@ -97,6 +113,8 @@ class BotRunner {
     this.bot = bot;
     bot.loadPlugin(pathfinder);
     bot.loadPlugin(collectBlock);
+    require('./crafting').fixCraftTiming(bot);
+    unwedge(bot);
     let spawnedAt = 0;
     this.combat = new Combat(this);
     bot.once('spawn', () => {
@@ -222,7 +240,6 @@ class BotRunner {
       }
     }
     this.current = null;
-    if (job.cancelled) this.queue = [];
     setImmediate(() => this.pump());
   }
 
@@ -242,7 +259,7 @@ class BotRunner {
       combat: this.combat.mode || null,
       job: this.current && {label: label(this.current), progress: this.current.progress},
       queue: this.queue.map(label),
-      inventory: top.slice(0, 8).map(([n, c]) => `${n} x${c}`),
+      inventory: top.map(([n, c]) => `${n} x${c}`),
       inventoryKinds: top.length,
       lastError: this.lastError,
     };
@@ -254,6 +271,27 @@ class BotRunner {
 // bases). Inside protected areas (player bases) it neither digs nor places.
 // A custom unbreakable-block list made the pathfinder plan routes it then
 // refused to walk (2026-10-08), so protection is by area only.
+// A bot can end up a hair from a wall where client and server collision
+// disagree: the server then pulls it back every tick (~20 forced moves/s) and
+// the pathfinder never gets moving again. Re-centre it in its block when that
+// starts (seen after stopping a mining job in a 1-wide pit, 2026-10-08).
+function unwedge(bot) {
+  let times = [];
+  bot.on('forcedMove', () => {
+    const now = Date.now();
+    times = times.filter((t) => now - t < 1000);
+    times.push(now);
+    if (times.length < 10) return;
+    times = [];
+    const pos = bot.entity.position;
+    const feet = bot.blockAt(pos.floored());
+    const head = bot.blockAt(pos.floored().offset(0, 1, 0));
+    if (feet?.boundingBox !== 'empty' || head?.boundingBox !== 'empty') return;
+    pos.x = Math.floor(pos.x) + 0.5;
+    pos.z = Math.floor(pos.z) + 0.5;
+  });
+}
+
 function safeMovements(bot, areas) {
   const mv = new Movements(bot);
   // Bots speak 26.1 to a 26.2 server through ViaBackwards; sprinting, parkour
@@ -444,6 +482,8 @@ async function chase(r, job, follow) {
   }
 }
 
+const crafting = require('./crafting').makeCrafting({goNear, guard});
+
 const JOBS = {
   goto: (r, job) => goNear(r, job, job.args.x, job.args.y, job.args.z, 1),
 
@@ -469,7 +509,7 @@ const JOBS = {
       let moved = 0;
       for (const it of bot.inventory.items()) {
         guard(job);
-        if (TOOL_RE.test(it.name) || bot.registry.foodsByName[it.name]) continue;
+        if (TOOL_RE.test(it.name) || KEEP_RE.test(it.name) || bot.registry.foodsByName[it.name]) continue;
         try {
           await chest.deposit(it.type, it.metadata, it.count);
           moved += it.count;
@@ -534,9 +574,44 @@ const JOBS = {
     job.progress = `armour ${worn}/4, ${sword?.name || 'no sword'}, off-hand ${off || 'empty'}, food ${foodCount()}`;
   },
 
+  craft: (r, job) => crafting.ensureItem(r, job, job.args.item, crafting.count(r.bot, job.args.item) + job.args.count),
+
+  smelt: (r, job) => crafting.smelt(r, job, job.args.item, job.args.count),
+
+  async shift(r, job) {
+    const {bot} = r;
+    const logs = job.args.block === 'logs';
+    const matching = logs ? Object.keys(bot.registry.blocksByName).filter((n) => n.endsWith('_log')) : [job.args.block];
+    // Sub-jobs share cancellation with the shift (prototype) but keep their own
+    // progress, so one stop ends everything.
+    const sub = (extra) => Object.assign(Object.create(job), extra);
+    let total = 0;
+    for (;;) {
+      guard(job);
+      if (bot.inventory.emptySlotCount() < 4) {
+        job.progress = `depositing (${total} so far)`;
+        await JOBS.deposit(r, sub({args: {x: job.args.x, y: job.args.y, z: job.args.z}}));
+        if (bot.inventory.emptySlotCount() < 4) throw new Error('inventory still full after depositing (chest full?)');
+        continue;
+      }
+      if (!logs && !bot.inventory.items().some((i) => i.name.endsWith('_pickaxe'))) {
+        job.progress = 'crafting a pickaxe';
+        try {
+          await crafting.ensureItem(r, sub({}), 'stone_pickaxe', 1);
+        } catch {
+          await crafting.ensureItem(r, sub({}), 'wooden_pickaxe', 1);
+        }
+      }
+      const round = sub({});
+      await collect(r, round, matching, 8, job.args.block);
+      total += 8;
+      job.progress = `${total} ${job.args.block} mined`;
+    }
+  },
+
   async say(r, job) {
     r.bot.chat(job.args.text);
   },
 };
 
-module.exports = {BotRunner, NAME_RE, VALIDATE, TOOL_RE};
+module.exports = {BotRunner, NAME_RE, VALIDATE, TOOL_RE, JOBS};

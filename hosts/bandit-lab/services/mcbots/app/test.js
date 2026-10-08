@@ -80,4 +80,23 @@ assert.strictEqual(pw('bot1').length, 32);
 const {normalize} = require('./itemfix');
 assert.deepStrictEqual(normalize({enchantments: [{id: 1, level: 5}]}, {enchantments: {1: {name: 'efficiency'}}}), [{name: 'efficiency', lvl: 5}]);
 assert.deepStrictEqual(normalize([{name: 'x', lvl: 1}], {}), [{name: 'x', lvl: 1}]);
-console.log('ok');
+assert.deepStrictEqual(VALIDATE.craft({item: 'stone_pickaxe', count: '2'}), {item: 'stone_pickaxe', count: 2});
+assert.throws(() => VALIDATE.craft({item: 'Stone Pickaxe'}));
+assert.deepStrictEqual(VALIDATE.shift({block: 'logs', x: 1, y: 2, z: 3}), {block: 'logs', x: 1, y: 2, z: 3});
+require('./crafting');
+// A job queued after "stop" must survive the stopped job winding down.
+(async () => {
+  const {JOBS} = require('./bots');
+  const q = new BotRunner('bot1', {host: 'x', port: 1, log: () => {}, world: null});
+  q.online = true;
+  let release;
+  const said = [];
+  JOBS.say = (r, job) => (said.push(job.args.text), job.args.text === 'slow' ? new Promise((res) => (release = res)) : null);
+  q.enqueue('say', {text: 'slow'});
+  q.enqueue('stop');
+  q.enqueue('say', {text: 'next'});
+  release();
+  await new Promise((res) => setTimeout(res, 20));
+  assert.deepStrictEqual(said, ['slow', 'next']);
+  console.log('ok');
+})();
