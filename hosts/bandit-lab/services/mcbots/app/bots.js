@@ -728,11 +728,12 @@ async function collect(r, job, matching, count, what) {
       misses = 0;
     } catch (e) {
       guard(job);
-      // One block nobody can walk to must not end a long job: skip it for 5 min, give up after 5 in a row.
-      if (!/could not reach/.test(e.message) || ++misses > 5) throw e;
+      // One block nobody can walk to (or whose dig was aborted by a block update, e.g. falling
+      // gravel) must not end a long job: skip it for 5 min, give up after 5 in a row.
+      if (!/could not reach|Digging aborted/.test(e.message) || ++misses > 5) throw e;
       for (const [k, until] of r.skip) if (until < Date.now()) r.skip.delete(k);
       r.skip.set(key, Date.now() + 300000);
-      r.emit('info', `skipped a ${what} block that cannot be reached (${at(pos)})`);
+      r.emit('info', `skipped a ${what} block (${e.message.slice(0, 40)}) at ${at(pos)}`);
       continue;
     } finally {
       r.world?.release(r.name, key);
