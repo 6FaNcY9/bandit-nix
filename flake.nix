@@ -262,6 +262,11 @@
         lab = self.nixosConfigurations.bandit-lab.config;
       };
 
+      lab-mcbots = import ./ci/lab-mcbots.nix {
+        inherit (nixpkgs) lib;
+        lab = self.nixosConfigurations.bandit-lab.config;
+      };
+
       lab-surface = import ./ci/lab-surface.nix {
         inherit pkgs repoConfig;
         inherit (nixpkgs) lib;
@@ -315,8 +320,13 @@
     };
 
     formatter.${system} = pkgs.alejandra;
+    apps.${system}.mcbots = {
+      type = "app";
+      program = nixpkgs.lib.getExe self.packages.${system}.mcbots;
+    };
     packages.${system} = {
       inherit (pkgs) cachix vulnix;
+      mcbots = pkgs.callPackage ./hosts/bandit-lab/services/mcbots/package.nix {};
       security-lab = securityLab.config.system.build.vm;
       security-lab-online = securityLabOnline.config.system.build.vm;
     };

@@ -1,0 +1,297 @@
+'use strict';
+// One BotRunner per bot: connection lifecycle plus a sequential job queue.
+// Adding a job type (crafting, building, ...) = add one entry to JOBS and one
+// to VALIDATE; nothing else changes.
+const mineflayer = require('mineflayer');
+const {pathfinder, Movements, goals} = require('mineflayer-pathfinder');
+const {plugin: collectBlock} = require('mineflayer-collectblock');
+
+const NAME_RE = /^bot[0-9]{1,2}$/; // BotGate's pattern (Velocity plugin)
+const LOGIN_GAP_MS = 4500; // Velocity rate-limits logins
+const GOTO_TIMEOUT_MS = 90000;
+const BACKOFF_START = 5000;
+const BACKOFF_CAP = 300000;
+const TOOL_RE = /_(pickaxe|axe|shovel|hoe|sword)$|^(shears|bow|crossbow|fishing_rod|shield|trident|flint_and_steel|elytra)$/;
+
+// Global login stagger shared by all runners in this process.
+let nextLogin = 0;
+function loginDelay() {
+  const t = Math.max(Date.now(), nextLogin);
+  nextLogin = t + LOGIN_GAP_MS;
+  return t - Date.now();
+}
+
+const num = (v, lo, hi, what) => {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < lo || n > hi) throw new Error(`${what} must be a number in ${lo}..${hi}`);
+  return Math.floor(n);
+};
+const xyz = (a) => ({x: num(a.x, -3e7, 3e7, 'x'), y: num(a.y, -64, 320, 'y'), z: num(a.z, -3e7, 3e7, 'z')});
+const player = (a) => {
+  if (!/^\w{1,16}$/.test(a.player || '')) throw new Error('player must be a valid Minecraft name');
+  return {player: a.player};
+};
+
+// Normalise and validate job arguments (throws on bad input).
+const VALIDATE = {
+  goto: xyz,
+  follow: player,
+  come: player,
+  mine: (a) => {
+    if (!/^[a-z_]{1,48}$/.test(a.block || '')) throw new Error('block must be a block name like iron_ore');
+    return {block: a.block, count: num(a.count ?? 1, 1, 2048, 'count')};
+  },
+  chop: (a) => ({count: num(a.count ?? 1, 1, 2048, 'count')}),
+  deposit: xyz,
+  say: (a) => {
+    const text = String(a.text ?? '').trim();
+    if (!text || text.length > 200) throw new Error('text must be 1..200 characters');
+    if (text.startsWith('/')) throw new Error('commands are not allowed');
+    return {text};
+  },
+};
+
+class Cancelled extends Error {}
+
+class BotRunner {
+  constructor(name, {host, port, log}) {
+    this.name = name;
+    this.host = host;
+    this.port = port;
+    this.log = log;
+    this.bot = null;
+    this.online = false;
+    this.queue = [];
+    this.current = null;
+    this.lastError = '';
+    this.backoff = BACKOFF_START;
+    this.timer = null;
+    this.stopped = false; // process shutdown
+    this.jobSeq = 0;
+  }
+
+  start() {
+    this.schedule(0);
+  }
+
+  schedule(ms) {
+    if (this.stopped) return;
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.connect(), ms + loginDelay());
+  }
+
+  connect() {
+    if (this.stopped) return;
+    this.log(this.name, `connecting to ${this.host}:${this.port}`);
+    const bot = mineflayer.createBot({host: this.host, port: this.port, username: this.name, auth: 'offline', version: '26.1', hideErrors: true});
+    this.bot = bot;
+    bot.loadPlugin(pathfinder);
+    bot.loadPlugin(collectBlock);
+    let spawnedAt = 0;
+    bot.once('spawn', () => {
+      spawnedAt = Date.now();
+      this.online = true;
+      const mv = new Movements(bot);
+      mv.canDig = false; // never tunnel through builds while pathing
+      mv.scafoldingBlocks = []; // never place blocks while pathing
+      bot.pathfinder.setMovements(mv);
+      bot.collectBlock.movements.canDig = false;
+      bot.collectBlock.movements.scafoldingBlocks = [];
+      this.log(this.name, 'spawned');
+    });
+    bot.on('death', () => {
+      this.lastError = 'died';
+      this.cancel();
+    });
+    bot.on('error', (e) => {
+      this.lastError = String(e.message || e);
+      this.log(this.name, `error: ${this.lastError}`);
+    });
+    bot.on('kicked', (reason) => {
+      this.lastError = `kicked: ${typeof reason === 'string' ? reason : JSON.stringify(reason)}`.slice(0, 300);
+      this.log(this.name, this.lastError);
+      if (/too fast|throttl/i.test(this.lastError)) this.backoff = Math.max(this.backoff, 30000);
+    });
+    bot.once('end', (why) => {
+      this.online = false;
+      this.cancel();
+      this.bot = null;
+      if (spawnedAt && Date.now() - spawnedAt > 60000) this.backoff = BACKOFF_START;
+      const wait = this.backoff;
+      this.backoff = Math.min(this.backoff * 2, BACKOFF_CAP);
+      this.log(this.name, `disconnected (${why}); reconnect in ${Math.round(wait / 1000)}s`);
+      this.schedule(wait);
+    });
+    // Chat is never a command source: no 'chat'/'whisper' listeners exist.
+  }
+
+  shutdown() {
+    this.stopped = true;
+    clearTimeout(this.timer);
+    this.queue = [];
+    this.cancel();
+    this.bot?.quit();
+  }
+
+  // ---- jobs ----
+  enqueue(type, args = {}) {
+    if (type === 'stop') {
+      this.queue = [];
+      this.cancel();
+      return;
+    }
+    if (!VALIDATE[type]) throw new Error(`unknown job type: ${type}`);
+    const job = {id: ++this.jobSeq, type, args: VALIDATE[type](args), status: 'queued'};
+    this.queue.push(job);
+    this.pump();
+  }
+
+  cancel() {
+    if (this.current) this.current.cancelled = true;
+    const b = this.bot;
+    try {
+      b?.pathfinder?.stop();
+      b?.collectBlock?.cancelTask().catch(() => {});
+    } catch {}
+  }
+
+  async pump() {
+    if (this.current || !this.queue.length) return;
+    const job = (this.current = this.queue.shift());
+    job.status = 'running';
+    job.progress = '';
+    try {
+      if (!this.online) throw new Error('bot is offline');
+      await JOBS[job.type](this, job);
+      job.status = job.cancelled ? 'stopped' : 'done';
+    } catch (e) {
+      job.status = job.cancelled ? 'stopped' : 'failed';
+      if (!job.cancelled) {
+        this.lastError = `${job.type}: ${e.message}`;
+        this.log(this.name, this.lastError);
+      }
+    }
+    this.current = null;
+    if (job.cancelled) this.queue = [];
+    setImmediate(() => this.pump());
+  }
+
+  snapshot() {
+    const b = this.bot;
+    const inv = {};
+    if (this.online) for (const it of b.inventory.items()) inv[it.name] = (inv[it.name] || 0) + it.count;
+    const top = Object.entries(inv).sort((a, c) => c[1] - a[1]);
+    const label = (j) => `${j.type} ${Object.values(j.args).join(' ')}`;
+    return {
+      name: this.name,
+      online: this.online,
+      health: this.online ? b.health : null,
+      food: this.online ? b.food : null,
+      pos: this.online && b.entity ? ['x', 'y', 'z'].map((k) => Math.round(b.entity.position[k])) : null,
+      dimension: this.online ? b.game?.dimension : null,
+      job: this.current && {label: label(this.current), progress: this.current.progress},
+      queue: this.queue.map(label),
+      inventory: top.slice(0, 8).map(([n, c]) => `${n} x${c}`),
+      inventoryKinds: top.length,
+      lastError: this.lastError,
+    };
+  }
+}
+
+// ---- job implementations: (runner, job) => Promise; throw on failure ----
+const guard = (job) => {
+  if (job.cancelled) throw new Cancelled('stopped');
+};
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function goNear(r, job, x, y, z, dist) {
+  guard(job);
+  // Unreachable goals (canDig is off) make the pathfinder retry partial paths
+  // forever, so every walk has a deadline.
+  const deadline = setTimeout(() => r.bot?.pathfinder.stop(), GOTO_TIMEOUT_MS);
+  try {
+    await r.bot.pathfinder.goto(new goals.GoalNear(x, y, z, dist));
+  } catch (e) {
+    guard(job);
+    throw new Error(`could not reach ${Math.round(x)} ${Math.round(y)} ${Math.round(z)}: ${e.message}`);
+  } finally {
+    clearTimeout(deadline);
+  }
+}
+
+async function collect(r, job, matching, count, what) {
+  const {bot} = r;
+  const ids = matching.map((n) => bot.registry.blocksByName[n]?.id).filter((i) => i !== undefined);
+  if (!ids.length) throw new Error(`unknown block: ${what}`);
+  let got = 0;
+  while (got < count) {
+    guard(job);
+    const pos = bot.findBlocks({matching: ids, maxDistance: 64, count: 1})[0];
+    if (!pos) throw new Error(`no ${what} within 64 blocks (collected ${got}/${count})`);
+    try {
+      await bot.collectBlock.collect(bot.blockAt(pos));
+    } catch (e) {
+      guard(job);
+      throw e;
+    }
+    job.progress = `${++got}/${count}`;
+  }
+}
+
+const JOBS = {
+  goto: (r, job) => goNear(r, job, job.args.x, job.args.y, job.args.z, 1),
+
+  async come(r, job) {
+    const e = r.bot.players[job.args.player]?.entity;
+    if (!e) throw new Error(`${job.args.player} is not within render distance`);
+    await goNear(r, job, e.position.x, e.position.y, e.position.z, 2);
+  },
+
+  async follow(r, job) {
+    const e = r.bot.players[job.args.player]?.entity;
+    if (!e) throw new Error(`${job.args.player} is not within render distance`);
+    r.bot.pathfinder.setGoal(new goals.GoalFollow(e, 2), true);
+    job.progress = 'following';
+    while (!job.cancelled && r.online) {
+      await sleep(500);
+      if (!r.bot.players[job.args.player]?.entity) throw new Error(`lost ${job.args.player}`);
+    }
+    r.bot.pathfinder.stop();
+  },
+
+  mine: (r, job) => collect(r, job, [job.args.block], job.args.count, job.args.block),
+
+  chop: (r, job) =>
+    collect(r, job, Object.keys(r.bot.registry.blocksByName).filter((n) => n.endsWith('_log')), job.args.count, 'logs'),
+
+  async deposit(r, job) {
+    const {bot} = r;
+    const {x, y, z} = job.args;
+    await goNear(r, job, x, y, z, 3);
+    const block = bot.blockAt(new (require('vec3').Vec3)(x, y, z));
+    if (!block || !/chest|barrel/.test(block.name)) throw new Error(`no chest at ${x} ${y} ${z} (found ${block?.name})`);
+    const chest = await bot.openContainer(block);
+    try {
+      let moved = 0;
+      for (const it of bot.inventory.items()) {
+        guard(job);
+        if (TOOL_RE.test(it.name) || bot.registry.foodsByName[it.name]) continue;
+        try {
+          await chest.deposit(it.type, it.metadata, it.count);
+          moved += it.count;
+          job.progress = `${moved} items`;
+        } catch (e) {
+          throw new Error(`chest full or deposit failed after ${moved} items: ${e.message}`);
+        }
+      }
+    } finally {
+      chest.close();
+    }
+  },
+
+  async say(r, job) {
+    r.bot.chat(job.args.text);
+  },
+};
+
+module.exports = {BotRunner, NAME_RE, VALIDATE, TOOL_RE};

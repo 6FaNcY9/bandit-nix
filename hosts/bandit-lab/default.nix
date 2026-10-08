@@ -14,6 +14,7 @@
     ./services/beszel
     ./services/vaultwarden
     ./services/minecraft
+    ./services/mcbots
     ./power.nix
     ./services/aiia
     ./services/auto-rebuild

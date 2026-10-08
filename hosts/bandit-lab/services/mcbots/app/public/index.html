@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mcbots</title>
+<style>
+  :root { color-scheme: light dark; --bg:#fff; --fg:#1b1d20; --mut:#6b7280; --card:#f4f5f7; --bd:#d6d9de; --ok:#16a34a; --bad:#dc2626; --acc:#2563eb; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14161a; --fg:#e6e8eb; --mut:#9aa1ab; --card:#1d2025; --bd:#2f343b; --acc:#60a5fa; } }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui,sans-serif; }
+  h1 { font-size:18px; margin:0 0 12px; }
+  .bar,.card { background:var(--card); border:1px solid var(--bd); border-radius:8px; padding:12px; margin-bottom:12px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px; }
+  .card h2 { font-size:15px; margin:0 0 6px; display:flex; align-items:center; gap:8px; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--bad); }
+  .on .dot { background:var(--ok); }
+  .mut { color:var(--mut); } .err { color:var(--bad); word-break:break-word; }
+  form { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:8px; }
+  input,select,button { font:inherit; color:inherit; background:var(--bg); border:1px solid var(--bd); border-radius:6px; padding:4px 8px; }
+  input[type=number] { width:70px; } input.w { width:110px; }
+  button { cursor:pointer; background:var(--acc); color:#fff; border-color:var(--acc); }
+  button.stop { background:var(--bad); border-color:var(--bad); }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  #msg { margin-left:8px; }
+</style>
+</head>
+<body>
+<h1>mcbots <span id="conn" class="mut"></span></h1>
+<div class="bar">
+  <div class="row"><b>Target</b>
+    <select id="target"></select>
+    <label>your player name <input id="me" class="w" maxlength="16"></label>
+    <button class="stop" data-job="stop">Stop</button><span id="msg" class="mut"></span>
+  </div>
+  <form data-job="goto">goto <input name="x" type="number" placeholder="x" required><input name="y" type="number" placeholder="y" required><input name="z" type="number" placeholder="z" required><button>Go</button></form>
+  <form data-job="follow">follow <input name="player" class="w" placeholder="player" required><button>Follow</button> <button type="button" data-job="come">Come to me</button></form>
+  <form data-job="mine">mine <input name="block" class="w" placeholder="iron_ore" required><input name="count" type="number" value="8" min="1"><button>Mine</button></form>
+  <form data-job="chop">chop logs <input name="count" type="number" value="8" min="1"><button>Chop</button></form>
+  <form data-job="deposit">deposit into chest <input name="x" type="number" placeholder="x" required><input name="y" type="number" placeholder="y" required><input name="z" type="number" placeholder="z" required><button>Deposit</button></form>
+  <form data-job="say">say <input name="text" placeholder="text" maxlength="200" required><button>Say</button></form>
+</div>
+<div id="bots" class="grid"></div>
+<script>
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+try { $('me').value = localStorage.getItem('me') || ''; } catch {}
+$('me').oninput = () => { try { localStorage.setItem('me', $('me').value); } catch {} };
+
+async function send(type, args) {
+  const t = $('target').value;
+  const r = await fetch('/api/job', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ bots: t === 'all' ? 'all' : [t], type, args }) });
+  const j = await r.json();
+  $('msg').textContent = r.ok ? 'sent' : j.error;
+  $('msg').className = r.ok ? 'mut' : 'err';
+}
+document.querySelectorAll('form').forEach((f) => f.onsubmit = (e) => {
+  e.preventDefault();
+  send(f.dataset.job, Object.fromEntries(new FormData(f)));
+});
+document.querySelectorAll('button[data-job]').forEach((b) => b.onclick = () =>
+  send(b.dataset.job, b.dataset.job === 'come' ? { player: $('me').value } : {}));
+
+function render(bots) {
+  const sel = $('target'), cur = sel.value;
+  const names = ['all', ...bots.map((b) => b.name)];
+  if (names.join() !== [...sel.options].map((o) => o.value).join()) {
+    sel.replaceChildren(...names.map((n) => new Option(n, n)));
+    sel.value = names.includes(cur) ? cur : 'all';
+  }
+  $('bots').replaceChildren(...bots.map((b) => {
+    const c = el('div', 'card' + (b.online ? ' on' : ''));
+    const h = el('h2'); h.append(el('span', 'dot'), b.name, el('span', 'mut', b.online ? 'online' : 'offline'));
+    c.append(h);
+    if (b.online) {
+      c.append(el('div', '', `health ${Math.round(b.health)}/20  food ${b.food}/20`));
+      c.append(el('div', '', `pos ${b.pos ? b.pos.join(' ') : '?'}  ${b.dimension || ''}`));
+    }
+    c.append(el('div', '', 'job: ' + (b.job ? `${b.job.label} ${b.job.progress || ''}` : 'idle')));
+    if (b.queue.length) c.append(el('div', 'mut', 'queue: ' + b.queue.join(' | ')));
+    c.append(el('div', 'mut', 'inv: ' + (b.inventory.join(', ') || 'empty') + (b.inventoryKinds > b.inventory.length ? ', ...' : '')));
+    if (b.lastError) c.append(el('div', 'err', 'error: ' + b.lastError));
+    return c;
+  }));
+}
+function connect() {
+  const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+  ws.onopen = () => { $('conn').textContent = ''; };
+  ws.onmessage = (e) => render(JSON.parse(e.data));
+  ws.onclose = () => { $('conn').textContent = '(reconnecting...)'; setTimeout(connect, 2000); };
+}
+connect();
+</script>
+</body>
+</html>

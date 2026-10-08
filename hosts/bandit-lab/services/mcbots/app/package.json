@@ -1,0 +1,16 @@
+{
+  "name": "mcbots",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mineflayer bots controlled from a small web dashboard",
+  "main": "server.js",
+  "bin": {"mcbots": "server.js"},
+  "engines": {"node": ">=22"},
+  "scripts": {"start": "node server.js", "test": "node test.js"},
+  "dependencies": {
+    "mineflayer": "4.39.0",
+    "mineflayer-collectblock": "1.6.0",
+    "mineflayer-pathfinder": "2.4.5",
+    "ws": "8.22.0"
+  }
+}
