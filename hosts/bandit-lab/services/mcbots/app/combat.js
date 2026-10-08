@@ -89,7 +89,10 @@ class Combat {
   async fight(target) {
     const bot = this.r.bot;
     const weapon = bot.inventory.items().sort((a, b) => weaponScore(b.name) - weaponScore(a.name))[0];
-    if (weapon && weaponScore(weapon.name) && bot.heldItem?.type !== weapon.type) await bot.equip(weapon, 'hand').catch(() => {});
+    // Keep an axe or sword already in hand (a bot chopping with an axe fights
+    // with it instead of swapping to the sword and then chopping with that).
+    const armed = /_(axe|sword)$/.test(bot.heldItem?.name || '');
+    if (!armed && weapon && weaponScore(weapon.name) && bot.heldItem?.type !== weapon.type) await bot.equip(weapon, 'hand').catch(() => {});
     await bot.lookAt(target.position.offset(0, target.height * 0.8, 0), true).catch(() => {});
     const cooldown = bot.heldItem?.name.endsWith('_axe') ? 1100 : 650;
     if (Date.now() - this.lastAttack >= cooldown && target.isValid !== false) {

@@ -16,7 +16,7 @@ NixOS flake for `bandit` (Framework 13 AMD laptop) and `bandit-lab` (headless se
 - The main agent handles small, bounded tasks directly, including targeted inspection, straightforward edits, documentation, and checks.
 - Use `scout` for substantial exploration that benefits from a separate context. Use `worker` for a bounded implementation task when delegation is expected to reduce total effort. Do not require a scout-to-worker handoff for every edit.
 - Use `architect` for a specific difficult design, security, migration, or debugging decision when cheaper investigation is insufficient. For a high-impact design decision, obtain that guidance before attempting a risky implementation.
-- Delegate only when the expected benefit justifies startup, context, and coordination costs. Parallelize independent work; give writers distinct ownership. Never perform the same investigation in both parent and child.
+- Delegate only when the expected benefit justifies startup, context, and coordination costs. A delegated agent starts cold and re-reads context, so one delegation can cost as much as a long session: do small and medium changes inline, run at most one delegated writer at a time, and tell the owner before starting one. Give writers distinct ownership. Never perform the same investigation in both parent and child.
 - Give each delegated task its goal, relevant paths/evidence, scope, and expected output. Request concise findings with file references, decisions, checks, and blockers. Reuse an existing agent when its context remains relevant.
 - If a configured role is unavailable, use an available capable route and briefly report any material limitation. Routing does not expand permissions.
 
@@ -30,6 +30,7 @@ NixOS flake for `bandit` (Framework 13 AMD laptop) and `bandit-lab` (headless se
 | Laptop system modules | `nixos/` |
 | Headless server base | `nixos/server/` |
 | Server services and assets | `hosts/bandit-lab/services/<name>/` |
+| Minecraft server, proxy, bots | `hosts/bandit-lab/services/{minecraft,mcbots}/`, `docs/runbooks/minecraft/` (`BOTS.md`, `PROXY.md`, `ADMIN.md`) |
 | User environment | `home/` (`desktop/`, `terminal/`, `editor/`) |
 | Secrets wiring and encrypted data | `nixos/sops.nix`, `.sops.yaml`, `secrets/` |
 | Checks and CI | `ci/`, `.github/workflows/`, `.gitlab-ci.yml` |
@@ -83,7 +84,7 @@ Inspect `flake.nix` for targeted checks and the `bandit-ci` configuration when h
 - Changes to `.sops.yaml` recipients require a recovery and re-encryption plan. Preserve host key provisioning and secret permissions.
 - Confirm the target host before activation. `nixos-rebuild test` also changes the running system; it is not a read-only test.
 - Respect deployment authority already granted by the task. A code edit alone does not authorize a restart, activation, disk operation, or service removal.
-- Check `lab-update` and its current automation before publishing deployment-triggering changes. A push to a watched branch can trigger server activation; a no-deploy boundary includes that path.
+- `lab-update-apply.timer` is enabled: a signed fast-forward push to `main` is deployed to bandit-lab within about an hour, so pushing to `main` is deploying. Build the committed revision (`nix build "git+file://$PWD?rev=<sha>#nixosConfigurations.bandit-lab.config.system.build.toplevel"`) before pushing, so uncommitted work in the tree cannot hide a broken commit. A no-deploy boundary includes pushing. Changes that restart `docker-minecraft` disconnect players and orphan Jarvis NPCs; prefer pushing those when nobody is online.
 - `lab-update apply` deploys fast-forwards only: a signed but older commit or rewritten history is refused (see `docs/runbooks/bandit-lab-updates.md`). `--allow-non-ff` is a manual override for a reviewed rewrite and must never appear in a systemd unit; the `lab-update` flake check enforces that.
 - Preserve remote access, application data, volumes, and rollback options during host/service changes. Use the affected service's runbook and health checks; verify affected services after activation (`bandit-health` or `bandit-lab-health`, as appropriate).
 - For Cloudflare routing, read `docs/runbooks/cloudflare-access.md`; reconcile remote configuration with the repository mirror.
