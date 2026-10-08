@@ -1,0 +1,107 @@
+title: '&8Survival kit'
+type: inventory
+command: kit
+conditions: '%player_name% $HASPERM bandit.admin.menu'
+rows: 3
+layout:
+  10:
+    - armor
+  12:
+    - weapons
+  14:
+    - tools
+  16:
+    - supplies
+  22:
+    - full
+items:
+  armor:
+    material: NETHERITE_CHESTPLATE
+    name: '&bArmor set'
+    left-click:
+      commands:
+        - '[console] give %player_name% minecraft:netherite_helmet[enchantments={protection:4,unbreaking:3,mending:1,respiration:3,aqua_affinity:1}]'
+        - '[console] give %player_name% minecraft:netherite_chestplate[enchantments={protection:4,unbreaking:3,mending:1}]'
+        - '[console] give %player_name% minecraft:netherite_leggings[enchantments={protection:4,unbreaking:3,mending:1}]'
+        - '[console] give %player_name% minecraft:netherite_boots[enchantments={protection:4,unbreaking:3,mending:1,feather_falling:4,depth_strider:3}]'
+        - '[console] give %player_name% minecraft:elytra[enchantments={unbreaking:3,mending:1}]'
+        - '[console] give %player_name% minecraft:totem_of_undying'
+        - '[console] give %player_name% minecraft:shield[enchantments={unbreaking:3,mending:1}]'
+        - '[msg] &aKit added to your inventory.'
+  weapons:
+    material: NETHERITE_SWORD
+    name: '&cWeapons'
+    left-click:
+      commands:
+        - '[console] give %player_name% minecraft:netherite_sword[enchantments={sharpness:5,looting:3,fire_aspect:2,sweeping_edge:3,unbreaking:3,mending:1}]'
+        - '[console] give %player_name% minecraft:bow[enchantments={power:5,infinity:1,unbreaking:3}]'
+        - '[console] give %player_name% minecraft:arrow 1'
+        - '[console] give %player_name% minecraft:trident[enchantments={loyalty:3,impaling:5,unbreaking:3,mending:1}]'
+        - '[console] give %player_name% minecraft:netherite_axe[enchantments={sharpness:5,efficiency:5,unbreaking:3,mending:1}]'
+        - '[msg] &aKit added to your inventory.'
+  tools:
+    material: NETHERITE_PICKAXE
+    name: '&eTools'
+    left-click:
+      commands:
+        - '[console] give %player_name% minecraft:netherite_pickaxe[enchantments={efficiency:5,fortune:3,unbreaking:3,mending:1}]'
+        - '[console] give %player_name% minecraft:netherite_shovel[enchantments={efficiency:5,unbreaking:3,mending:1}]'
+        - '[console] give %player_name% minecraft:netherite_hoe[enchantments={efficiency:5,fortune:3,unbreaking:3,mending:1}]'
+        - '[console] give %player_name% minecraft:fishing_rod[enchantments={luck_of_the_sea:3,lure:3,unbreaking:3,mending:1}]'
+        - '[console] give %player_name% minecraft:shears[enchantments={efficiency:5,unbreaking:3}]'
+        - '[console] give %player_name% minecraft:flint_and_steel'
+        - '[msg] &aKit added to your inventory.'
+  supplies:
+    material: GOLDEN_CARROT
+    name: '&aSupplies'
+    left-click:
+      commands:
+        - '[console] give %player_name% minecraft:golden_carrot 64'
+        - '[console] give %player_name% minecraft:firework_rocket 64'
+        - '[console] give %player_name% minecraft:ender_pearl 16'
+        - '[console] give %player_name% minecraft:water_bucket'
+        - '[console] give %player_name% minecraft:lava_bucket'
+        - '[console] give %player_name% minecraft:torch 64'
+        - '[console] give %player_name% minecraft:cobblestone 64'
+        - '[console] give %player_name% minecraft:oak_planks 64'
+        - '[console] give %player_name% minecraft:ender_chest'
+        - '[console] give %player_name% minecraft:white_bed'
+        - '[console] give %player_name% minecraft:experience_bottle 64'
+        - '[console] give %player_name% minecraft:golden_apple 16'
+        - '[msg] &aKit added to your inventory.'
+  full:
+    material: NETHER_STAR
+    name: '&6Full kit (everything)'
+    left-click:
+      commands:
+        - '[console] give %player_name% minecraft:netherite_helmet[enchantments={protection:4,unbreaking:3,mending:1,respiration:3,aqua_affinity:1}]'
+        - '[console] give %player_name% minecraft:netherite_chestplate[enchantments={protection:4,unbreaking:3,mending:1}]'
+        - '[console] give %player_name% minecraft:netherite_leggings[enchantments={protection:4,unbreaking:3,mending:1}]'
+        - '[console] give %player_name% minecraft:netherite_boots[enchantments={protection:4,unbreaking:3,mending:1,feather_falling:4,depth_strider:3}]'
+        - '[console] give %player_name% minecraft:elytra[enchantments={unbreaking:3,mending:1}]'
+        - '[console] give %player_name% minecraft:totem_of_undying'
+        - '[console] give %player_name% minecraft:shield[enchantments={unbreaking:3,mending:1}]'
+        - '[console] give %player_name% minecraft:netherite_sword[enchantments={sharpness:5,looting:3,fire_aspect:2,sweeping_edge:3,unbreaking:3,mending:1}]'
+        - '[console] give %player_name% minecraft:bow[enchantments={power:5,infinity:1,unbreaking:3}]'
+        - '[console] give %player_name% minecraft:arrow 1'
+        - '[console] give %player_name% minecraft:trident[enchantments={loyalty:3,impaling:5,unbreaking:3,mending:1}]'
+        - '[console] give %player_name% minecraft:netherite_axe[enchantments={sharpness:5,efficiency:5,unbreaking:3,mending:1}]'
+        - '[console] give %player_name% minecraft:netherite_pickaxe[enchantments={efficiency:5,fortune:3,unbreaking:3,mending:1}]'
+        - '[console] give %player_name% minecraft:netherite_shovel[enchantments={efficiency:5,unbreaking:3,mending:1}]'
+        - '[console] give %player_name% minecraft:netherite_hoe[enchantments={efficiency:5,fortune:3,unbreaking:3,mending:1}]'
+        - '[console] give %player_name% minecraft:fishing_rod[enchantments={luck_of_the_sea:3,lure:3,unbreaking:3,mending:1}]'
+        - '[console] give %player_name% minecraft:shears[enchantments={efficiency:5,unbreaking:3}]'
+        - '[console] give %player_name% minecraft:flint_and_steel'
+        - '[console] give %player_name% minecraft:golden_carrot 64'
+        - '[console] give %player_name% minecraft:firework_rocket 64'
+        - '[console] give %player_name% minecraft:ender_pearl 16'
+        - '[console] give %player_name% minecraft:water_bucket'
+        - '[console] give %player_name% minecraft:lava_bucket'
+        - '[console] give %player_name% minecraft:torch 64'
+        - '[console] give %player_name% minecraft:cobblestone 64'
+        - '[console] give %player_name% minecraft:oak_planks 64'
+        - '[console] give %player_name% minecraft:ender_chest'
+        - '[console] give %player_name% minecraft:white_bed'
+        - '[console] give %player_name% minecraft:experience_bottle 64'
+        - '[console] give %player_name% minecraft:golden_apple 16'
+        - '[msg] &aKit added to your inventory.'
