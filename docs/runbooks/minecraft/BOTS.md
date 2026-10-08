@@ -43,9 +43,39 @@ anything (HTTP or WebSocket) whose login is not in `ALLOWED_TS_LOGINS`
 `Origin`. Without `ALLOWED_TS_LOGINS` (laptop) the dashboard binds to
 `127.0.0.1` only and refuses any other `DASHBOARD_HOST`.
 
-The page shows every bot (online, health/food, position and dimension, job and
-queue, inventory summary, last error). Pick a target (one bot or `all`), then
-enqueue jobs. "Come to me" uses the player name typed into "your player name".
+![Dashboard on the local stage: two bots mining, queue, events, map](img/dashboard.png)
+
+One card per bot: an activity line in plain words ("mining stone 6/40 near -94
+66 -2", "walking to the supply chest to deposit", "idle - no job", "dead -
+respawning", "offline - last seen 3 min ago"), a progress bar for jobs that
+count (a work shift has no end, so no bar), health and food, the held tool with
+its durability (red below 15 %), inventory summary with free slots, host
+(`@bandit-lab`, `@laptop (remote worker)`), position, and the queue with an x
+to remove a queued job. A "problem" line shows the last error with its age
+(grey after 5 min); a death clears itself on respawn.
+
+Each card has "Give a job" (job types with fields; coordinates start at the
+supply chest; "Run now" replaces the running job and the queue, "Queue" adds
+behind it, "Stop" clears both). "Stop all" in the header and "Give the same job
+to several bots" (select bots, none = all) work on many bots. "Come to me" uses
+the player name typed into "your player name". The map shows bots, players,
+mobs, chests/ores, claimed blocks (orange), the supply chest and the protected
+areas (zoom with the wheel). "Advanced: debug" is the panel described below.
+
+### Events and `GET /api/events`
+
+The Events panel lists the last 200 events (job started / finished / failed /
+stopped, death, respawn, deposit, a bot skipping blocks another bot holds,
+joined/left the game, a worker connecting or going offline). They live in a ring
+buffer in the hub process (`app/events.js`, lost on restart); `GET
+/api/events?since=<id>` returns `{lastId, events: [{id, t, bot, kind, text}]}`
+with ids above `since`. Workers send theirs with their status frames; the hub
+keeps only events for the worker's own bots, with a known kind and at most 200
+characters.
+
+The page's Content-Security-Policy allows exactly its own inline script and
+style by hash (`default-src 'none'`, `connect-src 'self'`): no CDN, no other
+origin. A change to the page changes the hashes automatically.
 
 ### Debug panel and `GET /api/debug`
 
