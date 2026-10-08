@@ -127,7 +127,9 @@ function makeCrafting({goNear, guard}) {
     const timesOf = (recipe) => Math.ceil((want - have) / recipe.result.count);
     const recipe = [...all].sort((a, b) => missing(a, timesOf(a)) - missing(b, timesOf(b)))[0];
     const times = timesOf(recipe);
-    for (const d of recipe.delta.filter((x) => x.count < 0)) {
+    // Planks last: making sticks eats planks, so planks made first fall short.
+    const rank = (d) => (isPlanks(bot.registry.items[d.id].name) ? 1 : 0);
+    for (const d of recipe.delta.filter((x) => x.count < 0).sort((a, b) => rank(a) - rank(b))) {
       const ing = bot.registry.items[d.id].name;
       const need = -d.count * times;
       if (isPlanks(ing) && !isPlanks(name)) await ensurePlanks(r, job, need);
