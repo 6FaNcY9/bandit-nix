@@ -68,6 +68,7 @@ function cleanDebug(d) {
   const pf = obj(d.pathfinder);
   const corr = obj(d.corrections) || {};
   const err = obj(d.lastError);
+  const claims = obj(d.claims) || {};
   return {
     pos: vec(d.pos),
     dimension: optStr(d.dimension, 32),
@@ -77,6 +78,7 @@ function cleanDebug(d) {
     physics: phys && {onGround: bool(phys.onGround), collidedHorizontally: bool(phys.collidedHorizontally), velocity: vec(phys.velocity), controls: list(phys.controls, 8, (c) => str(c, 16))},
     pathfinder: pf && {moving: bool(pf.moving), mining: bool(pf.mining), building: bool(pf.building), goal: optStr(pf.goal, 48)},
     positions: list(d.positions, 130, (p) => ({agoS: num(p?.agoS), x: num(p?.x), y: num(p?.y), z: num(p?.z)})),
+    claims: {granted: int(claims.granted), refused: int(claims.refused), timedOut: int(claims.timedOut)},
     corrections: {total: int(corr.total), last30s: int(corr.last30s), lastAgoS: num(corr.lastAgoS)},
     lastError: err && {message: str(err.message, 300), agoS: num(err.agoS)},
   };

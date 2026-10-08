@@ -307,6 +307,7 @@ class BotRunner {
       job: j && {id: j.id, type: j.type, args: j.args, status: j.status, progress: j.progress || '', runningS: round((Date.now() - (j.startedAt || Date.now())) / 1000, 1)},
       queue: this.queue.map(jobLabel),
       combat: this.combat.mode || null,
+      claims: this.world?.claimStats(this.name) || {granted: 0, refused: 0, timedOut: 0},
       physics: live ? {onGround: !!e.onGround, collidedHorizontally: !!e.isCollidedHorizontally, velocity: ['x', 'y', 'z'].map((k) => round(e.velocity?.[k], 3)), controls: Object.keys(b.controlState || {}).filter((k) => b.controlState[k])} : null,
       pathfinder: pf ? {moving: !!pf.isMoving?.(), mining: !!pf.isMining?.(), building: !!pf.isBuilding?.(), goal: pf.goal?.constructor?.name || null} : null,
       ...this.trace.snapshot(),
@@ -457,7 +458,6 @@ async function collect(r, job, matching, count, what) {
     let key = null;
     for (const p of bot.findBlocks({matching: ids, maxDistance: 64, count: 48})) {
       const k = keyOf(p);
-      if (r.world?.claimedByOther(r.name, k)) continue;
       if (r.world && !(await r.world.claim(r.name, k))) continue;
       pos = p;
       key = k;
