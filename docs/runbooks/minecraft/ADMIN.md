@@ -55,6 +55,35 @@ Verified live on 2026-09-22 after activation. Existing server and worlds preserv
 | ViaBackwards | 5.12.0 | https://hangar.papermc.io/ViaVersion/ViaBackwards | Live |
 | CommandPanels | 4.2.4 | https://github.com/rockyhawk64/CommandPanels/releases/tag/4.2.4 | Live |
 | PlaceholderAPI | 2.12.3 + Player expansion | https://hangar.papermc.io/HelpChat/PlaceholderAPI | Enabled and verified live |
+| Citizens | 2.0.44 build 4258 | https://ci.citizensnpcs.co/job/Citizens2/4258/ | Enabled 2026-10-08 (required by Jarvis) |
+| Jarvis | 0.17.0 (`jarvis-paper-0.17.0.jar`) | https://github.com/iamgadgetman/jarvis/releases/tag/v0.17.0 | Enabled 2026-10-08, sha256 `d5219f71…3d5d41` |
+| Simple Voice Chat | bukkit-2.6.24 | https://modrinth.com/plugin/simple-voice-chat | Enabled 2026-10-08; only there because Jarvis loads its API classes |
+
+## Companion bots (Jarvis)
+
+Installed 2026-10-08 through the panel-owned plugin folder (not Nix). Each player
+summons a personal Citizens NPC: `/jarvis bell` (controller item), `/jarvis summon`,
+then `follow`, `mine [ore]`, `mine here`, `chop`, `farm`, `tend`, `fish`, `guard`,
+`chest`, `stop`, `dismiss`. No AI provider is configured (log: `REDUCED MODE:
+Ollama only`); every slash command works without one, natural-language chat does not.
+
+- Access: `jarvis.use` defaults to true upstream, so `default` has it set to
+  `false`; the LuckPerms group `minions` (display name `Bots`, weight 10) grants
+  it. The weight matters: at equal weight the `default` denial won. Add a player
+  with `/lp user <name> parent add minions`.
+- Jarvis 0.16.0 failed to enable without Simple Voice Chat
+  (`NoClassDefFoundError: de/maxhenkel/voicechat/api/VoicechatPlugin`), although
+  `voicechat` is only a soft dependency. 0.17.0 ships no copy of that API either,
+  so the voice chat plugin stays installed. Its UDP port is not published by the
+  container, so it is unreachable from outside.
+- AxMinions 1.0.20 was tried the same day and removed (stationary minions, not
+  wanted). Its jar and data are in `~/removed-plugins/` on bandit-lab.
+- Snapshots taken before the changes: `~/mc-backup-pre-axminions-20261008-0511.tar.gz`
+  and `~/mc-backup-pre-jarvis-20261008-0545.tar.gz` on bandit-lab.
+- Library downloads on the first start after adding a plugin failed twice with
+  `Network is unreachable` inside the container, while the same URLs answered
+  from the container a minute later. A second restart loaded them, after which
+  they are cached in `/data/libraries` and plugin `libs/` folders.
 
 The managed plugin releases are pinned with exact download URLs and hashes in the
 Nix module; the Modrinth-hosted releases explicitly list 26.2 compatibility, while
