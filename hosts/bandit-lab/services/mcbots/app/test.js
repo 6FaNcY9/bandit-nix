@@ -84,6 +84,23 @@ assert.deepStrictEqual(VALIDATE.craft({item: 'stone_pickaxe', count: '2'}), {ite
 assert.throws(() => VALIDATE.craft({item: 'Stone Pickaxe'}));
 assert.deepStrictEqual(VALIDATE.shift({block: 'logs', x: 1, y: 2, z: 3}), {block: 'logs', x: 1, y: 2, z: 3});
 require('./crafting');
+// Paper refuses a position whose box touches a block face exactly, so every
+// horizontal collision must end a hair short (physicsfix.js).
+{
+  const AABB = require('prismarine-physics/lib/aabb');
+  const {GAP} = require('./physicsfix');
+  const wall = new AABB(-5, 58, -5, -4, 59, -4);
+  const player = (x) => new AABB(x - 0.3, 58, -5, x + 0.3, 59.8, -4.4);
+  const stop = wall.computeOffsetX(player(-3.5), -1); // would end flush at x=-3.7
+  assert.ok(Math.abs(stop - -0.2) < 2 * GAP && stop > -0.2, `gap kept, got ${stop}`);
+  assert.strictEqual(wall.computeOffsetX(player(-3.7), -1), 0); // already flush: stay
+  assert.strictEqual(wall.computeOffsetX(player(-3.7 + GAP / 2), -1), 0); // inside the margin: stay
+  assert.strictEqual(wall.computeOffsetX(player(-3.5), -0.1), -0.1); // free move untouched
+  assert.strictEqual(wall.computeOffsetX(player(-3.5), 0.5), 0.5); // moving away untouched
+  const zwall = new AABB(-5, 58, -5, -4, 59, -4);
+  const zp = (z) => new AABB(-4.8, 58, z - 0.3, -4.2, 59.8, z + 0.3);
+  assert.ok(zwall.computeOffsetZ(zp(-3.5), -1) > -0.2 && zwall.computeOffsetZ(zp(-3.5), -1) < -0.2 + 2 * GAP);
+}
 // A job queued after "stop" must survive the stopped job winding down.
 (async () => {
   const {JOBS} = require('./bots');

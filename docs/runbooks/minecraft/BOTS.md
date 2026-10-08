@@ -134,5 +134,16 @@ Each bot runs its queue one job at a time. Chat is never read as a command.
   `sudo docker logs --tail 100 mcbots`. HTTPS unreachable: `tailscale serve status`,
   then `sudo systemctl restart mcbots-https`. 403: your Tailscale login is not in
   `ALLOWED_TS_LOGINS`, or the request bypassed `tailscale serve`.
+- Bot stuck at a block (dashboard shows the same position, ~20 server
+  corrections per second, "breaking the block frees it"): Paper 26.2 refuses a
+  position whose box touches a block face exactly (gap 0.0), while a gap of
+  1e-6 is accepted. Mineflayer's collision ends exactly flush, so the server
+  pulled the bot back every tick. `app/physicsfix.js` makes every horizontal
+  collision stop 1e-4 short (found 2026-10-08 with raw position packets against
+  a one-block step; fixed and checked with 3 round trips to -104 71 -7, 0
+  corrections). Widening the player box instead does not work: prismarine-physics
+  lets a box that already overlaps a wall walk straight through it. If it
+  returns, count `forcedMove` per bot first; `unwedge()` in `bots.js` only
+  re-centres as a last resort.
 - Image changed but the old one runs: the image tag is the Nix store hash;
   `sudo systemctl restart docker-mcbots` after activation.

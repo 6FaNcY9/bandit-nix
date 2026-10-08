@@ -7,6 +7,7 @@ const mineflayer = require('mineflayer');
 const {pathfinder, Movements, goals} = require('mineflayer-pathfinder');
 const {plugin: collectBlock} = require('mineflayer-collectblock');
 const {Combat} = require('./combat');
+require('./physicsfix');
 const {normDim, deadlineMs} = require('./world');
 
 const NAME_RE = /^bot[0-9]{1,2}$/; // BotGate's pattern (Velocity plugin)
@@ -271,10 +272,10 @@ class BotRunner {
 // bases). Inside protected areas (player bases) it neither digs nor places.
 // A custom unbreakable-block list made the pathfinder plan routes it then
 // refused to walk (2026-10-08), so protection is by area only.
-// A bot can end up a hair from a wall where client and server collision
-// disagree: the server then pulls it back every tick (~20 forced moves/s) and
-// the pathfinder never gets moving again. Re-centre it in its block when that
-// starts (seen after stopping a mining job in a 1-wide pit, 2026-10-08).
+// Safety net behind physicsfix.js (the cause of the wall/step wedge: the
+// client stopped exactly flush against blocks and the server refused that):
+// if a bot is still pulled back every tick (~20 forced moves/s), re-centre it
+// in its block (seen after stopping a mining job in a 1-wide pit, 2026-10-08).
 function unwedge(bot) {
   let times = [];
   bot.on('forcedMove', () => {
