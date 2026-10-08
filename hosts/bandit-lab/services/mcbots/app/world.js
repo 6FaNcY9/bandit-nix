@@ -20,6 +20,9 @@ const shouldFight = (e) => isHostile(e) && !NO_FIGHT.has(e.name);
 // 'minecraft:the_nether' / 'the_nether' / 'overworld' -> canonical name.
 const normDim = (d) => String(d || '').replace(/^minecraft:/, '');
 
+// Is the block column x,z inside one of the [x1,z1,x2,z2] boxes where bots never dig or place?
+const insideAreas = (areas, x, z) => areas.some(([x1, z1, x2, z2]) => x >= x1 && x <= x2 && z >= z1 && z <= z2);
+
 // Walking time budget: 90 s, plus 1 s per block of distance, capped at 10 min.
 const deadlineMs = (dist) => Math.min(600000, 90000 + Math.max(0, Math.floor(dist || 0)) * 1000);
 
@@ -183,4 +186,4 @@ function startBlueMap(world, baseUrl, log, fetchFn = fetch) {
   return () => clearInterval(timer);
 }
 
-module.exports = {WorldModel, startBlueMap, parsePlayers, isHostile, shouldFight, normDim, deadlineMs, NOTABLE_BLOCKS, MAPS, MOB_TTL_MS, MAX_MOBS, MAX_BLOCKS, NO_FIGHT};
+module.exports = {WorldModel, startBlueMap, parsePlayers, isHostile, shouldFight, normDim, deadlineMs, insideAreas, NOTABLE_BLOCKS, MAPS, MOB_TTL_MS, MAX_MOBS, MAX_BLOCKS, NO_FIGHT};

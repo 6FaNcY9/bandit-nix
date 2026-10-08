@@ -75,6 +75,10 @@ assert.ok(claims.claim('bot2', 'o:1,2,3'));
 assert.deepStrictEqual(claims.claimStats('bot1'), {granted: 1, refused: 0, timedOut: 0});
 assert.deepStrictEqual(claims.claimStats('bot2'), {granted: 1, refused: 1, timedOut: 0});
 assert.deepStrictEqual(claims.claimStats('nobody'), {granted: 0, refused: 0, timedOut: 0});
+// Protected boxes are inclusive; a block outside every box may be dug.
+const boxes = [[-80, -144, 80, 80], [112, 368, 272, 592]];
+assert.ok(W.insideAreas(boxes, 0, 0) && W.insideAreas(boxes, 80, 80) && W.insideAreas(boxes, 200, 400));
+assert.ok(!W.insideAreas(boxes, 81, 0) && !W.insideAreas(boxes, -36, -197) && !W.insideAreas([], 0, 0));
 // Login passwords are stable per seed and name, and differ between bots.
 const pw = (n) => new BotRunner(n, {host: 'x', port: 1, log: () => {}, world: null, loginSeed: 'seed'}).password;
 assert.strictEqual(pw('bot1'), pw('bot1'));

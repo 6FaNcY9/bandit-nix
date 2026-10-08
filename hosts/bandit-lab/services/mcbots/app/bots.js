@@ -9,7 +9,7 @@ const {plugin: collectBlock} = require('mineflayer-collectblock');
 const {Combat} = require('./combat');
 require('./physicsfix');
 const {BotTrace, SAMPLE_MS, round} = require('./debug');
-const {normDim, deadlineMs} = require('./world');
+const {normDim, deadlineMs, insideAreas} = require('./world');
 
 const NAME_RE = /^bot[0-9]{1,2}$/; // BotGate's pattern (Velocity plugin)
 const LOGIN_GAP_MS = 4500; // Velocity rate-limits logins
@@ -349,8 +349,7 @@ function safeMovements(bot, areas) {
   mv.allowSprinting = false;
   mv.allowParkour = false;
   mv.getMoveDiagonal = () => {};
-  const inside = (blk) => areas.some(([x1, z1, x2, z2]) =>
-    blk.position.x >= x1 && blk.position.x <= x2 && blk.position.z >= z1 && blk.position.z <= z2);
+  const inside = (blk) => insideAreas(areas, blk.position.x, blk.position.z);
   const veto = (blk) => (inside(blk) ? 100 : 0);
   mv.exclusionAreasBreak = [veto];
   mv.exclusionAreasPlace = [veto];
@@ -457,6 +456,8 @@ async function collect(r, job, matching, count, what) {
     let pos = null;
     let key = null;
     for (const p of bot.findBlocks({matching: ids, maxDistance: 64, count: 48})) {
+      // Digging a target is direct (not pathfinder), so protection is checked here too.
+      if (insideAreas(r.protectedAreas, p.x, p.z)) continue;
       const k = keyOf(p);
       if (r.world && !(await r.world.claim(r.name, k))) continue;
       pos = p;
