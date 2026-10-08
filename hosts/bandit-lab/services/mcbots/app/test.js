@@ -64,4 +64,40 @@ assert.deepStrictEqual(VALIDATE.rearm({x: 1, y: 2, z: 3}), {x: 1, y: 2, z: 3});
 const {BotRunner} = require('./bots');
 const runner = new BotRunner('bot1', {host: 'x', port: 1, log: () => {}, world: null, protectedAreas: [], supplyChest: {x: 1, y: 2, z: 3}});
 assert.deepStrictEqual(runner.supplyChest, {x: 1, y: 2, z: 3});
-console.log('ok');
+
+// ---- new jobs: strict validation ----
+assert.deepStrictEqual(VALIDATE.craft({item: 'oak_planks', count: '4'}), {item: 'oak_planks', count: 4});
+assert.deepStrictEqual(VALIDATE.smelt({item: 'raw_iron'}), {item: 'raw_iron', count: 1});
+assert.deepStrictEqual(VALIDATE.place({block: 'torch', x: 1, y: 64, z: 2}), {block: 'torch', x: 1, y: 64, z: 2});
+assert.deepStrictEqual(VALIDATE['dig-down']({}), {distance: 5});
+for (const bad of [{item: 'Oak Planks'}, {item: ''}, {item: 'a'.repeat(49)}, {item: 'stick', count: 0}, {item: 'stick', count: 65}]) assert.throws(() => VALIDATE.craft(bad), JSON.stringify(bad));
+assert.throws(() => VALIDATE.place({block: 'stone', x: 1, y: 999, z: 1}));
+assert.throws(() => VALIDATE.place({block: 'stone;x', x: 1, y: 1, z: 1}));
+assert.throws(() => VALIDATE['dig-down']({distance: 100}));
+for (const t of ['collect-drops', 'sleep', 'surface']) assert.deepStrictEqual(VALIDATE[t]({junk: 1}), {});
+
+// ---- Mindcraft skills load without a server; every skill sees our Movements ----
+const mindcraft = require('./mindcraft');
+const pf = require('mineflayer-pathfinder');
+(async () => {
+  const lib = await mindcraft.load('26.1');
+  for (const fn of ['goToPosition', 'collectBlock', 'craftRecipe', 'smeltItem', 'placeBlock', 'pickupNearbyItems', 'goToBed', 'digDown', 'goToSurface']) {
+    assert.strictEqual(typeof lib.skills[fn], 'function', fn);
+  }
+  assert.ok(lib.mc.getItemCraftingRecipes('crafting_table').length > 0);
+  // pf.Movements is what skills.js instantiates: constraints must apply to it.
+  const mcData = require('minecraft-data')('26.1');
+  const fakeBot = {registry: mcData, entity: null, world: {}, version: '26.1'};
+  mindcraft.attach(Object.assign(fakeBot, {loadPlugin() {}, once() {}}), [[0, 0, 10, 10]]);
+  const mv = new pf.Movements(fakeBot);
+  assert.strictEqual(mv.allowSprinting, false);
+  assert.strictEqual(mv.allowParkour, false);
+  assert.strictEqual(mv.getMoveDiagonal(), undefined);
+  assert.strictEqual(mv.exclusionAreasBreak[0]({position: {x: 5, z: 5}}), 100);
+  assert.strictEqual(mv.exclusionAreasPlace[0]({position: {x: 50, z: 5}}), 0);
+  assert.ok(mindcraft.inArea([[0, 0, 10, 10]], 10, 0) && !mindcraft.inArea([[0, 0, 10, 10]], 11, 0));
+  console.log('ok');
+})().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

@@ -13,7 +13,7 @@ buildNpmPackage {
     fileset = lib.fileset.difference ./app (lib.fileset.maybeMissing ./app/node_modules);
   };
   nodejs = nodejs_22;
-  npmDepsHash = "sha256-Gemg3W0kL+4JCdQCOptq922Il9g8DgSfFBq+1Wo6cM0=";
+  npmDepsHash = "sha256-dcB94wAvAUoZ5WfKhhqae20M7kTIGtZ+BLYJINcc7M8=";
   dontNpmBuild = true;
   npmFlags = ["--ignore-scripts"];
   meta.mainProgram = "mcbots";

@@ -40,6 +40,11 @@
   <form data-job="chop">chop logs <input name="count" type="number" value="8" min="1"><button>Chop</button></form>
   <form data-job="deposit">deposit into chest <input name="x" type="number" placeholder="x" required><input name="y" type="number" placeholder="y" required><input name="z" type="number" placeholder="z" required><button>Deposit</button></form>
   <form data-job="rearm">re-arm from chest <input name="x" type="number" placeholder="x" required><input name="y" type="number" placeholder="y" required><input name="z" type="number" placeholder="z" required><button>Re-arm</button></form>
+  <form data-job="craft">craft <input name="item" class="w" placeholder="oak_planks" required><input name="count" type="number" value="1" min="1" max="64" title="times the recipe is used"><button>Craft</button></form>
+  <form data-job="smelt">smelt <input name="item" class="w" placeholder="raw_iron" required><input name="count" type="number" value="1" min="1" max="64"><button>Smelt</button></form>
+  <form data-job="place">place <input name="block" class="w" placeholder="crafting_table" required><input name="x" type="number" placeholder="x" required><input name="y" type="number" placeholder="y" required><input name="z" type="number" placeholder="z" required><button>Place</button></form>
+  <form data-job="dig-down">dig down <input name="distance" type="number" value="5" min="1" max="32"><button>Dig</button></form>
+  <div class="row">other: <button data-job="collect-drops">Pick up drops</button> <button data-job="sleep">Sleep (night)</button> <button data-job="surface">Go to surface</button></div>
   <form data-job="say">say <input name="text" placeholder="text" maxlength="200" required><button>Say</button></form>
 </div>
 <div class="bar">

@@ -1,16 +1,19 @@
 'use strict';
 // One BotRunner per bot: connection lifecycle plus a sequential job queue.
-// Adding a job type (crafting, building, ...) = add one entry to JOBS and one
-// to VALIDATE; nothing else changes.
+// Adding a job type = add one entry to JOBS and one to VALIDATE; nothing else
+// changes. Most jobs are thin wrappers around the vendored Mindcraft skills
+// (see mindcraft.js); chase/rearm/deposit/say are our own orchestration.
 const mineflayer = require('mineflayer');
-const {pathfinder, Movements, goals} = require('mineflayer-pathfinder');
-const {plugin: collectBlock} = require('mineflayer-collectblock');
+const {goals} = require('mineflayer-pathfinder');
+const {Vec3} = require('vec3');
+const mindcraft = require('./mindcraft');
 const {Combat} = require('./combat');
 const {normDim, deadlineMs} = require('./world');
 
 const NAME_RE = /^bot[0-9]{1,2}$/; // BotGate's pattern (Velocity plugin)
 const LOGIN_GAP_MS = 4500; // Velocity rate-limits logins
 const GOTO_TIMEOUT_MS = 90000;
+const SKILL_TIMEOUT_MS = 120000; // default cap for one skill call
 const BACKOFF_START = 5000;
 const BACKOFF_CAP = 300000;
 const TOOL_RE = /_(pickaxe|axe|shovel|hoe|sword)$|^(shears|bow|crossbow|fishing_rod|shield|trident|flint_and_steel|elytra)$/;
@@ -29,6 +32,10 @@ const num = (v, lo, hi, what) => {
   return Math.floor(n);
 };
 const xyz = (a) => ({x: num(a.x, -3e7, 3e7, 'x'), y: num(a.y, -64, 320, 'y'), z: num(a.z, -3e7, 3e7, 'z')});
+const itemName = (v, what = 'item') => {
+  if (!/^[a-z_]{1,48}$/.test(v || '')) throw new Error(`${what} must be a name like oak_planks`);
+  return v;
+};
 const player = (a) => {
   if (!/^\w{1,16}$/.test(a.player || '')) throw new Error('player must be a valid Minecraft name');
   return {player: a.player};
@@ -44,6 +51,13 @@ const VALIDATE = {
     return {block: a.block, count: num(a.count ?? 1, 1, 2048, 'count')};
   },
   chop: (a) => ({count: num(a.count ?? 1, 1, 2048, 'count')}),
+  craft: (a) => ({item: itemName(a.item), count: num(a.count ?? 1, 1, 64, 'count')}),
+  smelt: (a) => ({item: itemName(a.item), count: num(a.count ?? 1, 1, 64, 'count')}),
+  place: (a) => ({block: itemName(a.block, 'block'), ...xyz(a)}),
+  'collect-drops': () => ({}),
+  sleep: () => ({}),
+  surface: () => ({}),
+  'dig-down': (a) => ({distance: num(a.distance ?? 5, 1, 32, 'distance')}),
   deposit: xyz,
   rearm: xyz,
   say: (a) => {
@@ -87,19 +101,26 @@ class BotRunner {
     this.timer = setTimeout(() => this.connect(), ms + loginDelay());
   }
 
-  connect() {
+  async connect() {
+    if (this.stopped) return;
+    try {
+      await mindcraft.load(); // the skill library must be ready before the first job
+    } catch (e) {
+      this.log(this.name, `skills failed to load: ${e.message}`);
+      return this.schedule(BACKOFF_CAP);
+    }
     if (this.stopped) return;
     this.log(this.name, `connecting to ${this.host}:${this.port}`);
     const bot = mineflayer.createBot({host: this.host, port: this.port, username: this.name, auth: 'offline', version: '26.1', hideErrors: true});
     this.bot = bot;
-    bot.loadPlugin(pathfinder);
-    bot.loadPlugin(collectBlock);
+    mindcraft.attach(bot, this.protectedAreas);
+    bot.once('login', () => mindcraft.load(bot.version).catch((e) => this.log(this.name, `skills: ${e.message}`)));
     let spawnedAt = 0;
     this.combat = new Combat(this);
     bot.once('spawn', () => {
       spawnedAt = Date.now();
       this.online = true;
-      const mv = safeMovements(bot, this.protectedAreas);
+      const mv = mindcraft.safeMovements(bot);
       bot.pathfinder.setMovements(mv);
       bot.collectBlock.movements = mv;
       this.log(this.name, 'spawned');
@@ -164,7 +185,9 @@ class BotRunner {
   cancel() {
     if (this.current) this.current.cancelled = true;
     const b = this.bot;
+    if (b) b.interrupt_code = true; // skills poll this in their loops
     try {
+      if (b?.isSleeping) b.wake().catch(() => {});
       b?.pathfinder?.stop();
       b?.collectBlock?.cancelTask().catch(() => {});
     } catch {}
@@ -194,6 +217,7 @@ class BotRunner {
       job.status = job.cancelled ? 'stopped' : 'failed';
       if (!job.cancelled) {
         this.lastError = `${job.type}: ${e.message}`;
+        if (process.env.MCBOTS_DEBUG) console.log(e.stack);
         this.log(this.name, this.lastError);
       }
     }
@@ -226,26 +250,6 @@ class BotRunner {
 }
 
 
-// Pathing uses mineflayer's default movement (it may dig and pillar outside
-// bases). Inside protected areas (player bases) it neither digs nor places.
-// A custom unbreakable-block list made the pathfinder plan routes it then
-// refused to walk (2026-10-08), so protection is by area only.
-function safeMovements(bot, areas) {
-  const mv = new Movements(bot);
-  // Bots speak 26.1 to a 26.2 server through ViaBackwards; sprinting, parkour
-  // jumps and diagonal corner-cutting make the server reject the move and pull
-  // the bot back (277 corrections in 15 s vs 0 without them, 2026-10-08).
-  mv.allowSprinting = false;
-  mv.allowParkour = false;
-  mv.getMoveDiagonal = () => {};
-  const inside = (blk) => areas.some(([x1, z1, x2, z2]) =>
-    blk.position.x >= x1 && blk.position.x <= x2 && blk.position.z >= z1 && blk.position.z <= z2);
-  const veto = (blk) => (inside(blk) ? 100 : 0);
-  mv.exclusionAreasBreak = [veto];
-  mv.exclusionAreasPlace = [veto];
-  return mv;
-}
-
 // ---- job implementations: (runner, job) => Promise; throw on failure ----
 const guard = (job) => {
   if (job.cancelled) throw new Cancelled('stopped');
@@ -272,13 +276,42 @@ async function waitSafe(r, job, x, z) {
   }
 }
 
-async function goNear(r, job, x, y, z, dist, {brave = false} = {}) {
+// Run one Mindcraft skill: its failures are returned as `false` plus a message
+// in bot.output; here they become exceptions. Every call has a deadline that
+// interrupts the skill (they poll bot.interrupt_code and stop the pathfinder).
+async function skill(r, job, name, args = [], {timeout = SKILL_TIMEOUT_MS} = {}) {
   guard(job);
-  // Unreachable goals make the pathfinder retry partial paths
-  // forever, so every walk has a deadline.
+  const bot = r.bot;
+  const {skills} = await mindcraft.load();
+  bot.output = '';
+  bot.interrupt_code = false;
   let timedOut = false;
   const deadline = setTimeout(() => {
     timedOut = true;
+    bot.interrupt_code = true;
+    bot.pathfinder?.stop();
+    if (bot.isSleeping) bot.wake().catch(() => {});
+  }, timeout);
+  try {
+    const ok = await skills[name](bot, ...args);
+    guard(job);
+    if (timedOut) throw new Error(`${name} timed out after ${Math.round(timeout / 1000)} s`);
+    if (ok === false) throw new Error(bot.output.trim().split('\n').slice(-2).join(' ') || `${name} failed`);
+    return bot.output;
+  } finally {
+    clearTimeout(deadline);
+    bot.interrupt_code = false;
+  }
+}
+
+async function goNear(r, job, x, y, z, dist, {brave = false} = {}) {
+  guard(job);
+  // Unreachable goals make the pathfinder retry partial paths forever, so
+  // every walk has a deadline.
+  let timedOut = false;
+  const deadline = setTimeout(() => {
+    timedOut = true;
+    r.bot.interrupt_code = true;
     r.bot?.pathfinder.stop();
   }, GOTO_TIMEOUT_MS);
   try {
@@ -287,7 +320,7 @@ async function goNear(r, job, x, y, z, dist, {brave = false} = {}) {
     for (let tries = 0; ; tries++) {
       try {
         if (!brave) await waitSafe(r, job, x, z);
-        await r.bot.pathfinder.goto(new goals.GoalNear(x, y, z, dist));
+        await skill(r, job, 'goToPosition', [x, y, z, dist], {timeout: GOTO_TIMEOUT_MS});
         return;
       } catch (e) {
         guard(job);
@@ -302,26 +335,34 @@ async function goNear(r, job, x, y, z, dist, {brave = false} = {}) {
   }
 }
 
-async function collect(r, job, matching, count, what) {
+// mine/chop: one block per skill call, so a combat interruption resumes with
+// the count already collected. The skill digs its target directly (no
+// pathfinder veto), so blocks inside protected areas are passed as `exclude`.
+async function collect(r, job, isWanted, count, what) {
   const {bot} = r;
-  const ids = matching.map((n) => bot.registry.blocksByName[n]?.id).filter((i) => i !== undefined);
-  if (!ids.length) throw new Error(`unknown block: ${what}`);
-  let got = job.collected || 0; // survives a combat interruption + resume
+  let got = job.collected || 0;
   while (got < count) {
     await waitCalm(r, job);
-    const pos = bot.findBlocks({matching: ids, maxDistance: 64, count: 1})[0];
-    if (!pos) throw new Error(`no ${what} within 64 blocks (collected ${got}/${count})`);
-    await waitSafe(r, job, pos.x, pos.z);
-    try {
-      await bot.collectBlock.collect(bot.blockAt(pos));
-    } catch (e) {
-      guard(job);
-      throw e;
-    }
+    const found = bot.findBlocks({matching: (blk) => isWanted(blk.name), maxDistance: 64, count: 256});
+    const protectedPos = found.filter((p) => mindcraft.inArea(r.protectedAreas, p.x, p.z));
+    const near = found.find((p) => !protectedPos.includes(p));
+    if (!near) throw new Error(`no ${what} within 64 blocks outside protected areas (collected ${got}/${count})`);
+    await waitSafe(r, job, near.x, near.z);
+    await skill(r, job, 'collectBlock', [bot.blockAt(near).name, 1, protectedPos.length ? protectedPos : null]);
     job.collected = ++got;
     job.progress = `${got}/${count}`;
   }
 }
+
+// Skills that place or break blocks next to the bot (crafting table, furnace,
+// dig-down, place) do not go through the pathfinder veto, so refuse them for
+// the bot standing, or the target lying, inside a protected area.
+function refuseProtected(r, x, z, what) {
+  if (mindcraft.inArea(r.protectedAreas, Math.floor(x), Math.floor(z))) {
+    throw new Error(`${what}: ${Math.floor(x)} ${Math.floor(z)} is inside a protected area`);
+  }
+}
+const refuseHere = (r, what) => refuseProtected(r, r.bot.entity.position.x, r.bot.entity.position.z, what);
 
 const dist3 = (a, p) => Math.hypot(a.x - p.x, a.y - p.y, a.z - p.z);
 
@@ -389,16 +430,58 @@ const JOBS = {
 
   follow: (r, job) => chase(r, job, true),
 
-  mine: (r, job) => collect(r, job, [job.args.block], job.args.count, job.args.block),
+  mine(r, job) {
+    const b = job.args.block; // also accepts the short names coal/iron/... like the skill does
+    const wanted = new Set([b, `deepslate_${b}`, `${b}_ore`, `deepslate_${b}_ore`, ...(b === 'dirt' ? ['grass_block'] : []), ...(b === 'cobblestone' ? ['stone'] : [])]);
+    return collect(r, job, (n) => wanted.has(n), job.args.count, b);
+  },
 
-  chop: (r, job) =>
-    collect(r, job, Object.keys(r.bot.registry.blocksByName).filter((n) => n.endsWith('_log')), job.args.count, 'logs'),
+  chop: (r, job) => collect(r, job, (n) => n.endsWith('_log'), job.args.count, 'logs'),
+
+  async craft(r, job) {
+    refuseHere(r, 'craft');
+    await skill(r, job, 'craftRecipe', [job.args.item, job.args.count]);
+    job.progress = `crafted ${job.args.item}`;
+  },
+
+  async smelt(r, job) {
+    refuseHere(r, 'smelt');
+    const {item, count} = job.args;
+    // The skill waits for the furnace: allow about 10 s per item.
+    await skill(r, job, 'smeltItem', [item, count], {timeout: 60000 + count * 11000});
+    job.progress = `smelted ${item}`;
+  },
+
+  async place(r, job) {
+    const {block, x, y, z} = job.args;
+    refuseProtected(r, x, z, 'place');
+    await skill(r, job, 'placeBlock', [block, x, y, z, 'bottom', true]);
+  },
+
+  async 'collect-drops'(r, job) {
+    await skill(r, job, 'pickupNearbyItems');
+  },
+
+  async sleep(r, job) {
+    const t = r.bot.time?.timeOfDay;
+    if (t !== undefined && t < 12542) throw new Error('it is daytime, beds only work at night (or in thunder)');
+    await skill(r, job, 'goToBed', [], {timeout: 600000});
+  },
+
+  async surface(r, job) {
+    await skill(r, job, 'goToSurface');
+  },
+
+  async 'dig-down'(r, job) {
+    refuseHere(r, 'dig-down');
+    await skill(r, job, 'digDown', [job.args.distance]);
+  },
 
   async deposit(r, job) {
     const {bot} = r;
     const {x, y, z} = job.args;
     await goNear(r, job, x, y, z, 3);
-    const block = bot.blockAt(new (require('vec3').Vec3)(x, y, z));
+    const block = bot.blockAt(new Vec3(x, y, z));
     if (!block || !/chest|barrel/.test(block.name)) throw new Error(`no chest at ${x} ${y} ${z} (found ${block?.name})`);
     const chest = await bot.openContainer(block);
     try {
@@ -425,7 +508,6 @@ const JOBS = {
   async rearm(r, job) {
     const {bot} = r;
     const {x, y, z} = job.args;
-    const Vec3 = require('vec3').Vec3;
     const centre = new Vec3(x, y, z);
     const ids = ['chest', 'trapped_chest', 'barrel'].map((n) => bot.registry.blocksByName[n]?.id).filter((i) => i !== undefined);
     await goNear(r, job, x, y, z, 3, {brave: true}); // getting armour is the safety step
@@ -457,10 +539,7 @@ const JOBS = {
         box.close();
       }
     }
-    for (const [re, slot] of [[/_helmet$/, 'head'], [/_chestplate$/, 'torso'], [/_leggings$/, 'legs'], [/_boots$/, 'feet']]) {
-      const it = best(bot.inventory.items(), re);
-      if (it) await bot.equip(it, slot).catch(() => {});
-    }
+    await bot.armorManager.equipAll().catch(() => {}); // mineflayer-armor-manager wears the best piece per slot
     const totem = bot.inventory.items().find((i) => i.name === 'totem_of_undying');
     if (totem) await bot.equip(totem, 'off-hand').catch(() => {});
     const sword = best(bot.inventory.items(), /_sword$/);

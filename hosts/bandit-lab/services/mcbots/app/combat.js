@@ -3,6 +3,7 @@
 // mobs only (never players, tamed or neutral animals). It may take over the
 // pathfinder (retreat / creeper back-off); `epoch` then changes so the running
 // job knows to re-issue its goal, and `busy` makes jobs wait until calm.
+// Eating is mineflayer-auto-eat's job (loaded in mindcraft.js), not ours.
 const {goals} = require('mineflayer-pathfinder');
 const {isHostile, shouldFight, normDim, NOTABLE_BLOCKS} = require('./world');
 
@@ -11,10 +12,8 @@ const FIGHT_RANGE = 4;
 const SEE_RANGE = 24;
 const LOW_HEALTH = 8;
 const RECOVERED_HEALTH = 12;
-const EAT_BELOW = 15;
 const SCAN_EVERY = 20; // ticks between notable-block scans (10 s)
 const MATERIALS = ['wooden', 'golden', 'stone', 'iron', 'diamond', 'netherite'];
-const AVOID_FOOD = new Set(['pufferfish', 'spider_eye', 'poisonous_potato', 'rotten_flesh', 'chicken', 'golden_apple', 'enchanted_golden_apple', 'chorus_fruit', 'suspicious_stew']);
 
 // Swords beat axes (axes hit harder but cool down much slower); higher tier wins.
 function weaponScore(name) {
@@ -30,7 +29,6 @@ class Combat {
     this.epoch = 0;
     this.busy = false; // retreating or backing off a creeper
     this.mode = null; // 'retreat' | 'creeper'
-    this.eating = false;
     this.lastAttack = 0;
     this.ticks = 0;
     this.timer = setInterval(() => this.tick().catch(() => {}), TICK_MS);
@@ -83,7 +81,6 @@ class Combat {
 
     if (near && near.name === 'creeper' && dist < 6) return this.takeover('creeper', near, 8);
     if (near && shouldFight(near) && dist <= FIGHT_RANGE && !this.busy) return this.fight(near);
-    if (!this.busy && !near) await this.eat();
   }
 
   async fight(target) {
@@ -95,22 +92,6 @@ class Combat {
     if (Date.now() - this.lastAttack >= cooldown && target.isValid !== false) {
       this.lastAttack = Date.now();
       bot.attack(target);
-    }
-  }
-
-  async eat() {
-    const bot = this.r.bot;
-    if (this.eating || bot.food >= EAT_BELOW) return;
-    const food = bot.inventory.items()
-      .filter((i) => bot.registry.foodsByName[i.name] && !AVOID_FOOD.has(i.name))
-      .sort((a, b) => bot.registry.foodsByName[b.name].foodPoints - bot.registry.foodsByName[a.name].foodPoints)[0];
-    if (!food) return;
-    this.eating = true;
-    try {
-      await bot.equip(food, 'hand');
-      await bot.consume();
-    } catch {} finally {
-      this.eating = false;
     }
   }
 
