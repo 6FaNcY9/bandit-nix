@@ -32,6 +32,32 @@ Owner's live check list for the already-shipped hub code: (1) shift with bot2+bo
 and watch the "reservations" line in the Debug panel; (2) a lab-dashboard job to bot5 while
 `nix run .#mcbots-worker -- bot5` runs; (3) Ctrl-C the worker and see "offline, last seen ...".
 
+## M2 - dashboard "what are they doing?": done
+
+Commits (mcbots-only, no `docker-minecraft` restart): `81e7a10` backend (activity line, event ring
+buffer + `GET /api/events`, queue removal, hash-based CSP), `6636334` the page, `cb1a326` docs and
+screenshot (`docs/runbooks/minecraft/img/dashboard.png`, linked in `BOTS.md`).
+
+```
+tools/ship-claude 81dd38e 670468c 81e7a10 6636334 cb1a326
+```
+
+What is there: a card per bot (plain-language activity, progress bar, health/food, held tool with
+durability, inventory + free slots, host, queue with remove), event log (ring buffer of 200, workers
+forward theirs), map with claimed blocks and supply chest, job composer per bot and for a bot
+selection (coordinates start at the supply chest), "Stop all", Debug panel kept under "Advanced".
+`lastError` is cleared on respawn when it was "died"; other errors show their age and turn grey
+after 5 min. The old page's `say` job stays available in the composer (I never sent one).
+
+Live check (local stage, bot6+bot7): activity line, progress bars, durability (46/59 -> 16/59 of a
+wooden pickaxe), claim-conflict event, queue with remove, map with claims; headless Chromium drove
+the composer (open "Give a job", pick goto, coordinates prefilled from the supply chest, Run now ->
+"sent: goto", Stop -> "sent: stop"). The strict CSP raised no console error. Full `nix flake
+check` passed on the committed tree.
+
+New tests: ring-buffer bound and ids, event cleaning, activity/tool/queue fields, hub field
+sanitising, `remove` over the hub, `/api/events` and the CSP header through the real server.
+
 ## Waiting for the owner
 
 Nothing yet.
