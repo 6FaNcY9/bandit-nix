@@ -21,6 +21,7 @@ const PROTOCOL = 1;
 const MAX_FRAME = 256 * 1024;
 const HELLO_MS = 5000;
 const HEARTBEAT_MS = 10000;
+const FORGET_MS = 3600000; // offline remote bots are dropped after this
 const STALE_MS = 30000; // no frame and no pong for this long: the worker is gone
 const MAX_BOTS_PER_WORKER = 8;
 const MAX_REMOTE_BOTS = 16;
@@ -199,12 +200,14 @@ class Hub {
       return deny(400, 'Bad Request');
     }
     if (path !== '/worker') return deny(404, 'Not Found');
-    if (this.throttled()) return deny(429, 'Too Many Requests');
-    if (this.conns.size >= MAX_CONNS) return deny(503, 'Service Unavailable');
+    // The token is checked first: a wrong one counts towards the failure window
+    // (then 429), but someone guessing never locks the real worker out.
     if (!this.tokenOk(req.headers.authorization)) {
+      if (this.throttled()) return deny(429, 'Too Many Requests');
       this.fails.push(this.now());
       return deny(401, 'Unauthorized');
     }
+    if (this.conns.size >= MAX_CONNS) return deny(503, 'Service Unavailable');
     this.wss.handleUpgrade(req, socket, head, (ws) => this.onConnection(ws));
   }
 
@@ -274,8 +277,7 @@ class Hub {
         const key = String(m.key);
         let ok = false;
         if (by && KEY_RE.test(key)) {
-          const held = [...this.world.claims.values()].filter((c) => c.by === by).length;
-          ok = (held < MAX_CLAIMS_PER_BOT || this.world.claims.get(key)?.by === by) && this.world.claim(by, key);
+          ok = (this.world.held(by) < MAX_CLAIMS_PER_BOT || this.world.claims.get(key)?.by === by) && this.world.claim(by, key);
         }
         conn.ws.send(JSON.stringify({t: 'claim_result', id: int(m.id), ok}));
         return;
@@ -361,6 +363,13 @@ class Hub {
 
   heartbeat() {
     const t = this.now();
+    // A remote bot whose worker has been away for an hour leaves the list (and frees its name slot).
+    for (const [n, r] of this.runners) {
+      if (r instanceof RemoteRunner && !r.conn && t - r.lastSeen > FORGET_MS) {
+        this.runners.delete(n);
+        this.events?.add(n, 'hub', 'offline for over an hour: removed from the list');
+      }
+    }
     for (const c of this.conns) {
       if (!c.alive && t - c.lastMsg > STALE_MS) {
         c.ws.terminate();
@@ -402,4 +411,4 @@ function createWorkerServer(hub) {
   return server;
 }
 
-module.exports = {Hub, RemoteRunner, createWorkerServer, cleanSnapshot, cleanDebug, PROTOCOL, KEY_RE};
+module.exports = {Hub, RemoteRunner, createWorkerServer, cleanSnapshot, cleanDebug, PROTOCOL, KEY_RE, FORGET_MS};

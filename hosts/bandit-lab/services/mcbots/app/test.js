@@ -463,6 +463,11 @@ require('./crafting');
     bad.stop();
     assert.ok(!runners.has('bot7'));
 
+    // guessing: after 20 wrong tokens in a minute the next wrong one is 429, but the real token still gets in
+    for (let i = 0; i < 25; i++) await open({Authorization: `Bearer ${'x'.repeat(30 + i)}`}).catch(() => {});
+    await rejects(open({Authorization: `Bearer ${'y'.repeat(40)}`}), /429/);
+    (await open(auth)).ws.close(); // the real client below also connects while the window is full
+
     // the real client against the real hub (stub bots instead of a Minecraft login)
     const got = [];
     const stub = {name: 'bot6', started: false, start() { this.started = true; }, shutdown() {}, snapshot: () => ({name: 'bot6', online: true, pos: [9, 9, 9], job: null, queue: [], inventory: [], pullbacks: 0}), debug: () => ({pos: [9, 9, 9]}), enqueue: (type, args, opts) => got.push([type, args, opts])};
@@ -509,6 +514,38 @@ require('./crafting');
   }
 })();
 
+// ---- claims expire out of the per-bot count; offline workers are forgotten after an hour ----
+{
+  const {WorldModel, CLAIM_TTL_MS} = require('./world');
+  let t = 1000;
+  const w = new WorldModel({now: () => t});
+  for (let i = 0; i < 8; i++) w.claim('bot5', `overworld:${i},1,1`);
+  assert.strictEqual(w.held('bot5'), 8);
+  t += CLAIM_TTL_MS + 1;
+  assert.strictEqual(w.held('bot5'), 0); // expired claims no longer count
+  assert.strictEqual(w.claims.size, 8);
+  w.prune();
+  assert.strictEqual(w.claims.size, 0); // and are pruned
+  assert.ok(w.claim('bot6', 'overworld:0,1,1'));
+
+  const {Hub, RemoteRunner, FORGET_MS} = require('./hub');
+  const runners = new Map([['bot1', new BotRunner('bot1', {host: 'x', port: 1, log: () => {}, world: w})]]);
+  const {EventLog} = require('./events');
+  const events = new EventLog();
+  let now = 5000;
+  const hub = new Hub({world: w, runners, token: 'k'.repeat(40), now: () => now, events});
+  const away = new RemoteRunner('bot5', () => now); away.lastSeen = now; away.conn = null;
+  const here = new RemoteRunner('bot6', () => now); here.lastSeen = now - 2 * FORGET_MS; here.conn = {ws: {}};
+  runners.set('bot5', away); runners.set('bot6', here);
+  now += FORGET_MS - 1000;
+  hub.heartbeat();
+  assert.ok(runners.has('bot5'));
+  now += 2000;
+  hub.heartbeat();
+  assert.deepStrictEqual([...runners.keys()], ['bot1', 'bot6']); // bot5 gone; a connected one stays however old; lab bots stay
+  assert.match(events.items.at(-1).text, /removed from the list/);
+  hub.close();
+}
 // ---- event log, activity line, queue removal ----
 {
   const {EventLog, clean, MAX} = require('./events');

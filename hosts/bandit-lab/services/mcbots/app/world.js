@@ -90,6 +90,14 @@ class WorldModel {
     return false;
   }
 
+  // Live claims of one bot: expired ones must not count towards a per-bot cap.
+  held(by) {
+    const t = this.now();
+    let n = 0;
+    for (const c of this.claims.values()) if (c.by === by && t - c.t < CLAIM_TTL_MS) n++;
+    return n;
+  }
+
   claimedByOther(by, key) {
     const c = this.claims.get(key);
     return !!c && c.by !== by && this.now() - c.t < CLAIM_TTL_MS;
@@ -134,6 +142,7 @@ class WorldModel {
     for (const [k, m] of this.mobs) if (t - m.t > MOB_TTL_MS) this.mobs.delete(k);
     for (const [k, b] of this.blocks) if (t - b.t > BLOCK_TTL_MS) this.blocks.delete(k);
     for (const [k, p] of this.players) if (t - p.t > PLAYER_TTL_MS) this.players.delete(k);
+    for (const [k, c] of this.claims) if (t - c.t >= CLAIM_TTL_MS) this.claims.delete(k);
   }
 
   hostilesNear(x, z, dim, r) {
@@ -186,4 +195,4 @@ function startBlueMap(world, baseUrl, log, fetchFn = fetch) {
   return () => clearInterval(timer);
 }
 
-module.exports = {WorldModel, startBlueMap, parsePlayers, isHostile, shouldFight, normDim, deadlineMs, insideAreas, NOTABLE_BLOCKS, MAPS, MOB_TTL_MS, MAX_MOBS, MAX_BLOCKS, NO_FIGHT};
+module.exports = {CLAIM_TTL_MS, WorldModel, startBlueMap, parsePlayers, isHostile, shouldFight, normDim, deadlineMs, insideAreas, NOTABLE_BLOCKS, MAPS, MOB_TTL_MS, MAX_MOBS, MAX_BLOCKS, NO_FIGHT};
