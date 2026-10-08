@@ -5,129 +5,253 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>mcbots</title>
 <style>
-  :root { color-scheme: light dark; --bg:#fff; --fg:#1b1d20; --mut:#6b7280; --card:#f4f5f7; --bd:#d6d9de; --ok:#16a34a; --bad:#dc2626; --acc:#2563eb; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#14161a; --fg:#e6e8eb; --mut:#9aa1ab; --card:#1d2025; --bd:#2f343b; --acc:#60a5fa; } }
+  :root { color-scheme: light dark; --bg:#fff; --fg:#1b1d20; --mut:#6b7280; --card:#f4f5f7; --bd:#d6d9de; --ok:#16a34a; --bad:#dc2626; --acc:#2563eb; --warn:#d97706; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14161a; --fg:#e6e8eb; --mut:#9aa1ab; --card:#1d2025; --bd:#2f343b; --acc:#60a5fa; --warn:#fbbf24; } }
   body { margin:0; padding:16px; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui,sans-serif; }
-  h1 { font-size:18px; margin:0 0 12px; }
+  h1 { font-size:18px; margin:0; }
+  h3 { font-size:14px; margin:0 0 8px; }
+  .top { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-bottom:12px; }
   .bar,.card { background:var(--card); border:1px solid var(--bd); border-radius:8px; padding:12px; margin-bottom:12px; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px; }
-  .card h2 { font-size:15px; margin:0 0 6px; display:flex; align-items:center; gap:8px; }
-  .dot { width:10px; height:10px; border-radius:50%; background:var(--bad); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(330px,1fr)); gap:12px; }
+  .grid .card { margin:0; display:flex; flex-direction:column; gap:4px; }
+  .card h2 { font-size:15px; margin:0; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--bad); flex:none; }
   .on .dot { background:var(--ok); }
-  .mut { color:var(--mut); } .err { color:var(--bad); word-break:break-word; }
-  form { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:8px; }
+  .dead .dot { background:var(--warn); }
+  .act { font-weight:600; min-height:1.45em; word-break:break-word; }
+  .mut { color:var(--mut); } .err { color:var(--bad); word-break:break-word; } .old { color:var(--mut); word-break:break-word; }
+  .warn { color:var(--bad); font-weight:600; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  progress { width:100%; height:10px; accent-color:var(--acc); }
+  progress.hp { width:80px; accent-color:var(--bad); } progress.food { width:80px; accent-color:var(--warn); }
+  .queue { margin:0; padding-left:18px; } .queue li { margin:2px 0; }
   input,select,button { font:inherit; color:inherit; background:var(--bg); border:1px solid var(--bd); border-radius:6px; padding:4px 8px; }
-  input[type=number] { width:70px; } input.w { width:110px; }
+  input[type=number] { width:70px; } input.w { width:120px; } input.xyz { width:64px; }
   button { cursor:pointer; background:var(--acc); color:#fff; border-color:var(--acc); }
   button.stop { background:var(--bad); border-color:var(--bad); }
-  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-  #msg { margin-left:8px; }
-  details.bar summary { cursor:pointer; font-weight:600; }
+  button.x { background:none; color:var(--bad); border:none; padding:0 4px; }
+  button.ghost { background:var(--bg); color:var(--fg); border-color:var(--bd); }
+  details > summary { cursor:pointer; font-weight:600; }
+  .composer { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:6px; }
+  .cols { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:12px; align-items:start; }
+  .cols > .bar { margin:0; }
+  #events { max-height:360px; overflow:auto; font:12px/1.5 ui-monospace,monospace; }
+  #events div { border-bottom:1px solid var(--bd); padding:1px 0; word-break:break-word; }
+  .k-fail,.k-death { color:var(--bad); } .k-done,.k-deposit,.k-respawn,.k-connect { color:var(--ok); } .k-claim { color:var(--warn); } .k-stop,.k-disconnect,.k-hub { color:var(--mut); }
   .dbg { border-top:1px solid var(--bd); padding:8px 0; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start; }
   .dbg .t { flex:1; min-width:260px; font:12px/1.5 ui-monospace,monospace; word-break:break-word; }
   .dbg svg { width:130px; height:130px; background:var(--bg); border:1px solid var(--bd); border-radius:6px; }
-  .warn { color:var(--bad); font-weight:600; }
   canvas { width:100%; max-width:640px; height:auto; aspect-ratio:1; background:var(--bg); border:1px solid var(--bd); border-radius:6px; display:block; margin-top:8px; touch-action:none; }
 </style>
 </head>
 <body>
-<h1>mcbots <span id="conn" class="mut"></span></h1>
-<div class="bar">
-  <div class="row"><b>Target</b>
-    <select id="target"></select>
-    <label>your player name <input id="me" class="w" maxlength="16"></label>
-    <label title="A new job replaces the running one and the queue instead of waiting behind them"><input type="checkbox" id="replace" checked> replace current jobs</label>
-    <button class="stop" data-job="stop">Stop</button><span id="msg" class="mut"></span>
+<div class="top">
+  <h1>mcbots <span id="conn" class="mut"></span></h1>
+  <button class="stop" id="stopall" title="Stop every bot and clear all queues">Stop all</button>
+  <label>your player name <input id="me" class="w" maxlength="16"></label>
+  <span id="msg" class="mut"></span>
+</div>
+<div id="bots" class="grid"></div>
+<div class="bar" id="allbar"><h3>Give the same job to several bots</h3><div id="allcomposer"></div></div>
+<div class="cols">
+  <div class="bar"><h3>Events <select id="evbot"></select></h3><div id="events"></div></div>
+  <div class="bar">
+    <h3>Map</h3>
+    <div class="row">centre <select id="centre"></select>
+      <label>zoom <input id="zoom" type="range" min="-2" max="3" step="0.25" value="1"></label>
+      <span id="mapinfo" class="mut"></span></div>
+    <canvas id="radar" width="640" height="640"></canvas>
+    <div class="mut">green = bots, blue = players, red = hostile mobs, yellow = chests/ores, orange = blocks a bot is working on, white square = supply chest, hatched red = protected areas</div>
   </div>
-  <form data-job="goto">goto <input name="x" type="number" placeholder="x" required><input name="y" type="number" placeholder="y" required><input name="z" type="number" placeholder="z" required><button>Go</button></form>
-  <form data-job="follow">follow <input name="player" class="w" placeholder="player" required><button>Follow</button> <button type="button" data-job="come">Come to me</button></form>
-  <form data-job="mine">mine <input name="block" class="w" placeholder="iron_ore" required><input name="count" type="number" value="8" min="1"><button>Mine</button></form>
-  <form data-job="chop">chop logs <input name="count" type="number" value="8" min="1"><button>Chop</button></form>
-  <form data-job="deposit">deposit into chest <input name="x" type="number" placeholder="x" required><input name="y" type="number" placeholder="y" required><input name="z" type="number" placeholder="z" required><button>Deposit</button></form>
-  <form data-job="rearm">re-arm from chest <input name="x" type="number" placeholder="x" required><input name="y" type="number" placeholder="y" required><input name="z" type="number" placeholder="z" required><button>Re-arm</button></form>
-  <form data-job="craft">craft <input name="item" class="w" placeholder="stone_pickaxe" required><input name="count" type="number" value="1" min="1" max="64"><button>Craft</button></form>
-  <form data-job="smelt">smelt <input name="item" class="w" placeholder="raw_iron" required><input name="count" type="number" value="8" min="1" max="64"><button>Smelt</button></form>
-  <form data-job="shift">work shift: mine <input name="block" class="w" placeholder="stone or logs" required> deposit at <input name="x" type="number" placeholder="x" required><input name="y" type="number" placeholder="y" required><input name="z" type="number" placeholder="z" required><button>Start shift</button></form>
-  <form data-job="say">say <input name="text" placeholder="text" maxlength="200" required><button>Say</button></form>
 </div>
-<div class="bar">
-  <div class="row"><b>Map</b> centre <select id="centre"></select>
-    <label>zoom <input id="zoom" type="range" min="-2" max="3" step="0.25" value="0"></label>
-    <span id="mapinfo" class="mut"></span></div>
-  <canvas id="radar" width="640" height="640"></canvas>
-  <div class="mut">green = bots, blue = players (BlueMap), red = hostile mobs, yellow = chests/ores, hatched = protected areas</div>
-</div>
-<details id="dbg" class="bar"><summary>Debug: last 30 s per bot (server pull-backs, job step, last error)</summary>
+<details id="dbg" class="bar"><summary>Advanced: debug (last 30 s per bot: server pull-backs, job step, last error)</summary>
   <div class="row"><button id="dbgcopy" type="button">Copy /api/debug JSON</button><span id="dbgmsg" class="mut"></span></div>
   <div id="dbgbots"></div>
 </details>
-<div id="bots" class="grid"></div>
+<datalist id="blocks"></datalist><datalist id="items"></datalist><datalist id="smeltables"></datalist>
 <script>
-let last = { bots: [], world: { players: [], mobs: [], blocks: [], bluemap: {} }, protectedAreas: [] };
+let last = { bots: [], world: { players: [], mobs: [], blocks: [], claims: [], bluemap: {} }, protectedAreas: [], supplyChest: null, lastEventId: 0 };
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+const fill = (id, list) => $(id).replaceChildren(...list.map((v) => { const o = el('option'); o.value = v; return o; }));
+fill('blocks', ['stone', 'cobblestone', 'deepslate', 'coal_ore', 'deepslate_coal_ore', 'iron_ore', 'deepslate_iron_ore', 'copper_ore', 'gold_ore', 'redstone_ore', 'lapis_ore', 'diamond_ore', 'sand', 'gravel', 'dirt', 'clay', 'logs']);
+fill('items', ['wooden_pickaxe', 'stone_pickaxe', 'iron_pickaxe', 'wooden_axe', 'stone_axe', 'iron_axe', 'stone_sword', 'iron_sword', 'torch', 'furnace', 'crafting_table', 'chest', 'stick', 'oak_planks', 'bucket']);
+fill('smeltables', ['raw_iron', 'raw_copper', 'raw_gold', 'cobblestone', 'sand', 'clay_ball', 'oak_log', 'birch_log']);
 try { $('me').value = localStorage.getItem('me') || ''; } catch {}
 $('me').oninput = () => { try { localStorage.setItem('me', $('me').value); } catch {} };
 
-async function send(type, args) {
-  const t = $('target').value;
-  const r = await fetch('/api/job', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ bots: t === 'all' ? 'all' : [t], type, args, replace: $('replace').checked }) });
-  const j = await r.json();
-  $('msg').textContent = r.ok ? 'sent' : j.error;
-  $('msg').className = r.ok ? 'mut' : 'err';
+async function send(bots, type, args, replace) {
+  try {
+    const r = await fetch('/api/job', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bots, type, args, replace }) });
+    const j = await r.json();
+    $('msg').textContent = r.ok ? `sent: ${type}` : j.error;
+    $('msg').className = r.ok ? 'mut' : 'err';
+  } catch (e) { $('msg').textContent = 'send failed: ' + e.message; $('msg').className = 'err'; }
 }
-document.querySelectorAll('form').forEach((f) => f.onsubmit = (e) => {
-  e.preventDefault();
-  send(f.dataset.job, Object.fromEntries(new FormData(f)));
-});
-document.querySelectorAll('button[data-job]').forEach((b) => b.onclick = () =>
-  send(b.dataset.job, b.dataset.job === 'come' ? { player: $('me').value } : {}));
+$('stopall').onclick = () => send('all', 'stop', {}, false);
 
-// "5 min ago (13:42:01)", relative to the hub's clock so a skewed laptop clock cannot confuse it.
-function ago(ms, now) {
+// ---- job composer: pick a job, the fields follow, coordinates start at the supply chest ----
+const XYZ = [['x', 'number', 'x'], ['y', 'number', 'y'], ['z', 'number', 'z']];
+const SPEC = {
+  mine: { label: 'Mine blocks', f: [['block', 'text', 'stone', 'blocks'], ['count', 'number', 16]] },
+  chop: { label: 'Chop trees', f: [['count', 'number', 16]] },
+  shift: { label: 'Work shift: mine and deposit', f: [['block', 'text', 'stone', 'blocks'], ...XYZ], chest: true, hint: 'deposits at x y z' },
+  craft: { label: 'Craft', f: [['item', 'text', 'stone_pickaxe', 'items'], ['count', 'number', 1]] },
+  smelt: { label: 'Smelt', f: [['item', 'text', 'raw_iron', 'smeltables'], ['count', 'number', 8]] },
+  goto: { label: 'Go to', f: XYZ, chest: true },
+  deposit: { label: 'Deposit into chest', f: XYZ, chest: true },
+  rearm: { label: 'Re-arm from chests', f: XYZ, chest: true },
+  come: { label: 'Come to me', f: [], me: true },
+  follow: { label: 'Follow a player', f: [['player', 'text', '']] },
+  say: { label: 'Say in chat', f: [['text', 'text', '']] },
+};
+function composer(targets) { // targets(): array of bot names or 'all'
+  const root = el('div', 'composer'), type = el('select');
+  for (const [k, v] of Object.entries(SPEC)) type.append(new Option(v.label, k));
+  const fields = el('span', 'row'), repl = el('input'), lab = el('label', '', ' replace running job');
+  repl.type = 'checkbox'; repl.checked = true; lab.prepend(repl);
+  const draw = () => {
+    const spec = SPEC[type.value], chest = last.supplyChest;
+    fields.replaceChildren(...spec.f.map(([name, kind, ph, list]) => {
+      const i = el('input', kind === 'number' && name.length === 1 ? 'xyz' : kind === 'number' ? '' : 'w');
+      i.name = name; i.type = kind; i.placeholder = name; i.required = true;
+      if (list) i.setAttribute('list', list);
+      if (kind === 'number' && name.length > 1) { i.value = ph; i.min = 1; } else if (kind === 'text') i.value = ph;
+      if (spec.chest && chest && name.length === 1) i.value = chest[name];
+      i.title = name;
+      return i;
+    }));
+  };
+  type.onchange = draw; draw();
+  const run = (replace) => {
+    const spec = SPEC[type.value], args = {};
+    for (const i of fields.querySelectorAll('input')) { if (!i.reportValidity()) return; args[i.name] = i.value; }
+    if (spec.me) args.player = $('me').value;
+    const t = targets();
+    if (!t || (Array.isArray(t) && !t.length)) { $('msg').textContent = 'pick a bot first'; return; }
+    send(t, type.value, args, replace);
+  };
+  const go = el('button', '', 'Run now'), q = el('button', 'ghost', 'Queue'), st = el('button', 'stop', 'Stop');
+  go.type = q.type = st.type = 'button';
+  go.title = 'Replace the running job and the queue'; q.title = 'Add behind the queue';
+  go.onclick = () => run(repl.checked); q.onclick = () => run(false);
+  st.onclick = () => { const t = targets(); if (t) send(t, 'stop', {}, false); };
+  root.append(type, fields, go, q, st);
+  return root;
+}
+
+// ---- bot cards: built once per bot, then only their text is patched (typing in a composer survives updates) ----
+const cards = new Map();
+function ago(ms, now) { // "5 min ago (13:42:01)", relative to the hub's clock
   const s = Math.max(0, Math.round(((now || Date.now()) - ms) / 1000));
   const rel = s < 90 ? `${s} s` : s < 5400 ? `${Math.round(s / 60)} min` : `${Math.round(s / 3600)} h`;
   return `${rel} ago (${new Date(ms).toLocaleTimeString()})`;
 }
-function render(bots, now) {
-  const sel = $('target'), cur = sel.value;
-  const names = ['all', ...bots.map((b) => b.name)];
-  if (names.join() !== [...sel.options].map((o) => o.value).join()) {
-    sel.replaceChildren(...names.map((n) => new Option(n, n)));
-    sel.value = names.includes(cur) ? cur : 'all';
+const dur = (s) => (s < 90 ? `${s} s` : `${Math.round(s / 60)} min`);
+function makeCard(name) {
+  const root = el('div', 'card'), h = el('h2'), dot = el('span', 'dot'), title = el('span', '', name), state = el('span', 'mut'), where = el('span', 'mut');
+  h.append(dot, title, state, where);
+  const act = el('div', 'act'), bar = el('progress'), barTxt = el('div', 'mut'), vit = el('div', 'row'), hp = el('progress', 'hp'), food = el('progress', 'food'), vitTxt = el('span');
+  hp.max = food.max = 20; vit.append(hp, food, vitTxt);
+  const tool = el('div'), inv = el('div', 'mut'), pos = el('div', 'mut'), err = el('div'), queue = el('ol', 'queue'), pb = el('div', 'warn');
+  const comp = el('details'); comp.append(el('summary', '', 'Give a job'), composer(() => [name]));
+  root.append(h, act, bar, barTxt, vit, tool, inv, pos, queue, pb, err, comp);
+  return { root, dot, state, where, act, bar, barTxt, vit, hp, food, vitTxt, tool, inv, pos, err, queue, pb, qsig: '' };
+}
+function updateCard(c, b, now) {
+  c.root.className = 'card' + (b.online ? ' on' : '') + (b.dead ? ' dead' : '');
+  c.state.textContent = b.dead ? 'dead' : b.online ? 'online' : (b.remote && !b.connected ? 'worker offline' : 'offline');
+  c.where.textContent = b.host ? '@' + b.host + (b.remote ? ' (remote worker)' : '') : '';
+  const act = b.activity || (b.job ? `${b.job.label} ${b.job.progress || ''}` : b.online ? 'idle - no job' : 'offline');
+  c.act.textContent = !b.online && b.lastSeen ? `${act} - last seen ${ago(b.lastSeen, now)}` : act;
+  const j = b.job, total = j && j.total;
+  c.bar.hidden = c.barTxt.hidden = !j;
+  if (j) {
+    if (total) { c.bar.max = total; c.bar.value = j.done; } else c.bar.removeAttribute('value'); // no total (work shift): spinner-style bar
+    c.barTxt.textContent = `${j.label}${j.progress ? ' - ' + j.progress : ''}${j.runningS ? ` - running ${dur(j.runningS)}` : ''}`;
   }
-  $('bots').replaceChildren(...bots.map((b) => {
-    const c = el('div', 'card' + (b.online ? ' on' : ''));
-    const h = el('h2'); h.append(el('span', 'dot'), b.name, el('span', 'mut', b.online ? 'online' : 'offline'));
-    if (b.host) h.append(el('span', 'mut', '@' + b.host + (b.remote ? ' (remote worker)' : '')));
-    c.append(h);
-    if (b.online) {
-      c.append(el('div', '', `health ${Math.round(b.health)}/20  food ${b.food}/20`));
-      c.append(el('div', '', `pos ${b.pos ? b.pos.join(' ') : '?'}  ${b.dimension || ''}`));
-    }
-    if (!b.online && b.lastSeen) c.append(el('div', 'mut', 'last seen ' + ago(b.lastSeen, now)));
-    c.append(el('div', '', 'job: ' + (b.job ? `${b.job.label} ${b.job.progress || ''}` : 'idle')));
-    if (b.queue.length) c.append(el('div', 'mut', 'queue: ' + b.queue.join(' | ')));
-    c.append(el('div', 'mut', 'inv: ' + (b.inventory.join(', ') || 'empty') + (b.inventoryKinds > b.inventory.length ? ', ...' : '')));
-    if (b.pullbacks) c.append(el('div', 'warn', `pulled back by the server ${b.pullbacks}x in 30 s`));
-    if (b.lastError) c.append(el('div', 'err', 'error: ' + b.lastError));
-    return c;
+  c.vit.hidden = !b.online;
+  if (b.online) { c.hp.value = b.health || 0; c.food.value = b.food || 0; c.vitTxt.textContent = `health ${Math.round(b.health)}/20 food ${b.food}/20`; }
+  const t = b.tool;
+  c.tool.textContent = t ? `holding ${t.name}${t.max ? ` (${t.left}/${t.max} durability)` : ''}` : (b.online ? 'holding nothing' : '');
+  c.tool.className = t && t.max && t.left / t.max < 0.15 ? 'warn' : 'mut';
+  c.inv.textContent = 'inventory: ' + (b.inventory.join(', ') || 'empty') + (b.inventoryKinds > b.inventory.length ? ', ...' : '') + (b.freeSlots != null ? ` (${b.freeSlots} free slots)` : '');
+  c.pos.textContent = b.online && b.pos ? `at ${b.pos.join(' ')} ${b.dimension || ''}` : '';
+  const sig = (b.queueIds || []).join() + '|' + b.queue.join('|');
+  if (sig !== c.qsig) {
+    c.qsig = sig;
+    c.queue.replaceChildren(...b.queue.map((q, i) => {
+      const li = el('li', '', q + ' '), x = el('button', 'x', '✕');
+      x.type = 'button'; x.title = 'Remove from the queue';
+      x.onclick = () => (b.queueIds && b.queueIds[i] != null ? send([b.name], 'remove', { id: b.queueIds[i] }, false) : 0);
+      li.append(x);
+      return li;
+    }));
+  }
+  c.queue.hidden = !b.queue.length;
+  c.pb.textContent = b.pullbacks ? `pulled back by the server ${b.pullbacks}x in 30 s` : '';
+  const old = b.lastErrorAgoS != null && b.lastErrorAgoS > 300;
+  c.err.className = old ? 'old' : 'err';
+  c.err.textContent = b.lastError ? `${old ? 'older problem' : 'problem'}${b.lastErrorAgoS != null ? ` (${dur(b.lastErrorAgoS)} ago)` : ''}: ${b.lastError}` : '';
+}
+function render(bots, now) {
+  const names = bots.map((b) => b.name);
+  for (const n of [...cards.keys()]) if (!names.includes(n)) { cards.get(n).root.remove(); cards.delete(n); }
+  for (const b of bots) {
+    if (!cards.has(b.name)) { const c = makeCard(b.name); cards.set(b.name, c); $('bots').append(c.root); }
+    updateCard(cards.get(b.name), b, now);
+  }
+  if ([...$('bots').children].map((e) => e.querySelector('h2 span:nth-child(2)').textContent).join() !== names.join()) $('bots').replaceChildren(...names.map((n) => cards.get(n).root)); // only on a new order: moving nodes would drop focus from a composer
+  const sel = $('evbot'), cur = sel.value;
+  const opts = ['all bots', ...names];
+  if (opts.join() !== [...sel.options].map((o) => o.value).join()) { sel.replaceChildren(...opts.map((n) => new Option(n, n))); sel.value = opts.includes(cur) ? cur : 'all bots'; renderEvents(); }
+}
+// one composer for a chosen set of bots
+const allSel = el('select'); allSel.multiple = true; allSel.size = 4;
+let allBuilt = false;
+function allComposer() {
+  const names = last.bots.map((b) => b.name);
+  if (allBuilt && [...allSel.options].map((o) => o.value).join() === names.join()) return;
+  const keep = new Set([...allSel.selectedOptions].map((o) => o.value));
+  allSel.replaceChildren(...names.map((n) => { const o = new Option(n, n); o.selected = keep.has(n); return o; }));
+  if (!allBuilt) { allBuilt = true; $('allcomposer').append(el('div', 'mut', 'Select bots (ctrl/shift-click), then pick a job. Nothing selected = all bots.'), allSel, composer(() => { const s = [...allSel.selectedOptions].map((o) => o.value); return s.length ? s : 'all'; })); }
+}
+
+// ---- events: GET /api/events?since=<id>, kept to the last 200 ----
+let evs = [], evLast = 0;
+function renderEvents() {
+  const only = $('evbot').value;
+  const list = evs.filter((e) => !only || only === 'all bots' || e.bot === only).slice(-200).reverse();
+  $('events').replaceChildren(...list.map((e) => {
+    const d = el('div', 'k-' + e.kind, `${new Date(e.t).toLocaleTimeString()} ${e.bot} ${e.text}`);
+    return d;
   }));
+}
+$('evbot').onchange = renderEvents;
+async function pollEvents() {
+  try {
+    const r = await fetch('/api/events?since=' + evLast, { cache: 'no-store' }), j = await r.json();
+    if (j.lastId < evLast) { evs = []; evLast = 0; return pollEvents(); } // server restarted
+    if (j.events.length) { evs = evs.concat(j.events).slice(-200); renderEvents(); }
+    evLast = j.lastId;
+  } catch {}
 }
 function connect() {
   const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
   ws.onopen = () => { $('conn').textContent = ''; };
-  ws.onmessage = (e) => { const m = JSON.parse(e.data); last = m; render(m.bots, m.now); radar(); };
+  ws.onmessage = (e) => {
+    const m = JSON.parse(e.data); last = m; render(m.bots, m.now); allComposer(); radar();
+    if (m.lastEventId !== evLast) pollEvents();
+  };
   ws.onclose = () => { $('conn').textContent = '(reconnecting...)'; setTimeout(connect, 2000); };
 }
 
-// ---- radar: top-down, north up (-z), centred on a bot or player ----
+// ---- map: top-down, north up (-z), centred on a bot or player ----
 const cv = $('radar'), g = cv.getContext('2d');
 $('zoom').oninput = radar;
 cv.onwheel = (e) => { e.preventDefault(); const z = $('zoom'); z.value = +z.value + (e.deltaY < 0 ? 0.25 : -0.25); radar(); };
 function radar() {
-  const { bots, world, protectedAreas } = last;
+  const { bots, world, protectedAreas, supplyChest } = last;
   const sel = $('centre'), cur = sel.value;
   const names = [...bots.map((b) => b.name), ...world.players.filter((p) => !bots.some((b) => b.name === p.name)).map((p) => p.name)];
   if (names.join() !== [...sel.options].map((o) => o.value).join()) {
@@ -158,11 +282,19 @@ function radar() {
   }
   const dot = (x, z, r, col, label) => { g.fillStyle = col; g.beginPath(); g.arc(px(x), pz(z), r, 0, 7); g.fill(); if (label) { g.fillStyle = css.color; g.fillText(label, px(x) + r + 2, pz(z) + 4); } };
   for (const b of world.blocks) if (b.dim === c.dim) dot(b.x, b.z, 3, '#eab308');
+  // claimed blocks: key is "<dim>:x,y,z"
+  g.fillStyle = '#f97316';
+  for (const cl of world.claims || []) {
+    const m = /^([a-z_]+):(-?\d+),(-?\d+),(-?\d+)$/.exec(cl.key);
+    if (m && m[1] === c.dim) g.fillRect(px(+m[2]), pz(+m[4]), Math.max(3, k), Math.max(3, k));
+  }
+  if (supplyChest && c.dim === 'overworld') { g.fillStyle = css.color; g.fillRect(px(supplyChest.x) - 4, pz(supplyChest.z) - 4, 8, 8); g.fillText('supply', px(supplyChest.x) + 7, pz(supplyChest.z) + 4); }
   for (const m of world.mobs) if (m.dim === c.dim) { g.globalAlpha = Math.max(0.3, 1 - m.age / 30); dot(m.x, m.z, 4, '#dc2626', k >= 2 ? m.type : ''); g.globalAlpha = 1; }
   for (const p of world.players) if (p.dim === c.dim && !bots.some((b) => b.name === p.name)) dot(p.x, p.z, 5, '#2563eb', p.name);
-  for (const b of bots) if (b.pos && b.dimension === c.dim) dot(b.pos[0], b.pos[2], 5, '#16a34a', b.name);
+  for (const b of bots) if (b.pos && b.dimension === c.dim) dot(b.pos[0], b.pos[2], 5, b.online ? '#16a34a' : '#9ca3af', b.name);
 }
-// ---- debug panel: GET /api/debug while the panel is open ----
+
+// ---- advanced: debug panel, GET /api/debug while the panel is open ----
 let dbgData = null;
 const SVGNS = 'http://www.w3.org/2000/svg';
 function track(positions) {
@@ -209,6 +341,7 @@ $('dbgcopy').onclick = async () => {
   catch { $('dbgmsg').textContent = 'copy failed - open /api/debug instead'; }
 };
 connect();
+pollEvents();
 </script>
 </body>
 </html>
