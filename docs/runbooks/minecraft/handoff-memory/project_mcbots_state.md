@@ -15,7 +15,7 @@ movement whose AABB touches a block face with gap 0.0; fixed in
 
 **How to apply:** before touching mcbots code, read
 `docs/runbooks/minecraft/HANDOFF-2026-10-08.md` (state, dead ends, hub protocol,
-shipping) and `OVERNIGHT-GOAL.md` (current work list). Not yet verified live:
+shipping) and `AUTOPILOT-GOAL.md` (current work list; overnight run done, see OVERNIGHT-REPORT). Not yet verified live:
 job from lab dashboard to bot5, shared reservations with several bots, offline /
 last-seen display. Not now: >4 lab bots, farm building, Baritone/Meteor,
 Cloudflare cleanup, night deploy window.

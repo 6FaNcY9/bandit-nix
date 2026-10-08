@@ -24,7 +24,7 @@ for f in project_mcbots_state.md reference_ship_and_environment.md feedback_depl
   cp -f "$src/$f" "$dest/$f"
 done
 
-add_index project_mcbots_state.md "mcbots state" "bots steps 0-4 done, read HANDOFF + OVERNIGHT-GOAL"
+add_index project_mcbots_state.md "mcbots state" "bots state, read HANDOFF + AUTOPILOT-GOAL"
 add_index reference_ship_and_environment.md "ship and environment" "how to ship to bandit-lab, laptop quirks"
 add_index feedback_deploy_and_overnight_rules.md "owner working rules" "language, deploy/secret boundaries, unattended runs"
 
