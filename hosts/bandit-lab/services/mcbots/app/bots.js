@@ -665,7 +665,7 @@ async function replacePickaxe(r, job) {
     }
   }
   const logs = Object.keys(bot.registry.blocksByName).filter((n) => n.endsWith('_log'));
-  if (!bot.inventory.items().some((i) => /_(log|planks)$/.test(i.name))) {
+  if (!bot.inventory.items().some((i) => /_log$/.test(i.name))) { // planks alone (2 of the 3 needed) are no reason to stay without a pickaxe
     try {
       await collect(r, child(job), logs, 3, 'logs');
       await crafting.ensureItem(r, child(job), 'wooden_pickaxe', 1);
