@@ -58,7 +58,9 @@ in {
     enable = true;
     enableSshSupport = false;
     pinentry.package = pkgs.pinentry-gnome3;
-    defaultCacheTtl = 3600;
-    maxCacheTtl = 14400; # 4 h — was 24 h
+    # 8 h (owner's choice, 2026-10-08): unlock once a day, commits are signed
+    # all day. Was 1 h / 4 h.
+    defaultCacheTtl = 28800;
+    maxCacheTtl = 28800;
   };
 }

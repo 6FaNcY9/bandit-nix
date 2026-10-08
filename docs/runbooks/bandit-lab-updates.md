@@ -1,12 +1,13 @@
 # bandit-lab updates and rollback
 
-Automatic updates are **paused**: `lab-update-apply.timer` is disabled in
-`hosts/bandit-lab/services/auto-rebuild/default.nix` (`enable = false`), so
-nothing is applied until someone runs `sudo lab-update apply`. To resume the
-hourly signed update (up to ten minutes of randomized delay, fetching
-`origin/main` itself), set `enable = true` again and deploy that change.
+Automatic updates are **on** (resumed 2026-10-08): `lab-update-apply.timer` in
+`hosts/bandit-lab/services/auto-rebuild/default.nix` applies a signed
+fast-forward `origin/main` hourly (up to ten minutes of randomized delay). A
+deploy that restarts Minecraft disconnects players; ask everyone to
+`/jarvis dismiss` first (see minecraft/ADMIN.md). To pause again, set
+`enable = false` and deploy, or mask the timer at runtime as below.
 
-Until the pause itself has been deployed, a timer that is already running on the
+Until a pause (`enable = false`) has been deployed, a timer that is already running on the
 host keeps firing. `systemctl disable` does not work on NixOS (the unit links
 live in the read-only Nix store), so stop it with a runtime mask, which lasts
 until the next reboot:
@@ -147,8 +148,8 @@ or compromised:
 4. **Review what was pushed.** Compare `git log origin/main` against what you
    remember pushing since the phone was last under your control. A fast-forward
    commit signed by the phone key would have been accepted by the lab.
-5. Keep the lab on manual apply until this is done (the timer is paused
-   already).
+5. Pause automatic apply until this is done: `sudo systemctl mask --runtime
+   --now lab-update-apply.timer`.
 
 ## If Tailscale is down (SSH recovery)
 
