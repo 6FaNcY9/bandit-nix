@@ -70,15 +70,108 @@
 
   panelPort = "7867";
   mapPort = "8100";
+
+  # Velocity proxy in front of Paper (docs/runbooks/minecraft/PROXY.md). The jar
+  # is hash-pinned here and handed to itzg/mc-proxy as TYPE=CUSTOM, so nothing is
+  # downloaded at start. BotGate is compiled against that same jar.
+  velocityJar = pkgs.fetchurl {
+    url = "https://fill-data.papermc.io/v1/objects/b4e3164df5377346854dc6cb9e6a78022b1946ff69e89676313f5f6f1c6f0fb3/velocity-3.5.1-615.jar";
+    hash = "sha256-tOMWTfU3c0aFTcbLnmp4AisZRv9p6JZ2MT9fbxxvD7M=";
+  };
+  botgate = import ./botgate {inherit pkgs;};
+
+  # Dedicated /29 for in-lab Mineflayer bots (containers join `mcbots`, connect
+  # to velocity:25565). Docker's pools hand out 172.17-31.x.x/16 and then
+  # 192.168.x.x; 10.250.77.0/29 collides with none of them nor with the other
+  # lab networks. The gateway takes .1, velocity .2 and up to 4 bots remain.
+  mcbotsSubnet = "10.250.77.0/29";
+
+  # Sources allowed to skip Mojang authentication for bot1..bot99. Never the
+  # `minecraft` network, the default bridge or the lab's own tailnet address.
+  botgateSources = "${repoConfig.lab.workstationTailscaleIp}/32,${mcbotsSubnet}";
+
+  # Applied by itzg to Paper's config at every start (PATCH_DEFINITIONS); the
+  # secret is resolved from the environment file, never written to the store.
+  velocityPatch = pkgs.writeText "velocity-patch.json" (builtins.toJSON {
+    patches = [
+      {
+        file = "/data/config/paper-global.yml";
+        ops = [
+          {
+            "$set" = {
+              path = "$.proxies.velocity.enabled";
+              value = true;
+              value-type = "bool";
+            };
+          }
+          {
+            "$set" = {
+              path = "$.proxies.velocity.online-mode";
+              value = true;
+              value-type = "bool";
+            };
+          }
+          {
+            "$set" = {
+              path = "$.proxies.velocity.secret";
+              value = "\${CFG_VELOCITY_SECRET}";
+            };
+          }
+        ];
+      }
+    ];
+  });
+
+  velocityToml = pkgs.writeText "velocity.toml" ''
+    config-version = "2.8"
+    bind = "0.0.0.0:25565"
+    # Mojang authentication for everyone; BotGate flips single logins offline.
+    online-mode = true
+    player-info-forwarding-mode = "modern"
+    ping-passthrough = "ALL"
+
+    [servers]
+    main = "minecraft:25565"
+    try = ["main"]
+
+    [forced-hosts]
+
+    # Players come from Docker/Tailscale, not from a PROXY-protocol balancer.
+    [advanced]
+    haproxy-protocol = false
+  '';
 in {
   systemd = {
     # Match the container's minecraft UID/GID so Paper can read player saves.
     tmpfiles.rules = [
       "d /srv/containers/minecraft/data 0750 1000 1000 -"
+      "d /srv/containers/velocity 0750 1000 1000 -"
+      "d /srv/containers/velocity/plugins 0750 1000 1000 -"
       "d /srv/containers/minecraft/backups 0750 root root -"
     ];
 
     services = {
+      docker-network-minecraft = repoConfig.mkDockerNetwork pkgs "minecraft";
+      # Same inspect-then-create pattern as mkDockerNetwork, with a pinned subnet.
+      docker-network-mcbots = let
+        docker = "${pkgs.docker}/bin/docker";
+      in {
+        description = "Create mcbots Docker network (${mcbotsSubnet})";
+        after = ["docker.service"];
+        requires = ["docker.service"];
+        wantedBy = ["multi-user.target"];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = pkgs.writeShellScript "ensure-mcbots-network" ''
+            set -euo pipefail
+            if ! ${docker} network inspect mcbots >/dev/null 2>&1; then
+              ${docker} network create --subnet ${mcbotsSubnet} mcbots
+            fi
+          '';
+        };
+      };
+
       # Stage the pinned panel/map and seed the panel-owned plugins before the
       # container starts. Runs as root on the host; the container only sees plain
       # files (a nix-store symlink would not resolve inside it). Ownership rules
@@ -94,6 +187,7 @@ in {
           STAGE_BLUEMAP_VERSION = blueMapVersion;
           STAGE_BLUEMAP_CORE = ./bluemap-core.conf;
           STAGE_PANELS = ./commandpanels;
+          STAGE_PATCHES = velocityPatch;
           STAGE_SEED = pkgs.linkFarm "minecraft-seed-plugins" seedPlugins;
           STAGE_EXPANSIONS = pkgs.linkFarm "minecraft-seed-expansions" seedExpansions;
         };
@@ -104,14 +198,28 @@ in {
         };
       };
 
-      # The tailnet address must exist before Docker can publish on it. tailscaled
-      # being "started" does not guarantee the address is assigned yet, so retry
-      # indefinitely instead of giving up after the default start limit.
+      # The tailnet address must exist before Docker can publish on it (now the
+      # proxy's job, see docker-velocity). tailscaled being "started" does not
+      # guarantee the address is assigned yet, so retry indefinitely instead of
+      # giving up after the default start limit.
       # Restart=always: a Stop from the panel (or a clean exit) brings the server
       # back; `systemctl stop docker-minecraft` stays the way to keep it down.
       docker-minecraft = {
-        after = ["tailscaled.service"];
+        after = ["docker-network-minecraft.service"];
+        requires = ["docker-network-minecraft.service"];
+        unitConfig.StartLimitIntervalSec = 0;
+        serviceConfig = {
+          Restart = lib.mkForce "always";
+          RestartSec = "10s";
+        };
+      };
+
+      # The proxy owns the tailnet game port, so it carries the tailscaled
+      # retry pattern above. It starts after Paper (the backend must resolve).
+      docker-velocity = {
+        after = ["tailscaled.service" "docker-network-minecraft.service" "docker-network-mcbots.service" "docker-minecraft.service"];
         wants = ["tailscaled.service"];
+        requires = ["docker-network-minecraft.service" "docker-network-mcbots.service"];
         unitConfig.StartLimitIntervalSec = 0;
         serviceConfig = {
           Restart = lib.mkForce "always";
@@ -179,10 +287,31 @@ in {
     };
   };
 
+  # Velocity forwarding secret, shared by the proxy (VELOCITY_FORWARDING_SECRET)
+  # and Paper (patched into paper-global.yml). Declared here so only bandit-lab
+  # decrypts it. The key `minecraft-velocity-secret` must exist in
+  # secrets/lab.yaml (docs/runbooks/minecraft/PROXY.md) before this is deployed.
+  sops = {
+    secrets."minecraft-velocity-secret".mode = "0400";
+    templates."minecraft-velocity.env" = {
+      mode = "0400";
+      # Docker reads environment files when a container is created; both
+      # containers must be recreated together to rotate the secret.
+      restartUnits = ["docker-minecraft.service" "docker-velocity.service"];
+      content = ''
+        VELOCITY_FORWARDING_SECRET=${config.sops.placeholder."minecraft-velocity-secret"}
+        CFG_VELOCITY_SECRET=${config.sops.placeholder."minecraft-velocity-secret"}
+      '';
+    };
+  };
+
   # Minecraft Java server (Paper) for ~12 players. Hard-capped at 4 CPU cores
   # and 12 GiB so it can never starve Traefik/PostgreSQL & co. — the lab
   # (i9-14900HX, 62 GiB) barely notices it. Not proxied through Traefik:
-  # Minecraft is a raw TCP protocol, so port 25565 is published directly.
+  # Minecraft is a raw TCP protocol. Paper publishes no game port at all: it is
+  # reachable only from the Velocity proxy over the `minecraft` Docker network
+  # (modern forwarding, shared secret), which is what lets Paper run with
+  # online-mode=false without being joinable by anyone else.
   # The container has no docker.sock, no privileges and a single mount: the
   # panel runs as a plugin inside it and cannot reach the host.
   virtualisation.oci-containers.containers.minecraft = {
@@ -207,26 +336,65 @@ in {
       USE_AIKAR_FLAGS = "true";
       MAX_PLAYERS = "12";
       OPS = "fancy8869";
+      # Authentication happens at the proxy (Mojang, or BotGate for bots); the
+      # Velocity forwarding secret is what keeps everyone else out of Paper.
+      ONLINE_MODE = "FALSE";
+      PATCH_DEFINITIONS = "/data/nix-patches";
       # Administer through the local console without exposing RCON.
       CREATE_CONSOLE_IN_PIPE = "true";
       ENABLE_RCON = "false";
     };
-    # Game port bound to the tailnet address (decision D6, 2026-10-06). Docker-
-    # published ports bypass the NixOS firewall (Docker's DNAT runs before
-    # INPUT), so the bind address is the only access control: players join over
-    # Tailscale. Panel and map listen on loopback only; tailscale serve (above)
-    # is their sole network path.
+    environmentFiles = [config.sops.templates."minecraft-velocity.env".path];
+    # Panel and map listen on loopback only; tailscale serve (above) is their
+    # sole network path. The game port is published by the proxy, not here.
     ports = [
-      "${repoConfig.lab.tailscaleIp}:25565:25565"
       "127.0.0.1:${panelPort}:7867"
       "127.0.0.1:${mapPort}:8100"
     ];
     volumes = ["/srv/containers/minecraft/data:/data"];
     extraOptions = [
+      "--network=minecraft"
       "--memory=12g"
       "--cpus=4"
       # Room for a full world save on SIGTERM (docker's default is 10 s).
       "--stop-timeout=60"
+    ];
+  };
+
+  # Velocity 3.5.1 proxy (itzg/mc-proxy, Java 21, TYPE=CUSTOM with the
+  # hash-pinned jar from Nix). Game port bound to the tailnet address (decision
+  # D6, 2026-10-06): Docker-published ports bypass the NixOS firewall, so the
+  # bind address is the only access control; players join over Tailscale.
+  # Runs as uid 1000 (not root) with no privileges and no docker.sock. Mojang
+  # authentication stays on for everyone except bot1..bot99 from BotGate's
+  # allowlisted sources. velocity.toml is re-synced from Nix on every start;
+  # the BotGate jar is mounted directly (the image's /plugins copy only
+  # replaces older files, and Nix store files all carry epoch mtimes).
+  virtualisation.oci-containers.containers.velocity = {
+    image = "itzg/mc-proxy@sha256:4bc904ca87ce92a1d6dc4948aaca3e026b770a7fe2bcfead0b099412239ba210"; # java21
+    environment = {
+      TYPE = "CUSTOM";
+      CUSTOM_FAMILY = "velocity";
+      BUNGEE_JAR_FILE = "/opt/velocity.jar";
+      SYNC_SKIP_NEWER_IN_DESTINATION = "false";
+      MEMORY = "512M";
+      TZ = config.time.timeZone;
+      BOTGATE_SOURCES = botgateSources;
+    };
+    environmentFiles = [config.sops.templates."minecraft-velocity.env".path];
+    ports = ["${repoConfig.lab.tailscaleIp}:25565:25565"];
+    volumes = [
+      "/srv/containers/velocity:/server"
+      "${velocityToml}:/config/velocity.toml:ro"
+      "${velocityJar}:/opt/velocity.jar:ro"
+      "${botgate}:/server/plugins/botgate.jar:ro"
+    ];
+    extraOptions = [
+      "--network=minecraft"
+      "--network=mcbots"
+      "--user=1000:1000"
+      "--memory=1g"
+      "--cpus=1"
     ];
   };
 }

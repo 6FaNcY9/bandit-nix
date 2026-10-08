@@ -3,7 +3,7 @@
 # File ownership, one writer per file:
 #   Nix   - the panel (VoxelDash) and map (BlueMap) jars, BlueMap's core.conf
 #           when it does not exist yet, and the CommandPanels menu YAML files.
-#           Replaced on every start.
+#           Replaced on every start. Also nix-patches/ (itzg config patch set).
 #   Panel - every other plugin jar and all runtime settings once the one-time
 #           seed below has run. The panel (or an operator) installs, updates and
 #           removes them; Nix never deletes or overwrites them again.
@@ -140,6 +140,11 @@ install -d "${own[@]}" -m 0750 "$plugins/CommandPanels" "$plugins/CommandPanels/
 for panel in "$STAGE_PANELS"/*.yml; do
   install "${own[@]}" -m 0644 "$panel" "$plugins/CommandPanels/panels/$(basename "$panel")"
 done
+
+# Velocity forwarding patch set (PATCH_DEFINITIONS=/data/nix-patches). The
+# secret stays a ${CFG_VELOCITY_SECRET} placeholder resolved by itzg at start.
+install -d "${own[@]}" -m 0750 "$data/nix-patches"
+install "${own[@]}" -m 0640 "$STAGE_PATCHES" "$data/nix-patches/velocity.json"
 
 # --- One-time seed: everything else belongs to the panel ----------------------
 if [ -e "$stamp" ]; then

@@ -27,6 +27,9 @@ in {
     # Tailscale IP of bandit-lab. Update after any Tailscale machine
     # re-enrollment or tailnet migration.
     tailscaleIp = "100.125.161.81";
+    # Tailscale IP of the owner laptop `bandit`; BotGate (Minecraft Velocity
+    # proxy) lets bot1..bot99 skip Mojang login from this address only.
+    workstationTailscaleIp = "100.102.247.30";
   };
 
   # Shared with the headless shell and editor modules.

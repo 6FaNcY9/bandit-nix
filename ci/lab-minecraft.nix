@@ -9,10 +9,12 @@
   lab,
 }: let
   c = lab.virtualisation.oci-containers.containers.minecraft;
+  v = lab.virtualisation.oci-containers.containers.velocity;
   tailnet = repoConfig.lab.tailscaleIp;
   scripts = import ../hosts/bandit-lab/services/minecraft/scripts.nix {inherit pkgs;};
   units = lab.systemd.services;
   extra = lib.concatStringsSep " " c.extraOptions;
+  vExtra = lib.concatStringsSep " " v.extraOptions;
   dummyJar = name: pkgs.writeText name "jar";
   seeds = pkgs.linkFarm "seed-plugins" {
     "LuckPerms-Bukkit-5.5.71.jar" = dummyJar "lp";
@@ -23,7 +25,13 @@
 in
   assert lib.assertMsg (c.volumes == ["/srv/containers/minecraft/data:/data"]) "the Minecraft container may mount only its data directory (no docker.sock, no unrelated paths)";
   assert lib.assertMsg (!(lib.hasInfix "privileged" extra) && !(lib.hasInfix "cap-add" extra) && !(lib.hasInfix "docker.sock" extra)) "the Minecraft container must stay unprivileged: ${extra}";
-  assert lib.assertMsg (lib.sort lib.lessThan c.ports == lib.sort lib.lessThan ["${tailnet}:25565:25565" "127.0.0.1:7867:7867" "127.0.0.1:8100:8100"]) "Minecraft publishes the game port on the tailnet and the panel/map on loopback only: ${toString c.ports}";
+  assert lib.assertMsg (lib.sort lib.lessThan c.ports == ["127.0.0.1:7867:7867" "127.0.0.1:8100:8100"]) "Paper publishes only the panel/map on loopback, never a game port: ${toString c.ports}";
+  assert lib.assertMsg (v.ports == ["${tailnet}:25565:25565"]) "the Velocity proxy publishes exactly the game port on the tailnet address: ${toString v.ports}";
+  assert lib.assertMsg (c.environment.ONLINE_MODE != "FALSE" || (lab.virtualisation.oci-containers.containers ? velocity && !(lib.any (lib.hasSuffix ":25565") c.ports))) "Paper may run online-mode=false only behind Velocity and without a published game port";
+  assert lib.assertMsg (lib.hasInfix "--network=minecraft" extra && lib.hasInfix "--network=minecraft" vExtra) "Paper and Velocity share the dedicated minecraft network";
+  assert lib.assertMsg (!(lib.hasInfix "privileged" vExtra) && !(lib.hasInfix "cap-add" vExtra) && !(lib.any (lib.hasInfix "docker.sock") v.volumes)) "the Velocity container must stay unprivileged without docker.sock: ${vExtra}";
+  assert lib.assertMsg (!(lib.hasInfix "100.125.161.81/" v.environment.BOTGATE_SOURCES) && !(lib.hasInfix "172." v.environment.BOTGATE_SOURCES) && !(lib.hasInfix "--network=bridge" vExtra)) "BotGate must never allowlist the lab tailnet address, a default Docker range or the bridge: ${v.environment.BOTGATE_SOURCES}";
+  assert lib.assertMsg (v.environmentFiles == c.environmentFiles && !(lib.hasInfix "VELOCITY_FORWARDING_SECRET" (builtins.toJSON v.environment))) "the forwarding secret reaches both containers only through the sops env file";
   assert lib.assertMsg (c.environment.ENABLE_RCON == "false" && !(c.environment ? RCON_PASSWORD)) "RCON stays disabled";
   assert lib.assertMsg (lib.hasInfix "--memory=12g" extra && lib.hasInfix "--cpus=4" extra && c.environment.MEMORY == "8G") "resource caps (12 GiB, 4 CPUs, 8 GiB heap) are part of the contract";
   assert lib.assertMsg (c.environment.PAPER_BUILD != "" && !(c.environment ? MOTD)) "the Paper build is pinned and server.properties keys owned by the panel (MOTD) have no environment variable";
@@ -44,7 +52,7 @@ in
         MC_DATA=$data MC_OWNER= \
           STAGE_VOXELDASH=${dummyJar "voxeldash"} STAGE_VOXELDASH_VERSION=1.0 \
           STAGE_BLUEMAP=${dummyJar "bluemap"} STAGE_BLUEMAP_VERSION=2.0 \
-          STAGE_BLUEMAP_CORE=${dummyJar "core"} STAGE_PANELS=${panels} \
+          STAGE_BLUEMAP_CORE=${dummyJar "core"} STAGE_PANELS=${panels} STAGE_PATCHES=${dummyJar "patch"} \
           STAGE_SEED=${seeds} STAGE_EXPANSIONS=${expansions} \
           ${scripts.stage}/bin/minecraft-stage
       }
@@ -58,6 +66,7 @@ in
       grep -q '^force-reason: true$' $data/plugins/SModeration/config.yml
       grep -q '^  warn:$' $data/plugins/SModeration/config.yml
       test -e $data/.nix-seed-v1
+      test -e $data/nix-patches/velocity.json
 
       # After the seed the panel owns everything else: a removed plugin stays
       # removed, a changed setting stays changed, Nix-owned jars are replaced.

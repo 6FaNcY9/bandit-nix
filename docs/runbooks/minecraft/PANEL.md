@@ -198,8 +198,8 @@ between them and the panel. Restrict the ACL to admin devices and keep panel acc
 to administrators. Check which containers share the bridge with
 `docker network inspect bridge` before the GO.
 
-`lab-surface` and `lab-minecraft` (flake checks) enforce: game port on the tailnet
-address; panel (7867) and map (8100) on `127.0.0.1` only; RCON disabled and unpublished;
+`lab-surface` and `lab-minecraft` (flake checks) enforce: game port published only by
+the Velocity proxy on the tailnet address ([PROXY.md](PROXY.md)), none by Paper; panel (7867) and map (8100) on `127.0.0.1` only; RCON disabled and unpublished;
 one mount (`/srv/containers/minecraft/data`), no `--privileged`, no `cap-add`, no
 docker.sock; no firewall port opened for the panel. VoxelDash's built-in SSH/SFTP
 server (Settings) is off by default and must stay off: it would listen inside the
