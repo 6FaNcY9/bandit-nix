@@ -272,17 +272,31 @@ async function waitSafe(r, job, x, z) {
   }
 }
 
-async function goNear(r, job, x, y, z, dist) {
+async function goNear(r, job, x, y, z, dist, {brave = false} = {}) {
   guard(job);
   // Unreachable goals make the pathfinder retry partial paths
   // forever, so every walk has a deadline.
-  const deadline = setTimeout(() => r.bot?.pathfinder.stop(), GOTO_TIMEOUT_MS);
+  let timedOut = false;
+  const deadline = setTimeout(() => {
+    timedOut = true;
+    r.bot?.pathfinder.stop();
+  }, GOTO_TIMEOUT_MS);
   try {
-    await waitSafe(r, job, x, z);
-    await r.bot.pathfinder.goto(new goals.GoalNear(x, y, z, dist));
-  } catch (e) {
-    guard(job);
-    throw new Error(`could not reach ${Math.round(x)} ${Math.round(y)} ${Math.round(z)}: ${e.message}`);
+    // Something else (combat, a block update) can stop the path mid-walk; walk
+    // again instead of failing the job, unless the deadline or a stop hit.
+    for (let tries = 0; ; tries++) {
+      try {
+        if (!brave) await waitSafe(r, job, x, z);
+        await r.bot.pathfinder.goto(new goals.GoalNear(x, y, z, dist));
+        return;
+      } catch (e) {
+        guard(job);
+        if (timedOut || tries >= 3) {
+          throw new Error(`could not reach ${Math.round(x)} ${Math.round(y)} ${Math.round(z)}: ${e.message}`);
+        }
+        await sleep(1000);
+      }
+    }
   } finally {
     clearTimeout(deadline);
   }
@@ -405,40 +419,55 @@ const JOBS = {
     }
   },
 
-  // Take armour, a sword and food from a chest and wear/hold them.
+  // Visit every chest/barrel within 6 blocks of the supply point and take
+  // what is missing: best armour per slot, a sword, an axe, a pickaxe, a totem
+  // for the off-hand and food up to 32; then wear/hold it.
   async rearm(r, job) {
     const {bot} = r;
     const {x, y, z} = job.args;
-    await goNear(r, job, x, y, z, 3);
-    const block = bot.blockAt(new (require('vec3').Vec3)(x, y, z));
-    if (!block || !/chest|barrel/.test(block.name)) throw new Error(`no chest at ${x} ${y} ${z} (found ${block?.name})`);
-    const tier = (n) => ['leather', 'golden', 'chainmail', 'iron', 'diamond', 'netherite'].findIndex((t) => n.startsWith(t));
-    const has = (re) => bot.inventory.items().some((i) => re.test(i.name));
-    const want = [
-      [/_helmet$/, 'head'], [/_chestplate$/, 'torso'], [/_leggings$/, 'legs'], [/_boots$/, 'feet'], [/_sword$/, null],
-    ];
-    const chest = await bot.openContainer(block);
-    try {
-      for (const [re] of want) {
-        guard(job);
-        if (has(re)) continue;
-        const best = chest.containerItems().filter((i) => re.test(i.name)).sort((a, b) => tier(b.name) - tier(a.name))[0];
-        if (best) await chest.withdraw(best.type, best.metadata, 1);
+    const Vec3 = require('vec3').Vec3;
+    const centre = new Vec3(x, y, z);
+    const ids = ['chest', 'trapped_chest', 'barrel'].map((n) => bot.registry.blocksByName[n]?.id).filter((i) => i !== undefined);
+    await goNear(r, job, x, y, z, 3, {brave: true}); // getting armour is the safety step
+    const spots = bot.findBlocks({matching: ids, point: centre, maxDistance: 6, count: 64});
+    if (!spots.length) throw new Error(`no chests within 6 blocks of ${x} ${y} ${z}`);
+    const tier = (n) => ['wooden', 'leather', 'golden', 'stone', 'chainmail', 'iron', 'diamond', 'netherite'].findIndex((t) => n.startsWith(t));
+    const best = (items, re) => items.filter((i) => re.test(i.name)).sort((a, b) => tier(b.name) - tier(a.name))[0];
+    const mine = () => [...bot.inventory.items(), ...['head', 'torso', 'legs', 'feet', 'off-hand'].map((s) => bot.inventory.slots[bot.getEquipmentDestSlot(s)]).filter(Boolean)];
+    const WANT = [/_helmet$/, /_chestplate$/, /_leggings$/, /_boots$/, /_sword$/, /_axe$/, /_pickaxe$/, /^totem_of_undying$/];
+    const isFood = (n) => bot.registry.foodsByName[n] && !/rotten|spider_eye|poisonous|pufferfish|chorus|golden_apple/.test(n);
+    const foodCount = () => bot.inventory.items().filter((i) => isFood(i.name)).reduce((n, i) => n + i.count, 0);
+    const opened = new Set();
+    for (const pos of spots) {
+      guard(job);
+      // A double chest is two blocks but one inventory; skip the second half.
+      if ([...opened].some((k) => pos.distanceTo(k) <= 1.01)) continue;
+      opened.add(pos);
+      await goNear(r, job, pos.x, pos.y, pos.z, 3, {brave: true});
+      const box = await bot.openContainer(bot.blockAt(pos));
+      try {
+        for (const re of WANT) {
+          const have = best(mine(), re);
+          const offer = best(box.containerItems(), re);
+          if (offer && (!have || tier(offer.name) > tier(have.name))) await box.withdraw(offer.type, offer.metadata, 1);
+        }
+        const food = box.containerItems().filter((i) => isFood(i.name)).sort((a, b) => (b.name === 'golden_carrot') - (a.name === 'golden_carrot'))[0];
+        if (food && foodCount() < 32) await box.withdraw(food.type, food.metadata, Math.min(32 - foodCount(), food.count));
+      } finally {
+        box.close();
       }
-      const food = chest.containerItems().find((i) => bot.registry.foodsByName[i.name] && !/rotten|spider_eye|poisonous|golden_apple/.test(i.name));
-      const haveFood = bot.inventory.items().filter((i) => bot.registry.foodsByName[i.name]).reduce((n, i) => n + i.count, 0);
-      if (food && haveFood < 16) await chest.withdraw(food.type, food.metadata, Math.min(16 - haveFood, food.count));
-    } finally {
-      chest.close();
     }
-    for (const [re, slot] of want) {
-      const it = bot.inventory.items().filter((i) => re.test(i.name)).sort((a, b) => tier(b.name) - tier(a.name))[0];
-      if (it && slot) await bot.equip(it, slot).catch(() => {});
+    for (const [re, slot] of [[/_helmet$/, 'head'], [/_chestplate$/, 'torso'], [/_leggings$/, 'legs'], [/_boots$/, 'feet']]) {
+      const it = best(bot.inventory.items(), re);
+      if (it) await bot.equip(it, slot).catch(() => {});
     }
-    const sword = bot.inventory.items().find((i) => /_sword$/.test(i.name));
+    const totem = bot.inventory.items().find((i) => i.name === 'totem_of_undying');
+    if (totem) await bot.equip(totem, 'off-hand').catch(() => {});
+    const sword = best(bot.inventory.items(), /_sword$/);
     if (sword) await bot.equip(sword, 'hand').catch(() => {});
     const worn = ['head', 'torso', 'legs', 'feet'].filter((s) => bot.inventory.slots[bot.getEquipmentDestSlot(s)]).length;
-    job.progress = `armour ${worn}/4${sword ? ', sword' : ''}`;
+    const off = bot.inventory.slots[bot.getEquipmentDestSlot('off-hand')]?.name;
+    job.progress = `armour ${worn}/4, ${sword?.name || 'no sword'}, off-hand ${off || 'empty'}, food ${foodCount()}`;
   },
 
   async say(r, job) {

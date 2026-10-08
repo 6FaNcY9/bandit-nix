@@ -40,7 +40,7 @@ in {
         BLUEMAP_URL = "http://minecraft:8100";
         # Chest next to the bots' respawn point (spawnpoint -36 64 -197); after a
         # death a bot re-equips armour, sword and food from it.
-        SUPPLY_CHEST = "-37,64,-199";
+        SUPPLY_CHEST = "-37,65,-200";
         # Bots never dig or place inside these x1,z1,x2,z2 boxes: the main base
         # around spawn and MidariBread's base (from BlueMap light data, +16).
         PROTECTED_AREAS = "-80,-144,80,80;112,368,272,592";
