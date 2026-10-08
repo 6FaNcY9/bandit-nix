@@ -112,9 +112,11 @@ class BotRunner {
     bot.on('spawn', () => {
       if (!authed && this.password) setTimeout(() => !authed && bot.chat(`/login ${this.password}`), 1500);
     });
+    // The holding area sends no normal spawn, so answer its prompts directly.
     bot.on('messagestr', (msg) => {
       if (!this.password || authed) return;
-      if (/not registered/i.test(msg)) bot.chat(`/register ${this.password} ${this.password}`);
+      if (/not registered|use \/register/i.test(msg)) bot.chat(`/register ${this.password} ${this.password}`);
+      else if (/use \/login|already registered/i.test(msg)) bot.chat(`/login ${this.password}`);
       else if (/logged in successfully|registered successfully|already logged in/i.test(msg)) {
         authed = true;
         this.log(this.name, 'logged in to VeloAuth');
