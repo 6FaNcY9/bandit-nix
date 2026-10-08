@@ -588,6 +588,23 @@ function noteStock(r, job, chest) {
 // "logs" stands for every kind of log; anything else is an exact item name.
 const itemMatcher = (what) => (what === 'logs' ? (n) => n.endsWith('_log') : what === 'coal' ? (n) => n === 'coal' || n === 'charcoal' : (n) => n === what);
 
+// A chest cannot be opened with a solid block on top. The pathfinder builds with
+// dirt (which grows grass)/cobblestone/stone/netherrack, and a chest it bridged over stayed shut
+// for the bots (2026-10-08): clear that kind of cover, report anything else.
+const SCAFFOLD = /^(dirt|grass_block|cobblestone|stone|netherrack)$/; // dirt turns into grass in the light
+async function openChest(r, job, block) {
+  const {bot} = r;
+  const p = block.position.offset(0, 1, 0);
+  const above = bot.blockAt(p);
+  if (/chest/.test(block.name) && above && above.boundingBox === 'block') {
+    if (!SCAFFOLD.test(above.name) || insideAreas(r.protectedAreas, p.x, p.z)) throw new Error(`${block.name} at ${at(block.position)} is covered by ${above.name}`);
+    job.t.doing = `clearing ${above.name} off the chest`;
+    r.emit('info', `chest at ${at(block.position)} was covered by ${above.name}: digging it away`);
+    await bot.dig(above, true);
+  }
+  return bot.openContainer(block);
+}
+
 // Where a job may empty the inventory: a shift's own chest, else the supply chest.
 const chestOf = (r, job) => (job.type === 'shift' ? {x: job.args.x, y: job.args.y, z: job.args.z} : r.supplyChest);
 const edible = (bot, it) => bot.registry.foodsByName[it.name] && !AVOID_FOOD.has(it.name);
@@ -813,7 +830,7 @@ const JOBS = {
     job.t.doing = `depositing at ${place(r, job.args)}`;
     const block = bot.blockAt(new (require('vec3').Vec3)(x, y, z));
     if (!block || !/chest|barrel/.test(block.name)) throw new Error(`no chest at ${x} ${y} ${z} (found ${block?.name})`);
-    const chest = await bot.openContainer(block);
+    const chest = await openChest(r, job, block);
     try {
       let moved = 0;
       const only = job.args.only && itemMatcher(job.args.only);
@@ -843,7 +860,7 @@ const JOBS = {
     const block = bot.blockAt(new (require('vec3').Vec3)(x, y, z));
     if (!block || !/chest|barrel/.test(block.name)) throw new Error(`no chest at ${x} ${y} ${z} (found ${block?.name})`);
     job.t.doing = `counting what is in ${place(r, job.args)}`;
-    const chest = await bot.openContainer(block);
+    const chest = await openChest(r, job, block);
     try {
       noteStock(r, job, chest);
     } finally {
@@ -859,7 +876,7 @@ const JOBS = {
     const block = bot.blockAt(new (require('vec3').Vec3)(x, y, z));
     if (!block || !/chest|barrel/.test(block.name)) throw new Error(`no chest at ${x} ${y} ${z} (found ${block?.name})`);
     job.t.doing = `taking ${item} from ${place(r, job.args)}`;
-    const chest = await bot.openContainer(block);
+    const chest = await openChest(r, job, block);
     try {
       let taken = 0;
       const match = itemMatcher(item);
@@ -904,7 +921,7 @@ const JOBS = {
       opened.add(pos);
       job.t.doing = `re-arming from ${place(r, job.args)}`;
       await goNear(r, job, pos.x, pos.y, pos.z, 3, {brave: true, doing: job.t.doing});
-      const box = await bot.openContainer(bot.blockAt(pos));
+      const box = await openChest(r, job, bot.blockAt(pos));
       try {
         for (const re of WANT) {
           const have = best(mine(), re);
@@ -950,15 +967,6 @@ const JOBS = {
         await JOBS.deposit(r, sub({args: {x: job.args.x, y: job.args.y, z: job.args.z}}));
         if (bot.inventory.emptySlotCount() < 4) throw new Error('inventory still full after depositing (chest full?)');
         continue;
-      }
-      if (!logs && !bot.inventory.items().some((i) => i.name.endsWith('_pickaxe'))) {
-        job.progress = 'crafting a pickaxe';
-        job.t.doing = 'crafting a pickaxe';
-        try {
-          await crafting.ensureItem(r, sub({}), 'stone_pickaxe', 1);
-        } catch {
-          await crafting.ensureItem(r, sub({}), 'wooden_pickaxe', 1);
-        }
       }
       const round = sub({});
       await collect(r, round, matching, 8, job.args.block);
