@@ -20,6 +20,7 @@
   tunnelTargets = lib.concatMap (t: map (v: toString (v.service or v)) (lib.attrValues t.ingress)) (lib.attrValues lab.services.cloudflared.tunnels);
   sambaAllow = lab.services.samba.settings.global."hosts allow";
 in
+  assert lib.assertMsg (lib.elem "--security-opt=no-new-privileges" lab.virtualisation.oci-containers.containers.aiia-ghost.extraOptions) "aiia-ghost must retain no-new-privileges";
   assert lib.assertMsg (!lab.services.openssh.openFirewall) "sshd must not open the firewall globally; port 22 is allowed on tailscale0 only";
   assert lib.assertMsg (lib.all (p: lib.elem p fw.interfaces.tailscale0.allowedTCPPorts) [22 139 445]) "tailscale0 must allow SSH (22) and SMB (139, 445)";
   assert lib.assertMsg (noPorts fw) "the global firewall lists must be empty: open ports per interface, on tailscale0 only";

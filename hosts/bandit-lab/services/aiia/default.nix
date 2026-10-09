@@ -162,6 +162,7 @@ in {
       };
       environmentFiles = [config.sops.templates."aiia.env".path];
       extraOptions = [
+        "--security-opt=no-new-privileges"
         "--label=traefik.enable=true"
         "--label=traefik.docker.network=proxy"
         "--label=traefik.http.routers.aiia.rule=Host(`aiia.at`) || Host(`www.aiia.at`) || Host(`aiia.bandit-lab.mrija.org`)"

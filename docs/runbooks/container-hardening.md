@@ -38,7 +38,44 @@ the tailnet address (`ci/lab-surface.nix`).
 | wazuh.agent | root | no | none | no | no | Holds the Docker socket for container monitoring (accepted risk; allowlisted in `ci/lab-surface.nix`). |
 | portainer, portainer-agent | root | no | none | no | no | Being retired; the Agent holds `docker.sock`. |
 
-## First candidates, in order
+## Step 1: source changes prepared on 2026-10-10
+
+These rows record declarative flags, not deployed state. Each container is a
+separate commit, guarded by `lab-surface`. The owner gives GO for each shipment;
+Codex neither pushes nor activates. Vaultwarden goes last and needs the
+supervised-maintenance procedure in `bandit-lab-updates.md`.
+
+| Container | Adopted flag | Owner's post-deploy health probe |
+| --- | --- | --- |
+| aiia-ghost | `no-new-privileges` | HTTP `http://127.0.0.1:2368/` inside its network namespace; expect a successful storefront response (follow redirects), then check `https://aiia.at/` through the normal route. |
+
+For an HTTP probe from the host, use the container's network namespace so no
+port needs publishing (owner only; substitute the row's container and URL):
+
+```bash
+sudo nsenter -t "$(sudo docker inspect -f '{{.State.Pid}}' aiia-ghost)" -n \
+  curl -fsSL --max-time 15 http://127.0.0.1:2368/ >/dev/null
+sudo docker inspect -f '{{json .HostConfig.SecurityOpt}}' aiia-ghost
+sudo docker logs --since 5m --tail 50 aiia-ghost
+```
+
+Confirm the inspect output contains `no-new-privileges`, the probe succeeds,
+and logs have no new startup/permission failures. Builds alone cannot establish
+image compatibility. If a probe fails, revert that container's flag through the
+same deployment procedure; do not alter or restore its application data.
+
+Compose's monitoring unit uses `start`, not `up`, and has
+`restartIfChanged = false`. After the owner applies a monitoring flag, recreate
+only that service to apply it:
+
+```bash
+sudo docker compose -p monitoring -f /etc/bandit-lab/monitoring.compose.yml \
+  up -d --no-deps --pull never --no-build --force-recreate SERVICE
+```
+
+No runtime checks have been performed for these prepared changes.
+
+## Historical candidate list (2026-10-06)
 
 1. `--security-opt=no-new-privileges` for vaultwarden, searxng, cyberchef,
    it-tools, juice-shop, aiia-ghost, aiia-redis, grafana and the two Prometheus
