@@ -629,6 +629,14 @@ async function sealFluids(r, job, pos) {
   return true;
 }
 
+// One line for the "got no answer" events: what the server's dig timing depends on.
+function digWhy(bot, block, pos) {
+  const e = bot.entity;
+  const effects = Object.values(e.effects || {}).map((f) => bot.registry.effects?.[f.id]?.name || f.id).join(',') || 'none';
+  const t = bot.digTime ? bot.digTime(block) : '?';
+  return `held ${bot.heldItem?.name || 'nothing'}, onGround ${e.onGround}, inWater ${!!e.isInWater}, effects ${effects}, dist ${e.position.distanceTo(pos.offset(0.5, 0.5, 0.5)).toFixed(1)}, est ${Math.round(t)} ms`;
+}
+
 // true only when this bot dug the block; false when it was gone already or the dig got no answer.
 async function digAt(r, job, pos) {
   const {bot} = r;
@@ -648,29 +656,47 @@ async function digAt(r, job, pos) {
   job.t.doing = `mining ${block.name}${tally(job)} near ${at(pos)}`;
   // A dig the server never answers hangs forever: give it 25 s, then try another block.
   // A fight ends a dig on purpose (see Combat.fight): wait until it is over and dig again.
-  let gave;
-  for (let tries = 0; ; tries++) {
-    await bot.tool.equipForBlock(block, {}).catch(() => {});
-    let digTimer;
-    try {
-      gave = await Promise.race([bot.dig(block, true).then(() => false), new Promise((res) => (digTimer = setTimeout(() => res(true), 25000)))]);
-      break;
-    } catch (e) {
-      if (!/Digging aborted/.test(e.message) || tries >= 3 || Date.now() - (r.combat?.lastFight || 0) > 2000) throw e;
-      while (Date.now() - (r.combat?.lastFight || 0) < 1500) {
+  // Resolves true when the server never answered, false when dug, null when the block is gone.
+  const attempt = async () => {
+    for (let tries = 0; ; tries++) {
+      await bot.tool.equipForBlock(block, {}).catch(() => {});
+      let digTimer;
+      try {
+        return await Promise.race([bot.dig(block, true).then(() => false), new Promise((res) => (digTimer = setTimeout(() => res(true), 25000)))]);
+      } catch (e) {
+        if (!/Digging aborted/.test(e.message) || tries >= 3 || Date.now() - (r.combat?.lastFight || 0) > 2000) throw e;
+        while (Date.now() - (r.combat?.lastFight || 0) < 1500) {
+          guard(job);
+          await sleep(250);
+        }
+        block = bot.blockAt(pos);
+        if (!block || block.name.endsWith('air')) return null;
+      } finally {
+        clearTimeout(digTimer);
+      }
+    }
+  };
+  let gave = await attempt();
+  if (gave === null) return false;
+  if (gave) {
+    bot.stopDigging();
+    const why = digWhy(bot, block, pos);
+    block = bot.blockAt(pos);
+    if (block && !block.name.endsWith('air')) {
+      // Safety net: the server needs 5x-25x longer while the bot is airborne or in water; settle, then dig once more.
+      r.emit('info', `digging ${block.name} at ${at(pos)} got no answer, trying once more: ${why}`);
+      for (let i = 0; i < 12 && (!bot.entity.onGround || bot.entity.isInWater); i++) {
         guard(job);
         await sleep(250);
       }
-      block = bot.blockAt(pos);
-      if (!block || block.name.endsWith('air')) return false;
-    } finally {
-      clearTimeout(digTimer);
+      gave = await attempt();
+      if (gave === null) return false;
     }
-  }
-  if (gave) {
-    bot.stopDigging();
-    r.emit('info', `digging ${block.name} at ${at(pos)} got no answer: skipped`);
-    return false;
+    if (gave) {
+      bot.stopDigging();
+      r.emit('info', `digging ${block.name} at ${at(pos)} got no answer: skipped (${digWhy(bot, block, pos)})`);
+      return false;
+    }
   }
   // Walk over the drops near the block (items merge and fly a little).
   await sleep(400);

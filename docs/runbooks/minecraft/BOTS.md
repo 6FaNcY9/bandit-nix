@@ -455,5 +455,17 @@ dirty tree does not leak).
   lets a box that already overlaps a wall walk straight through it. If it
   returns, count `forcedMove` per bot first; `unwedge()` in `bots.js` only
   re-centres as a last resort.
+- "digging X at ... got no answer": the server never confirmed a break within 25 s.
+  `digAt()` now stops the dig, waits up to 3 s until the bot is on the ground and out of
+  water, and digs once more; the first event says `trying once more: held ..., onGround ...,
+  inWater ..., effects ..., dist ..., est ... ms`, a second failure says `skipped`.
+  Measured 2026-10-10 (bot6, `mine redstone_ore 16` at y -47..-55): 5 first digs got no
+  answer, all with the right pickaxe held, on the ground, dry, no effects, 1-3.5 blocks
+  away, and all 5 worked on the second try, 0 skipped. So the cause is not the held
+  item, airborne or water; it is a lost first dig that a fresh one fixes (a rejected or
+  ignored start packet is the likeliest, unproven). Separate finding: minecraft-data
+  gives ores the material `incorrect_for_wooden_tool` instead of `mineable/pickaxe`, so
+  mineflayer's `digTime` ignores the pickaxe speed for every ore (`est 6750 ms` for
+  deepslate redstone with a diamond pickaxe; vanilla takes about 840 ms).
 - Image changed but the old one runs: the image tag is the Nix store hash;
   `sudo systemctl restart docker-mcbots` after activation.
