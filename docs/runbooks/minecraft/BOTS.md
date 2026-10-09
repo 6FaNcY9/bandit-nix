@@ -99,6 +99,11 @@ inventory goes on at once; a log job without an axe makes a stone or wooden one 
 then mines the target; without rubble it skips the block. Live: water above a test ore sealed with
 granite, ore mined in 16 s.
 
+**Jobs survive restarts**: every 2 s the running and queued `shift`, `guard`, `mine` and `chop` jobs
+are saved to `STATE_DIR/jobs.json` (a mine/chop with what is left of its count) and queued again
+once each bot is back online after a restart or deploy (a bot away for more than 5 min starts
+empty). A shift whose bot is far from the chest (respawned at world spawn) walks back first.
+
 **Junk**: during ore and log jobs, with fewer than 4 free slots, the bot throws away cobblestone
 (keeping one stack), cobbled deepslate, dirt, gravel, granite, diorite, andesite, tuff and the like
 (not what the job is mining). Torches never hang on a block of the job's target type.

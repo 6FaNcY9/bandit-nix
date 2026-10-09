@@ -910,6 +910,10 @@ async function collect(r, job, matching, count, what) {
     }
     // A shift works around its own chest: never more than LEASH blocks away from it.
     const anchor = job.type === 'shift' ? job.args : null;
+    if (anchor && Math.hypot(me.x - anchor.x, me.z - anchor.z) > LEASH - 8) { // e.g. respawned at world spawn
+      await goNear(r, job, anchor.x, anchor.y, anchor.z, 3, {doing: `walking back to the shift's chest ${at(anchor)}`});
+      continue;
+    }
     if (anchor) found = found.filter((p) => Math.hypot(p.x - anchor.x, p.z - anchor.z) <= LEASH);
     for (const p of found) {
       if ((r.skip.get(keyOf(p)) || 0) > Date.now()) continue; // could not get there lately
