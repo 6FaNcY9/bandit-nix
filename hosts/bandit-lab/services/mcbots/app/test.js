@@ -235,6 +235,15 @@ require('./crafting');
     // the page may only run its own two inline blocks
     const csp = (await fetch(`http://127.0.0.1:${port}/`, {headers: {'tailscale-user-login': 'a@github'}})).headers.get('content-security-policy');
     assert.match(csp, /default-src 'none'; script-src 'sha256-[\w+/=]{44}'; style-src 'sha256-[\w+/=]{44}'; connect-src 'self'/);
+    // a supply marker replaces the configured supply chest for everyone
+    const placesPost = (body, origin = `http://127.0.0.1:${port}`) => fetch(`http://127.0.0.1:${port}/api/places`, {method: 'POST', headers: {'content-type': 'application/json', origin, 'tailscale-user-login': 'a@github'}, body: JSON.stringify(body)});
+    assert.strictEqual((await placesPost({action: 'set', place: {name: 'Main', kind: 'supply', x: 5, y: 64, z: 6}}, 'http://evil.example')).status, 403, 'cross-origin refused');
+    const pr = await placesPost({action: 'set', place: {name: 'Main', kind: 'supply', x: 5, y: 64, z: 6}});
+    assert.deepStrictEqual([pr.status, (await pr.json()).supplyChest], [200, {x: 5, y: 64, z: 6}]);
+    const full = await (await fetch(`http://127.0.0.1:${port}/api/state`, {headers: {'tailscale-user-login': 'a@github'}})).json();
+    assert.deepStrictEqual([full.supplyChest, full.places.length], [{x: 5, y: 64, z: 6}, 1]);
+    assert.strictEqual((await placesPost({action: 'set', place: {name: 'Bad', kind: 'nope', x: 0, y: 0, z: 0}})).status, 400);
+
     // map tiles: proxied from BlueMap; anything else never reaches it
     const tileUrl = (pth) => fetch(`http://127.0.0.1:${port}${pth}`, {headers: {'tailscale-user-login': 'a@github'}});
     const tl = await tileUrl('/api/tile/world/1/x-1/z0.png');
@@ -817,6 +826,22 @@ require('./crafting');
   assert.strictEqual(unsafeDig(fake({'0,8,0': 'air', '0,7,0': 'air'}, [0, 10, 0]), new Vec3(0, 9, 0)), null, 'a drop of 3 is fine');
   assert.match(unsafeDig(fake({'0,8,0': 'air', '0,7,0': 'air', '0,6,0': 'air', '0,5,0': 'air'}, [0, 10, 0]), new Vec3(0, 9, 0)), /drop/);
   assert.match(unsafeDig(fake({'0,8,0': 'air', '0,7,0': 'lava'}, [0, 10, 0]), new Vec3(0, 9, 0)), /lava below/);
+
+  // places: validated, replaced by name, kept across a restart; first supply wins
+  const {Places} = require('./places');
+  const pdir = require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'mcbots-p-'));
+  const pl = new Places(pdir);
+  pl.set({name: 'Forest', kind: 'site', x: -258, y: 65, z: -210});
+  pl.set({name: 'Main chest', kind: 'supply', x: '-260', y: '65', z: '-213'});
+  assert.deepStrictEqual(pl.first('supply'), {name: 'Main chest', kind: 'supply', dim: 'overworld', x: -260, y: 65, z: -213});
+  pl.set({name: 'Forest', kind: 'site', x: -250, y: 66, z: -200});
+  assert.strictEqual(pl.list.length, 2, 'same name replaces');
+  assert.throws(() => pl.set({name: 'x', kind: 'castle', x: 0, y: 0, z: 0}), /kind/);
+  assert.throws(() => pl.set({name: '<script>', kind: 'site', x: 0, y: 0, z: 0}), /name/);
+  assert.throws(() => pl.set({name: 'deep', kind: 'site', x: 0, y: 999, z: 0}), /y must/);
+  assert.deepStrictEqual(new Places(pdir).list.map((p) => [p.name, p.x]), [['Forest', -250], ['Main chest', -260]], 'survives a restart');
+  pl.remove('Forest');
+  assert.throws(() => pl.remove('Forest'), /no place/);
 
   // guard job arguments
   const gq = new BotRunner('bot2', {host: 'x', port: 1, log: () => {}, world: null});
