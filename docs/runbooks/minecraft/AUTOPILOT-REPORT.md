@@ -109,7 +109,6 @@ post), torches + ore search + review fixes (`147431c`: `mine iron_ore 8` gave 9 
   armour from the inventory without walking to a chest, keep spare kits in the supply chest.
   Lost kits today: bot1 x2 (skeletons), bot2, bot4 (drowned).
 - P1 supply chest as a map marker that the owner moves (still the old spawn chest from default.nix).
-- P1 torch spacing: one pair still landed 1 block apart (light/torch updates lag the dig).
 - P1 a shift that finds nothing in range moves on (spiral 48 blocks) instead of failing.
 - P2 precision everywhere (owner's wish: use what humans cannot time): instant tool swap per block
   (done), perfect crit/sweep timing (done), next: shield-free arrow dodging by side-stepping only
@@ -117,6 +116,13 @@ post), torches + ore search + review fixes (`147431c`: `mine iron_ore 8` gave 9 
   inventory sorting at the chest. No duplication glitches (they damage the shared world).
 - AFK: bot4 stands at the owner's Nether-roof gold farm (167 234.5 603.5); after the deploy set its
   settings to defend off so it never walks off the roof.
+- From the Jarvis plugin (iamgadgetman/jarvis, read 2026-10-09; Java/Citizens, so ideas only):
+  P1 seal lava pockets with cobblestone instead of skipping the block; P2 a full branch mine at a
+  site marker (staircase, gallery, grid of branches, torch-lit); P2 guard leash + creeper first +
+  remember attackers; later natural-language orders via a local model (stage 2) and builds as
+  generated fill/setBlock scripts (stage 5). Done: junk thrown away during ore/log jobs.
+  JARVIS-1 (CraftJarvis): research agent on 1.16 + GPU + OpenAI, not usable; only its
+  recipe-tree planning with remembered plans maps to stage 2.
 - P2 ore levels: send a bot to the ore's best Y first (diamond/redstone -59, gold -16, lapis 0,
   iron 16, copper 48, coal 96; 26.2 keeps the 1.18 distribution) and branch-mine there.
 - P2 a cave layer on the map (top-down slice at the bot's height from its loaded blocks).

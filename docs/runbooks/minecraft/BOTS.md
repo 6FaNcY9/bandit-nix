@@ -90,6 +90,10 @@ the 1.18 distribution), ores outside the band count 4 extra per level, and when 
 reach it tunnels 32 blocks sideways (up to 6 times) instead of failing. Live: `mine iron_ore 8`
 from the surface, 11 raw iron in 153 s, ending at Y 32.
 
+**Junk**: during ore and log jobs, with fewer than 4 free slots, the bot throws away cobblestone
+(keeping one stack), cobbled deepslate, dirt, gravel, granite, diorite, andesite, tuff and the like
+(not what the job is mining). Torches never hang on a block of the job's target type.
+
 **Targets**: `mine`/`shift` of an ore also take its deepslate variant; ores are searched within 128
 blocks (no anti-xray on the server, so bots see ores through stone), nearest first so a vein is
 finished; stone and logs prefer blocks at or above the bot (2 extra cost per level down).
