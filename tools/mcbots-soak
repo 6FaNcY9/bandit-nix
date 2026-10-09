@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Unattended soak test of the lab bots: read-only, no model while it runs.
+#   tools/mcbots-soak [HOURS]   (default 8)
+# Every 10 min: GET /api/state and new /api/events from the lab dashboard, and
+# the bots' death lines from the minecraft log (ssh bandit-lab, read-only).
+# At the end one `claude -p --model haiku` call turns the data into report.md.
+# Output: ~/.local/state/mcbots-soak/<start time>/
+set -euo pipefail
+
+hours=${1:-8}
+url=${MCBOTS_URL:-https://bandit-lab.tail7facc9.ts.net:8445}
+dir=${XDG_STATE_HOME:-$HOME/.local/state}/mcbots-soak/$(date +%Y%m%d-%H%M)
+mkdir -p "$dir"
+end=$(($(date +%s) + hours * 3600))
+last=$(curl -fsS "$url/api/events" | python3 -c 'import json,sys; print(json.load(sys.stdin)["lastId"])')
+echo "soak until $(date -d @"$end" +%H:%M), data in $dir"
+
+while (($(date +%s) < end)); do
+  t=$(date +%FT%T)
+  if s=$(curl -fsS --max-time 20 "$url/api/state"); then
+    python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+for b in d["bots"]:
+    print(json.dumps({"t": sys.argv[1], "bot": b["name"], "online": b.get("online"), "pos": b.get("pos"), "dim": b.get("dimension"),
+                      "health": b.get("health"), "food": b.get("food"), "activity": b.get("activity"), "error": b.get("lastError"),
+                      "tool": (b.get("tool") or {}).get("name"), "free": b.get("freeSlots"), "inventory": b.get("inventory")}))' "$t" <<<"$s" >>"$dir/state.jsonl"
+  else
+    echo "{\"t\": \"$t\", \"error\": \"dashboard unreachable\"}" >>"$dir/state.jsonl"
+  fi
+  if e=$(curl -fsS --max-time 20 "$url/api/events?since=$last"); then
+    python3 -c 'import json,sys; [print(json.dumps(x)) for x in json.load(sys.stdin)["events"]]' <<<"$e" >>"$dir/events.jsonl"
+    last=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["lastId"])' <<<"$e")
+  fi
+  ssh -o BatchMode=yes -o ConnectTimeout=10 bandit-lab \
+    "docker logs --since 10m minecraft 2>&1 | grep -E 'INFO\]: bot[0-9]+ (was|died|fell|drowned|hit|tried|burned|blew|suffocated|went|walked|experienced|starved|froze|withered)'" \
+    >>"$dir/deaths.log" 2>/dev/null || true
+  sleep 600
+done
+
+claude -p --model haiku --allowedTools Read,Write "Read $dir/state.jsonl, $dir/events.jsonl and $dir/deaths.log: a ${hours} h unattended run of Minecraft bots (bot1 logs, bot2 iron, bot3 coal shifts at the forest chest -260 65 -213; bot4 AFK at a Nether gold farm). Write $dir/report.md in short English: per bot deaths with causes, failed jobs with reasons, lost kits (diamond tools missing later), stuck periods (same position and activity for 30 min or more), resources gained (inventory and deposit events), and the top 3 problems to fix, with numbers. Facts from the data only." >"$dir/haiku.log" 2>&1 || true
+echo "done: $dir/report.md"
