@@ -761,6 +761,40 @@ async function replacePickaxe(r, job) {
   throw new Error(`no pickaxe and could not make one: ${why}`);
 }
 
+// Dig down (or climb) into the ore's Y band, 16 levels per walk so every leg
+// fits the walk deadline. The pathfinder digs the stairs and never into fluids.
+async function toBand(r, job, band, what) {
+  const {bot} = r;
+  const target = Math.round((band[0] + band[1]) / 2);
+  for (let leg = 0; leg < 12 && outside(band, bot.entity.position.y) > 2; leg++) {
+    const y = bot.entity.position.y > target ? Math.max(target, Math.floor(bot.entity.position.y) - 16) : Math.min(target, Math.floor(bot.entity.position.y) + 16);
+    const p = bot.entity.position;
+    await goNear(r, job, p.x, y, p.z, 2, {goal: new goals.GoalY(y), doing: `digging down to Y ${target} for ${what} (now Y ${Math.floor(p.y)})`});
+  }
+}
+
+// Tunnel EXPLORE_STEP blocks sideways at the same height, a new direction each time.
+async function explore(r, job, what, n) {
+  const {bot} = r;
+  const dirs = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+  const [dx, dz] = dirs[(n + (r.name.charCodeAt(r.name.length - 1) || 0)) % 4]; // bots spread out
+  const p = bot.entity.position;
+  const x = Math.floor(p.x) + dx * EXPLORE_STEP, z = Math.floor(p.z) + dz * EXPLORE_STEP;
+  if (insideAreas(r.protectedAreas, x, z)) return;
+  r.emit('info', `no ${what} left in reach: tunnelling ${EXPLORE_STEP} blocks to ${x} ${Math.floor(p.y)} ${z}`);
+  await goNear(r, job, x, Math.floor(p.y), z, 3, {doing: `tunnelling to new ${what} ground near ${x} ${Math.floor(p.y)} ${z}`}).catch((e) => {
+    guard(job);
+    r.emit('info', `tunnel stopped: ${e.message.slice(0, 80)}`);
+  });
+}
+
+// Where each ore is densest in 26.2 (the 1.18 distribution): bots mine inside
+// these Y bands, digging down (or up) to them first.
+const ORE_BAND = {coal_ore: [40, 130], iron_ore: [0, 40], copper_ore: [30, 70], gold_ore: [-30, -5], lapis_ore: [-15, 15], redstone_ore: [-60, -45], diamond_ore: [-60, -45], emerald_ore: [100, 250]};
+const outside = (band, y) => (band ? Math.max(0, band[0] - y, y - band[1]) : 0);
+const EXPLORE_STEP = 32;
+const EXPLORE_MAX = 6;
+
 async function collect(r, job, matching, count, what) {
   const {bot} = r;
   // An ore below Y 0 is the deepslate variant: mining iron_ore also takes deepslate_iron_ore.
@@ -769,6 +803,8 @@ async function collect(r, job, matching, count, what) {
   if (!ids.length) throw new Error(`unknown block: ${what}`);
   const ore = names.some((n) => n.endsWith('_ore'));
   const range = ore ? 128 : 64; // the bot sees every block within its view distance (no anti-xray)
+  const band = bot.game?.dimension?.endsWith('overworld') !== false ? ORE_BAND[matching.find((n) => ORE_BAND[n])] : null;
+  let explored = 0, descents = 0;
   let got = job.collected || 0; // survives a combat interruption + resume
   let misses = 0;
   if (!job.t.open) Object.assign(job.t, {done: got, total: count});
@@ -789,8 +825,14 @@ async function collect(r, job, matching, count, what) {
     // logs: digging down costs a staircase and leads into dark caves, so a block
     // below the bot counts 2 extra per level.
     const me = bot.entity.position;
-    const cost = (p) => p.distanceTo(me) + (ore ? 0 : 2 * Math.max(0, Math.floor(me.y) - p.y));
-    const found = bot.findBlocks({matching: ids, maxDistance: range, count: 64}).sort((a, b) => cost(a) - cost(b));
+    const cost = (p) => p.distanceTo(me) + (ore ? 4 * outside(band, p.y) : 2 * Math.max(0, Math.floor(me.y) - p.y));
+    let found = bot.findBlocks({matching: ids, maxDistance: range, count: 64}).sort((a, b) => cost(a) - cost(b));
+    // Ore job, nothing inside the band near enough, and the bot is not in the band: go there first.
+    if (band && descents < 2 && outside(band, me.y) > 4 && !found.some((p) => !outside(band, p.y) && p.distanceTo(me) <= 48)) {
+      descents++; // twice at most, then mine what is in reach
+      await toBand(r, job, band, what);
+      continue;
+    }
     for (const p of found) {
       if ((r.skip.get(keyOf(p)) || 0) > Date.now()) continue; // could not get there lately
       // Digging a target is direct (not pathfinder), so protection is checked here too.
@@ -805,7 +847,15 @@ async function collect(r, job, matching, count, what) {
       job.t.area = {x: p.x, y: p.y, z: p.z}; // where a resumed job walks back to
       break;
     }
-    if (!pos) throw new Error(`no free ${what} within ${range} blocks (collected ${got}/${count})`);
+    if (!pos) {
+      // Mined out around here: tunnel on at the same height and look again.
+      if (ore && explored < EXPLORE_MAX) {
+        explored++;
+        await explore(r, job, what, explored);
+        continue;
+      }
+      throw new Error(`no free ${what} within ${range} blocks (collected ${got}/${count}${explored ? `, searched ${explored} more spots` : ''})`);
+    }
     try {
       await waitSafe(r, job, pos.x, pos.z);
       if (!(await digAt(r, job, pos))) {
