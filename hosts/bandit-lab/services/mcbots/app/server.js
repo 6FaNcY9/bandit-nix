@@ -52,6 +52,65 @@ function applyPlaces() {
   }
 }
 applyPlaces();
+
+// Long jobs survive a restart (deploys restart the container): every 5 s the
+// running and queued shift/guard/mine/chop jobs go to STATE_DIR/jobs.json and
+// are queued again at start; a mine/chop keeps only what is left of its count.
+const KEEP = new Set(['shift', 'guard', 'mine', 'chop']);
+const jobsFile = process.env.STATE_DIR ? path.join(process.env.STATE_DIR, 'jobs.json') : null;
+const keptJobs = () => {
+  const out = {};
+  for (const r of runners.values()) {
+    if (r instanceof RemoteRunner) continue;
+    const list = [r.current, ...r.queue].filter((j) => j && !j.cancelled && KEEP.has(j.type)).map((j) => {
+      const args = {...j.args};
+      if (args.count && j.collected) args.count = Math.max(1, args.count - j.collected);
+      return {type: j.type, args};
+    });
+    if (list.length) out[r.name] = list;
+  }
+  return out;
+};
+// Saved jobs wait until their bot is online (a job started before the login fails at once).
+let toResume = {};
+if (jobsFile) {
+  try {
+    toResume = JSON.parse(fs.readFileSync(jobsFile, 'utf8'));
+  } catch {} // none saved
+}
+const resumeUntil = Date.now() + 300000; // a bot still away after 5 min starts with no job
+function resumeJobs() {
+  if (Date.now() > resumeUntil) toResume = {};
+  for (const [name, list] of Object.entries(toResume)) {
+    const r = runners.get(name);
+    if (!r || r instanceof RemoteRunner) {
+      delete toResume[name];
+      continue;
+    }
+    if (!r.online || r.dead) continue;
+    delete toResume[name];
+    for (const j of list) {
+      try {
+        r.enqueue(j.type, j.args);
+        events.add(name, 'info', `resumed after restart: ${j.type}`);
+      } catch {} // an entry the validator refuses is dropped
+    }
+  }
+}
+let jobsSaved = '';
+const jobsTimer = jobsFile ? setInterval(() => {
+  resumeJobs();
+  if (Object.keys(toResume).length) return; // not every bot is back yet: keep the file as it is
+  const now = JSON.stringify(keptJobs());
+  if (now === jobsSaved) return;
+  try {
+    fs.writeFileSync(`${jobsFile}.tmp`, now);
+    fs.renameSync(`${jobsFile}.tmp`, jobsFile);
+    jobsSaved = now;
+  } catch (e) {
+    log('jobs', `could not save: ${e.message}`);
+  }
+}, 2000) : null;
 const authorized = (req) => !cfg.allowed.length || cfg.allowed.includes(req.headers['tailscale-user-login']);
 // Cross-site guard: browsers send Origin on POST/WS; it must match Host.
 const sameOrigin = (req) => {
@@ -253,6 +312,7 @@ let closing = false;
 function shutdown() {
   if (closing) return;
   closing = true;
+  clearInterval(jobsTimer); // first: stopping the bots cancels their jobs, which must not be saved
   clearInterval(tick);
   clearInterval(keeperTick);
   stopBlueMap();
