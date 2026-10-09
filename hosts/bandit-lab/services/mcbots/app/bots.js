@@ -712,6 +712,33 @@ async function tossJunk(r, job) {
   }
 }
 
+// Armour in the inventory goes on at once; no walk to a chest needed.
+async function wearArmour(r) {
+  const {bot} = r;
+  for (const [re, slot] of [[/_helmet$/, 'head'], [/_chestplate$/, 'torso'], [/_leggings$/, 'legs'], [/_boots$/, 'feet']]) {
+    if (bot.inventory.slots[bot.getEquipmentDestSlot(slot)]) continue;
+    const it = bot.inventory.items().find((i) => re.test(i.name));
+    if (it) await bot.equip(it, slot).catch(() => {});
+  }
+}
+
+// Chopping by hand is slow: make a stone (else wooden) axe from what the bot
+// carries, at most one try per 5 min.
+async function getAxe(r, job) {
+  const {bot} = r;
+  if (bot.inventory.items().some((i) => i.name.endsWith('_axe')) || Date.now() - (r.axeTriedAt || 0) < 300000) return;
+  r.axeTriedAt = Date.now();
+  for (const item of ['stone_axe', 'wooden_axe']) {
+    try {
+      await crafting.ensureItem(r, child(job), item, 1);
+      r.emit('info', `made a ${item} for chopping`);
+      return;
+    } catch (e) {
+      guard(job);
+    }
+  }
+}
+
 async function upkeep(r, job, ids) {
   if (job.t.upkeep) return;
   job.t.upkeep = true;
@@ -719,6 +746,8 @@ async function upkeep(r, job, ids) {
   try {
     const {bot} = r;
     await lightUp(r, job, ids).catch((e) => { guard(job); r.emit('info', `no torch placed: ${e.message.slice(0, 80)}`); });
+    await wearArmour(r);
+    if (ids.some((id) => /_(log|stem)$/.test(bot.registry.blocks[id]?.name || ''))) await getAxe(r, job);
     const need = ids.find((id) => !canHarvest(bot, id));
     if (need !== undefined) await replacePickaxe(r, job);
     if (bot.food < FOOD_BELOW && r.supplyChest && !bot.inventory.items().some((i) => edible(bot, i)) && Date.now() - (r.foodTriedAt || 0) > FOOD_RETRY_MS) {
@@ -802,6 +831,7 @@ async function explore(r, job, what, n) {
   const p = bot.entity.position;
   const x = Math.floor(p.x) + dx * EXPLORE_STEP, z = Math.floor(p.z) + dz * EXPLORE_STEP;
   if (insideAreas(r.protectedAreas, x, z)) return;
+  if (job.type === 'shift' && Math.hypot(x - job.args.x, z - job.args.z) > LEASH) return; // stay near the chest
   r.emit('info', `no ${what} left in reach: tunnelling ${EXPLORE_STEP} blocks to ${x} ${Math.floor(p.y)} ${z}`);
   await goNear(r, job, x, Math.floor(p.y), z, 3, {doing: `tunnelling to new ${what} ground near ${x} ${Math.floor(p.y)} ${z}`}).catch((e) => {
     guard(job);
@@ -814,6 +844,7 @@ async function explore(r, job, what, n) {
 const ORE_BAND = {coal_ore: [40, 130], iron_ore: [0, 40], copper_ore: [30, 70], gold_ore: [-30, -5], lapis_ore: [-15, 15], redstone_ore: [-60, -45], diamond_ore: [-60, -45], emerald_ore: [100, 250]};
 const outside = (band, y) => (band ? Math.max(0, band[0] - y, y - band[1]) : 0);
 const EXPLORE_STEP = 32;
+const LEASH = 64; // blocks a shift may work from its chest
 const EXPLORE_MAX = 6;
 
 async function collect(r, job, matching, count, what) {
@@ -854,6 +885,9 @@ async function collect(r, job, matching, count, what) {
       await toBand(r, job, band, what);
       continue;
     }
+    // A shift works around its own chest: never more than LEASH blocks away from it.
+    const anchor = job.type === 'shift' ? job.args : null;
+    if (anchor) found = found.filter((p) => Math.hypot(p.x - anchor.x, p.z - anchor.z) <= LEASH);
     for (const p of found) {
       if ((r.skip.get(keyOf(p)) || 0) > Date.now()) continue; // could not get there lately
       // Digging a target is direct (not pathfinder), so protection is checked here too.
@@ -896,6 +930,9 @@ async function collect(r, job, matching, count, what) {
       if (!/could not reach|Digging aborted/.test(e.message) || ++misses > 5) throw e;
       for (const [k, until] of r.skip) if (until < Date.now()) r.skip.delete(k);
       r.skip.set(key, Date.now() + 300000);
+      // The rest of that vein sits behind the same water or wall: skip it too,
+      // or each of its blocks costs another full walk timeout.
+      if (/could not reach/.test(e.message)) for (const q of found) if (q.distanceTo(pos) <= 4) r.skip.set(keyOf(q), Date.now() + 300000);
       r.emit('info', `skipped a ${what} block (${e.message.slice(0, 40)}) at ${at(pos)}`);
       continue;
     } finally {
