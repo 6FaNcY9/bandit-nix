@@ -65,6 +65,15 @@ kept in `STATE_DIR/settings.json`, on the lab the named volume `mcbots-state` (t
 stopped, the bot fights every hostile within the radius of the spot or player and walks back when
 all is quiet. Map menu: "guard this spot" / "guard <player>"; composer: "Guard a spot", "Guard a player".
 
+**Torches** (setting "place torches where it is dark", on by default): during `mine`, `chop` and
+`shift`, where the block light at the bot's feet is below 7 and no torch is within 5 blocks, it puts a
+torch on a wall at head height (floor if there is no wall). Out of torches with coal or charcoal in
+the inventory: it crafts 4 (one try per 5 min).
+
+**Targets**: `mine`/`shift` of an ore also take its deepslate variant; ores are searched within 128
+blocks (no anti-xray on the server, so bots see ores through stone), nearest first so a vein is
+finished; stone and logs prefer blocks at or above the bot (2 extra cost per level down).
+
 One card per bot: an activity line in plain words ("mining stone 6/40 near -94
 66 -2", "walking to the supply chest to deposit", "idle - no job", "dead -
 respawning", "offline - last seen 3 min ago"), a progress bar for jobs that

@@ -94,6 +94,28 @@ tools/ship-claude 81dd38e 670468c 6f894d0 81e7a10 6636334 cb1a326 8568526 744211
 - Ship (GPG + push).
 - Choose a `KEEPER_SITE` before using standing orders on the lab.
 
+## 2026-10-09 evening: control centre, settings, guard, torches
+
+Live on the local stage: terrain map from BlueMap with click menus (`0cecb33`), in-game view
+(`d6a2d1e`), settings + guard (`303c8a8`: a guarded zombie was hunted and killed, bot back at its
+post), torches + ore search + review fixes (`147431c`: `mine iron_ore 8` gave 9 raw iron in
+149 s with 7 wall torches). Lab bots work a resource site at -260 65 -213 (chest), diamond kit.
+
+## To do (priority: P1 now, P2 next, P3 later)
+
+- P1 safe digging: never dig the block under the bot into a drop of more than 3 or into lava/water
+  (bot7 fell to death, bots died to skeletons before the fight range).
+- P1 torch spacing: one pair still landed 1 block apart (light/torch updates lag the dig).
+- P1 a shift that finds nothing in range moves on (spiral 48 blocks) instead of failing.
+- P2 ore levels: send a bot to the ore's best Y first (diamond/redstone -59, gold -16, lapis 0,
+  iron 16, copper 48, coal 96; 26.2 keeps the 1.18 distribution) and branch-mine there.
+- P2 a cave layer on the map (top-down slice at the bot's height from its loaded blocks).
+- P2 bulk crafting chains for the base (hoppers, rails, ...) and base quotas from the owner's list.
+- P2 build job (schematic, design in BOTS.md).
+- P3 crawl (trapdoor) 1x1 tunnels: mineflayer physics/pathfinder have no crawl pose; low value
+  because bots see ores through stone and tunnel straight to them.
+- Owner: `/vanish` (SModeration) already hides you, also on BlueMap; turn it on right after joining.
+
 ## Next (owner's goal: bots farm everything the automated base needs)
 
 1. guard job (protect an area or a player); 2. safe branch mining at a set depth, no digging
