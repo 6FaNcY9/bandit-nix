@@ -586,18 +586,30 @@ function unsafeDig(bot, pos) {
 // each fluid neighbour gets a cobblestone (or other junk block) placed against the
 // target's face towards it. true when every neighbour got filled.
 const FILLER = ['cobblestone', 'cobbled_deepslate', 'dirt', 'netherrack', 'andesite', 'diorite', 'granite', 'tuff', 'stone'];
-async function sealFluids(r, pos) {
+// A permitted target does not authorise changes to its neighbours: a fluid block
+// inside a protected area is never filled (the target is then left unmined), and
+// a stop is honoured between the asynchronous steps.
+async function sealFluids(r, job, pos) {
   const {bot} = r;
   const target = bot.blockAt(pos);
   if (!target) return false;
-  for (const d of [[0, 1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, -1, 0]]) {
+  const dirs = [[0, 1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, -1, 0]];
+  // Decide before touching anything: one forbidden neighbour means no sealing at all.
+  for (const d of dirs) {
+    const n = bot.blockAt(pos.offset(...d));
+    if (n && FLUID.test(n.name) && insideAreas(r.protectedAreas, n.position.x, n.position.z)) return false;
+  }
+  for (const d of dirs) {
+    guard(job);
     const n = bot.blockAt(pos.offset(...d));
     if (!n || !FLUID.test(n.name)) continue;
     const fill = bot.inventory.items().find((i) => FILLER.includes(i.name));
     if (!fill) return false;
     await bot.equip(fill, 'hand').catch(() => {});
+    guard(job);
     await bot.placeBlock(target, new Vec3(...d)).catch(() => {});
     await sleep(250);
+    guard(job);
     if (FLUID.test(bot.blockAt(pos.offset(...d))?.name || '')) return false;
     r.emit('info', `sealed ${n.name} at ${at(n.position)} with ${fill.name}`);
   }
@@ -618,7 +630,7 @@ async function digAt(r, job, pos) {
   block = bot.blockAt(pos);
   if (!block || block.name.endsWith('air')) return false;
   let danger = unsafeDig(bot, pos);
-  if (danger && / next to it$/.test(danger) && (await sealFluids(r, pos))) danger = unsafeDig(bot, pos);
+  if (danger && / next to it$/.test(danger) && (await sealFluids(r, job, pos))) danger = unsafeDig(bot, pos);
   if (danger) throw new Error(`unsafe: ${danger}`);
   job.t.doing = `mining ${block.name}${tally(job)} near ${at(pos)}`;
   await bot.tool.equipForBlock(block, {}).catch(() => {});
@@ -1308,4 +1320,4 @@ const JOBS = {
   },
 };
 
-module.exports = {BotRunner, NAME_RE, VALIDATE, TOOL_RE, JOBS, unsafeDig};
+module.exports = {BotRunner, NAME_RE, VALIDATE, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled};
