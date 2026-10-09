@@ -45,6 +45,11 @@ anything (HTTP or WebSocket) whose login is not in `ALLOWED_TS_LOGINS`
 
 ![Dashboard on the local stage: two bots mining, queue, events, map](img/dashboard.png)
 
+The map is at the top: terrain from BlueMap's low-res tiles (`GET /api/tile/<map>/<lod>/x<i>/z<j>.png`,
+fetched server-side from `BLUEMAP_URL`, cached 5 min). Drag to move, wheel to zoom. Click a bot
+(select it: map actions then go to that bot only; show card; centre; stop), a player (selected bot
+or all bots: come, follow) or a spot (go here, at the surface height read from the tile).
+
 One card per bot: an activity line in plain words ("mining stone 6/40 near -94
 66 -2", "walking to the supply chest to deposit", "idle - no job", "dead -
 respawning", "offline - last seen 3 min ago"), a progress bar for jobs that

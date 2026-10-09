@@ -65,6 +65,24 @@ function readJson(req) {
   });
 }
 
+// BlueMap low-res tiles (top half colour, bottom half height) for the map,
+// fetched server-side so the page stays same-origin. Small in-memory cache.
+const TILE_RE = /^\/api\/tile\/(world|world_the_nether|world_the_end)\/([1-3])\/x(-?\d{1,5})\/z(-?\d{1,5})\.png$/;
+const tiles = new Map(); // path -> {t, body|null}
+async function tile(rel) {
+  const hit = tiles.get(rel);
+  if (hit && Date.now() - hit.t < 300000) return hit.body;
+  let body = null;
+  try {
+    const r = await fetch(`${cfg.bluemapUrl}/maps/${rel}`, {signal: AbortSignal.timeout(5000)});
+    if (r.ok) body = Buffer.from(await r.arrayBuffer());
+  } catch {}
+  tiles.delete(rel);
+  tiles.set(rel, {t: Date.now(), body});
+  if (tiles.size > 400) tiles.delete(tiles.keys().next().value); // ponytail: FIFO cap, ~400 tiles x ~300 KB worst case
+  return body;
+}
+
 const server = http.createServer(async (req, res) => {
   const send = (code, type, body) => {
     res.writeHead(code, {'Content-Type': type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': CSP, 'Referrer-Policy': 'no-referrer'});
@@ -77,6 +95,13 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/state') return json(200, state());
   if (req.method === 'GET' && url.pathname === '/api/events') return json(200, {lastId: events.lastId, events: events.since(Number(url.searchParams.get('since')) || 0)});
   if (req.method === 'GET' && url.pathname === '/api/world') return json(200, world.snapshot());
+  const tm = req.method === 'GET' && cfg.bluemapUrl && TILE_RE.exec(url.pathname);
+  if (tm) {
+    const body = await tile(`${tm[1]}/tiles/${tm[2]}/x${tm[3]}/z${tm[4]}.png`);
+    if (!body) return send(404, 'text/plain', 'no tile');
+    res.writeHead(200, {'Content-Type': 'image/png', 'Cache-Control': 'max-age=300', 'X-Content-Type-Options': 'nosniff'});
+    return res.end(body);
+  }
   if (req.method === 'GET' && url.pathname === '/api/debug') {
     const bots = [...runners.values()].map((r) => {
       try {

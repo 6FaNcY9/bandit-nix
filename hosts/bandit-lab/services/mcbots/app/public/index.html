@@ -44,6 +44,12 @@
   .dbg .t { flex:1; min-width:260px; font:12px/1.5 ui-monospace,monospace; word-break:break-word; }
   .dbg svg { width:130px; height:130px; background:var(--bg); border:1px solid var(--bd); border-radius:6px; }
   canvas { width:100%; max-width:640px; height:auto; aspect-ratio:1; background:var(--bg); border:1px solid var(--bd); border-radius:6px; display:block; margin-top:8px; touch-action:none; }
+  .mapwrap { position:relative; }
+  .mapwrap canvas { max-width:none; aspect-ratio:auto; cursor:grab; }
+  .menu[hidden] { display:none; }
+  .menu { position:absolute; z-index:5; background:var(--card); border:1px solid var(--bd); border-radius:8px; padding:6px; display:flex; flex-direction:column; gap:4px; min-width:180px; box-shadow:0 4px 16px rgba(0,0,0,.35); }
+  .menu b { padding:2px 4px; }
+  .card.pick { outline:2px solid #16a34a; }
 </style>
 </head>
 <body>
@@ -58,19 +64,17 @@
   <div class="mut" id="kinfo"></div>
   <table id="ktable"></table>
 </div>
-<div id="bots" class="grid"></div>
-<div class="bar" id="allbar"><h3>Give the same job to several bots</h3><div id="allcomposer"></div></div>
-<div class="cols">
-  <div class="bar"><h3>Events <select id="evbot"></select></h3><div id="events"></div></div>
-  <div class="bar">
+<div class="bar" id="mapbar">
     <h3>Map</h3>
     <div class="row">centre <select id="centre"></select>
       <label>zoom <input id="zoom" type="range" min="-2" max="3" step="0.25" value="1"></label>
       <span id="mapinfo" class="mut"></span></div>
-    <canvas id="radar" width="640" height="640"></canvas>
-    <div class="mut">green = bots, blue = players, red = hostile mobs, yellow = chests/ores, orange = blocks a bot is working on, white square = supply chest, hatched red = protected areas</div>
+    <div class="mapwrap"><canvas id="radar" width="1280" height="720"></canvas><div id="mapmenu" class="menu" hidden></div></div>
+    <div class="mut">drag to move, wheel to zoom, click a bot, a player or a spot for actions. Terrain from BlueMap. green = bots, blue = players, red = hostile mobs, yellow = chests/ores, orange = blocks a bot is working on, white square = supply chest, hatched red = protected areas</div>
   </div>
-</div>
+<div id="bots" class="grid"></div>
+<div class="bar" id="allbar"><h3>Give the same job to several bots</h3><div id="allcomposer"></div></div>
+<div class="bar"><h3>Events <select id="evbot"></select></h3><div id="events"></div></div>
 <details id="dbg" class="bar"><summary>Advanced: debug (last 30 s per bot: server pull-backs, job step, last error)</summary>
   <div class="row"><button id="dbgcopy" type="button">Copy /api/debug JSON</button><span id="dbgmsg" class="mut"></span></div>
   <div id="dbgbots"></div>
@@ -159,7 +163,7 @@ function ago(ms, now) { // "5 min ago (13:42:01)", relative to the hub's clock
 }
 const dur = (s) => (s < 90 ? `${s} s` : `${Math.round(s / 60)} min`);
 function makeCard(name) {
-  const root = el('div', 'card'), h = el('h2'), dot = el('span', 'dot'), title = el('span', '', name), state = el('span', 'mut'), where = el('span', 'mut');
+  const root = el('div', 'card'); root.id = 'card-' + name; const h = el('h2'), dot = el('span', 'dot'), title = el('span', '', name), state = el('span', 'mut'), where = el('span', 'mut');
   h.append(dot, title, state, where);
   const act = el('div', 'act'), bar = el('progress'), barTxt = el('div', 'mut'), vit = el('div', 'row'), hp = el('progress', 'hp'), food = el('progress', 'food'), vitTxt = el('span');
   hp.max = food.max = 20; vit.append(hp, food, vitTxt);
@@ -169,7 +173,7 @@ function makeCard(name) {
   return { root, dot, state, where, act, bar, barTxt, vit, hp, food, vitTxt, tool, inv, pos, err, queue, pb, qsig: '' };
 }
 function updateCard(c, b, now) {
-  c.root.className = 'card' + (b.online ? ' on' : '') + (b.dead ? ' dead' : '');
+  c.root.className = 'card' + (b.name === picked ? ' pick' : '') + (b.online ? ' on' : '') + (b.dead ? ' dead' : '');
   c.state.textContent = b.dead ? 'dead' : b.online ? 'online' : (b.remote && !b.connected ? 'worker offline' : 'offline');
   c.where.textContent = b.host ? '@' + b.host + (b.remote ? ' (remote worker)' : '') : '';
   const act = b.activity || (b.job ? `${b.job.label} ${b.job.progress || ''}` : b.online ? 'idle - no job' : 'offline');
@@ -283,6 +287,72 @@ function connect() {
 
 // ---- map: top-down, north up (-z), centred on a bot or player ----
 const cv = $('radar'), g = cv.getContext('2d');
+const MAPNAME = { overworld: 'world', the_nether: 'world_the_nether', the_end: 'world_the_end' };
+let free = null, view = null, hits = [], picked = null, drag = null;
+const tiles = new Map();
+function tileImg(map, lod, x, z) {
+  const key = `${map}/${lod}/x${x}/z${z}`;
+  let t = tiles.get(key);
+  if (!t) {
+    t = { img: new Image(), ready: false };
+    t.img.onload = () => { t.ready = true; radar(); };
+    t.img.src = `/api/tile/${key}.png`;
+    tiles.set(key, t);
+  }
+  return t;
+}
+// surface height from the tile's bottom half (green*256 + blue, signed), lod 1 only
+function heightAt(dim, x, z) {
+  const t = tiles.get(`${MAPNAME[dim]}/1/x${Math.floor(x / 500)}/z${Math.floor(z / 500)}`);
+  if (!t?.ready) return null;
+  if (!t.px) { const c = document.createElement('canvas'); c.width = t.img.width; c.height = t.img.height; const cg = c.getContext('2d'); cg.drawImage(t.img, 0, 0); t.px = cg.getImageData(0, 0, c.width, c.height); }
+  const ix = Math.floor(x) - Math.floor(x / 500) * 500, iz = Math.floor(z) - Math.floor(z / 500) * 500 + 501;
+  const i = (iz * t.px.width + ix) * 4, h = t.px.data[i + 1] * 256 + t.px.data[i + 2];
+  return h > 32767 ? h - 65536 : h;
+}
+const toWorld = (e) => { const r = cv.getBoundingClientRect(), sx = (e.clientX - r.left) * cv.width / r.width, sy = (e.clientY - r.top) * cv.height / r.height; return { sx, sy, x: view.x + (sx - cv.width / 2) / view.k, z: view.z + (sy - cv.height / 2) / view.k }; };
+cv.onpointerdown = (e) => { if (!view) return; drag = { x: e.clientX, y: e.clientY, moved: false, c: { ...view } }; cv.setPointerCapture(e.pointerId); };
+cv.onpointermove = (e) => {
+  if (!drag) return;
+  const r = cv.getBoundingClientRect(), dx = (e.clientX - drag.x) * cv.width / r.width, dy = (e.clientY - drag.y) * cv.height / r.height;
+  if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true;
+  if (drag.moved) { free = { x: drag.c.x - dx / drag.c.k, z: drag.c.z - dy / drag.c.k, dim: drag.c.dim }; $('mapmenu').hidden = true; radar(); }
+};
+cv.onpointerup = (e) => { const d = drag; drag = null; if (d && !d.moved) mapClick(e); };
+$('centre').onchange = () => { free = null; radar(); };
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('mapmenu').hidden = true; });
+function pick(name) {
+  picked = name; render(last.bots, last.now); radar();
+  $('card-' + name)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+function menu(e, title, items) {
+  const m = $('mapmenu'), r = cv.getBoundingClientRect(), wr = m.parentElement.getBoundingClientRect();
+  m.replaceChildren(el('b', '', title), ...items.map(([label, fn]) => { const b = el('button', '', label); b.type = 'button'; b.onclick = () => { m.hidden = true; fn(); }; return b; }));
+  m.style.left = Math.min(e.clientX - wr.left + 8, wr.width - 200) + 'px'; m.style.top = (e.clientY - wr.top + 8) + 'px'; m.hidden = false;
+}
+const online = () => last.bots.filter((b) => b.online && !b.dead).map((b) => b.name);
+const who = () => (picked && online().includes(picked) ? [picked] : online());
+const whoLabel = () => (picked ? picked : 'all bots');
+function mapClick(e) {
+  const p = toWorld(e), h = hits.filter((t) => Math.hypot(t.sx - p.sx, t.sy - p.sy) < 10).sort((a, b) => !!b.bot - !!a.bot)[0];
+  if (h?.bot) return menu(e, h.bot, [
+    [picked === h.bot ? 'Unselect' : 'Select (map actions go to this bot)', () => pick(picked === h.bot ? null : h.bot)],
+    ['Show card', () => $('card-' + h.bot)?.scrollIntoView({ behavior: 'smooth' })],
+    ['Centre on it', () => { free = null; $('centre').value = h.bot; radar(); }],
+    ['Stop', () => send([h.bot], 'stop', {}, true)],
+  ]);
+  if (h?.player) return menu(e, h.player, [
+    [`${whoLabel()}: come to ${h.player}`, () => send(who(), 'come', { player: h.player }, true)],
+    [`${whoLabel()}: follow and guard ${h.player}`, () => send(who(), 'follow', { player: h.player }, true)],
+    ['Centre on player', () => { free = null; $('centre').value = h.player; radar(); }],
+  ]);
+  const x = Math.floor(p.x), z = Math.floor(p.z), y = view.dim === 'overworld' ? heightAt(view.dim, x, z) : null;
+  const items = [];
+  if (y !== null) items.push([`${whoLabel()}: go here (${x} ${y + 1} ${z})`, () => send(who(), 'goto', { x, y: y + 1, z }, true)]);
+  else items.push(['(zoom in for terrain height to send bots here)', () => {}]);
+  if (picked) items.push(['Unselect ' + picked, () => pick(null)]);
+  menu(e, `${x} ${z}`, items);
+}
 $('zoom').oninput = radar;
 cv.onwheel = (e) => { e.preventDefault(); const z = $('zoom'); z.value = +z.value + (e.deltaY < 0 ? 0.25 : -0.25); radar(); };
 function radar() {
@@ -295,7 +365,9 @@ function radar() {
   }
   const bot = bots.find((b) => b.name === sel.value && b.pos);
   const pl = world.players.find((p) => p.name === sel.value);
-  const c = bot ? { x: bot.pos[0], z: bot.pos[2], dim: bot.dimension } : pl ? { x: pl.x, z: pl.z, dim: pl.dim } : null;
+  const c = free || (bot ? { x: bot.pos[0], z: bot.pos[2], dim: bot.dimension } : pl ? { x: pl.x, z: pl.z, dim: pl.dim } : null);
+  view = c;
+  hits = [];
   const W = cv.width, H = cv.height;
   const css = getComputedStyle(document.body);
   g.clearRect(0, 0, W, H);
@@ -305,6 +377,19 @@ function radar() {
   if (!c) return;
   const k = 2 * Math.pow(2, +$('zoom').value); // pixels per block
   const px = (x) => W / 2 + (x - c.x) * k, pz = (z) => H / 2 + (z - c.z) * k;
+  view.k = k;
+  // terrain: BlueMap low-res tiles, lod 1 = 500 blocks per tile, x5 per lod
+  const map = MAPNAME[c.dim];
+  if (map) {
+    const lod = k >= 0.4 ? 1 : k >= 0.08 ? 2 : 3, size = 500 * Math.pow(5, lod - 1);
+    g.imageSmoothingEnabled = false;
+    for (let tx = Math.floor((c.x - W / 2 / k) / size); tx * size < c.x + W / 2 / k; tx++)
+      for (let tz = Math.floor((c.z - H / 2 / k) / size); tz * size < c.z + H / 2 / k; tz++) {
+        const t = tileImg(map, lod, tx, tz);
+        if (t.ready) g.drawImage(t.img, 0, 0, 500, 500, px(tx * size), pz(tz * size), size * k + 1, size * k + 1);
+      }
+    g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(0, 0, W, H); // keep markers readable
+  }
   g.strokeStyle = css.getPropertyValue('--bd'); g.fillStyle = css.getPropertyValue('--mut'); g.font = '12px system-ui';
   g.lineWidth = 1;
   const step = [16, 32, 64, 128, 256, 512, 1024].find((s) => s * k >= 48) || 1024; // grid, in blocks
@@ -315,7 +400,7 @@ function radar() {
     g.fillStyle = 'rgba(220,38,38,0.12)'; g.strokeStyle = '#dc2626';
     g.fillRect(px(x1), pz(z1), (x2 - x1) * k, (z2 - z1) * k); g.strokeRect(px(x1), pz(z1), (x2 - x1) * k, (z2 - z1) * k);
   }
-  const dot = (x, z, r, col, label) => { g.fillStyle = col; g.beginPath(); g.arc(px(x), pz(z), r, 0, 7); g.fill(); if (label) { g.fillStyle = css.color; g.fillText(label, px(x) + r + 2, pz(z) + 4); } };
+  const dot = (x, z, r, col, label, hit) => { if (hit) hits.push({ ...hit, sx: px(x), sy: pz(z) }); g.fillStyle = col; g.beginPath(); g.arc(px(x), pz(z), r, 0, 7); g.fill(); if (label) { g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,.8)'; g.strokeText(label, px(x) + r + 2, pz(z) + 4); g.fillStyle = '#fff'; g.fillText(label, px(x) + r + 2, pz(z) + 4); g.lineWidth = 1; } };
   for (const b of world.blocks) if (b.dim === c.dim) dot(b.x, b.z, 3, '#eab308');
   // claimed blocks: key is "<dim>:x,y,z"
   g.fillStyle = '#f97316';
@@ -325,8 +410,8 @@ function radar() {
   }
   if (supplyChest && c.dim === 'overworld') { g.fillStyle = css.color; g.fillRect(px(supplyChest.x) - 4, pz(supplyChest.z) - 4, 8, 8); g.fillText('supply', px(supplyChest.x) + 7, pz(supplyChest.z) + 4); }
   for (const m of world.mobs) if (m.dim === c.dim) { g.globalAlpha = Math.max(0.3, 1 - m.age / 30); dot(m.x, m.z, 4, '#dc2626', k >= 2 ? m.type : ''); g.globalAlpha = 1; }
-  for (const p of world.players) if (p.dim === c.dim && !bots.some((b) => b.name === p.name)) dot(p.x, p.z, 5, '#2563eb', p.name);
-  for (const b of bots) if (b.pos && b.dimension === c.dim) dot(b.pos[0], b.pos[2], 5, b.online ? '#16a34a' : '#9ca3af', b.name);
+  for (const p of world.players) if (p.dim === c.dim && !bots.some((b) => b.name === p.name)) dot(p.x, p.z, 5, '#2563eb', p.name, { player: p.name });
+  for (const b of bots) if (b.pos && b.dimension === c.dim) dot(b.pos[0], b.pos[2], b.name === picked ? 7 : 5, b.online ? '#16a34a' : '#9ca3af', b.name, { bot: b.name });
 }
 
 // ---- advanced: debug panel, GET /api/debug while the panel is open ----
