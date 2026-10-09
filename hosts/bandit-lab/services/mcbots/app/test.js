@@ -782,5 +782,18 @@ require('./crafting');
   release();
   for (let i = 0; i < 150 && said.length < 2; i++) await new Promise((res) => setTimeout(res, 20));
   assert.deepStrictEqual(said, ['slow', 'next']);
+
+  // in-game view: stone floor at y=60, a gold block straight ahead (-z), sky above
+  const {render, cast} = require('./view');
+  const world = (x, y, z) => (y <= 60 ? 'stone' : x === 0 && z === -5 && y === 61 ? 'gold_block' : 'air');
+  assert.strictEqual(cast(world, 0.5, 61.5, 0.5, 0, 0, -1).name, 'gold_block', 'yaw 0 looks to -z');
+  assert.strictEqual(cast(world, 0.5, 61.5, 0.5, 0, -1, 0).name, 'stone');
+  assert.strictEqual(cast((x, y, z) => (z < -3 ? null : 'air'), 0.5, 61.5, 0.5, 0, 0, -1), null, 'unloaded chunk');
+  const img = render({blockAt: world, eye: {x: 0.5, y: 61.6, z: 0.5}, yaw: 0, pitch: 0, w: 16, h: 9});
+  assert.deepStrictEqual([...img.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10], 'PNG signature');
+  const raw = require('node:zlib').inflateSync(img.subarray(41, img.length - 12)); // IHDR is 25 bytes after the signature
+  const px = (x, y) => [...raw.subarray(y * 49 + 1 + x * 3, y * 49 + 4 + x * 3)];
+  assert.deepStrictEqual(px(8, 0), [135, 175, 235], 'sky at the top');
+  assert.ok(px(8, 8)[0] < 135 && px(8, 8)[2] < 200, 'floor at the bottom: ' + px(8, 8));
   console.log('ok');
 })();

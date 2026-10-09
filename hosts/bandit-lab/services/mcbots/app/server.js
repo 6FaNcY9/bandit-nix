@@ -11,6 +11,7 @@ const {WINDOW_MS} = require('./debug');
 const {Hub, RemoteRunner, createWorkerServer} = require('./hub');
 const {EventLog} = require('./events');
 const {Keeper} = require('./keeper');
+const {botView} = require('./view');
 
 const cfg = loadConfig();
 const log = (who, msg) => console.log(`${new Date().toISOString()} [${who}] ${msg}`);
@@ -95,6 +96,15 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/state') return json(200, state());
   if (req.method === 'GET' && url.pathname === '/api/events') return json(200, {lastId: events.lastId, events: events.since(Number(url.searchParams.get('since')) || 0)});
   if (req.method === 'GET' && url.pathname === '/api/world') return json(200, world.snapshot());
+  const vm = req.method === 'GET' && /^\/api\/view\/(\w{1,16})\.png$/.exec(url.pathname);
+  if (vm) {
+    const r = runners.get(vm[1]);
+    if (!r || r instanceof RemoteRunner || !r.bot?.entity || !r.online) return send(404, 'text/plain', 'no view (offline or remote worker)');
+    const now = Date.now(); // ponytail: one frame per bot per 700 ms, shared by all viewers
+    if (!r.viewFrame || now - r.viewFrame.t > 700) r.viewFrame = {t: now, body: botView(r.bot, {w: 256, h: 144})};
+    res.writeHead(200, {'Content-Type': 'image/png', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'});
+    return res.end(r.viewFrame.body);
+  }
   const tm = req.method === 'GET' && cfg.bluemapUrl && TILE_RE.exec(url.pathname);
   if (tm) {
     const body = await tile(`${tm[1]}/tiles/${tm[2]}/x${tm[3]}/z${tm[4]}.png`);

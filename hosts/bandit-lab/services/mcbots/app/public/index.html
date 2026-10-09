@@ -50,6 +50,7 @@
   .menu { position:absolute; z-index:5; background:var(--card); border:1px solid var(--bd); border-radius:8px; padding:6px; display:flex; flex-direction:column; gap:4px; min-width:180px; box-shadow:0 4px 16px rgba(0,0,0,.35); }
   .menu b { padding:2px 4px; }
   .card.pick { outline:2px solid #16a34a; }
+  .view img { width:100%; height:auto; image-rendering:pixelated; border-radius:6px; background:#000; display:block; margin-top:6px; }
 </style>
 </head>
 <body>
@@ -169,8 +170,16 @@ function makeCard(name) {
   hp.max = food.max = 20; vit.append(hp, food, vitTxt);
   const tool = el('div'), inv = el('div', 'mut'), pos = el('div', 'mut'), err = el('div'), queue = el('ol', 'queue'), pb = el('div', 'warn');
   const comp = el('details'); comp.append(el('summary', '', 'Give a job'), composer(() => [name]));
-  root.append(h, act, bar, barTxt, vit, tool, inv, pos, queue, pb, err, comp);
-  return { root, dot, state, where, act, bar, barTxt, vit, hp, food, vitTxt, tool, inv, pos, err, queue, pb, qsig: '' };
+  const view = el('details', 'view'), img = el('img'); img.alt = name + ' in-game view'; img.width = 320; img.height = 180;
+  view.append(el('summary', '', 'In-game view'), img);
+  let viewTimer = null;
+  view.ontoggle = () => {
+    clearInterval(viewTimer);
+    const load = () => { img.src = `/api/view/${encodeURIComponent(name)}.png?t=${Date.now()}`; };
+    if (view.open) { load(); viewTimer = setInterval(load, 1000); }
+  };
+  root.append(h, act, bar, barTxt, vit, tool, inv, pos, queue, pb, err, view, comp);
+  return { root, view, dot, state, where, act, bar, barTxt, vit, hp, food, vitTxt, tool, inv, pos, err, queue, pb, qsig: '' };
 }
 function updateCard(c, b, now) {
   c.root.className = 'card' + (b.name === picked ? ' pick' : '') + (b.online ? ' on' : '') + (b.dead ? ' dead' : '');
@@ -338,6 +347,7 @@ function mapClick(e) {
   if (h?.bot) return menu(e, h.bot, [
     [picked === h.bot ? 'Unselect' : 'Select (map actions go to this bot)', () => pick(picked === h.bot ? null : h.bot)],
     ['Show card', () => $('card-' + h.bot)?.scrollIntoView({ behavior: 'smooth' })],
+    ['In-game view', () => { const c = cards.get(h.bot); if (c) { c.view.open = true; c.root.scrollIntoView({ behavior: 'smooth' }); } }],
     ['Centre on it', () => { free = null; $('centre').value = h.bot; radar(); }],
     ['Stop', () => send([h.bot], 'stop', {}, true)],
   ]);
