@@ -652,7 +652,7 @@ const child = (job, extra = {}) => Object.assign(Object.create(job), {collected:
 // between gets back to light 0, where monsters spawn). Out of torches: craft 4
 // when there is coal or charcoal (sticks come from planks).
 const TORCH_BELOW = 7;
-async function lightUp(r, job) {
+async function lightUp(r, job, ids = []) {
   const {bot} = r;
   if (!(r.getSettings?.().torches ?? true) || r.combat.busy || bot.currentWindow) return;
   if (Date.now() - (r.torchAt || 0) < 3000) return;
@@ -676,13 +676,17 @@ async function lightUp(r, job) {
   // tunnel leaves it alone), else on the floor at the bot's feet.
   const head = feet.offset(0, 1, 0);
   let ref = null, face = null, spot = feet;
+  // Never on a block of the job's target type: digging it next drops the torch.
   if (['air', 'cave_air'].includes(bot.blockAt(head)?.name)) {
     for (const d of [new Vec3(1, 0, 0), new Vec3(-1, 0, 0), new Vec3(0, 0, 1), new Vec3(0, 0, -1)]) {
       const w = bot.blockAt(head.plus(d));
-      if (w && w.boundingBox === 'block' && !insideAreas(r.protectedAreas, w.position.x, w.position.z)) { ref = w; face = d.scaled(-1); spot = head; break; }
+      if (w && w.boundingBox === 'block' && !ids.includes(w.type) && !insideAreas(r.protectedAreas, w.position.x, w.position.z)) { ref = w; face = d.scaled(-1); spot = head; break; }
     }
   }
-  if (!ref) { ref = below; face = new Vec3(0, 1, 0); }
+  if (!ref) {
+    if (ids.includes(below.type)) return; // the floor itself is a target: it would fall off
+    ref = below; face = new Vec3(0, 1, 0);
+  }
   const held = bot.heldItem;
   await bot.equip(torch, 'hand');
   await bot.placeBlock(ref, face).catch(() => {}); // placeBlock may time out waiting for the update; check the world instead
@@ -692,13 +696,29 @@ async function lightUp(r, job) {
   if (held && held.name !== 'torch') await bot.equip(held, 'hand').catch(() => {});
 }
 
+// Stone and dirt that ore and log jobs dig through (an idea from the Jarvis plugin):
+// keep one stack of cobblestone for torches, crafting and patching, throw the rest
+// away so the bot goes to the chest for ore, not for rubble.
+const JUNK = new Set(['cobblestone', 'cobbled_deepslate', 'dirt', 'gravel', 'granite', 'diorite', 'andesite', 'tuff', 'netherrack', 'calcite', 'dripstone_block', 'rooted_dirt', 'leaf_litter']);
+const jobWants = (job, item) => [job.args?.block, job.args?.item].some((n) => n && (n === item || (item === 'cobblestone' && n === 'stone')));
+async function tossJunk(r, job) {
+  const {bot} = r;
+  let keptCobble = false;
+  for (const it of bot.inventory.items()) {
+    if (!JUNK.has(it.name) || jobWants(job, it.name)) continue;
+    if (it.name === 'cobblestone' && !keptCobble) { keptCobble = true; continue; }
+    await bot.tossStack(it).catch(() => {});
+    guard(job);
+  }
+}
+
 async function upkeep(r, job, ids) {
   if (job.t.upkeep) return;
   job.t.upkeep = true;
   const shown = {done: job.t.done, total: job.t.total};
   try {
     const {bot} = r;
-    await lightUp(r, job).catch((e) => { guard(job); r.emit('info', `no torch placed: ${e.message.slice(0, 80)}`); });
+    await lightUp(r, job, ids).catch((e) => { guard(job); r.emit('info', `no torch placed: ${e.message.slice(0, 80)}`); });
     const need = ids.find((id) => !canHarvest(bot, id));
     if (need !== undefined) await replacePickaxe(r, job);
     if (bot.food < FOOD_BELOW && r.supplyChest && !bot.inventory.items().some((i) => edible(bot, i)) && Date.now() - (r.foodTriedAt || 0) > FOOD_RETRY_MS) {
@@ -709,6 +729,7 @@ async function upkeep(r, job, ids) {
         r.emit('info', `no food fetched: ${e.message}`); // keep working; the retry timer asks again later
       });
     }
+    if (bot.inventory.emptySlotCount() < 4 && !jobWants(job, 'cobblestone')) await tossJunk(r, job);
     if (bot.inventory.emptySlotCount() < 2) {
       const chest = chestOf(r, job);
       if (!chest) throw new Error('inventory is full and there is no supply chest to deposit into');
