@@ -115,6 +115,8 @@ const SPEC = {
   rearm: { label: 'Re-arm from chests', f: XYZ, chest: true },
   come: { label: 'Come to me', f: [], me: true },
   follow: { label: 'Follow a player', f: [['player', 'text', '']] },
+  guard: { label: 'Guard a spot (fight mobs around it)', f: [...XYZ, ['radius', 'number', 16]], chest: true },
+  guardp: { label: 'Guard a player', f: [['player', 'text', ''], ['radius', 'number', 16]], type: 'guard' },
   withdraw: { label: 'Take from a chest', f: [['item', 'text', 'coal', 'items'], ['count', 'number', 8], ...XYZ], chest: true },
   stock: { label: 'Count a chest', f: XYZ, chest: true },
   place: { label: 'Place a block', f: [['item', 'text', 'chest', 'items'], ...XYZ] },
@@ -144,7 +146,7 @@ function composer(targets) { // targets(): array of bot names or 'all'
     if (spec.me) args.player = $('me').value;
     const t = targets();
     if (!t || (Array.isArray(t) && !t.length)) { $('msg').textContent = 'pick a bot first'; return; }
-    send(t, type.value, args, replace);
+    send(t, spec.type || type.value, args, replace);
   };
   const go = el('button', '', 'Run now'), q = el('button', 'ghost', 'Queue'), st = el('button', 'stop', 'Stop');
   go.type = q.type = st.type = 'button';
@@ -178,8 +180,23 @@ function makeCard(name) {
     const load = () => { img.src = `/api/view/${encodeURIComponent(name)}.png?t=${Date.now()}`; };
     if (view.open) { load(); viewTimer = setInterval(load, 1000); }
   };
-  root.append(h, act, bar, barTxt, vit, tool, inv, pos, queue, pb, err, view, comp);
-  return { root, view, dot, state, where, act, bar, barTxt, vit, hp, food, vitTxt, tool, inv, pos, err, queue, pb, qsig: '' };
+  const set = el('details', 'settings'); set.append(el('summary', '', 'Settings'));
+  const sf = {};
+  for (const [k, label, lo, hi] of [['defend', 'fight hostile mobs'], ['fightRange', 'fight range (blocks)', 2, 16], ['retreatHealth', 'retreat below health', 0, 18], ['eatBelow', 'eat below food', 1, 19]]) {
+    const i = el('input'); i.name = k;
+    if (lo === undefined) i.type = 'checkbox'; else { i.type = 'number'; i.min = lo; i.max = hi; i.className = 'xyz'; }
+    const l = el('label', 'row', label + ' '); l.append(i); set.append(l); sf[k] = i;
+  }
+  const save = el('button', '', 'Save settings'); save.type = 'button'; const smsg = el('span', 'mut');
+  save.onclick = async () => {
+    const body = {}; for (const [k, i] of Object.entries(sf)) { if (i.type === 'number' && !i.reportValidity()) return; body[k] = i.type === 'checkbox' ? i.checked : Number(i.value); }
+    const r = await fetch('/api/settings', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ bot: name, settings: body }) });
+    smsg.textContent = r.ok ? 'saved' : 'error: ' + ((await r.json().catch(() => ({}))).error || r.status);
+  };
+  set.append(save, smsg);
+  set.ontoggle = () => { if (set.open) { const cur = last.bots.find((b) => b.name === name)?.settings || {}; for (const [k, i] of Object.entries(sf)) { if (i.type === 'checkbox') i.checked = !!cur[k]; else i.value = cur[k] ?? ''; } smsg.textContent = ''; } };
+  root.append(h, act, bar, barTxt, vit, tool, inv, pos, queue, pb, err, view, set, comp);
+  return { root, view, set, dot, state, where, act, bar, barTxt, vit, hp, food, vitTxt, tool, inv, pos, err, queue, pb, qsig: '' };
 }
 function updateCard(c, b, now) {
   c.root.className = 'card' + (b.name === picked ? ' pick' : '') + (b.online ? ' on' : '') + (b.dead ? ' dead' : '');
@@ -349,16 +366,19 @@ function mapClick(e) {
     ['Show card', () => $('card-' + h.bot)?.scrollIntoView({ behavior: 'smooth' })],
     ['In-game view', () => { const c = cards.get(h.bot); if (c) { c.view.open = true; c.root.scrollIntoView({ behavior: 'smooth' }); } }],
     ['Centre on it', () => { free = null; $('centre').value = h.bot; radar(); }],
+    ['Settings', () => { const c = cards.get(h.bot); if (c) { c.set.open = true; c.root.scrollIntoView({ behavior: 'smooth' }); } }],
     ['Stop', () => send([h.bot], 'stop', {}, true)],
   ]);
   if (h?.player) return menu(e, h.player, [
     [`${whoLabel()}: come to ${h.player}`, () => send(who(), 'come', { player: h.player }, true)],
-    [`${whoLabel()}: follow and guard ${h.player}`, () => send(who(), 'follow', { player: h.player }, true)],
+    [`${whoLabel()}: follow ${h.player}`, () => send(who(), 'follow', { player: h.player }, true)],
+    [`${whoLabel()}: guard ${h.player} (fight mobs within 16)`, () => send(who(), 'guard', { player: h.player, radius: 16 }, true)],
     ['Centre on player', () => { free = null; $('centre').value = h.player; radar(); }],
   ]);
   const x = Math.floor(p.x), z = Math.floor(p.z), y = view.dim === 'overworld' ? heightAt(view.dim, x, z) : null;
   const items = [];
-  if (y !== null) items.push([`${whoLabel()}: go here (${x} ${y + 1} ${z})`, () => send(who(), 'goto', { x, y: y + 1, z }, true)]);
+  if (y !== null) items.push([`${whoLabel()}: go here (${x} ${y + 1} ${z})`, () => send(who(), 'goto', { x, y: y + 1, z }, true)],
+    [`${whoLabel()}: guard this spot (radius 16)`, () => send(who(), 'guard', { x, y: y + 1, z, radius: 16 }, true)]);
   else items.push(['(zoom in for terrain height to send bots here)', () => {}]);
   if (picked) items.push(['Unselect ' + picked, () => pick(null)]);
   menu(e, `${x} ${z}`, items);

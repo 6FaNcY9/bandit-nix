@@ -14,6 +14,8 @@
   image = pkgs.dockerTools.buildLayeredImage {
     name = "mcbots";
     contents = [app];
+    # Docker seeds the empty mcbots-state volume from this directory, owner included.
+    fakeRootCommands = "mkdir -p state && chown 1000:1000 state && chmod 0700 state";
     config = {
       User = "1000:1000";
       Cmd = ["${app}/bin/mcbots"];
@@ -57,7 +59,10 @@ in {
         # around spawn and MidariBread's base (from BlueMap light data, +16).
         PROTECTED_AREAS = "-80,-144,80,80;112,368,272,592";
         NODE_OPTIONS = "--max-old-space-size=1536";
+        # Per-bot settings from the dashboard (settings.json) survive restarts.
+        STATE_DIR = "/state";
       };
+      volumes = ["mcbots-state:/state"]; # named volume, not a host path
       ports = [
         "127.0.0.1:${dashboardPort}:${dashboardPort}"
         "127.0.0.1:${workerPort}:${workerPort}"
