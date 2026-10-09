@@ -1,0 +1,102 @@
+{
+ "name": "base-v1-shell-06",
+ "description": "base-v1 shell, upper half, part 2 of 4 (16 cobblestone). Build 01..08 in order with the same origin as base-v1.",
+ "blocks": [
+  {
+   "x": 5,
+   "y": 3,
+   "z": 0,
+   "block": "cobblestone"
+  },
+  {
+   "x": 6,
+   "y": 3,
+   "z": 0,
+   "block": "cobblestone"
+  },
+  {
+   "x": 6,
+   "y": 3,
+   "z": 1,
+   "block": "cobblestone"
+  },
+  {
+   "x": 6,
+   "y": 3,
+   "z": 2,
+   "block": "cobblestone"
+  },
+  {
+   "x": 6,
+   "y": 3,
+   "z": 3,
+   "block": "cobblestone"
+  },
+  {
+   "x": 6,
+   "y": 3,
+   "z": 4,
+   "block": "cobblestone"
+  },
+  {
+   "x": 5,
+   "y": 4,
+   "z": 0,
+   "block": "cobblestone"
+  },
+  {
+   "x": 6,
+   "y": 4,
+   "z": 0,
+   "block": "cobblestone"
+  },
+  {
+   "x": 5,
+   "y": 4,
+   "z": 1,
+   "block": "cobblestone"
+  },
+  {
+   "x": 6,
+   "y": 4,
+   "z": 1,
+   "block": "cobblestone"
+  },
+  {
+   "x": 5,
+   "y": 4,
+   "z": 2,
+   "block": "cobblestone"
+  },
+  {
+   "x": 6,
+   "y": 4,
+   "z": 2,
+   "block": "cobblestone"
+  },
+  {
+   "x": 5,
+   "y": 4,
+   "z": 3,
+   "block": "cobblestone"
+  },
+  {
+   "x": 6,
+   "y": 4,
+   "z": 3,
+   "block": "cobblestone"
+  },
+  {
+   "x": 5,
+   "y": 4,
+   "z": 4,
+   "block": "cobblestone"
+  },
+  {
+   "x": 6,
+   "y": 4,
+   "z": 4,
+   "block": "cobblestone"
+  }
+ ]
+}

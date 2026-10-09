@@ -1,0 +1,66 @@
+{
+ "name": "base-v1-shell-04",
+ "description": "base-v1 shell, lower half, part 4 of 4 (10 cobblestone). Build 01..08 in order with the same origin as base-v1.",
+ "blocks": [
+  {
+   "x": 5,
+   "y": 0,
+   "z": 5,
+   "block": "cobblestone"
+  },
+  {
+   "x": 6,
+   "y": 0,
+   "z": 5,
+   "block": "cobblestone"
+  },
+  {
+   "x": 5,
+   "y": 0,
+   "z": 6,
+   "block": "cobblestone"
+  },
+  {
+   "x": 6,
+   "y": 0,
+   "z": 6,
+   "block": "cobblestone"
+  },
+  {
+   "x": 6,
+   "y": 1,
+   "z": 5,
+   "block": "cobblestone"
+  },
+  {
+   "x": 5,
+   "y": 1,
+   "z": 6,
+   "block": "cobblestone"
+  },
+  {
+   "x": 6,
+   "y": 1,
+   "z": 6,
+   "block": "cobblestone"
+  },
+  {
+   "x": 6,
+   "y": 2,
+   "z": 5,
+   "block": "cobblestone"
+  },
+  {
+   "x": 5,
+   "y": 2,
+   "z": 6,
+   "block": "cobblestone"
+  },
+  {
+   "x": 6,
+   "y": 2,
+   "z": 6,
+   "block": "cobblestone"
+  }
+ ]
+}

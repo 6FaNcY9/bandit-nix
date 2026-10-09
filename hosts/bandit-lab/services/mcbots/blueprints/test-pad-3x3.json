@@ -1,0 +1,60 @@
+{
+ "name": "test-pad-3x3",
+ "description": "3x3 cobblestone pad for live tests (origin one above the ground).",
+ "blocks": [
+  {
+   "x": 0,
+   "y": 0,
+   "z": 0,
+   "block": "cobblestone"
+  },
+  {
+   "x": 1,
+   "y": 0,
+   "z": 0,
+   "block": "cobblestone"
+  },
+  {
+   "x": 2,
+   "y": 0,
+   "z": 0,
+   "block": "cobblestone"
+  },
+  {
+   "x": 0,
+   "y": 0,
+   "z": 1,
+   "block": "cobblestone"
+  },
+  {
+   "x": 1,
+   "y": 0,
+   "z": 1,
+   "block": "cobblestone"
+  },
+  {
+   "x": 2,
+   "y": 0,
+   "z": 1,
+   "block": "cobblestone"
+  },
+  {
+   "x": 0,
+   "y": 0,
+   "z": 2,
+   "block": "cobblestone"
+  },
+  {
+   "x": 1,
+   "y": 0,
+   "z": 2,
+   "block": "cobblestone"
+  },
+  {
+   "x": 2,
+   "y": 0,
+   "z": 2,
+   "block": "cobblestone"
+  }
+ ]
+}

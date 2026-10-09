@@ -35,10 +35,39 @@ Each milestone ships on its own through `tools/ship-claude`, with tests and a bo
 - **B1 - stocked supply (exists, verify).** Keeper live on the lab at the site marker; quotas for logs, cobblestone, coal, torches met without help. *Ships:* goal #4.
 - **B2 - `build` from inventory.** The design in BOTS.md as written: JSON blueprint, max 5x5x3 / 75 plain blocks, bottom-up order, claims shared with digging, no scaffolding, fail before placing when material is missing, `remove: true` undo. Pure-function tests first. *Ships:* a bot builds and removes a 3x3 cobblestone platform away from spawn.
 - **B3 - build fetches its material. Done 2026-10-10** (live: 9 cobblestone from the chest, pad placed in 3 s, chest 9 -> 0; details in BOTS.md "Building"). Before placing, the job withdraws the blueprint's material list from the supply chest (keeper stock already knows the counts) and reports what is short. *Ships:* the same platform built by a bot that starts empty.
-- **B4 - keeper fills the shortfall.** A build's shortage becomes a temporary keeper quota (logs/cobblestone already have chains; add planks/stone via the existing craft/smelt jobs). *Ships:* "build this" from an empty chest ends with gathered material placed. **This is the goal.**
-- **B5 - real base parts.** Raise limits for a first useful structure (a MidariBread farm module): layer claims across several bots, simple scaffolding, `.schem`/`.litematic` import and map preview (Stage 5). *Ships:* one farm built from gathered materials.
+- **B4 - the builder gathers what is still missing.** After the chest, the building bot mines the rest itself (cobblestone, dirt, stone via smelting; design in `docs/runbooks/minecraft/SONNET-GOAL.md`). *Ships:* "build this" from an empty chest ends with gathered material placed. **This is the goal.**
+- **B5 - real base parts** (superseded by R4 below). Raise limits for a first useful structure (a MidariBread farm module): layer claims across several bots, simple scaffolding, `.schem`/`.litematic` import and map preview (Stage 5). *Ships:* one farm built from gathered materials.
 
 Skip for this path: drag-box orders, roles, cave layer, precision tricks (Stages 1, 4, 6). Useful, not on the critical path.
+
+## 3a. Bots: after B4, toward a base they build and run themselves
+
+Owner's goal (2026-10-10): the bots follow one plan without help, build a base first (their respawn
+point and a storage), and fill it with what is not farmed yet, iron and gold first. Estimate: about
+**35-40 % there**. Gathering, ore heights, tools up to stone, claims, keeper and small builds exist.
+A big build, a spawn point, storage and the plan itself do not. Sizes are in work sessions and are
+**guesses**: about 20-30 sessions in all, 3-6 weeks at the pace of 2026-10-08..10. "Without
+errors" is not reachable; the target is that the bots recover by themselves and need the owner
+at most once a day.
+
+| # | Stage | Done when | Size | Depends on |
+| --- | --- | --- | --- | --- |
+| R1 | Iron and gold quotas | Keeper plans for `raw_iron` and `raw_gold` (mine at the ore band, deposit into their chest); iron and gold arrive in the chest without help | 1-2 | B4 |
+| R2 | Tool progression | A bot with iron in reach makes an iron pickaxe (gold needs it), sword and armour by itself, and the keeper keeps spare iron kits in the supply chest | 1-2 | R1 |
+| R3 | Survival (Stage 3) | Arrow side-step, no swimming in lava, retreat at night, collect drops after a death; one day of shifts without a lost kit | 2-4 | R2 |
+| R4 | Bigger builds | Blueprints larger than 5x5x3, block states (chest, furnace, bed facing; torch), reach from inside a structure or simple scaffolding, several builders on one blueprint; `base-v1.json` builds | 4-8 | B4; design reviewed by `architect` first |
+| R5 | Respawn point | Each bot clicks the base bed once (and again after the bed is replaced); deaths respawn at the base | 1 (beds from the owner) / 2 (sheep for wool) | R4 |
+| R6 | Storage | Deposits go to the chest that holds that item (`storage` roles in `base-v1.json`); the dashboard answers "where is X" | 2-3 | R4 |
+| R7 | The plan | One ordered list (build base-v1 -> storage roles -> iron/gold quotas -> ...) that the hub works through, giving roles to bots and showing progress on the dashboard | 3-5 | R1, R4, R6 |
+| R8 | Soak | Several days unattended; every failure fixed or turned into a self-recovery | 1-2 weeks alongside | R7 |
+
+Blueprints: `hosts/bandit-lab/services/mcbots/blueprints/` (README there). `base-v1-shell-01..08`
+can be built today (168 cobblestone, simulated, not yet live). The full `base-v1` with chests,
+bed and furnace waits for R4.
+
+Shortcuts that save the most: the owner provides beds and a starting kit (skips wool and R5's
+sheep); the base is a blueprint the owner chooses, not one the bots design; R1-R2 before R4,
+because they pay off at once.
 
 ## 4. Contradictions and stale content
 

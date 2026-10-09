@@ -164,6 +164,7 @@ bot.
 
 ## After B4 (do not start without the owner)
 
-B5 (schematic import, bigger builds, several builders) needs a design decision: scaffolding above
+Next is R1 (iron and gold quotas) in `docs/NEXT-GOALS.md` section 3a, when the owner says so.
+R4 (bigger builds, block states, several builders; it replaces B5) needs a design decision: scaffolding above
 height 3, and layer claims. Write a short proposal and ask the `architect` subagent to review it
 before writing code.
