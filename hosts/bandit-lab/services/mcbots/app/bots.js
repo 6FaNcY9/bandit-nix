@@ -1104,7 +1104,9 @@ async function chase(r, job, follow) {
 }
 
 const crafting = require('./crafting').makeCrafting({goNear, guard});
-const build = buildJob.makeBuild({goNear, guard, sleep, goals, digAt});
+// A build takes what it lacks from the supply chest (the withdraw job, with the chest's position).
+const buildWithdraw = (r, job, item, count) => JOBS.withdraw(r, child(job, {type: 'withdraw', args: {item, count, ...r.supplyChest}}));
+const build = buildJob.makeBuild({goNear, guard, sleep, goals, digAt, withdraw: buildWithdraw});
 
 const JOBS = {
   goto: (r, job) => goNear(r, job, job.args.x, job.args.y, job.args.z, 1),

@@ -34,7 +34,7 @@ Each milestone ships on its own through `tools/ship-claude`, with tests and a bo
 
 - **B1 - stocked supply (exists, verify).** Keeper live on the lab at the site marker; quotas for logs, cobblestone, coal, torches met without help. *Ships:* goal #4.
 - **B2 - `build` from inventory.** The design in BOTS.md as written: JSON blueprint, max 5x5x3 / 75 plain blocks, bottom-up order, claims shared with digging, no scaffolding, fail before placing when material is missing, `remove: true` undo. Pure-function tests first. *Ships:* a bot builds and removes a 3x3 cobblestone platform away from spawn.
-- **B3 - build fetches its material.** Before placing, the job withdraws the blueprint's material list from the supply chest (keeper stock already knows the counts) and reports what is short. *Ships:* the same platform built by a bot that starts empty.
+- **B3 - build fetches its material. Done 2026-10-10** (live: 9 cobblestone from the chest, pad placed in 3 s, chest 9 -> 0; details in BOTS.md "Building"). Before placing, the job withdraws the blueprint's material list from the supply chest (keeper stock already knows the counts) and reports what is short. *Ships:* the same platform built by a bot that starts empty.
 - **B4 - keeper fills the shortfall.** A build's shortage becomes a temporary keeper quota (logs/cobblestone already have chains; add planks/stone via the existing craft/smelt jobs). *Ships:* "build this" from an empty chest ends with gathered material placed. **This is the goal.**
 - **B5 - real base parts.** Raise limits for a first useful structure (a MidariBread farm module): layer claims across several bots, simple scaffolding, `.schem`/`.litematic` import and map preview (Stage 5). *Ships:* one farm built from gathered materials.
 

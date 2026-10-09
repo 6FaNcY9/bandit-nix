@@ -23,7 +23,18 @@ assert.throws(() => loadConfig({BOT_NAMES: 'bot1', PROTECTED_AREAS: '1,2,3'}));
   assert.deepStrictEqual(plan.blocks.slice(0, 2).map((b) => [b.x, b.y, b.z]), [[100, 64, 100], [101, 64, 100]], 'bottom layer first, then z, then x');
   assert.ok(plan.blocks.every((b, i, a) => !i || a[i - 1].y <= b.y));
   assert.deepStrictEqual(B.materials(plan), {cobblestone: 18});
-  assert.deepStrictEqual(B.shortfall({cobblestone: 18, stone: 2}, {cobblestone: 20}), ['2 stone']);
+  assert.deepStrictEqual(B.shortfall({cobblestone: 18, stone: 2}, {cobblestone: 20}), {stone: 2}, 'counts of what is missing');
+  assert.deepStrictEqual(B.shortfall({cobblestone: 18, stone: 2}, {cobblestone: 5, stone: 2}), {cobblestone: 13});
+  assert.deepStrictEqual(B.shortfall({cobblestone: 9}, {cobblestone: 9}), {}, 'nothing missing');
+  assert.deepStrictEqual(B.formatShortfall({stone: 2, cobblestone: 13}), ['2 stone', '13 cobblestone']);
+  assert.deepStrictEqual(B.countHave([{name: 'cobblestone', count: 40}, {name: 'dirt', count: 3}, {name: 'cobblestone', count: 24}]), {cobblestone: 64, dirt: 3}, 'stacks add up');
+  {
+    // withdraw only what is missing: 9 needed, 5 carried -> take 4; afterwards nothing is missing
+    const need = {cobblestone: 9};
+    const before = B.shortfall(need, B.countHave([{name: 'cobblestone', count: 5}]));
+    assert.deepStrictEqual(before, {cobblestone: 4});
+    assert.deepStrictEqual(B.shortfall(need, B.countHave([{name: 'cobblestone', count: 5 + before.cobblestone}])), {});
+  }
   for (const [bad, re] of [
     [{...bp, blocks: [{x: 0, y: 0, z: 0, block: 'chest'}]}, /cannot be built/],
     [{...bp, blocks: [{x: 0, y: 0, z: 0, block: 'sand'}]}, /cannot be built/],
@@ -1043,5 +1054,61 @@ require('./crafting');
   } finally {
     await b.stop();
   }
+  console.log('ok');
+})();
+
+// B3: build() takes what it lacks from the supply chest, only that, never when removing.
+(async () => {
+  const B = require('./build');
+  const {Vec3} = require('vec3');
+  const bpArgs = (remove = false) => ({origin: {x: 0, y: 64, z: 0}, blocks: Array.from({length: 9}, (_, i) => ({x: i % 3, y: 0, z: Math.floor(i / 3), block: 'cobblestone'})), remove});
+  // r.bot: ground below y 64, air above; the carried inventory is a mutable list.
+  const fake = (carried, supplyChest = {x: 5, y: 64, z: 5}) => {
+    const items = carried.map(([name, count]) => ({name, count}));
+    const mv = {exclusionAreasBreak: [], exclusionAreasPlace: [], scafoldingBlocks: []};
+    const bot = {game: {dimension: 'minecraft:overworld'}, pathfinder: {movements: mv}, registry: {itemsByName: {cobblestone: {id: 1}}},
+      blockAt: (p) => ({name: p.y < 64 ? 'stone' : 'air', position: p}), inventory: {items: () => items}};
+    return {r: {bot, protectedAreas: [], supplyChest, name: 'bot6'}, items};
+  };
+  const run = (r, withdraw, args, passedAfter = null) => {
+    let guards = 0;
+    const guard = () => { if (passedAfter !== null && guards++ >= passedAfter) throw new Error('passed-check'); };
+    const build = B.makeBuild({goNear: async () => {}, guard, sleep: async () => {}, goals: {}, digAt: async () => {}, withdraw});
+    return build(r, {args, t: {}});
+  };
+  const calls = [];
+  const give = (f) => async (r, job, item, count) => { calls.push([item, count]); f(item, count); };
+  // 5 carried, 4 missing: exactly 4 are taken, then the build goes on (the first guard of the place loop ends the test)
+  let f = fake([['cobblestone', 5]]);
+  await assert.rejects(run(f.r, give((item, n) => f.items[0].count += n), bpArgs(), 3), /passed-check/);
+  assert.deepStrictEqual(calls, [['cobblestone', 4]], 'only the missing count is taken');
+  // nothing carried, chest has no cobblestone: the item error is absorbed, the recount names the shortage
+  calls.length = 0;
+  f = fake([]);
+  await assert.rejects(run(f.r, async (r, j, item, n) => { calls.push([item, n]); throw new Error(`no ${item} in the chest`); }, bpArgs()), /missing material: 9 cobblestone \(not in the supply chest either\)/);
+  assert.deepStrictEqual(calls, [['cobblestone', 9]]);
+  // the chest holds only 3 of 9: still short by 6
+  f = fake([]);
+  await assert.rejects(run(f.r, give((item, n) => f.items.push({name: item, count: 3})), bpArgs()), /missing material: 6 cobblestone \(not in the supply chest either\)/);
+  // another error (no chest there) is not hidden
+  f = fake([]);
+  await assert.rejects(run(f.r, async () => { throw new Error('no chest at 5 64 5 (found air)'); }, bpArgs()), /no chest at 5 64 5/);
+  // no supply chest configured: the plain message, no withdraw attempt
+  calls.length = 0;
+  f = fake([], null);
+  await assert.rejects(run(f.r, give(() => {}), bpArgs()), (e) => e.message === 'missing material: 9 cobblestone');
+  assert.deepStrictEqual(calls, []);
+  // remove mode never withdraws (the blocks are in the world, nothing to carry)
+  f = fake([]);
+  f.r.bot.blockAt = (p) => ({name: p.y === 64 && p.x < 3 && p.z < 3 ? 'cobblestone' : p.y < 64 ? 'stone' : 'air', position: p});
+  await assert.rejects(run(f.r, give(() => {}), bpArgs(true), 1), /passed-check/);
+  assert.deepStrictEqual(calls, [], 'no withdraw in remove mode');
+  // a stop between items ends the build before the next withdraw
+  calls.length = 0;
+  f = fake([]);
+  const two = {origin: {x: 0, y: 64, z: 0}, blocks: [{x: 0, y: 0, z: 0, block: 'cobblestone'}, {x: 1, y: 0, z: 0, block: 'dirt'}]};
+  f.r.bot.registry.itemsByName.dirt = {id: 2};
+  await assert.rejects(run(f.r, async (r, j, item, n) => { calls.push([item, n]); f.items.push({name: item, count: n}); }, two, 1), /passed-check/);
+  assert.strictEqual(calls.length, 1, 'a stop during the withdrawals prevents the next one');
   console.log('ok');
 })();

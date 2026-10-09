@@ -94,13 +94,25 @@ function materials(plan, nameAt = () => null) {
   return need;
 }
 
+// What is missing, {name: count}: need minus have, only where have is short.
 function shortfall(need, have) {
-  return Object.entries(need).filter(([n, c]) => (have[n] || 0) < c).map(([n, c]) => `${c - (have[n] || 0)} ${n}`);
+  const out = {};
+  for (const [n, c] of Object.entries(need)) if ((have[n] || 0) < c) out[n] = c - (have[n] || 0);
+  return out;
+}
+
+const formatShortfall = (missing) => Object.entries(missing).map(([n, c]) => `${c} ${n}`);
+
+// {name: count} of an inventory item list.
+function countHave(items) {
+  const have = {};
+  for (const it of items) have[it.name] = (have[it.name] || 0) + it.count;
+  return have;
 }
 
 const WAIT_MS = 60000; // blocks held by other bots: give up when nothing frees for this long
 
-function makeBuild({goNear, guard, sleep, goals, digAt}) {
+function makeBuild({goNear, guard, sleep, goals, digAt, withdraw}) {
   return async function build(r, job) {
     const {bot} = r;
     const plan = validate(job.args, r.protectedAreas);
@@ -129,10 +141,25 @@ function makeBuild({goNear, guard, sleep, goals, digAt}) {
     let waitingSince = 0;
     try {
       if (!plan.remove) {
-        const have = {};
-        for (const it of bot.inventory.items()) have[it.name] = (have[it.name] || 0) + it.count;
-        const short = shortfall(materials(plan, nameAt), have);
-        if (short.length) throw new Error(`missing material: ${short.join(', ')}`);
+        const need = materials(plan, nameAt);
+        const missing = shortfall(need, countHave(bot.inventory.items()));
+        if (Object.keys(missing).length) {
+          if (!r.supplyChest) throw new Error(`missing material: ${formatShortfall(missing).join(', ')}`);
+          // Take exactly what is missing from the supply chest, item by item; an item the
+          // chest does not hold is not an error yet, the recount below decides.
+          for (const [item, count] of Object.entries(missing)) {
+            guard(job);
+            try {
+              await withdraw(r, job, item, count);
+            } catch (e) {
+              guard(job);
+              if (!/^no .+ in the chest$/.test(e.message)) throw e;
+            }
+          }
+          guard(job);
+          const left = shortfall(need, countHave(bot.inventory.items()));
+          if (Object.keys(left).length) throw new Error(`missing material: ${formatShortfall(left).join(', ')} (not in the supply chest either)`);
+        }
       }
       for (;;) {
         guard(job);
@@ -193,4 +220,4 @@ function makeBuild({goNear, guard, sleep, goals, digAt}) {
   };
 }
 
-module.exports = {validate, step, removeStep, materials, shortfall, makeBuild, MAX_BLOCKS};
+module.exports = {validate, step, removeStep, materials, shortfall, formatShortfall, countHave, makeBuild, MAX_BLOCKS};

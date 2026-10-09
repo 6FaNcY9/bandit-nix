@@ -347,9 +347,20 @@ before chopping or mining). Without `SUPPLY_CHEST` or quotas the panel is absent
 Status 2026-10-10: built (`app/build.js`), unit-tested with a fake world in `app/test.js`, and
 live-tested on the local stage: bot6 built a 3x3 cobblestone pad at -121 77 9 (west of the
 protected spawn box, in the area earlier bot tests dug) in 7 s and removed it in 58 s, getting all
-9 blocks back; 0 server pull-backs, 19 claims granted, 0 refused. Not yet: several bots on one
-build live (claims are shared, so it should work, untested), a dashboard form (API only), and
-fetching material from the supply chest (milestone B3 in `docs/NEXT-GOALS.md`).
+9 blocks back; 0 server pull-backs, 19 claims granted, 0 refused.
+
+**B3 (2026-10-10): a build takes its missing blocks from the supply chest.** Before placing,
+`build` counts what the blueprint still needs against the inventory; for each missing item it
+runs the `withdraw` job against the supply chest for exactly the missing count (never in `remove`
+mode, a stop is honoured between items). An item the chest does not hold is not an error yet;
+after all items the job recounts and fails with `missing material: 9 cobblestone (not in the
+supply chest either)` if anything is still short (without a supply chest the message has no
+suffix). Live on the local stage (bot6, chest at -116 77 9, pad at -121 77 9): 9 cobblestone in
+the chest, bot6 carrying none, `build` finished in 3 s including the withdrawal, chest 9 -> 0,
+9/9 cells placed, 9 claims granted, 0 refused, no pull-back; `remove` took 40 s and gave all 9 back;
+a second build with chest and bot empty failed with the message above. Not yet: the builder
+cannot gather what is missing (B4), several bots on one build live (claims are shared, untested),
+a dashboard form (API only).
 
 ```bash
 # blueprint relative to the origin; same-origin JSON, as for any job
