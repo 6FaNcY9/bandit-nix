@@ -77,6 +77,20 @@ assert.throws(() => loadConfig({BOT_NAMES: 'bot1', PROTECTED_AREAS: '1,2,3'}));
 // ---- shared world / combat logic ----
 const W = require('./world');
 const {weaponScore} = require('./combat');
+{
+  // A fight during a dig ends the dig before the weapon goes into the hand (wrong-tool digs, 2026-10-10).
+  const {Combat} = require('./combat');
+  const calls = [];
+  const bot = {targetDigBlock: {name: 'stone'}, stopDigging: () => calls.push('stop'), currentWindow: null,
+    heldItem: {name: 'stone_pickaxe', type: 2}, inventory: {items: () => [{name: 'stone_sword', type: 1}]},
+    equip: async () => calls.push('equip')};
+  const c = new Combat({bot, inventoryBusy: 0});
+  c.stop();
+  c.fight({isValid: false}).then(() => {
+    assert.deepStrictEqual(calls, ['stop', 'equip'], 'dig stopped first, then the weapon');
+    assert.ok(Date.now() - c.lastFight < 1000);
+  });
+}
 assert.ok(W.isHostile({type: 'hostile', name: 'zombie'}));
 assert.ok(W.isHostile({type: 'mob', category: 'Hostile mobs', name: 'phantom'}));
 assert.ok(!W.isHostile({type: 'player', name: 'x'}) && !W.isHostile({type: 'animal', name: 'wolf'}) && !W.isHostile(null));

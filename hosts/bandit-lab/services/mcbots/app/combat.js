@@ -107,6 +107,12 @@ class Combat {
 
   async fight(target) {
     const bot = this.r.bot;
+    // Swapping to a weapon (or striking) mid-dig leaves the dig running with the
+    // wrong item: the server counts its slower break time and refuses the block, and
+    // the bot waits for an answer that never comes. End the dig first; digAt() digs
+    // again once the fight is over (2026-10-10).
+    this.lastFight = Date.now();
+    if (bot.targetDigBlock) bot.stopDigging();
     const weapon = bot.inventory.items().sort((a, b) => weaponScore(b.name) - weaponScore(a.name))[0];
     // Keep an axe or sword already in hand (a bot chopping with an axe fights
     // with it instead of swapping to the sword and then chopping with that).

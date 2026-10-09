@@ -641,11 +641,27 @@ async function digAt(r, job, pos) {
   if (danger && / next to it$/.test(danger) && (await sealFluids(r, job, pos))) danger = unsafeDig(bot, pos);
   if (danger) throw new Error(`unsafe: ${danger}`);
   job.t.doing = `mining ${block.name}${tally(job)} near ${at(pos)}`;
-  await bot.tool.equipForBlock(block, {}).catch(() => {});
   // A dig the server never answers hangs forever: give it 25 s, then try another block.
-  let digTimer;
-  const gave = await Promise.race([bot.dig(block, true).then(() => false), new Promise((res) => (digTimer = setTimeout(() => res(true), 25000)))]);
-  clearTimeout(digTimer);
+  // A fight ends a dig on purpose (see Combat.fight): wait until it is over and dig again.
+  let gave;
+  for (let tries = 0; ; tries++) {
+    await bot.tool.equipForBlock(block, {}).catch(() => {});
+    let digTimer;
+    try {
+      gave = await Promise.race([bot.dig(block, true).then(() => false), new Promise((res) => (digTimer = setTimeout(() => res(true), 25000)))]);
+      break;
+    } catch (e) {
+      if (!/Digging aborted/.test(e.message) || tries >= 3 || Date.now() - (r.combat?.lastFight || 0) > 2000) throw e;
+      while (Date.now() - (r.combat?.lastFight || 0) < 1500) {
+        guard(job);
+        await sleep(250);
+      }
+      block = bot.blockAt(pos);
+      if (!block || block.name.endsWith('air')) return false;
+    } finally {
+      clearTimeout(digTimer);
+    }
+  }
   if (gave) {
     bot.stopDigging();
     r.emit('info', `digging ${block.name} at ${at(pos)} got no answer: skipped`);
