@@ -638,7 +638,23 @@ async function digAt(r, job, pos) {
     guard(job);
     await goNear(r, job, d.position.x, d.position.y, d.position.z, 0.8, {doing: 'picking up the drops'}).catch(() => {});
   }
+  if (/_log$/.test(block.name)) await replant(r, pos, block.name).catch(() => {});
   return true;
+}
+
+// Where a log came off dirt or grass, plant the matching sapling again (the
+// forest around a shift's chest was felled bare within a day). Not in protected areas.
+const SOIL = new Set(['dirt', 'grass_block', 'podzol', 'coarse_dirt', 'rooted_dirt', 'moss_block', 'mud']);
+async function replant(r, pos, logName) {
+  const {bot} = r;
+  const sapling = bot.inventory.items().find((i) => i.name === logName.replace(/_log$/, '_sapling'));
+  const below = bot.blockAt(pos.offset(0, -1, 0));
+  if (!sapling || !below || !SOIL.has(below.name) || insideAreas(r.protectedAreas, pos.x, pos.z)) return;
+  if (!bot.blockAt(pos)?.name.endsWith('air') || bot.entity.position.distanceTo(pos) > 4.5) return;
+  await bot.equip(sapling, 'hand');
+  await bot.placeBlock(below, new Vec3(0, 1, 0)).catch(() => {});
+  await sleep(250);
+  if (/_sapling$/.test(bot.blockAt(pos)?.name || '')) r.emit('info', `replanted ${sapling.name} at ${at(pos)}`);
 }
 
 // Report the supply chest's contents to the shared picture (the keeper plans from it).
@@ -860,14 +876,14 @@ async function toBand(r, job, band, what) {
 }
 
 // Tunnel EXPLORE_STEP blocks sideways at the same height, a new direction each time.
-async function explore(r, job, what, n) {
+async function explore(r, job, what, n, leash = LEASH) {
   const {bot} = r;
   const dirs = [[1, 0], [0, 1], [-1, 0], [0, -1]];
   const [dx, dz] = dirs[(n + (r.name.charCodeAt(r.name.length - 1) || 0)) % 4]; // bots spread out
   const p = bot.entity.position;
   const x = Math.floor(p.x) + dx * EXPLORE_STEP, z = Math.floor(p.z) + dz * EXPLORE_STEP;
   if (insideAreas(r.protectedAreas, x, z)) return;
-  if (job.type === 'shift' && Math.hypot(x - job.args.x, z - job.args.z) > LEASH) return; // stay near the chest
+  if (job.type === 'shift' && Math.hypot(x - job.args.x, z - job.args.z) > leash) return; // stay near the chest
   r.emit('info', `no ${what} left in reach: tunnelling ${EXPLORE_STEP} blocks to ${x} ${Math.floor(p.y)} ${z}`);
   await goNear(r, job, x, Math.floor(p.y), z, 3, {doing: `tunnelling to new ${what} ground near ${x} ${Math.floor(p.y)} ${z}`}).catch((e) => {
     guard(job);
@@ -880,7 +896,8 @@ async function explore(r, job, what, n) {
 const ORE_BAND = {coal_ore: [40, 130], iron_ore: [0, 40], copper_ore: [30, 70], gold_ore: [-30, -5], lapis_ore: [-15, 15], redstone_ore: [-60, -45], diamond_ore: [-60, -45], emerald_ore: [100, 250]};
 const outside = (band, y) => (band ? Math.max(0, band[0] - y, y - band[1]) : 0);
 const EXPLORE_STEP = 32;
-const LEASH = 64; // blocks a shift may work from its chest
+const LEASH = 64; // blocks a shift may work from its chest (128 for logs: forests thin out)
+const WOOD_LEASH = 128;
 const EXPLORE_MAX = 6;
 
 async function collect(r, job, matching, count, what) {
@@ -890,7 +907,9 @@ async function collect(r, job, matching, count, what) {
   const ids = names.map((n) => bot.registry.blocksByName[n]?.id).filter((i) => i !== undefined);
   if (!ids.length) throw new Error(`unknown block: ${what}`);
   const ore = names.some((n) => n.endsWith('_ore'));
-  const range = ore ? 128 : 64; // the bot sees every block within its view distance (no anti-xray)
+  const wood = names.every((n) => /_(log|stem)$/.test(n));
+  const leash = wood ? WOOD_LEASH : LEASH;
+  const range = ore || wood ? 128 : 64; // the bot sees every block within its view distance (no anti-xray)
   const band = bot.game?.dimension?.endsWith('overworld') !== false ? ORE_BAND[matching.find((n) => ORE_BAND[n])] : null;
   let explored = 0, descents = 0;
   let got = job.collected || 0; // survives a combat interruption + resume
@@ -923,11 +942,11 @@ async function collect(r, job, matching, count, what) {
     }
     // A shift works around its own chest: never more than LEASH blocks away from it.
     const anchor = job.type === 'shift' ? job.args : null;
-    if (anchor && Math.hypot(me.x - anchor.x, me.z - anchor.z) > LEASH - 8) { // e.g. respawned at world spawn
+    if (anchor && Math.hypot(me.x - anchor.x, me.z - anchor.z) > leash - 8) { // e.g. respawned at world spawn
       await goNear(r, job, anchor.x, anchor.y, anchor.z, 3, {doing: `walking back to the shift's chest ${at(anchor)}`});
       continue;
     }
-    if (anchor) found = found.filter((p) => Math.hypot(p.x - anchor.x, p.z - anchor.z) <= LEASH);
+    if (anchor) found = found.filter((p) => Math.hypot(p.x - anchor.x, p.z - anchor.z) <= leash);
     for (const p of found) {
       if ((r.skip.get(keyOf(p)) || 0) > Date.now()) continue; // could not get there lately
       // Digging a target is direct (not pathfinder), so protection is checked here too.
@@ -944,9 +963,9 @@ async function collect(r, job, matching, count, what) {
     }
     if (!pos) {
       // Mined out around here: tunnel on at the same height and look again.
-      if (ore && explored < EXPLORE_MAX) {
+      if ((ore || wood) && explored < EXPLORE_MAX) {
         explored++;
-        await explore(r, job, what, explored);
+        await explore(r, job, what, explored, leash);
         continue;
       }
       throw new Error(`no free ${what} within ${range} blocks (collected ${got}/${count}${explored ? `, searched ${explored} more spots` : ''})`);
