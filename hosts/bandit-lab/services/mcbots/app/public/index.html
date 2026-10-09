@@ -56,7 +56,7 @@
 <body>
 <div class="top">
   <h1>mcbots <span id="conn" class="mut"></span></h1>
-  <button class="stop" id="stopall" title="Stop every bot and clear all queues">Stop all</button>
+  <button class="stop" id="stopall" title="Stop every bot, clear all queues and switch standing orders off">Stop all</button>
   <label>your player name <input id="me" class="w" maxlength="16"></label>
   <span id="msg" class="mut"></span>
 </div>
@@ -100,7 +100,11 @@ async function send(bots, type, args, replace) {
     $('msg').className = r.ok ? 'mut' : 'err';
   } catch (e) { $('msg').textContent = 'send failed: ' + e.message; $('msg').className = 'err'; }
 }
-$('stopall').onclick = () => send('all', 'stop', {}, false);
+$('stopall').onclick = async () => {
+  // Standing orders would hand the idle bots new work at once: switch them off first.
+  if (last.keeper?.enabled) await fetch('/api/keeper', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled: false }) }).catch(() => {});
+  send('all', 'stop', {}, false);
+};
 
 // ---- job composer: pick a job, the fields follow, coordinates start at the supply chest ----
 const XYZ = [['x', 'number', 'x'], ['y', 'number', 'y'], ['z', 'number', 'z']];
@@ -182,7 +186,7 @@ function makeCard(name) {
   };
   const set = el('details', 'settings'); set.append(el('summary', '', 'Settings'));
   const sf = {};
-  for (const [k, label, lo, hi] of [['defend', 'fight hostile mobs'], ['fightRange', 'fight range (blocks)', 2, 16], ['retreatHealth', 'retreat below health', 0, 18], ['eatBelow', 'eat below food', 1, 19]]) {
+  for (const [k, label, lo, hi] of [['defend', 'fight hostile mobs'], ['torches', 'place torches where it is dark'], ['fightRange', 'fight range (blocks)', 2, 16], ['retreatHealth', 'retreat below health', 0, 18], ['eatBelow', 'eat below food', 1, 19]]) {
     const i = el('input'); i.name = k;
     if (lo === undefined) i.type = 'checkbox'; else { i.type = 'number'; i.min = lo; i.max = hi; i.className = 'xyz'; }
     const l = el('label', 'row', label + ' '); l.append(i); set.append(l); sf[k] = i;
