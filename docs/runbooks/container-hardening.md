@@ -5,6 +5,12 @@ is a report, not a change: each flag below can break an image in ways only a tes
 deployment shows, so nothing was switched on blindly. Order the work from the
 "first candidates" list and deploy one container at a time.
 
+> **Update 2026-10-10:** Wazuh, WatchYourLAN, SearXNG, Portainer and the toolbox (CyberChef,
+> IT-Tools, Juice Shop) were retired in
+> `fc3669f` (2026-10-08); their rows below are historical. No container mounts
+> `docker.sock` now; Traefik reads Docker through the filtering proxy in
+> `hosts/bandit-lab/services/traefik/default.nix`.
+
 Facts: no container sets `no-new-privileges` or a read-only root filesystem.
 Capability drops: WatchYourLAN drops ALL (and adds NET_RAW); Grafana drops a
 subset. One container is privileged (cAdvisor, needs host access for cgroup

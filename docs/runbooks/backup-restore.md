@@ -21,8 +21,7 @@ it does not prove application-level recovery or off-host recoverability.
 
 ## Minecraft
 
-*Prepared, not yet deployed:* once the panel change is activated
-([minecraft/MIGRATION.md](minecraft/MIGRATION.md)), `minecraft-backup.timer` (03:40)
+Deployed with the panel change (`40a947e`, 2026-10-06): `minecraft-backup.timer` (03:40)
 writes a consistent archive (`save-off`, `save-all flush`, rsync, `save-on`, tar.zst)
 with a `.sha256` and keeps the newest 14 in `/srv/containers/minecraft/backups/auto`;
 the restic job calls the same snapshot script. `tools/minecraft-restore-test.sh

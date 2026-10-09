@@ -1,5 +1,10 @@
 # Autopilot report
 
+> **Status 2026-10-10:** everything below was shipped to `main` through `tools/ship-claude`,
+> including the 2026-10-09 evening work. Still only on `claude/autopilot`: `mcbots-soak` and
+> a few docs/hub commits (`git cherry origin/main claude/autopilot`). `KEEPER_SITE` is set in
+> `default.nix`; a `site` marker overrides it. Next goals: `docs/NEXT-GOALS.md`.
+
 Branch `claude/autopilot` (worktree `~/src/bandit-nix-auto`). Nothing pushed to `main`, no
 deploy, no `flake.lock`/secrets change, no restart. Commits are unsigned; `tools/ship-claude`
 re-signs them. Local stage = `node app/server.js` with bot6+bot7 against the lab game server.
@@ -103,11 +108,11 @@ post), torches + ore search + review fixes (`147431c`: `mine iron_ore 8` gave 9 
 
 ## To do (priority: P1 now, P2 next, P3 later)
 
-- P1 safe digging: never dig the block under the bot into a drop of more than 3 or into lava/water
+- (done, `3b3b4a5`) P1 safe digging: never dig the block under the bot into a drop of more than 3 or into lava/water
   (bot7 fell to death, bots died to skeletons before the fight range).
 - P1 kits: keep spare kits in the supply chest (axe and armour-from-inventory done).
   Lost kits today: bot1 x2 (skeletons), bot2, bot4 (drowned).
-- P1 supply chest as a map marker that the owner moves (still the old spawn chest from default.nix).
+- (done, `0032d31`) P1 supply chest as a map marker that the owner moves.
 - P2 precision everywhere (owner's wish: use what humans cannot time): instant tool swap per block
   (done), perfect crit/sweep timing (done), next: shield-free arrow dodging by side-stepping only
   when a skeleton draws, block-perfect bridging over gaps, MLG water bucket on falls, instant

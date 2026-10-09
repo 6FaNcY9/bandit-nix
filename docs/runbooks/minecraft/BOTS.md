@@ -1,9 +1,10 @@
 # Minecraft bots (Mineflayer)
 
-Phase 1+2 of the bot system: Mineflayer bots join Paper through Velocity and
+Mineflayer bots join Paper through Velocity and
 BotGate and are controlled from a small web dashboard. Code:
 `hosts/bandit-lab/services/mcbots/` (`app/` is the Node app, `default.nix` the
-lab deployment). Crafting and schematic building are later phases; a new job
+lab deployment). Crafting and smelting exist; schematic building is designed but
+not built (see below). Goals in stages: `CONTROL-CENTRE-GOAL.md`. A new job
 type is one entry in `JOBS` and one in `VALIDATE` in `app/bots.js`.
 
 ## How it fits together
@@ -264,6 +265,10 @@ Each bot runs its queue one job at a time. Chat is never read as a command.
 | `come` | player | walks to the player (BlueMap position when far); 90 s + 1 s/block, max 10 min |
 | `mine` | block, count | `mine iron_ore 8`; nearest block within 64, best tool is equipped |
 | `chop` | count | any `*_log` within 64 blocks |
+| `shift` | block (or `logs`), x y z | work shift until stopped: mine/chop and deposit into the chest at x y z when full; stays within 64 blocks of it |
+| `guard` | x y z or player, radius | fight hostiles within radius (4-48, default 16) until stopped |
+| `craft` | item, count | crafts up to 64, making a crafting table first when needed |
+| `smelt` | item, count | smelts up to 64 of an input such as `raw_iron` |
 | `deposit` | x y z, optional `only` | puts everything except tools, food and crafting stock (planks, sticks, coal, torches, table, furnace) into the chest/barrel there; with `only` (an item name, `logs` or `coal`) just that kind, including what is normally kept |
 | `withdraw` | item, count, x y z | takes up to `count` of an item (or `logs`) out of the chest/barrel |
 | `stock` | x y z | opens the chest and reports its contents (changes nothing); for the supply chest the numbers go to the keeper |
@@ -368,11 +373,14 @@ exist: `place` (one block), block claims, `upkeep`, the queue and the dashboard.
 
 ## Limits
 
-- Bots defend themselves against hostile mobs only (see above); they do not
-  avoid lava or players' builds beyond not tunnelling or placing blocks while
-  walking, and they cannot cross dimensions.
+- Bots defend themselves against hostile mobs only (see above). They avoid
+  digging into fluids or drops (see Sealing) but do not recognise players'
+  builds: the only protection is `PROTECTED_AREAS`, where the pathfinder may
+  neither break nor place. They cannot cross dimensions.
   `mine`/`chop` do break blocks: do not point them at player builds.
-- Pathing cannot dig or bridge, so a goal behind solid rock is reported as
+- Pathing uses Mineflayer's default movements without sprint, parkour or
+  diagonals (server pull-backs), so it may dig through and bridge over blocks
+  outside protected areas; a goal it still cannot reach is reported as
   "could not reach".
 - Velocity admits at most the `/29` network: gateway, Velocity and 4 bots.
 - The dashboard trusts the `Tailscale-User-Login` header. Only `tailscale serve`

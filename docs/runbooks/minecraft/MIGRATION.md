@@ -1,4 +1,8 @@
-# Minecraft panel migration: maintenance runbook (waiting for your GO)
+# Minecraft panel migration: maintenance runbook (historical)
+
+> **Historical (2026-10-10):** the change described here is deployed: it has been on `main`
+> since `40a947e` (2026-10-06) and `lab-update-apply.timer` applies `main`. The text below is
+> the plan as written before activation; whether steps 1-4 were run is not recorded.
 
 Nothing here has been run on production. Prepared 2026-10-06 on branch `main`, working
 tree only (no commit, no push, no activation). A push to the watched branch can trigger

@@ -6,7 +6,8 @@ everything the automated base needs, build parts of it and keep themselves alive
 day; each stage below is usable on its own and is shipped when it is done.
 
 Where we are: dashboard with terrain map (click a bot, player or spot), in-game view per bot,
-per-bot settings, guard, shifts, standing orders, torches, safe digging, crit/sweep combat.
+per-bot settings, guard, shifts, standing orders, torches, safe digging, crit/sweep combat,
+map markers (supply, chest, site, home, AFK; `app/places.js`).
 
 ## Stage 1 - the map is the controller (next)
 
@@ -14,7 +15,7 @@ per-bot settings, guard, shifts, standing orders, torches, safe digging, crit/sw
   here, guard, go, place a chest, "light up this area", "send N bots".
 - Drag a box on the map: "mine everything in this box down to Y", "clear trees", "light it up",
   "guard it". The box shows on the map with its progress.
-- Places are map markers I create, move and name: supply chest(s), work sites, home, AFK spots
+- (done, except chest contents on hover) Places are map markers I create, move and name: supply chest(s), work sites, home, AFK spots
   (gold farm). Saved in the state volume, not in `default.nix`, so the supply marker is where the
   chest really is. Hover a chest: its contents.
 - Roles per bot (miner, lumberjack, guard, AFK, builder) with their own default site and job, set

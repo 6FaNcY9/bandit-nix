@@ -1,9 +1,9 @@
 # Security Hardening Plan
 
-This file tracks the active security posture for the `bandit` laptop. Disk
-encryption and boot-chain hardening are intentionally deferred until there is
-time to plan recovery and rollback properly. `bandit-lab` hardening is handled
-in `hosts/bandit-lab/default.nix` (key-auth-only SSH) and the WAN runbooks.
+This file tracks the security posture of both hosts: the `bandit` laptop and,
+from the dated sections on, `bandit-lab`. Disk encryption and boot-chain
+hardening are parked (owner, 2026-10-10): the laptop stays at home. The
+prepared LUKS work waits on branch `luks-prepare`.
 
 ---
 
@@ -64,7 +64,11 @@ required; do not return to global `allowUnfree = true`.
 
 ---
 
-## SOPS PGP recipient removal
+## SOPS PGP recipient removal (done 2026-08-06, `b468706`)
+
+`.sops.yaml` has had no `pgp:` block since `b468706`. `encrypted_regex` was not
+added: sops encrypts every value by default without it. The original plan
+follows for reference.
 
 The GPG private key currently lives in `~/.gnupg` on the same machine, so using
 it as a SOPS recipient adds decryption attack surface without much recovery

@@ -1,8 +1,9 @@
 # Minecraft browser administration: selection, access, daily use
 
-Status 2026-10-06: **prepared and tested on disposable servers; not committed, not
-deployed.** Production is untouched. Activation needs the maintenance GO described in
-[MIGRATION.md](MIGRATION.md).
+Status 2026-10-10: **deployed.** The panel change has been on `main` since `40a947e`
+(2026-10-06) and `lab-update` applies `main` to the lab; BlueMap and VoxelDash are in daily use
+(the bots read BlueMap since 2026-10-08). Whether the GO steps of [MIGRATION.md](MIGRATION.md)
+(cold backup, `data.pre-migration-<ts>` copy) were run is not recorded here.
 
 ## Decision
 
