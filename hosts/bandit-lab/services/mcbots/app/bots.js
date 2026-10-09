@@ -548,6 +548,27 @@ async function goNear(r, job, x, y, z, dist, {brave = false, goal = null, doing 
 // Mine one block and pick up what drops. Replaces mineflayer-collectblock,
 // which froze the bot process (synchronous loop until out of memory) when
 // asked to mine stone without a pickaxe (2026-10-08).
+// Why digging pos would hurt the bot, or null: a fluid would flow in (water
+// drowns, lava burns), or the bot stands on it and would fall more than 3.
+const FLUID = /^(water|lava|bubble_column)$/;
+function unsafeDig(bot, pos) {
+  for (const d of [[0, 1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, -1, 0]]) {
+    const n = bot.blockAt(pos.offset(...d))?.name || '';
+    if (FLUID.test(n) || bot.blockAt(pos.offset(...d))?.getProperties?.().waterlogged) return `${n || 'waterlogged block'} next to it`;
+  }
+  const feet = bot.entity.position.floored();
+  if (pos.x === feet.x && pos.z === feet.z && pos.y < feet.y) {
+    for (let y = pos.y - 1, fall = 1; ; y--, fall++) {
+      const b = bot.blockAt(pos.offset(0, y - pos.y, 0));
+      if (!b) return 'unknown blocks below';
+      if (FLUID.test(b.name)) return `${b.name} below`;
+      if (b.boundingBox === 'block') break;
+      if (fall > 3) return `a drop of more than 3 below`;
+    }
+  }
+  return null;
+}
+
 // true only when this bot dug the block; false when it was gone already or the dig got no answer.
 async function digAt(r, job, pos) {
   const {bot} = r;
@@ -561,6 +582,8 @@ async function digAt(r, job, pos) {
   guard(job);
   block = bot.blockAt(pos);
   if (!block || block.name.endsWith('air')) return false;
+  const danger = unsafeDig(bot, pos);
+  if (danger) throw new Error(`unsafe: ${danger}`);
   job.t.doing = `mining ${block.name}${tally(job)} near ${at(pos)}`;
   await bot.tool.equipForBlock(block, {}).catch(() => {});
   // A dig the server never answers hangs forever: give it 25 s, then try another block.
@@ -794,6 +817,11 @@ async function collect(r, job, matching, count, what) {
       guard(job);
       // One block nobody can walk to (or whose dig was aborted by a block update, e.g. falling
       // gravel) must not end a long job: skip it for 5 min, give up after 5 in a row.
+      if (/^unsafe: /.test(e.message)) { // never counts towards giving up: there is other ore
+        r.skip.set(key, Date.now() + 1800000);
+        r.emit('info', `left a ${what} block at ${at(pos)}: ${e.message}`);
+        continue;
+      }
       if (!/could not reach|Digging aborted/.test(e.message) || ++misses > 5) throw e;
       for (const [k, until] of r.skip) if (until < Date.now()) r.skip.delete(k);
       r.skip.set(key, Date.now() + 300000);
@@ -1113,4 +1141,4 @@ const JOBS = {
   },
 };
 
-module.exports = {BotRunner, NAME_RE, VALIDATE, TOOL_RE, JOBS};
+module.exports = {BotRunner, NAME_RE, VALIDATE, TOOL_RE, JOBS, unsafeDig};
