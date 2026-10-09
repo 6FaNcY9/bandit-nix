@@ -58,6 +58,43 @@ check` passed on the committed tree.
 New tests: ring-buffer bound and ids, event cleaning, activity/tool/queue fields, hub field
 sanitising, `remove` over the hub, `/api/events` and the CSP header through the real server.
 
+## M3 - robustness for long runs: done
+
+Commits: `744211b` (claims, hub offline/throttle), `5a502d3` (tool replacement, resume after
+death, deposit when full, `place` job), fixes `77ea71c b70a63d 5e66231 d55a323`, docs `fe9907e`.
+
+Live check (2026-10-09, local stage, bot6+bot7, `shift stone` into a chest at -104 68 -12,
+`PROTECTED_AREAS` set, no `SUPPLY_CHEST`), 30 min without intervention:
+
+- pull-backs 0 during the run (3 total, all at connect);
+- claims: bot6 245 granted / 0 refused, bot7 138 / 2 refused, 0 timed out;
+- bot6 replaced its pickaxe several times by itself and worked the whole 30 min;
+- bot7 died once from a fall while digging down (-108 52 -15), respawned and walked back
+  (resume works), but had lost its pickaxe and every tree was out of reach from the pit;
+  with no supply chest on the stage the last fallback was missing, so the shift failed.
+  On the lab `SUPPLY_CHEST` is set (re-arm after respawn). Open: avoid digging into drops.
+
+## M4 - standing orders: done, not live-tested
+
+Commits: `4b2922d` keeper, `c728558` dashboard panel, screenshot `f5f2759`. Unit-tested
+in `app/test.js`. Not run live: the only supply chest (-37 65 -200) is at spawn where
+players were. Off by default after a restart. Set `KEEPER_SITE` before switching it on
+on the lab, otherwise the bots dig around the spawn chest.
+
+## M5 - schematic building: skipped (design only, `6b18c15`)
+
+## Ship
+
+```
+tools/ship-claude 81dd38e 670468c 81e7a10 6636334 cb1a326 744211b 5a502d3 4b2922d c728558 fe9907e 77ea71c 6b18c15 bd398b6 b70a63d 5e66231 d55a323 f5f2759 <this report commit>
+```
+
 ## Waiting for the owner
 
-Nothing yet.
+- Ship (GPG + push).
+- Choose a `KEEPER_SITE` before using standing orders on the lab.
+
+## Next (owner's goal: bots farm everything the automated base needs)
+
+1. guard job (protect an area or a player); 2. safe branch mining at a set depth, no digging
+into drops; 3. bulk crafting chains; 4. base quotas from the owner's materials list.
