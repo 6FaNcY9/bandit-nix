@@ -5,6 +5,7 @@
 // furnace until the requested output is collected. Helpers come from bots.js
 // (goNear/guard/sleep) so walking keeps the movement and protection rules.
 const {Vec3} = require('vec3');
+const {insideAreas} = require('./world');
 
 const MAX_DEPTH = 4;
 const FUELS = ['coal', 'charcoal', 'coal_block', 'oak_planks', 'spruce_planks', 'birch_planks', 'jungle_planks',
@@ -38,7 +39,7 @@ function nearBlock(bot, name, maxDistance = 24) {
 // Place an item from the inventory on a free spot next to the bot.
 // Grass, flowers and leaf litter count as free: placing replaces them.
 const open = (b) => b && b.boundingBox === 'empty' && !/water|lava/.test(b.name);
-async function placeNear(bot, itemName) {
+async function placeNear(bot, itemName, areas = []) {
   const item = bot.inventory.items().find((i) => i.name === itemName);
   if (!item) throw new Error(`no ${itemName} to place`);
   const me = bot.entity.position.floored();
@@ -47,7 +48,7 @@ async function placeNear(bot, itemName) {
     for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
       const ground = bot.blockAt(me.offset(dx, dy, dz));
       const spot = bot.blockAt(me.offset(dx, dy + 1, dz));
-      if (ground?.boundingBox === 'block' && open(spot)) {
+      if (ground?.boundingBox === 'block' && open(spot) && !insideAreas(areas, spot.position.x, spot.position.z)) {
         await bot.equip(item, 'hand');
         await bot.placeBlock(ground, new Vec3(0, 1, 0)).catch(() => {}); // 26.x may not echo the update in time
         for (let i = 0; i < 20; i++) {
@@ -80,7 +81,7 @@ function makeCrafting({goNear, guard}) {
     }
     if (!block) {
       await ensureItem(r, job, name, 1, depth + 1);
-      block = await placeNear(bot, name);
+      block = await placeNear(bot, name, r.protectedAreas);
     }
     return bot.blockAt(block.position);
   }

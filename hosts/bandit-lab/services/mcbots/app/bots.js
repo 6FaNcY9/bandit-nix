@@ -5,6 +5,7 @@ require('./itemfix'); // must load before mineflayer
 // to VALIDATE; nothing else changes.
 const mineflayer = require('mineflayer');
 const {pathfinder, Movements, goals} = require('mineflayer-pathfinder');
+const {Vec3} = require('vec3');
 const {plugin: collectBlock} = require('mineflayer-collectblock');
 const {Combat, AVOID_FOOD} = require('./combat');
 require('./physicsfix');
@@ -547,10 +548,11 @@ async function goNear(r, job, x, y, z, dist, {brave = false, goal = null, doing 
 // Mine one block and pick up what drops. Replaces mineflayer-collectblock,
 // which froze the bot process (synchronous loop until out of memory) when
 // asked to mine stone without a pickaxe (2026-10-08).
+// true only when this bot dug the block; false when it was gone already or the dig got no answer.
 async function digAt(r, job, pos) {
   const {bot} = r;
   let block = bot.blockAt(pos);
-  if (!block || block.name.endsWith('air')) return;
+  if (!block || block.name.endsWith('air')) return false;
   const tools = block.harvestTools ? Object.keys(block.harvestTools).map(Number) : null;
   if (tools && !bot.inventory.items().some((i) => tools.includes(i.type))) {
     throw new Error(`needs a tool that can harvest ${block.name} (for stone and ore: a pickaxe)`);
@@ -558,7 +560,7 @@ async function digAt(r, job, pos) {
   await goNear(r, job, pos.x, pos.y, pos.z, 4, {goal: new goals.GoalLookAtBlock(pos, bot.world, {reach: 4}), doing: `walking to ${block.name} near ${at(pos)}${tally(job)}`});
   guard(job);
   block = bot.blockAt(pos);
-  if (!block || block.name.endsWith('air')) return;
+  if (!block || block.name.endsWith('air')) return false;
   job.t.doing = `mining ${block.name}${tally(job)} near ${at(pos)}`;
   await bot.tool.equipForBlock(block, {}).catch(() => {});
   // A dig the server never answers hangs forever: give it 25 s, then try another block.
@@ -568,7 +570,7 @@ async function digAt(r, job, pos) {
   if (gave) {
     bot.stopDigging();
     r.emit('info', `digging ${block.name} at ${at(pos)} got no answer: skipped`);
-    return;
+    return false;
   }
   // Walk over the drops near the block (items merge and fly a little).
   await sleep(400);
@@ -577,6 +579,7 @@ async function digAt(r, job, pos) {
     guard(job);
     await goNear(r, job, d.position.x, d.position.y, d.position.z, 0.8, {doing: 'picking up the drops'}).catch(() => {});
   }
+  return true;
 }
 
 // Report the supply chest's contents to the shared picture (the keeper plans from it).
@@ -621,12 +624,58 @@ const child = (job, extra = {}) => Object.assign(Object.create(job), {collected:
 // when hungry and carrying none, empty a full inventory. Called before every
 // block of collect(); the helpers below may call collect themselves (logs for
 // a new pickaxe), hence the guard.
+// Torches: where the block light at the bot's feet is below TORCH_BELOW, put a
+// torch there (it shines 14, so they land about every 7 blocks and nothing in
+// between gets back to light 0, where monsters spawn). Out of torches: craft 4
+// when there is coal or charcoal (sticks come from planks).
+const TORCH_BELOW = 7;
+async function lightUp(r, job) {
+  const {bot} = r;
+  if (!(r.getSettings?.().torches ?? true) || r.combat.busy || bot.currentWindow) return;
+  if (Date.now() - (r.torchAt || 0) < 3000) return;
+  const feet = bot.entity.position.floored();
+  const here = bot.blockAt(feet), below = bot.blockAt(feet.offset(0, -1, 0));
+  if (!here || here.name !== 'air' && here.name !== 'cave_air' || !below || below.boundingBox !== 'block' || (here.light ?? 15) >= TORCH_BELOW) return;
+  if (insideAreas(r.protectedAreas, feet.x, feet.z)) return;
+  // The client's light data lags behind a fresh torch: also count torches close by.
+  const torchIds = ['torch', 'wall_torch'].map((n) => bot.registry.blocksByName[n]?.id).filter((id) => id !== undefined);
+  if (bot.findBlock({matching: torchIds, maxDistance: 5})) return;
+  r.torchAt = Date.now();
+  if (!bot.inventory.items().some((i) => i.name === 'torch')) {
+    if (!bot.inventory.items().some((i) => i.name === 'coal' || i.name === 'charcoal') || Date.now() - (r.torchCraftAt || 0) < 300000) return;
+    r.torchCraftAt = Date.now(); // one try per 5 min, so a missing recipe input cannot stall the job
+    await crafting.ensureItem(r, child(job), 'torch', 4);
+    guard(job);
+  }
+  const torch = bot.inventory.items().find((i) => i.name === 'torch');
+  if (!torch) return;
+  // On a wall at head height when there is one (digging down or along a
+  // tunnel leaves it alone), else on the floor at the bot's feet.
+  const head = feet.offset(0, 1, 0);
+  let ref = null, face = null, spot = feet;
+  if (['air', 'cave_air'].includes(bot.blockAt(head)?.name)) {
+    for (const d of [new Vec3(1, 0, 0), new Vec3(-1, 0, 0), new Vec3(0, 0, 1), new Vec3(0, 0, -1)]) {
+      const w = bot.blockAt(head.plus(d));
+      if (w && w.boundingBox === 'block' && !insideAreas(r.protectedAreas, w.position.x, w.position.z)) { ref = w; face = d.scaled(-1); spot = head; break; }
+    }
+  }
+  if (!ref) { ref = below; face = new Vec3(0, 1, 0); }
+  const held = bot.heldItem;
+  await bot.equip(torch, 'hand');
+  await bot.placeBlock(ref, face).catch(() => {}); // placeBlock may time out waiting for the update; check the world instead
+  await sleep(250);
+  if (!/torch$/.test(bot.blockAt(spot)?.name || '')) throw new Error(`torch at ${at(spot)} did not stay`);
+  r.emit('info', `placed a torch at ${at(spot)} (light was ${here.light})`);
+  if (held && held.name !== 'torch') await bot.equip(held, 'hand').catch(() => {});
+}
+
 async function upkeep(r, job, ids) {
   if (job.t.upkeep) return;
   job.t.upkeep = true;
   const shown = {done: job.t.done, total: job.t.total};
   try {
     const {bot} = r;
+    await lightUp(r, job).catch((e) => { guard(job); r.emit('info', `no torch placed: ${e.message.slice(0, 80)}`); });
     const need = ids.find((id) => !canHarvest(bot, id));
     if (need !== undefined) await replacePickaxe(r, job);
     if (bot.food < FOOD_BELOW && r.supplyChest && !bot.inventory.items().some((i) => edible(bot, i)) && Date.now() - (r.foodTriedAt || 0) > FOOD_RETRY_MS) {
@@ -691,8 +740,12 @@ async function replacePickaxe(r, job) {
 
 async function collect(r, job, matching, count, what) {
   const {bot} = r;
-  const ids = matching.map((n) => bot.registry.blocksByName[n]?.id).filter((i) => i !== undefined);
+  // An ore below Y 0 is the deepslate variant: mining iron_ore also takes deepslate_iron_ore.
+  const names = matching.flatMap((n) => (/^[a-z]+_ore$/.test(n) ? [n, `deepslate_${n}`] : [n]));
+  const ids = names.map((n) => bot.registry.blocksByName[n]?.id).filter((i) => i !== undefined);
   if (!ids.length) throw new Error(`unknown block: ${what}`);
+  const ore = names.some((n) => n.endsWith('_ore'));
+  const range = ore ? 128 : 64; // the bot sees every block within its view distance (no anti-xray)
   let got = job.collected || 0; // survives a combat interruption + resume
   let misses = 0;
   if (!job.t.open) Object.assign(job.t, {done: got, total: count});
@@ -709,7 +762,13 @@ async function collect(r, job, matching, count, what) {
     if (r.world?.unreachable) throw new Error('hub unreachable: not digging without block reservations');
     let pos = null;
     let key = null;
-    for (const p of bot.findBlocks({matching: ids, maxDistance: 64, count: 48})) {
+    // Ores: nearest first, so a vein is finished before the next one. Stone and
+    // logs: digging down costs a staircase and leads into dark caves, so a block
+    // below the bot counts 2 extra per level.
+    const me = bot.entity.position;
+    const cost = (p) => p.distanceTo(me) + (ore ? 0 : 2 * Math.max(0, Math.floor(me.y) - p.y));
+    const found = bot.findBlocks({matching: ids, maxDistance: range, count: 64}).sort((a, b) => cost(a) - cost(b));
+    for (const p of found) {
       if ((r.skip.get(keyOf(p)) || 0) > Date.now()) continue; // could not get there lately
       // Digging a target is direct (not pathfinder), so protection is checked here too.
       if (insideAreas(r.protectedAreas, p.x, p.z)) continue;
@@ -723,10 +782,13 @@ async function collect(r, job, matching, count, what) {
       job.t.area = {x: p.x, y: p.y, z: p.z}; // where a resumed job walks back to
       break;
     }
-    if (!pos) throw new Error(`no free ${what} within 64 blocks (collected ${got}/${count})`);
+    if (!pos) throw new Error(`no free ${what} within ${range} blocks (collected ${got}/${count})`);
     try {
       await waitSafe(r, job, pos.x, pos.z);
-      await digAt(r, job, pos);
+      if (!(await digAt(r, job, pos))) {
+        r.skip.set(key, Date.now() + 300000); // not dug by us: do not count it, try another block
+        continue;
+      }
       misses = 0;
     } catch (e) {
       guard(job);

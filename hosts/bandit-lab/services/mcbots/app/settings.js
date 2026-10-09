@@ -9,6 +9,7 @@ const DEFAULTS = Object.freeze({
   fightRange: 8, // blocks: walk up to a hostile this close and fight it (4 = only when it is next to the bot)
   retreatHealth: 8, // retreat below this health, come back 4 higher
   eatBelow: 15, // eat when food is below this
+  torches: true, // place torches where it is dark while mining, chopping and on shifts
 });
 const LIMITS = {fightRange: [2, 16], retreatHealth: [0, 18], eatBelow: [1, 19]};
 
@@ -17,9 +18,9 @@ function clean(input) {
   const out = {};
   for (const [k, v] of Object.entries(input || {})) {
     if (!(k in DEFAULTS)) continue;
-    if (k === 'defend') {
-      if (typeof v !== 'boolean') throw new Error('defend must be true or false');
-      out.defend = v;
+    if (typeof DEFAULTS[k] === 'boolean') {
+      if (typeof v !== 'boolean') throw new Error(`${k} must be true or false`);
+      out[k] = v;
     } else {
       const [lo, hi] = LIMITS[k];
       if (!Number.isInteger(v) || v < lo || v > hi) throw new Error(`${k} must be a whole number from ${lo} to ${hi}`);
