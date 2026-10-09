@@ -55,6 +55,9 @@ in {
         # keeper keeps in the supply chest, item:amount. Optional KEEPER_SITE
         # "x,y,z" makes the bots walk there before they chop or mine.
         KEEPER_QUOTAS = "logs:64,cobblestone:128,coal:32,torch:64";
+        # Resource site in the forest west of spawn (chest -260 65 -213), so
+        # standing orders never dig around the spawn base.
+        KEEPER_SITE = "-258,65,-210";
         # Bots never dig or place inside these x1,z1,x2,z2 boxes: the main base
         # around spawn and MidariBread's base (from BlueMap light data, +16).
         PROTECTED_AREAS = "-80,-144,80,80;112,368,272,592";
