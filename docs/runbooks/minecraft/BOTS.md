@@ -262,6 +262,8 @@ before chopping or mining). Without `SUPPLY_CHEST` or quotas the panel is absent
 - API: `GET /api/keeper`, `POST /api/keeper {"enabled": true|false}` (same-origin
   JSON only); the state is also part of every `/api/state` and WebSocket frame.
 
+![Standing orders panel: quotas, stock and who works on what](img/standing-orders.png)
+
 ## Schematic building (design only, not built)
 
 Status: designed in the autopilot run, deliberately not implemented. The owner's
