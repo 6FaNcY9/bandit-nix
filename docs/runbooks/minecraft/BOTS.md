@@ -55,6 +55,16 @@ rendered on the server from the blocks the bot has loaded (`app/view.js`, `GET /
 one frame per bot per 0.7 s, refreshed every second while open). Blocks are flat colours by name,
 players blue and hostile mobs red boxes; no textures. Laptop workers (bot5) have no view yet.
 
+**Settings** per bot (card, or map menu): fight hostile mobs on/off, fight range (2-16 blocks: the
+bot walks up to a hostile this close, so skeletons no longer shoot it from afar), retreat below
+health, eat below food. `POST /api/settings {"bot": "bot1", "settings": {...}}` (same-origin JSON);
+kept in `STATE_DIR/settings.json`, on the lab the named volume `mcbots-state` (the only mount the
+`lab-mcbots` check allows). Laptop workers keep their defaults.
+
+**Guard** job: `guard {x, y, z, radius}` or `guard {player, radius}` (radius 4-48, default 16). Until
+stopped, the bot fights every hostile within the radius of the spot or player and walks back when
+all is quiet. Map menu: "guard this spot" / "guard <player>"; composer: "Guard a spot", "Guard a player".
+
 One card per bot: an activity line in plain words ("mining stone 6/40 near -94
 66 -2", "walking to the supply chest to deposit", "idle - no job", "dead -
 respawning", "offline - last seen 3 min ago"), a progress bar for jobs that

@@ -9,7 +9,7 @@ const {plugin: collectBlock} = require('mineflayer-collectblock');
 const {Combat, AVOID_FOOD} = require('./combat');
 require('./physicsfix');
 const {BotTrace, SAMPLE_MS, round} = require('./debug');
-const {normDim, deadlineMs, insideAreas} = require('./world');
+const {normDim, deadlineMs, insideAreas, shouldFight} = require('./world');
 
 const NAME_RE = /^bot[0-9]{1,2}$/; // BotGate's pattern (Velocity plugin)
 const LOGIN_GAP_MS = 4500; // Velocity rate-limits logins
@@ -20,7 +20,7 @@ const BACKOFF_CAP = 300000;
 const KEEP_RE = /^(stick|[a-z_]+_planks|coal|charcoal|torch|crafting_table|furnace)$/;
 const FOOD_BELOW = 14; // fetch food from the supply chest when hungry and carrying none
 const FOOD_RETRY_MS = 600000; // an empty chest is not worth a walk every minute
-const RESUMABLE = new Set(['mine', 'chop', 'shift', 'goto', 'deposit', 'follow', 'come']);
+const RESUMABLE = new Set(['mine', 'chop', 'shift', 'goto', 'deposit', 'follow', 'come', 'guard']);
 const MAX_INTERRUPTIONS = 3; // deaths/disconnects of one job before it is given up
 const TOOL_RE = /_(pickaxe|axe|shovel|hoe|sword)$|^(shears|bow|crossbow|fishing_rod|shield|trident|flint_and_steel|elytra)$/;
 
@@ -48,6 +48,8 @@ const VALIDATE = {
   goto: xyz,
   follow: player,
   come: player,
+  // Guard a spot (x,y,z) or a player: fight every hostile within radius of it.
+  guard: (a) => ({...(a.player ? player(a) : xyz(a)), radius: num(a.radius ?? 16, 4, 48, 'radius')}),
   mine: (a) => {
     if (!/^[a-z_]{1,48}$/.test(a.block || '')) throw new Error('block must be a block name like iron_ore');
     return {block: a.block, count: num(a.count ?? 1, 1, 2048, 'count')};
@@ -405,7 +407,7 @@ class BotRunner {
   activity() {
     if (!this.online) return this.lastSeen ? 'offline' : 'connecting...';
     if (this.dead) return 'dead - respawning';
-    if (this.combat.busy) return `fighting or retreating (${this.combat.mode || 'combat'})`;
+    if (this.combat.busy) return {hunt: `fighting ${this.combat.target?.name || 'a hostile mob'}`, retreat: 'retreating to heal', creeper: 'backing off a creeper'}[this.combat.mode] || 'fighting';
     const j = this.current;
     if (!j) return this.queue.length ? 'starting the next job' : 'idle - no job';
     return j.t?.doing || `${jobLabel(j)} ${j.progress || ''}`.trim();
@@ -818,6 +820,50 @@ const JOBS = {
   come: (r, job) => chase(r, job, false),
 
   follow: (r, job) => chase(r, job, true),
+
+  // Runs until stopped: hunts hostiles within the radius (combat does the
+  // hitting once it is close), else walks back to the post or the player.
+  guard: async (r, job) => {
+    const {bot} = r;
+    const {radius, player: name} = job.args;
+    let goal = null; // what the pathfinder chases: a mob entity, or 'post'
+    let epoch = r.combat.epoch;
+    try {
+      for (;;) {
+        guard(job);
+        if (!r.online) throw new Error('bot went offline');
+        await waitCalm(r, job);
+        if (epoch !== r.combat.epoch) { epoch = r.combat.epoch; goal = null; } // combat replaced our goal
+        const me = bot.entity.position;
+        let post = job.args;
+        if (name) {
+          const e = bot.players[name]?.entity;
+          const p = e ? e.position : r.world.player(name);
+          if (!p) throw new Error(`${name} is not visible and not on the map (offline, or BlueMap unavailable)`);
+          post = {x: p.x, y: p.y, z: p.z};
+        }
+        const foe = Object.values(bot.entities)
+          .filter((e) => e !== bot.entity && e.position && shouldFight(e) && Math.hypot(e.position.x - post.x, e.position.z - post.z) <= radius && Math.abs(e.position.y - post.y) < 16)
+          .sort((a, b) => a.position.distanceTo(me) - b.position.distanceTo(me))[0];
+        if (foe) {
+          job.progress = `fighting ${foe.name}`;
+          job.t.doing = `fighting ${foe.name} ${Math.round(foe.position.distanceTo(me))} blocks away`;
+          if (goal !== foe) { bot.pathfinder.setGoal(new goals.GoalFollow(foe, 2), true); goal = foe; }
+        } else if (Math.hypot(me.x - post.x, me.z - post.z) > Math.max(3, radius / 3)) {
+          job.progress = 'returning to post';
+          job.t.doing = name ? `staying with ${name}` : `walking back to the post ${at(post)}`;
+          if (goal !== 'post' || !bot.pathfinder.isMoving()) { bot.pathfinder.setGoal(new goals.GoalNear(post.x, post.y, post.z, 2)); goal = 'post'; }
+        } else {
+          job.progress = 'all quiet';
+          job.t.doing = `guarding ${name || at(post)}, radius ${radius}: all quiet`;
+          if (goal) { bot.pathfinder.setGoal(null); goal = null; }
+        }
+        await sleep(500);
+      }
+    } finally {
+      if (goal) bot.pathfinder.setGoal(null);
+    }
+  },
 
   mine: (r, job) => collect(r, job, [job.args.block], job.args.count, job.args.block),
 

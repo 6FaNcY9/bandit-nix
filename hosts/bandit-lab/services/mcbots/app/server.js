@@ -12,6 +12,7 @@ const {Hub, RemoteRunner, createWorkerServer} = require('./hub');
 const {EventLog} = require('./events');
 const {Keeper} = require('./keeper');
 const {botView} = require('./view');
+const {Settings} = require('./settings');
 
 const cfg = loadConfig();
 const log = (who, msg) => console.log(`${new Date().toISOString()} [${who}] ${msg}`);
@@ -19,6 +20,8 @@ const world = new WorldModel();
 const events = new EventLog();
 const stopBlueMap = startBlueMap(world, cfg.bluemapUrl, log);
 const runners = new Map(cfg.names.map((n) => [n, new BotRunner(n, {host: cfg.mcHost, port: cfg.mcPort, log, world, protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest, loginSeed: cfg.loginSeed, hostLabel: cfg.hostLabel, onEvent: (b, k, t) => events.add(b, k, t)})]));
+const settings = new Settings(process.env.STATE_DIR || '');
+for (const r of runners.values()) r.getSettings = () => settings.get(r.name);
 const page = fs.readFileSync(path.join(__dirname, 'public', 'index.html'));
 // The page is one file with inline script and style: allow exactly those two
 // bodies by hash and nothing else (no CDN, no eval, no other origin).
@@ -44,7 +47,7 @@ const sameOrigin = (req) => {
     return false;
   }
 };
-const state = () => ({now: Date.now(), lastEventId: events.lastId, keeper: keeper?.state() || null, bots: [...runners.values()].map((r) => r.snapshot()), world: world.snapshot(), protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest});
+const state = () => ({now: Date.now(), lastEventId: events.lastId, keeper: keeper?.state() || null, bots: [...runners.values()].map((r) => ({...r.snapshot(), settings: r instanceof RemoteRunner ? null : settings.get(r.name)})), world: world.snapshot(), protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest});
 
 function readJson(req) {
   return new Promise((resolve, reject) => {
@@ -140,6 +143,20 @@ const server = http.createServer(async (req, res) => {
       keeper.setEnabled(enabled);
       broadcast();
       return json(200, keeper.state());
+    } catch (e) {
+      return json(400, {error: e.message});
+    }
+  }
+  if (req.method === 'POST' && url.pathname === '/api/settings') {
+    if (!sameOrigin(req) || !String(req.headers['content-type']).startsWith('application/json')) return json(403, {error: 'bad origin'});
+    try {
+      const {bot, settings: input} = await readJson(req);
+      const r = runners.get(bot);
+      if (!r || r instanceof RemoteRunner) throw new Error('unknown bot (laptop workers keep their own settings)');
+      const now = settings.set(bot, input);
+      events.add(bot, 'info', `settings: ${Object.entries(input || {}).map(([k, v]) => `${k} ${v}`).join(', ')}`);
+      broadcast();
+      return json(200, now);
     } catch (e) {
       return json(400, {error: e.message});
     }

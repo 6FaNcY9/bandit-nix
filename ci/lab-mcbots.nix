@@ -17,7 +17,8 @@
 in
   assert lib.assertMsg (c.ports != [] && lib.all (lib.hasPrefix "127.0.0.1:") c.ports) "mcbots may publish only on 127.0.0.1: ${toString c.ports}";
   assert lib.assertMsg (!(lib.hasInfix "privileged" extra) && !(lib.hasInfix "cap-add" extra) && !(lib.hasInfix "--network=host" extra) && !(lib.hasInfix "--pid=" extra)) "mcbots must stay unprivileged: ${extra}";
-  assert lib.assertMsg (c.volumes == []) "mcbots needs no mounts (no docker.sock, no host paths): ${toString c.volumes}";
+  # Only its own named volume for dashboard settings; never docker.sock or a host path.
+  assert lib.assertMsg (c.volumes == ["mcbots-state:/state"]) "mcbots mounts only the named volume mcbots-state:/state (no docker.sock, no host paths): ${toString c.volumes}";
   assert lib.assertMsg (lib.hasInfix "--network=mcbots" extra && lib.hasInfix "--network=minecraft" extra && !(lib.hasInfix "--network=bridge" extra) && !(lib.hasInfix "--network=host" extra)) "mcbots joins exactly the mcbots and minecraft networks: ${extra}";
   assert lib.assertMsg (lib.length (lib.filter (lib.hasPrefix "--network") c.extraOptions) == 2) "mcbots may not join further networks: ${extra}";
   assert lib.assertMsg (lib.hasInfix "--add-host=velocity:10.250.77." extra) "with two networks `velocity` must be pinned to its mcbots-network address, or BotGate sees a minecraft-network source: ${extra}";

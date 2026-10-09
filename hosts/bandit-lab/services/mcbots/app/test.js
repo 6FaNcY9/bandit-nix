@@ -795,5 +795,25 @@ require('./crafting');
   const px = (x, y) => [...raw.subarray(y * 49 + 1 + x * 3, y * 49 + 4 + x * 3)];
   assert.deepStrictEqual(px(8, 0), [135, 175, 235], 'sky at the top');
   assert.ok(px(8, 8)[0] < 135 && px(8, 8)[2] < 200, 'floor at the bottom: ' + px(8, 8));
+
+  // settings: validated, merged over defaults, kept across a restart in STATE_DIR
+  const {Settings, DEFAULTS} = require('./settings');
+  const dir = require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'mcbots-'));
+  const st = new Settings(dir);
+  assert.deepStrictEqual(st.get('bot1'), DEFAULTS);
+  assert.deepStrictEqual(st.set('bot1', {fightRange: 12, defend: false, junk: 1}), {...DEFAULTS, fightRange: 12, defend: false});
+  assert.throws(() => st.set('bot1', {fightRange: 99}), /fightRange/);
+  assert.throws(() => st.set('bot1', {defend: 'yes'}), /defend/);
+  assert.deepStrictEqual(new Settings(dir).get('bot1'), {...DEFAULTS, fightRange: 12, defend: false}, 'survives a restart');
+  assert.deepStrictEqual(new Settings('').get('bot1'), DEFAULTS, 'no STATE_DIR: memory only');
+
+  // guard job arguments
+  const gq = new BotRunner('bot2', {host: 'x', port: 1, log: () => {}, world: null});
+  gq.online = true;
+  JOBS.guard = () => new Promise(() => {}); // never ends; we only check the queued args
+  gq.enqueue('guard', {x: '1', y: '64', z: '-3'});
+  assert.deepStrictEqual(gq.current?.args || gq.queue[0]?.args, {x: 1, y: 64, z: -3, radius: 16});
+  assert.throws(() => gq.enqueue('guard', {player: 'Steve', radius: 99}), /radius/);
+  assert.throws(() => gq.enqueue('guard', {player: 'bad name!'}), /player/);
   console.log('ok');
 })();

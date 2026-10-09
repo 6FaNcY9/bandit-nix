@@ -5,13 +5,11 @@
 // job knows to re-issue its goal, and `busy` makes jobs wait until calm.
 const {goals} = require('mineflayer-pathfinder');
 const {isHostile, shouldFight, normDim, NOTABLE_BLOCKS} = require('./world');
+const {DEFAULTS} = require('./settings');
 
 const TICK_MS = 500;
 const FIGHT_RANGE = 4;
 const SEE_RANGE = 24;
-const LOW_HEALTH = 8;
-const RECOVERED_HEALTH = 12;
-const EAT_BELOW = 15;
 const SCAN_EVERY = 20; // ticks between notable-block scans (10 s)
 const MATERIALS = ['wooden', 'golden', 'stone', 'iron', 'diamond', 'netherite'];
 const AVOID_FOOD = new Set(['pufferfish', 'spider_eye', 'poisonous_potato', 'rotten_flesh', 'chicken', 'golden_apple', 'enchanted_golden_apple', 'chorus_fruit', 'suspicious_stew']);
@@ -49,9 +47,18 @@ class Combat {
     this.r.bot.pathfinder.setGoal(new goals.GoalInvert(new goals.GoalFollow(target, dist)), true);
   }
 
+  hunt(target) {
+    this.mode = 'hunt';
+    this.target = target;
+    this.busy = true;
+    this.epoch++;
+    this.r.bot.pathfinder.setGoal(new goals.GoalFollow(target, 2), true);
+  }
+
   release() {
     if (!this.mode) return;
     this.mode = null;
+    this.target = null;
     this.busy = false;
     this.epoch++;
     this.r.bot.pathfinder.setGoal(null);
@@ -70,19 +77,23 @@ class Combat {
     if (this.ticks % SCAN_EVERY === 0) this.scanBlocks(dim);
     // Only mobs that actually threaten the bot drive retreat/back-off/attack;
     // endermen, piglins and the like are seen and shared but left alone.
+    const s = this.r.getSettings?.() || DEFAULTS;
     const near = seen.filter(shouldFight).sort((a, b) => a.position.distanceTo(me) - b.position.distanceTo(me))[0];
     const dist = near ? near.position.distanceTo(me) : Infinity;
 
     // Retreat until healthy again or nothing hostile is close.
     if (this.mode === 'retreat') {
-      if (bot.health >= RECOVERED_HEALTH || dist > 16) this.release();
+      if (bot.health >= Math.min(20, s.retreatHealth + 4) || dist > 16) this.release();
       return;
     }
-    if (near && bot.health < LOW_HEALTH && dist <= 16) return this.takeover('retreat', near, 20);
+    if (near && bot.health < s.retreatHealth && dist <= 16) return this.takeover('retreat', near, 20);
+    // Hunt: walk up to a hostile within the fight range (skeletons shoot from afar).
+    if (this.mode === 'hunt' && (!near || !s.defend || dist > s.fightRange + 4 || near !== this.target)) this.release();
     if (this.mode === 'creeper' && (!near || near.name !== 'creeper' || dist > 8)) this.release();
 
     if (near && near.name === 'creeper' && dist < 6) return this.takeover('creeper', near, 8);
-    if (near && shouldFight(near) && dist <= FIGHT_RANGE && !this.busy) return this.fight(near);
+    if (near && s.defend && dist <= FIGHT_RANGE && (!this.busy || this.mode === 'hunt')) return this.fight(near);
+    if (near && s.defend && dist <= s.fightRange && !this.busy && !this.r.inventoryBusy && !bot.currentWindow) return this.hunt(near);
     if (!this.busy && !near && !this.r.inventoryBusy && !bot.currentWindow) await this.eat();
   }
 
@@ -103,7 +114,7 @@ class Combat {
 
   async eat() {
     const bot = this.r.bot;
-    if (this.eating || bot.food >= EAT_BELOW) return;
+    if (this.eating || bot.food >= (this.r.getSettings?.() || DEFAULTS).eatBelow) return;
     const food = bot.inventory.items()
       .filter((i) => bot.registry.foodsByName[i.name] && !AVOID_FOOD.has(i.name))
       .sort((a, b) => bot.registry.foodsByName[b.name].foodPoints - bot.registry.foodsByName[a.name].foodPoints)[0];
