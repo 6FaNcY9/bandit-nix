@@ -62,6 +62,7 @@
 
   environment.systemPackages = with pkgs; [
     gcc
+    devenv
     comma
     lazygit
     grc # fzf-tab-source: colorized ip/network output in previews

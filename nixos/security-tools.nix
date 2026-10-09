@@ -48,6 +48,8 @@
     binutils # objdump / readelf / nm
     strace
     ltrace
+    lynis # local security audit
+    vulnix # scan the closure for known CVEs
 
     # ── Wireless ─────────────────────────────────────────────────────────
     # NOTE: the Framework 13's MediaTek Wi-Fi has no monitor mode/injection —
