@@ -94,6 +94,11 @@ from the surface, 11 raw iron in 153 s, ending at Y 32.
 an unreachable block makes the bot skip the whole vein around it (4 blocks) for 5 min; armour in the
 inventory goes on at once; a log job without an axe makes a stone or wooden one first.
 
+**Sealing**: water or lava next to a target block is plugged first: the bot places a rubble block
+(cobblestone, cobbled deepslate, dirt, granite, ...) against the target's face towards the fluid,
+then mines the target; without rubble it skips the block. Live: water above a test ore sealed with
+granite, ore mined in 16 s.
+
 **Junk**: during ore and log jobs, with fewer than 4 free slots, the bot throws away cobblestone
 (keeping one stack), cobbled deepslate, dirt, gravel, granite, diorite, andesite, tuff and the like
 (not what the job is mining). Torches never hang on a block of the job's target type.

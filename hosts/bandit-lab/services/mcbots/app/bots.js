@@ -569,6 +569,28 @@ function unsafeDig(bot, pos) {
   return null;
 }
 
+// Plug water and lava next to a target with rubble (an idea from the Jarvis plugin):
+// each fluid neighbour gets a cobblestone (or other junk block) placed against the
+// target's face towards it. true when every neighbour got filled.
+const FILLER = ['cobblestone', 'cobbled_deepslate', 'dirt', 'netherrack', 'andesite', 'diorite', 'granite', 'tuff', 'stone'];
+async function sealFluids(r, pos) {
+  const {bot} = r;
+  const target = bot.blockAt(pos);
+  if (!target) return false;
+  for (const d of [[0, 1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, -1, 0]]) {
+    const n = bot.blockAt(pos.offset(...d));
+    if (!n || !FLUID.test(n.name)) continue;
+    const fill = bot.inventory.items().find((i) => FILLER.includes(i.name));
+    if (!fill) return false;
+    await bot.equip(fill, 'hand').catch(() => {});
+    await bot.placeBlock(target, new Vec3(...d)).catch(() => {});
+    await sleep(250);
+    if (FLUID.test(bot.blockAt(pos.offset(...d))?.name || '')) return false;
+    r.emit('info', `sealed ${n.name} at ${at(n.position)} with ${fill.name}`);
+  }
+  return true;
+}
+
 // true only when this bot dug the block; false when it was gone already or the dig got no answer.
 async function digAt(r, job, pos) {
   const {bot} = r;
@@ -582,7 +604,8 @@ async function digAt(r, job, pos) {
   guard(job);
   block = bot.blockAt(pos);
   if (!block || block.name.endsWith('air')) return false;
-  const danger = unsafeDig(bot, pos);
+  let danger = unsafeDig(bot, pos);
+  if (danger && / next to it$/.test(danger) && (await sealFluids(r, pos))) danger = unsafeDig(bot, pos);
   if (danger) throw new Error(`unsafe: ${danger}`);
   job.t.doing = `mining ${block.name}${tally(job)} near ${at(pos)}`;
   await bot.tool.equipForBlock(block, {}).catch(() => {});
