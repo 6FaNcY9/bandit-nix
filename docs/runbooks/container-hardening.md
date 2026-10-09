@@ -48,6 +48,7 @@ supervised-maintenance procedure in `bandit-lab-updates.md`.
 | Container | Adopted flag | Owner's post-deploy health probe |
 | --- | --- | --- |
 | aiia-ghost | `no-new-privileges` | HTTP `http://127.0.0.1:2368/` inside its network namespace; expect a successful storefront response (follow redirects), then check `https://aiia.at/` through the normal route. |
+| aiia-redis | `no-new-privileges` | `sudo docker exec aiia-redis redis-cli ping` must return `PONG`; check Ghost still serves requests. |
 
 For an HTTP probe from the host, use the container's network namespace so no
 port needs publishing (owner only; substitute the row's container and URL):

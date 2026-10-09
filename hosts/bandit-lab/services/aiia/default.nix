@@ -107,6 +107,7 @@ in {
     aiia-redis = {
       image = "redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf";
       networks = ["aiia"];
+      extraOptions = ["--security-opt=no-new-privileges"];
     };
 
     # Custom Ghost 6 fork build (github.com/6FaNcY9/AiiA). The image is loaded
