@@ -105,11 +105,9 @@ post), torches + ore search + review fixes (`147431c`: `mine iron_ore 8` gave 9 
 
 - P1 safe digging: never dig the block under the bot into a drop of more than 3 or into lava/water
   (bot7 fell to death, bots died to skeletons before the fight range).
-- P1 kits: chop with an axe (craft one from the logs; bot1 chopped holding a golden carrot), put on
-  armour from the inventory without walking to a chest, keep spare kits in the supply chest.
+- P1 kits: keep spare kits in the supply chest (axe and armour-from-inventory done).
   Lost kits today: bot1 x2 (skeletons), bot2, bot4 (drowned).
 - P1 supply chest as a map marker that the owner moves (still the old spawn chest from default.nix).
-- P1 a shift that finds nothing in range moves on (spiral 48 blocks) instead of failing.
 - P2 precision everywhere (owner's wish: use what humans cannot time): instant tool swap per block
   (done), perfect crit/sweep timing (done), next: shield-free arrow dodging by side-stepping only
   when a skeleton draws, block-perfect bridging over gaps, MLG water bucket on falls, instant

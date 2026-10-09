@@ -280,7 +280,7 @@ function renderKeeper(k) {
     const tr = el('tr'), bar = el('progress');
     bar.max = q.want; bar.value = q.have || 0;
     const wanted = el('td'); wanted.append(bar, ' ' + q.want);
-    tr.append(el('td', '', q.item), el('td', '', q.have == null ? '?' : String(q.have)), wanted,
+    tr.append(el('td', '', q.item), el('td', '', q.have == null ? 'not counted yet' : String(q.have)), wanted,
       el('td', q.bot ? '' : 'mut', q.bot ? `${q.bot} is fetching ${q.fetching}` : q.have != null && q.have >= q.want ? 'ok' : q.note || (k.enabled ? 'waiting' : '')));
     return tr;
   }));
