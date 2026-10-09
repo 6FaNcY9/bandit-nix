@@ -843,6 +843,40 @@ require('./crafting');
   pl.remove('Forest');
   assert.throws(() => pl.remove('Forest'), /no place/);
 
+  // MC-2: sealing never changes a neighbour inside a protected area, and honours a stop
+  {
+    const {sealFluids, Cancelled} = require('./bots');
+    const {Vec3} = require('vec3');
+    const make = (blocks, areas, onPlace) => {
+      const placed = [];
+      const bot = {
+        blockAt: (p) => { const name = blocks[`${p.x},${p.y},${p.z}`]; return name ? {name, position: new Vec3(p.x, p.y, p.z)} : null; },
+        inventory: {items: () => [{name: 'cobblestone'}]},
+        equip: async () => {},
+        placeBlock: async (target, face) => { const at = target.position.plus(face); placed.push(`${at.x},${at.y},${at.z}`); blocks[`${at.x},${at.y},${at.z}`] = 'cobblestone'; onPlace?.(); },
+      };
+      return {r: {bot, protectedAreas: areas, emit() {}}, placed};
+    };
+    const T = new Vec3(10, 64, 0);
+    // ore outside the boundary, water inside it: no sealing, nothing placed, target stays unmined (false)
+    let w = make({'10,64,0': 'diamond_ore', '11,64,0': 'water'}, [[11, -5, 20, 5]]);
+    assert.strictEqual(await sealFluids(w.r, {cancelled: false}, T), false);
+    assert.deepStrictEqual(w.placed, []);
+    // one forbidden neighbour among several: still nothing placed, not even on the allowed one
+    w = make({'10,64,0': 'diamond_ore', '10,65,0': 'water', '11,64,0': 'lava'}, [[11, -5, 20, 5]]);
+    assert.strictEqual(await sealFluids(w.r, {cancelled: false}, T), false);
+    assert.deepStrictEqual(w.placed, []);
+    // an unprotected neighbour is sealed
+    w = make({'10,64,0': 'diamond_ore', '11,64,0': 'water'}, [[100, 100, 110, 110]]);
+    assert.strictEqual(await sealFluids(w.r, {cancelled: false}, T), true);
+    assert.deepStrictEqual(w.placed, ['11,64,0']);
+    // a stop during sealing: the first placement happens, the second never does
+    const job = {cancelled: false};
+    w = make({'10,64,0': 'diamond_ore', '11,64,0': 'water', '10,65,0': 'water'}, [], () => { job.cancelled = true; });
+    await assert.rejects(sealFluids(w.r, job, T), Cancelled);
+    assert.strictEqual(w.placed.length, 1, 'no placement after the stop');
+  }
+
   // guard job arguments
   const gq = new BotRunner('bot2', {host: 'x', port: 1, log: () => {}, world: null});
   gq.online = true;
