@@ -84,6 +84,12 @@ is where Paper pulls bots back.
 torch on a wall at head height (floor if there is no wall). Out of torches with coal or charcoal in
 the inventory: it crafts 4 (one try per 5 min).
 
+**Ore heights**: an ore job first digs down (or up) into the ore's band (iron 0..40, copper 30..70,
+coal 40..130, gold -30..-5, lapis -15..15, redstone/diamond -60..-45, emerald 100..250; 26.2 keeps
+the 1.18 distribution), ores outside the band count 4 extra per level, and when nothing is left in
+reach it tunnels 32 blocks sideways (up to 6 times) instead of failing. Live: `mine iron_ore 8`
+from the surface, 11 raw iron in 153 s, ending at Y 32.
+
 **Targets**: `mine`/`shift` of an ore also take its deepslate variant; ores are searched within 128
 blocks (no anti-xray on the server, so bots see ores through stone), nearest first so a vein is
 finished; stone and logs prefer blocks at or above the bot (2 extra cost per level down).
