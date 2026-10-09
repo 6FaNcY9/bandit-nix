@@ -11,6 +11,7 @@ const {Combat, AVOID_FOOD} = require('./combat');
 require('./physicsfix');
 const {BotTrace, SAMPLE_MS, round} = require('./debug');
 const {normDim, deadlineMs, insideAreas, shouldFight} = require('./world');
+const buildJob = require('./build');
 
 const NAME_RE = /^bot[0-9]{1,2}$/; // BotGate's pattern (Velocity plugin)
 const LOGIN_GAP_MS = 4500; // Velocity rate-limits logins
@@ -21,7 +22,7 @@ const BACKOFF_CAP = 300000;
 const KEEP_RE = /^(stick|[a-z_]+_planks|coal|charcoal|torch|crafting_table|furnace)$/;
 const FOOD_BELOW = 14; // fetch food from the supply chest when hungry and carrying none
 const FOOD_RETRY_MS = 600000; // an empty chest is not worth a walk every minute
-const RESUMABLE = new Set(['mine', 'chop', 'shift', 'goto', 'deposit', 'follow', 'come', 'guard']);
+const RESUMABLE = new Set(['mine', 'chop', 'shift', 'goto', 'deposit', 'follow', 'come', 'guard', 'build']);
 const MAX_INTERRUPTIONS = 3; // deaths/disconnects of one job before it is given up
 const TOOL_RE = /_(pickaxe|axe|shovel|hoe|sword)$|^(shears|bow|crossbow|fishing_rod|shield|trident|flint_and_steel|elytra)$/;
 
@@ -86,6 +87,13 @@ const VALIDATE = {
     if (!/^[a-z_]{1,48}$/.test(a.item || '')) throw new Error('item must be a block name like chest');
     return {item: a.item, ...xyz(a)};
   },
+  // Blueprint {origin, blocks: [{x,y,z,block}], remove?}; protected areas are
+  // checked again when the job runs (the hub and workers may differ).
+  build: (a) => {
+    const plan = buildJob.validate(a);
+    const o = plan.origin;
+    return {origin: o, blocks: plan.blocks.map((b) => ({x: b.x - o.x, y: b.y - o.y, z: b.z - o.z, block: b.block})), remove: plan.remove};
+  },
   say: (a) => {
     const text = String(a.text ?? '').trim();
     if (!text || text.length > 200) throw new Error('text must be 1..200 characters');
@@ -99,7 +107,7 @@ class Cancelled extends Error {}
 const at = (c) => `${Math.round(c.x)} ${Math.round(c.y)} ${Math.round(c.z)}`;
 // "the supply chest" when x,y,z is the configured one, else the coordinates.
 const place = (r, c) => (r.supplyChest && r.supplyChest.x === c.x && r.supplyChest.y === c.y && r.supplyChest.z === c.z ? 'the supply chest' : at(c));
-const jobLabel = (j) => `${j.type} ${Object.values(j.args).join(' ')}`;
+const jobLabel = (j) => `${j.type} ${Object.values(j.args).map((v) => (Array.isArray(v) ? `${v.length} blocks` : v && typeof v === 'object' ? `at ${at(v)}` : v)).join(' ')}`;
 
 class BotRunner {
   constructor(name, {host, port, log, world, protectedAreas = [], supplyChest = null, loginSeed = null, hostLabel = '', onEvent = null}) {
@@ -1080,6 +1088,7 @@ async function chase(r, job, follow) {
 }
 
 const crafting = require('./crafting').makeCrafting({goNear, guard});
+const build = buildJob.makeBuild({goNear, guard, sleep, goals, digAt});
 
 const JOBS = {
   goto: (r, job) => goNear(r, job, job.args.x, job.args.y, job.args.z, 1),
@@ -1262,6 +1271,8 @@ const JOBS = {
     const off = bot.inventory.slots[bot.getEquipmentDestSlot('off-hand')]?.name;
     job.progress = `armour ${worn}/4, ${sword?.name || 'no sword'}, off-hand ${off || 'empty'}, food ${foodCount()}`;
   },
+
+  build: (r, job) => build(r, job),
 
   craft: (r, job) => crafting.ensureItem(r, job, job.args.item, crafting.count(r.bot, job.args.item) + job.args.count),
 

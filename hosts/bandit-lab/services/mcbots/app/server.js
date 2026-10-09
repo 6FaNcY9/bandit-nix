@@ -135,7 +135,7 @@ function readJson(req) {
     let body = '';
     req.on('data', (c) => {
       body += c;
-      if (body.length > 4096) {
+      if (body.length > 8192) { // a 75-block build blueprint is ~3-5 KB
         reject(new Error('body too large'));
         req.destroy();
       }

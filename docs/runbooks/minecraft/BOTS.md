@@ -3,8 +3,8 @@
 Mineflayer bots join Paper through Velocity and
 BotGate and are controlled from a small web dashboard. Code:
 `hosts/bandit-lab/services/mcbots/` (`app/` is the Node app, `default.nix` the
-lab deployment). Crafting and smelting exist; schematic building is designed but
-not built (see below). Goals in stages: `CONTROL-CENTRE-GOAL.md`. A new job
+lab deployment). Crafting, smelting and small builds exist; schematic import does
+not yet (see Building). Goals in stages: `CONTROL-CENTRE-GOAL.md`. A new job
 type is one entry in `JOBS` and one in `VALIDATE` in `app/bots.js`.
 
 ## How it fits together
@@ -274,6 +274,7 @@ Each bot runs its queue one job at a time. Chat is never read as a command.
 | `guard` | x y z or player, radius | fight hostiles within radius (4-48, default 16) until stopped |
 | `craft` | item, count | crafts up to 64, making a crafting table first when needed |
 | `smelt` | item, count | smelts up to 64 of an input such as `raw_iron` |
+| `build` | blueprint, optional `remove` | places (or digs back) up to 75 plain blocks in a 5x5x3 box; see Building |
 | `deposit` | x y z, optional `only` | puts everything except tools, food and crafting stock (planks, sticks, coal, torches, table, furnace) into the chest/barrel there; with `only` (an item name, `logs` or `coal`) just that kind, including what is normally kept |
 | `withdraw` | item, count, x y z | takes up to `count` of an item (or `logs`) out of the chest/barrel |
 | `stock` | x y z | opens the chest and reports its contents (changes nothing); for the supply chest the numbers go to the keeper |
@@ -341,14 +342,26 @@ before chopping or mining). Without `SUPPLY_CHEST` or quotas the panel is absent
 
 ![Standing orders panel: quotas, stock and who works on what](img/standing-orders.png)
 
-## Schematic building (design only, not built)
+## Building (`build` job)
 
-Status: designed in the autopilot run, deliberately not implemented. The owner's
-test rule (a build of at most 5x5x3 within 40 blocks of spawn, outside the
-protected areas, with no player-made block within 10 blocks, removed afterwards)
-needs a look at the lab's spawn surroundings that a laptop run cannot make
-safely, and a `build` job writes to the live world. The pieces it needs already
-exist: `place` (one block), block claims, `upkeep`, the queue and the dashboard.
+Status 2026-10-10: built (`app/build.js`), unit-tested with a fake world in `app/test.js`, and
+live-tested on the local stage: bot6 built a 3x3 cobblestone pad at -121 77 9 (west of the
+protected spawn box, in the area earlier bot tests dug) in 7 s and removed it in 58 s, getting all
+9 blocks back; 0 server pull-backs, 19 claims granted, 0 refused. Not yet: several bots on one
+build live (claims are shared, so it should work, untested), a dashboard form (API only), and
+fetching material from the supply chest (milestone B3 in `docs/NEXT-GOALS.md`).
+
+```bash
+# blueprint relative to the origin; same-origin JSON, as for any job
+curl -X POST http://127.0.0.1:8095/api/job -H 'Content-Type: application/json' \
+  -H 'Origin: http://127.0.0.1:8095' -d '{"bots":["bot6"],"type":"build","args":
+  {"origin":{"x":-121,"y":77,"z":9},"blocks":[{"x":0,"y":0,"z":0,"block":"cobblestone"}]}}'
+```
+
+Add `"remove": true` to dig the same blueprint back out. Rules found live:
+flowers and grass in a target cell are broken first (anything else there is
+"in the way" and fails the job); the pathfinder may not dig, place or spend the
+blueprint's own blocks as scaffolding inside the build's box while the job runs.
 
 - **Blueprint**: JSON `{"origin": {"x","y","z"}, "blocks": [{"x","y","z","block"}]}`
   with x, y, z relative to the origin, `block` a plain block name (no states, no
@@ -368,8 +381,7 @@ exist: `place` (one block), block claims, `upkeep`, the queue and the dashboard.
   `build` job is "place blocks of this blueprint until none is left", so any
   idle bot can join by queueing the same job.
 - **Material**: counted up front from the blueprint; the job fails before
-  placing anything when the inventory lacks it (a later phase may withdraw from
-  the supply chest like the keeper does).
+  placing anything when the inventory lacks it (`missing material: 3 stone`).
 - **Undo**: a `build` with `remove: true` digs the same blueprint top-down with
   the same claims and keeps the blocks; the live test would end with it.
 - **Tests first**: pure functions for validation (bounds, protected areas,

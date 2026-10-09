@@ -14,6 +14,66 @@ assert.throws(() => VALIDATE.mine({block: 'Iron Ore'}));
 assert.deepStrictEqual(loadConfig({BOT_NAMES: 'bot1', PROTECTED_AREAS: '10,5,-10,-5; 1,2,3,4'}).protectedAreas, [[-10, -5, 10, 5], [1, 2, 3, 4]]);
 assert.throws(() => loadConfig({BOT_NAMES: 'bot1', PROTECTED_AREAS: '1,2,3'}));
 
+// ---- build job: blueprint validation, order, next block (fake world) ----
+{
+  const B = require('./build');
+  const cube = (n, block = 'cobblestone') => Array.from({length: n}, (_, i) => ({x: i % 3, y: Math.floor(i / 9), z: Math.floor(i / 3) % 3, block}));
+  const bp = {origin: {x: 100, y: 64, z: 100}, blocks: cube(18).reverse()};
+  const plan = B.validate(bp);
+  assert.deepStrictEqual(plan.blocks.slice(0, 2).map((b) => [b.x, b.y, b.z]), [[100, 64, 100], [101, 64, 100]], 'bottom layer first, then z, then x');
+  assert.ok(plan.blocks.every((b, i, a) => !i || a[i - 1].y <= b.y));
+  assert.deepStrictEqual(B.materials(plan), {cobblestone: 18});
+  assert.deepStrictEqual(B.shortfall({cobblestone: 18, stone: 2}, {cobblestone: 20}), ['2 stone']);
+  for (const [bad, re] of [
+    [{...bp, blocks: [{x: 0, y: 0, z: 0, block: 'chest'}]}, /cannot be built/],
+    [{...bp, blocks: [{x: 0, y: 0, z: 0, block: 'sand'}]}, /cannot be built/],
+    [{...bp, blocks: [{x: 0, y: 0, z: 0, block: 'oak_door'}]}, /cannot be built/],
+    [{...bp, blocks: [{x: 0, y: 0, z: 0, block: 'Stone'}]}, /cannot be built/],
+    [{...bp, blocks: [{x: 0, y: 0, z: 0, block: 'stone'}, {x: 0, y: 0, z: 0, block: 'dirt'}]}, /two blocks/],
+    [{...bp, blocks: [{x: 0, y: 0, z: 0, block: 'stone'}, {x: 0, y: 3, z: 0, block: 'stone'}]}, /larger than/],
+    [{...bp, blocks: [{x: 0, y: 0, z: 0, block: 'stone'}, {x: 5, y: 0, z: 0, block: 'stone'}]}, /larger than/],
+    [{...bp, blocks: Array.from({length: 76}, () => ({x: 0, y: 0, z: 0, block: 'stone'}))}, /at most 75/],
+    [{...bp, blocks: []}, /no blocks/],
+    [{...bp, origin: {x: 1.5, y: 64, z: 0}}, /whole number/],
+  ]) assert.throws(() => B.validate(bad), re);
+  assert.ok(B.validate({...bp, blocks: [{x: 0, y: 0, z: 0, block: 'sandstone'}]}), 'sandstone is not a gravity block');
+  assert.throws(() => B.validate(bp, [[90, 90, 110, 110]]), /protected area/);
+  assert.ok(B.validate(bp, [[0, 0, 10, 10]]));
+  // VALIDATE.build keeps the blueprint relative so a resumed job validates the same way.
+  assert.deepStrictEqual(VALIDATE.build({origin: {x: '1', y: 64, z: 2}, blocks: [{x: 0, y: '0', z: 0, block: 'dirt'}]}),
+    {origin: {x: 1, y: 64, z: 2}, blocks: [{x: 0, y: 0, z: 0, block: 'dirt'}], remove: false});
+  // Fake world: ground (stone) at y 63, air above; placing fills the map.
+  const world = new Map();
+  const nameAt = (x, y, z) => world.get(`${x},${y},${z}`) ?? (y <= 63 ? 'stone' : 'air');
+  let s = B.step(plan, nameAt);
+  assert.deepStrictEqual([s.next.x, s.next.y, s.next.z, s.face], [100, 64, 100, [0, -1, 0]], 'first block goes on the ground');
+  assert.ok(B.step(plan, nameAt, new Set(['100,64,100'])).next.x === 101, 'a claimed block is skipped');
+  let n = 0;
+  while (!(s = B.step(plan, nameAt)).done) {
+    assert.ok(s.next && ++n <= 18, 'every block gets placed, in order');
+    world.set(`${s.next.x},${s.next.y},${s.next.z}`, s.next.block);
+  }
+  assert.strictEqual(n, 18);
+  assert.deepStrictEqual(B.materials(plan, nameAt), {});
+  // A floating second layer waits until the first exists (no neighbour yet).
+  const floating = B.validate({origin: {x: 0, y: 70, z: 0}, blocks: [{x: 0, y: 1, z: 0, block: 'dirt'}]});
+  assert.ok(B.step(floating, nameAt).wait === 1);
+  world.set('100,65,100', 'dirt'); // wrong block where the blueprint wants cobblestone
+  assert.match(B.step(plan, nameAt).stuck, /dirt is in the way/);
+  world.set('100,65,100', 'wildflowers'); // a plant is broken first, not refused
+  assert.deepStrictEqual(B.step(plan, nameAt, new Set(), (n) => n === 'wildflowers').clear, true);
+  assert.match(B.step(plan, nameAt).stuck, /wildflowers is in the way/);
+  world.set('100,65,100', 'cobblestone');
+  // Remove: top layer first, nothing left at the end.
+  const rm = B.validate({...bp, remove: true});
+  assert.strictEqual(B.removeStep(rm, nameAt).next.y, 65);
+  for (let k = 0; !(s = B.removeStep(rm, nameAt)).done; k++) {
+    assert.ok(k < 18);
+    world.delete(`${s.next.x},${s.next.y},${s.next.z}`);
+  }
+  assert.ok([...world.keys()].length === 0);
+}
+
 // ---- shared world / combat logic ----
 const W = require('./world');
 const {weaponScore} = require('./combat');
