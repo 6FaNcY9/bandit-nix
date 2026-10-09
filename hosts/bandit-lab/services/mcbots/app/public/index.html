@@ -96,15 +96,12 @@ async function send(bots, type, args, replace) {
   try {
     const r = await fetch('/api/job', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bots, type, args, replace }) });
     const j = await r.json();
-    $('msg').textContent = r.ok ? `sent: ${type}` : j.error;
-    $('msg').className = r.ok ? 'mut' : 'err';
+    const away = j.unreached?.length ? `; not reached (worker away, it keeps its jobs): ${j.unreached.join(', ')}` : '';
+    $('msg').textContent = r.ok ? `sent: ${type}${away}` : j.error + away;
+    $('msg').className = r.ok && !away ? 'mut' : 'err';
   } catch (e) { $('msg').textContent = 'send failed: ' + e.message; $('msg').className = 'err'; }
 }
-$('stopall').onclick = async () => {
-  // Standing orders would hand the idle bots new work at once: switch them off first.
-  if (last.keeper?.enabled) await fetch('/api/keeper', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled: false }) }).catch(() => {});
-  send('all', 'stop', {}, false);
-};
+$('stopall').onclick = () => send('all', 'stop', {}, false); // the server also switches standing orders off and drops saved jobs
 
 // ---- job composer: pick a job, the fields follow, coordinates start at the supply chest ----
 const XYZ = [['x', 'number', 'x'], ['y', 'number', 'y'], ['z', 'number', 'z']];

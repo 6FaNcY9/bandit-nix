@@ -97,19 +97,25 @@ function resumeJobs() {
     }
   }
 }
+// What the file holds: running/queued jobs, plus jobs still waiting for their bot to log in.
 let jobsSaved = '';
-const jobsTimer = jobsFile ? setInterval(() => {
-  resumeJobs();
-  if (Object.keys(toResume).length) return; // not every bot is back yet: keep the file as it is
-  const now = JSON.stringify(keptJobs());
-  if (now === jobsSaved) return;
+function saveJobs(force = false) {
+  if (!jobsFile) return null;
+  const now = JSON.stringify({...toResume, ...keptJobs()});
+  if (!force && now === jobsSaved) return null;
   try {
     fs.writeFileSync(`${jobsFile}.tmp`, now);
     fs.renameSync(`${jobsFile}.tmp`, jobsFile);
     jobsSaved = now;
+    return null;
   } catch (e) {
     log('jobs', `could not save: ${e.message}`);
+    return e.message;
   }
+}
+const jobsTimer = jobsFile ? setInterval(() => {
+  resumeJobs();
+  saveJobs();
 }, 2000) : null;
 const authorized = (req) => !cfg.allowed.length || cfg.allowed.includes(req.headers['tailscale-user-login']);
 // Cross-site guard: browsers send Origin on POST/WS; it must match Host.
@@ -260,16 +266,32 @@ const server = http.createServer(async (req, res) => {
       const targets = all ? [...runners.values()].filter((r) => !(r instanceof RemoteRunner) || r.conn) : (Array.isArray(bots) ? bots : []).map((n) => runners.get(n));
       if (!targets.length || targets.includes(undefined)) throw new Error('unknown bot');
       const errors = [];
+      const stopping = type === 'stop' || replace === true;
       for (const r of targets) {
         try {
           r.enqueue(type, args || {}, {replace: replace === true});
+          if (stopping) delete toResume[r.name]; // its saved jobs must not come back after a restart or reconnect
         } catch (e) {
           errors.push(`${r.name}: ${e.message}`); // one bot failing must not keep the others from getting the job
         }
       }
+      // Stop all is authoritative here, not in the browser: standing orders off first
+      // (they would hand idle bots new work), then every pending recovery dropped.
+      let keeperOff = false;
+      if (all && type === 'stop') {
+        toResume = {};
+        if (keeper?.enabled) {
+          keeper.setEnabled(false);
+          keeperOff = true;
+        }
+      }
       broadcast();
       if (errors.length) throw new Error(errors.join('; '));
-      return json(200, {ok: true});
+      // Persist the stopped state before saying so; the bots are stopped either way.
+      const saveErr = stopping ? saveJobs(true) : null;
+      const unreached = all ? [...runners.values()].filter((r) => r instanceof RemoteRunner && !r.conn).map((r) => r.name) : [];
+      if (saveErr) return json(500, {error: `stopped, but the stopped state could not be saved (${saveErr}): saved jobs may come back after a restart`, unreached});
+      return json(200, {ok: true, keeperOff, unreached});
     } catch (e) {
       return json(400, {error: e.message});
     }

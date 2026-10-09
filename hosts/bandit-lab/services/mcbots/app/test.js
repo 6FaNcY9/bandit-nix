@@ -887,3 +887,87 @@ require('./crafting');
   assert.throws(() => gq.enqueue('guard', {player: 'bad name!'}), /player/);
   console.log('ok');
 })();
+
+// MC-1: Stop is decided by the server: standing orders off, saved jobs dropped (also those waiting
+// for an offline bot), persistence before the answer, a worker that is away reported, not claimed.
+(async () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const net = require('node:net');
+  const {spawn} = require('node:child_process');
+  const WebSocket = require('ws');
+  const freePort = () => new Promise((res) => { const s = net.createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); });
+  const TOKEN = 'c0ffee11'.repeat(5);
+  const H = {'tailscale-user-login': 'a@github'};
+  const launch = async (dir) => {
+    const port = await freePort();
+    const wport = await freePort();
+    const child = spawn(process.execPath, [path.join(__dirname, 'server.js')], {
+      env: {PATH: process.env.PATH, NODE_PATH: process.env.NODE_PATH || '', BOT_NAMES: 'bot1,bot2', STATE_DIR: dir, SUPPLY_CHEST: '1,64,1', KEEPER_QUOTAS: 'logs:64', WORKER_PORT: String(wport), WORKER_TOKEN: TOKEN, DASHBOARD_PORT: String(port), DASHBOARD_HOST: '127.0.0.1', ALLOWED_TS_LOGINS: 'a@github', MC_HOST: '127.0.0.1', MC_PORT: '1', BOT_PASSWORD_SEED: 'test'},
+      stdio: ['ignore', 'pipe', 'inherit'],
+    });
+    await new Promise((res, rej) => {
+      const to = setTimeout(() => rej(new Error('server did not start')), 8000);
+      child.stdout.on('data', (b) => { if (String(b).includes('listening')) { clearTimeout(to); res(); } });
+      child.on('exit', (c) => rej(new Error(`server exited early (${c})`)));
+    });
+    const call = (pth, body) => fetch(`http://127.0.0.1:${port}${pth}`, {method: 'POST', headers: {'content-type': 'application/json', origin: `http://127.0.0.1:${port}`, ...H}, body: JSON.stringify(body)});
+    const get = async (pth) => (await fetch(`http://127.0.0.1:${port}${pth}`, {headers: H})).json();
+    const stop = () => new Promise((res) => { child.once('exit', res); child.kill('SIGINT'); });
+    return {port, wport, call, get, stop};
+  };
+  const saved = (dir) => JSON.parse(fs.readFileSync(path.join(dir, 'jobs.json'), 'utf8'));
+  const jobs = {bot1: [{type: 'shift', args: {block: 'logs', x: 1, y: 64, z: 1}}], bot2: [{type: 'guard', args: {x: 5, y: 64, z: 5, radius: 16}}]};
+  const dirA = fs.mkdtempSync(path.join(os.tmpdir(), 'mcbots-stopA-'));
+  fs.writeFileSync(path.join(dirA, 'jobs.json'), JSON.stringify(jobs));
+
+  // A: keeper on, saved jobs waiting for offline bots, a worker that joined and left
+  let a = await launch(dirA);
+  try {
+    assert.strictEqual((await (await a.call('/api/keeper', {enabled: true})).json()).enabled, true);
+    const wk = await new Promise((res, rej) => { const ws = new WebSocket(`ws://127.0.0.1:${a.wport}/worker`, {headers: {Authorization: `Bearer ${TOKEN}`}}); ws.on('open', () => res(ws)); ws.on('error', rej); });
+    wk.send(JSON.stringify({t: 'hello', v: 1, host: 'laptop', bots: ['bot5']}));
+    for (let i = 0; i < 100 && !(await a.get('/api/state')).bots.some((b) => b.name === 'bot5'); i++) await new Promise((r) => setTimeout(r, 50));
+    wk.close();
+    for (let i = 0; i < 100 && (await a.get('/api/state')).bots.find((b) => b.name === 'bot5')?.connected; i++) await new Promise((r) => setTimeout(r, 50));
+    assert.deepStrictEqual(saved(dirA), jobs, 'pending jobs are kept while their bots are away');
+    const res = await a.call('/api/job', {bots: 'all', type: 'stop'});
+    const body = await res.json();
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(body.keeperOff, true);
+    assert.deepStrictEqual(body.unreached, ['bot5'], 'the absent worker is reported, not claimed as stopped');
+    assert.deepStrictEqual(saved(dirA), {}, 'persisted before the answer: nothing can come back');
+    assert.strictEqual((await a.get('/api/state')).keeper.enabled, false);
+  } finally {
+    await a.stop();
+  }
+  // stop followed by a process restart: nothing resumes, standing orders stay off
+  a = await launch(dirA);
+  try {
+    await new Promise((r) => setTimeout(r, 2500)); // longer than the 2 s resume/save tick
+    assert.deepStrictEqual((await a.get('/api/events?since=0')).events.filter((e) => /resumed/.test(e.text)), []);
+    assert.strictEqual((await a.get('/api/state')).keeper.enabled, false);
+    assert.deepStrictEqual(saved(dirA), {});
+  } finally {
+    await a.stop();
+  }
+
+  // B: per-bot stop drops only that bot's saved jobs; a failed state write is reported, not hidden
+  const dirB = fs.mkdtempSync(path.join(os.tmpdir(), 'mcbots-stopB-'));
+  fs.writeFileSync(path.join(dirB, 'jobs.json'), JSON.stringify(jobs));
+  const b = await launch(dirB);
+  try {
+    const one = await b.call('/api/job', {bots: ['bot1'], type: 'stop'});
+    assert.strictEqual(one.status, 200);
+    assert.deepStrictEqual(saved(dirB), {bot2: jobs.bot2}, "only bot1's saved job is gone");
+    fs.rmSync(path.join(dirB, 'jobs.json'));
+    fs.mkdirSync(path.join(dirB, 'jobs.json')); // writes now fail
+    const bad = await b.call('/api/job', {bots: ['bot2'], type: 'stop'});
+    assert.strictEqual(bad.status, 500);
+    assert.match((await bad.json()).error, /stopped, but the stopped state could not be saved/);
+  } finally {
+    await b.stop();
+  }
+  console.log('ok');
+})();
