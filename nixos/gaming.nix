@@ -32,5 +32,6 @@
   hardware.steam-hardware.enable = true;
 
   # FPS/frametime overlay: prefix launch options with `mangohud`.
-  environment.systemPackages = [pkgs.mangohud];
+  # Prism Launcher: Minecraft instances (Java runtimes managed per instance).
+  environment.systemPackages = [pkgs.mangohud pkgs.prismlauncher];
 }
