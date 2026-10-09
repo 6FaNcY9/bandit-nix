@@ -50,6 +50,14 @@ fetched server-side from `BLUEMAP_URL`, cached 5 min). Drag to move, wheel to zo
 (select it: map actions then go to that bot only; show card; centre; stop), a player (selected bot
 or all bots: come, follow) or a spot (go here, at the surface height read from the tile).
 
+**Markers** (stage 1 of `CONTROL-CENTRE-GOAL.md`): right-click or click a spot, "Add a marker here…",
+name, kind (`supply`, `chest`, `site`, `home`, `afk`) and y (for a chest: the chest block's own height,
+F3). Click a marker for its actions: chests (empty inventory here, re-arm, count), sites (work shift
+for logs/stone/ores into the nearest chest marker, guard), AFK (park the bot, fighting off), go here;
+move, rename, delete. The first overworld `supply` marker replaces `SUPPLY_CHEST` for all bots, the
+hub and the keeper; the first `site` marker replaces `KEEPER_SITE`. Kept in `STATE_DIR/places.json`.
+Laptop workers get the supply chest only when they connect.
+
 Each bot card has an **In-game view** (also from the map menu): a 256x144 first-person picture
 rendered on the server from the blocks the bot has loaded (`app/view.js`, `GET /api/view/<bot>.png`,
 one frame per bot per 0.7 s, refreshed every second while open). Blocks are flat colours by name,

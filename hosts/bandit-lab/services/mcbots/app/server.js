@@ -13,6 +13,7 @@ const {EventLog} = require('./events');
 const {Keeper} = require('./keeper');
 const {botView} = require('./view');
 const {Settings} = require('./settings');
+const {Places} = require('./places');
 
 const cfg = loadConfig();
 const log = (who, msg) => console.log(`${new Date().toISOString()} [${who}] ${msg}`);
@@ -35,7 +36,22 @@ const workerServer = hub ? createWorkerServer(hub) : null;
 // tailscale serve sets Tailscale-User-Login for tailnet users. When
 // ALLOWED_TS_LOGINS is set, nothing is served without it.
 // Standing orders: only with a supply chest and at least one quota; switched off at every start.
-const keeper = cfg.supplyChest && cfg.keeperQuotas.length ? new Keeper({runners, world, chest: cfg.supplyChest, quotas: cfg.keeperQuotas, site: cfg.keeperSite, events, log}) : null;
+const keeper = cfg.keeperQuotas.length ? new Keeper({runners, world, chest: cfg.supplyChest, quotas: cfg.keeperQuotas, site: cfg.keeperSite, events, log}) : null;
+// Map markers: the first 'supply' place is the supply chest for every bot, the
+// hub's workers and the keeper; the first 'site' place is where the keeper works.
+const places = new Places(process.env.STATE_DIR || '');
+let supplyChest = cfg.supplyChest;
+function applyPlaces() {
+  const s = places.first('supply'), site = places.first('site');
+  supplyChest = s ? {x: s.x, y: s.y, z: s.z} : cfg.supplyChest;
+  for (const r of runners.values()) if (!(r instanceof RemoteRunner)) r.supplyChest = supplyChest;
+  if (hub) hub.supplyChest = supplyChest;
+  if (keeper) {
+    keeper.chest = supplyChest;
+    keeper.site = site ? {x: site.x, y: site.y, z: site.z} : cfg.keeperSite;
+  }
+}
+applyPlaces();
 const authorized = (req) => !cfg.allowed.length || cfg.allowed.includes(req.headers['tailscale-user-login']);
 // Cross-site guard: browsers send Origin on POST/WS; it must match Host.
 const sameOrigin = (req) => {
@@ -47,7 +63,7 @@ const sameOrigin = (req) => {
     return false;
   }
 };
-const state = () => ({now: Date.now(), lastEventId: events.lastId, keeper: keeper?.state() || null, bots: [...runners.values()].map((r) => ({...r.snapshot(), settings: r instanceof RemoteRunner ? null : settings.get(r.name)})), world: world.snapshot(), protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest});
+const state = () => ({now: Date.now(), lastEventId: events.lastId, keeper: keeper?.state() || null, bots: [...runners.values()].map((r) => ({...r.snapshot(), settings: r instanceof RemoteRunner ? null : settings.get(r.name)})), world: world.snapshot(), protectedAreas: cfg.protectedAreas, supplyChest, places: places.list});
 
 function readJson(req) {
   return new Promise((resolve, reject) => {
@@ -143,6 +159,20 @@ const server = http.createServer(async (req, res) => {
       keeper.setEnabled(enabled);
       broadcast();
       return json(200, keeper.state());
+    } catch (e) {
+      return json(400, {error: e.message});
+    }
+  }
+  if (req.method === 'POST' && url.pathname === '/api/places') {
+    if (!sameOrigin(req) || !String(req.headers['content-type']).startsWith('application/json')) return json(403, {error: 'bad origin'});
+    try {
+      const {action, place, name} = await readJson(req);
+      if (action === 'set') events.add('map', 'info', `marker ${places.set(place).name} (${place.kind}) at ${place.x} ${place.y} ${place.z}`);
+      else if (action === 'delete') { places.remove(name); events.add('map', 'info', `marker ${name} removed`); }
+      else throw new Error('action must be set or delete');
+      applyPlaces();
+      broadcast();
+      return json(200, {places: places.list, supplyChest});
     } catch (e) {
       return json(400, {error: e.message});
     }

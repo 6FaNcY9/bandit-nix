@@ -71,7 +71,7 @@
       <label>zoom <input id="zoom" type="range" min="-2" max="3" step="0.25" value="1"></label>
       <span id="mapinfo" class="mut"></span></div>
     <div class="mapwrap"><canvas id="radar" width="1280" height="720"></canvas><div id="mapmenu" class="menu" hidden></div></div>
-    <div class="mut">drag to move, wheel to zoom, click a bot, a player or a spot for actions. Terrain from BlueMap. green = bots, blue = players, red = hostile mobs, yellow = chests/ores, orange = blocks a bot is working on, white square = supply chest, hatched red = protected areas</div>
+    <div class="mut">drag to move, wheel to zoom, click (or right-click) a bot, a player, a marker or a spot for actions; add markers for your chests, work sites, home and AFK spots. Terrain from BlueMap. green = bots, blue = players, red = hostile mobs, yellow = chests/ores, orange = blocks a bot is working on, white square = supply chest, hatched red = protected areas</div>
   </div>
 <div id="bots" class="grid"></div>
 <div class="bar" id="allbar"><h3>Give the same job to several bots</h3><div id="allcomposer"></div></div>
@@ -82,7 +82,7 @@
 </details>
 <datalist id="blocks"></datalist><datalist id="items"></datalist><datalist id="smeltables"></datalist>
 <script>
-let last = { bots: [], world: { players: [], mobs: [], blocks: [], claims: [], bluemap: {} }, protectedAreas: [], supplyChest: null, lastEventId: 0 };
+let last = { bots: [], world: { players: [], mobs: [], blocks: [], claims: [], bluemap: {} }, protectedAreas: [], supplyChest: null, places: [], lastEventId: 0 };
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 const fill = (id, list) => $(id).replaceChildren(...list.map((v) => { const o = el('option'); o.value = v; return o; }));
@@ -317,6 +317,7 @@ function connect() {
 
 // ---- map: top-down, north up (-z), centred on a bot or player ----
 const cv = $('radar'), g = cv.getContext('2d');
+const KIND_COLOR = { supply: '#facc15', chest: '#a16207', site: '#22c55e', home: '#38bdf8', afk: '#c084fc' };
 const MAPNAME = { overworld: 'world', the_nether: 'world_the_nether', the_end: 'world_the_end' };
 let free = null, view = null, hits = [], picked = null, drag = null;
 const tiles = new Map();
@@ -357,14 +358,67 @@ function pick(name) {
 }
 function menu(e, title, items) {
   const m = $('mapmenu'), r = cv.getBoundingClientRect(), wr = m.parentElement.getBoundingClientRect();
-  m.replaceChildren(el('b', '', title), ...items.map(([label, fn]) => { const b = el('button', '', label); b.type = 'button'; b.onclick = () => { m.hidden = true; fn(); }; return b; }));
+  m.replaceChildren(el('b', '', title), ...items.map((it) => { if (it instanceof Node) return it; const [label, fn] = it; const b = el('button', '', label); b.type = 'button'; b.onclick = () => { m.hidden = true; fn(); }; return b; }));
   m.style.left = Math.min(e.clientX - wr.left + 8, wr.width - 200) + 'px'; m.style.top = (e.clientY - wr.top + 8) + 'px'; m.hidden = false;
 }
 const online = () => last.bots.filter((b) => b.online && !b.dead).map((b) => b.name);
 const who = () => (picked && online().includes(picked) ? [picked] : online());
 const whoLabel = () => (picked ? picked : 'all bots');
+async function savePlace(place) {
+  const r = await fetch('/api/places', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'set', place }) });
+  const j = await r.json().catch(() => ({}));
+  $('msg').textContent = r.ok ? `saved marker ${place.name}` : 'marker: ' + (j.error || r.status);
+  if (r.ok) { last.places = j.places; last.supplyChest = j.supplyChest; radar(); }
+  return r.ok;
+}
+async function deletePlace(name) {
+  const r = await fetch('/api/places', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'delete', name }) });
+  const j = await r.json().catch(() => ({}));
+  if (r.ok) { last.places = j.places; last.supplyChest = j.supplyChest; radar(); } else $('msg').textContent = 'marker: ' + (j.error || r.status);
+}
+let moving = null; // a place waiting for its new spot (next click on the map)
+function markerForm(at, start = {}) {
+  const f = el('div', 'row'), name = el('input'), kind = el('select'), yIn = el('input', 'xyz'), ok = el('button', '', 'Save');
+  name.placeholder = 'name'; name.value = start.name || ''; name.maxLength = 32; name.style.width = '9em';
+  yIn.type = 'number'; yIn.min = -64; yIn.max = 320; yIn.value = at.y; yIn.title = 'y: for a chest the height of the chest block itself (F3)';
+  for (const k of ['supply', 'site', 'home', 'afk', 'chest']) kind.append(new Option(k, k));
+  kind.value = start.kind || 'site'; ok.type = 'button';
+  ok.onclick = async () => { if (await savePlace({ name: name.value.trim(), kind: kind.value, ...at, y: Number(yIn.value) })) $('mapmenu').hidden = true; };
+  f.append(name, kind, el('span', 'mut', 'y'), yIn, ok);
+  setTimeout(() => name.focus(), 0);
+  return f;
+}
+// The chest a job at this place deposits into: the place itself if it is a chest, else the nearest chest/supply marker.
+function chestFor(pl) {
+  if (pl.kind === 'supply' || pl.kind === 'chest') return pl;
+  return (last.places || []).filter((q) => (q.kind === 'supply' || q.kind === 'chest') && q.dim === pl.dim).sort((a, b) => Math.hypot(a.x - pl.x, a.z - pl.z) - Math.hypot(b.x - pl.x, b.z - pl.z))[0] || last.supplyChest;
+}
+function placeMenu(e, pl) {
+  const xyz = { x: pl.x, y: pl.y, z: pl.z }, w = whoLabel(), items = [];
+  if (pl.kind === 'supply' || pl.kind === 'chest') items.push([`${w}: empty inventory here`, () => send(who(), 'deposit', xyz, true)], [`${w}: re-arm here`, () => send(who(), 'rearm', xyz, true)], ['count what is inside', () => send(who().slice(0, 1), 'stock', xyz, true)]);
+  if (pl.kind === 'site') {
+    const ch = chestFor(pl);
+    for (const b of ['logs', 'stone', 'coal_ore', 'iron_ore', 'copper_ore', 'gold_ore', 'redstone_ore', 'diamond_ore'])
+      items.push([`${w}: work shift ${b}${ch ? '' : ' (no chest marker!)'}`, () => ch && send(who(), 'shift', { block: b, x: ch.x, y: ch.y, z: ch.z }, true)]);
+    items.push([`${w}: guard this site`, () => send(who(), 'guard', { ...xyz, radius: 24 }, true)]);
+  }
+  if (pl.kind === 'afk') items.push([`${w}: park here (stays, does not fight)`, async () => { for (const b of who()) await fetch('/api/settings', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ bot: b, settings: { defend: false } }) }); send(who(), 'goto', xyz, true); }]);
+  items.push([`${w}: go here`, () => send(who(), 'goto', xyz, true)]);
+  if (!pl.fixed) items.push(['Move (click the new spot)', () => { moving = pl; $('msg').textContent = `click the new spot for ${pl.name}`; }], ['Rename / change kind', () => menu(e, pl.name, [markerForm(xyz, pl), ['Cancel', () => {}]])], ['Delete marker', () => deletePlace(pl.name)]);
+  else items.push(['(from the config: add a supply marker to replace it)', () => {}]);
+  menu(e, `${pl.name} (${pl.kind}) ${pl.x} ${pl.y} ${pl.z}`, items);
+}
+cv.oncontextmenu = (e) => { e.preventDefault(); mapClick(e); };
 function mapClick(e) {
   const p = toWorld(e), h = hits.filter((t) => Math.hypot(t.sx - p.sx, t.sy - p.sy) < 10).sort((a, b) => !!b.bot - !!a.bot)[0];
+  if (moving) {
+    const mx = Math.floor(p.x), mz = Math.floor(p.z), my = view.dim === 'overworld' ? heightAt(view.dim, mx, mz) : null, pl = moving;
+    moving = null;
+    if (my === null) { $('msg').textContent = 'zoom in so the terrain height is known, then move again'; return; }
+    const y = pl.kind === 'supply' || pl.kind === 'chest' ? pl.y : my + 1; // a chest marker keeps the chest's height
+    return savePlace({ ...pl, x: mx, y, z: mz, dim: view.dim });
+  }
+  if (h?.place) return placeMenu(e, h.place);
   if (h?.bot) return menu(e, h.bot, [
     [picked === h.bot ? 'Unselect' : 'Select (map actions go to this bot)', () => pick(picked === h.bot ? null : h.bot)],
     ['Show card', () => $('card-' + h.bot)?.scrollIntoView({ behavior: 'smooth' })],
@@ -384,6 +438,7 @@ function mapClick(e) {
   if (y !== null) items.push([`${whoLabel()}: go here (${x} ${y + 1} ${z})`, () => send(who(), 'goto', { x, y: y + 1, z }, true)],
     [`${whoLabel()}: guard this spot (radius 16)`, () => send(who(), 'guard', { x, y: y + 1, z, radius: 16 }, true)]);
   else items.push(['(zoom in for terrain height to send bots here)', () => {}]);
+  if (y !== null) items.push(['Add a marker here…', () => menu(e, `new marker at ${x} ${y + 1} ${z}`, [markerForm({ x, y: y + 1, z, dim: view.dim }), ['Cancel', () => {}]])]);
   if (picked) items.push(['Unselect ' + picked, () => pick(null)]);
   menu(e, `${x} ${z}`, items);
 }
@@ -442,7 +497,15 @@ function radar() {
     const m = /^([a-z_]+):(-?\d+),(-?\d+),(-?\d+)$/.exec(cl.key);
     if (m && m[1] === c.dim) g.fillRect(px(+m[2]), pz(+m[4]), Math.max(3, k), Math.max(3, k));
   }
-  if (supplyChest && c.dim === 'overworld') { g.fillStyle = css.color; g.fillRect(px(supplyChest.x) - 4, pz(supplyChest.z) - 4, 8, 8); g.fillText('supply', px(supplyChest.x) + 7, pz(supplyChest.z) + 4); }
+  const placeList = last.places || [];
+  if (supplyChest && c.dim === 'overworld' && !placeList.some((p) => p.kind === 'supply')) placeList.push({ name: 'supply (config)', kind: 'supply', dim: 'overworld', ...supplyChest, fixed: true });
+  for (const p of placeList) if (p.dim === c.dim) {
+    const x = px(p.x + 0.5), y = pz(p.z + 0.5);
+    g.fillStyle = KIND_COLOR[p.kind]; g.strokeStyle = '#000'; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(x, y - 8); g.lineTo(x + 7, y); g.lineTo(x, y + 8); g.lineTo(x - 7, y); g.closePath(); g.fill(); g.stroke(); g.lineWidth = 1;
+    g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,.8)'; g.strokeText(p.name, x + 10, y + 4); g.fillStyle = '#fff'; g.fillText(p.name, x + 10, y + 4); g.lineWidth = 1;
+    hits.push({ place: p, sx: x, sy: y });
+  }
   for (const m of world.mobs) if (m.dim === c.dim) { g.globalAlpha = Math.max(0.3, 1 - m.age / 30); dot(m.x, m.z, 4, '#dc2626', k >= 2 ? m.type : ''); g.globalAlpha = 1; }
   for (const p of world.players) if (p.dim === c.dim && !bots.some((b) => b.name === p.name)) dot(p.x, p.z, 5, '#2563eb', p.name, { player: p.name });
   for (const b of bots) if (b.pos && b.dimension === c.dim) dot(b.pos[0], b.pos[2], b.name === picked ? 7 : 5, b.online ? '#16a34a' : '#9ca3af', b.name, { bot: b.name });
