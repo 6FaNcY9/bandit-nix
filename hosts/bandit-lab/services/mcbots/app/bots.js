@@ -7,7 +7,7 @@ const mineflayer = require('mineflayer');
 const {pathfinder, Movements, goals} = require('mineflayer-pathfinder');
 const {Vec3} = require('vec3');
 const {plugin: collectBlock} = require('mineflayer-collectblock');
-const {Combat, AVOID_FOOD} = require('./combat');
+const {Combat, AVOID_FOOD, deathCause} = require('./combat');
 require('./physicsfix');
 const {BotTrace, SAMPLE_MS, round} = require('./debug');
 const {normDim, deadlineMs, insideAreas, shouldFight} = require('./world');
@@ -223,6 +223,9 @@ class BotRunner {
     });
     // The holding area sends no normal spawn, so answer its prompts directly.
     bot.on('messagestr', (msg) => {
+      // Death messages are only logged, never obeyed.
+      const cause = deathCause(this.name, msg);
+      if (cause) this.deathCause = {cause, t: Date.now()};
       if (!this.password || authed) return;
       if (/not registered|use \/register/i.test(msg)) bot.chat(`/register ${this.password} ${this.password}`);
       else if (/use \/login|already registered/i.test(msg)) bot.chat(`/login ${this.password}`);
@@ -236,7 +239,9 @@ class BotRunner {
       this.dead = true;
       this.lastError = 'died';
       const p = bot.entity?.position;
-      this.emit('death', `died${p ? ` at ${Math.round(p.x)} ${Math.round(p.y)} ${Math.round(p.z)}` : ''}`);
+      const why = this.deathCause && Date.now() - this.deathCause.t < 5000 ? `: ${this.deathCause.cause}` : '';
+      this.deathCause = null;
+      this.emit('death', `died${p ? ` at ${Math.round(p.x)} ${Math.round(p.y)} ${Math.round(p.z)}` : ''}${why}`);
       const was = this.current && !this.current.cancelled ? this.current : null; // a job the user stopped stays stopped
       this.cancel();
       this.resumeLater(was, 'died');

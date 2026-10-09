@@ -8,6 +8,17 @@ const {isHostile, shouldFight, normDim, NOTABLE_BLOCKS} = require('./world');
 const {DEFAULTS} = require('./settings');
 
 const TICK_MS = 500;
+
+// Health only regenerates at food 18+, so a hurt bot must eat earlier than a healthy one.
+const wantsToEat = (food, health, eatBelow) => food < eatBelow || (health < 20 && food < 18);
+
+const DEATH_PHRASE = /^(was slain by|was shot by|fell|hit the ground|drowned|burned|went up in flames|tried to swim in lava|blew up|was blown up|suffocated|starved|froze|was killed|withered|was pricked|experienced kinetic energy)/;
+// "bot1 fell from a high place" -> "fell from a high place"; null for chat and other players.
+const deathCause = (name, msg) => {
+  if (!msg.startsWith(`${name} `)) return null;
+  const rest = msg.slice(name.length + 1);
+  return DEATH_PHRASE.test(rest) ? rest : null;
+};
 const FIGHT_RANGE = 4;
 const SEE_RANGE = 24;
 const SCAN_EVERY = 20; // ticks between notable-block scans (10 s)
@@ -154,7 +165,7 @@ class Combat {
 
   async eat() {
     const bot = this.r.bot;
-    if (this.eating || bot.food >= (this.r.getSettings?.() || DEFAULTS).eatBelow) return;
+    if (this.eating || !wantsToEat(bot.food, bot.health, (this.r.getSettings?.() || DEFAULTS).eatBelow)) return;
     const food = bot.inventory.items()
       .filter((i) => bot.registry.foodsByName[i.name] && !AVOID_FOOD.has(i.name))
       .sort((a, b) => bot.registry.foodsByName[b.name].foodPoints - bot.registry.foodsByName[a.name].foodPoints)[0];
@@ -178,4 +189,4 @@ class Combat {
   }
 }
 
-module.exports = {Combat, weaponScore, AVOID_FOOD};
+module.exports = {Combat, weaponScore, AVOID_FOOD, wantsToEat, deathCause};

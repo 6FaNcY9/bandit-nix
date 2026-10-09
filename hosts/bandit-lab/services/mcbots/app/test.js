@@ -87,7 +87,23 @@ assert.throws(() => loadConfig({BOT_NAMES: 'bot1', PROTECTED_AREAS: '1,2,3'}));
 
 // ---- shared world / combat logic ----
 const W = require('./world');
-const {weaponScore} = require('./combat');
+const {weaponScore, wantsToEat, deathCause} = require('./combat');
+// Hurt bots eat at food 15-17 so they regenerate (bot1 sat at 6.7 health with food 17, 2026-10-10).
+assert.equal(wantsToEat(17, 6.7, 15), true);
+assert.equal(wantsToEat(17, 20, 15), false);
+assert.equal(wantsToEat(14, 20, 15), true);
+assert.equal(wantsToEat(19, 10, 15), false);
+// Death causes: only the bot's own death messages; chat and other players are ignored.
+assert.equal(deathCause('bot1', 'bot1 was slain by Zombie'), 'was slain by Zombie');
+assert.equal(deathCause('bot1', 'bot1 fell from a high place'), 'fell from a high place');
+assert.equal(deathCause('bot1', 'bot1 hit the ground too hard'), 'hit the ground too hard');
+assert.equal(deathCause('bot1', 'bot1 tried to swim in lava'), 'tried to swim in lava');
+assert.equal(deathCause('bot1', 'bot1 experienced kinetic energy'), 'experienced kinetic energy');
+for (const m of ['bot1 drowned', 'bot1 burned to death', 'bot1 went up in flames', 'bot1 blew up', 'bot1 was blown up by Creeper', 'bot1 suffocated in a wall', 'bot1 starved to death', 'bot1 froze to death', 'bot1 was killed by magic', 'bot1 withered away', 'bot1 was pricked to death', 'bot1 was shot by Skeleton']) assert.ok(deathCause('bot1', m), m);
+assert.equal(deathCause('bot1', 'bot2 was slain by Zombie'), null);
+assert.equal(deathCause('bot1', '<bot1> fell from a high place'), null);
+assert.equal(deathCause('bot1', 'bot1 joined the game'), null);
+assert.equal(deathCause('bot1', 'bot10 fell from a high place'), null);
 {
   // A fight during a dig ends the dig before the weapon goes into the hand (wrong-tool digs, 2026-10-10).
   const {Combat} = require('./combat');

@@ -138,7 +138,8 @@ areas (zoom with the wheel). "Advanced: debug" is the panel described below.
 ### Events and `GET /api/events`
 
 The Events panel lists the last 200 events (job started / finished / failed /
-stopped, death, respawn, deposit, a bot skipping blocks another bot holds,
+stopped, death (with the cause from Paper's death message when it arrived in the
+5 s before, e.g. `died at -278 46 -168: fell from a high place`), respawn, deposit, a bot skipping blocks another bot holds,
 joined/left the game, a worker connecting or going offline). They live in a ring
 buffer in the hub process (`app/events.js`, lost on restart); `GET
 /api/events?since=<id>` returns `{lastId, events: [{id, t, bot, kind, text}]}`
@@ -251,8 +252,10 @@ dashboard radar and served by `GET /api/state` (`bots`, `world`,
   not fought. Endermen, piglins, wardens, the wither/dragon, ghasts and breezes
   are never attacked. Below 8 health the bot retreats from hostiles within 16
   blocks until health is 12; its job pauses and resumes afterwards. Food below
-  15 is eaten when nothing hostile is near (not raw chicken, rotten flesh,
-  spider eyes, pufferfish, poisonous potatoes, golden apples).
+  15 is eaten when nothing hostile is near, and a hurt bot (health below 20) eats
+  already below food 18, because health only regenerates at food 18 or more
+  (not raw chicken, rotten flesh, spider eyes, pufferfish, poisonous potatoes,
+  golden apples).
   Defending inside `PROTECTED_AREAS` is allowed.
 
 Dashboard radar: top-down, north up, centred on any bot or BlueMap player,
@@ -293,7 +296,7 @@ in `app/bots.js`, checked before every block):
   fine, so a broken axe is not replaced.
 - **Hunger**: food below 14, none in the inventory and a supply chest set: walk
   there and take food (the `rearm` routine), at most once per 10 min. The
-  existing combat loop eats from the inventory below 15.
+  existing combat loop eats from the inventory below 15 (below 18 while hurt).
 - **Full inventory** (fewer than 2 free slots) in a job that is not a `shift`:
   deposit into the supply chest and carry on. A `shift` deposits into its own
   chest. Without a chest the job fails with a clear message.
