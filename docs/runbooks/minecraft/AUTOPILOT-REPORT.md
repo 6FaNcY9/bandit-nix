@@ -86,7 +86,7 @@ on the lab, otherwise the bots dig around the spawn chest.
 ## Ship
 
 ```
-tools/ship-claude 81dd38e 670468c 81e7a10 6636334 cb1a326 744211b 5a502d3 4b2922d c728558 fe9907e 77ea71c 6b18c15 bd398b6 b70a63d 5e66231 d55a323 f5f2759 fb6e266
+tools/ship-claude 81dd38e 670468c 6f894d0 81e7a10 6636334 cb1a326 8568526 744211b 5a502d3 4b2922d c728558 fe9907e 77ea71c 6b18c15 bd398b6 b70a63d 5e66231 d55a323 f5f2759 fb6e266 9438e51 <this commit>
 ```
 
 ## Waiting for the owner
