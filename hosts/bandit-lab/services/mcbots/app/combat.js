@@ -104,11 +104,37 @@ class Combat {
     // with it instead of swapping to the sword and then chopping with that).
     const armed = /_(axe|sword)$/.test(bot.heldItem?.name || '');
     if (!armed && !this.r.inventoryBusy && !bot.currentWindow && weapon && weaponScore(weapon.name) && bot.heldItem?.type !== weapon.type) await bot.equip(weapon, 'hand').catch(() => {});
-    await bot.lookAt(target.position.offset(0, target.height * 0.8, 0), true).catch(() => {});
-    const cooldown = bot.heldItem?.name.endsWith('_axe') ? 1100 : 650;
-    if (Date.now() - this.lastAttack >= cooldown && target.isValid !== false) {
+    // Precision a player cannot match: swing exactly when the weapon is fully
+    // charged (full damage, and a sword sweeps every mob around), and make it a
+    // critical hit (x1.5, the sparkles) by jumping and striking on the way down.
+    const cooldown = (bot.heldItem?.name.endsWith('_axe') ? 1000 : 625) + 30; // attack speed 1.0 / 1.6 per s, plus a tick of slack
+    const wait = cooldown - (Date.now() - this.lastAttack);
+    if (this.striking || target.isValid === false) return;
+    const aim = () => bot.lookAt(target.position.offset(0, target.height * 0.8, 0), true).catch(() => {});
+    await aim();
+    if (wait > 450) return; // the next tick comes in 500 ms
+    this.striking = true;
+    try {
+      if (wait > 0) await new Promise((res) => setTimeout(res, wait));
+      // A sword sweep (ground hit) beats a crit when two or more hostiles stand together.
+      const bunch = Object.values(bot.entities).filter((e) => e !== target && shouldFight(e) && e.position.distanceTo(target.position) <= 2).length;
+      const sweep = bunch > 0 && bot.heldItem?.name.endsWith('_sword');
+      const crit = !sweep && bot.entity.onGround && !bot.entity.isInWater && !bot.entity.isInLava && target.position.distanceTo(bot.entity.position) <= 3.2;
+      if (crit) {
+        bot.setControlState('jump', true);
+        await bot.waitForTicks(1);
+        bot.setControlState('jump', false);
+        for (let i = 0; i < 12 && !(bot.entity.velocity.y < 0); i++) await bot.waitForTicks(1); // apex of the jump
+      }
+      if (target.isValid === false || target.position.distanceTo(bot.entity.position) > 3.6) return;
+      await aim();
       this.lastAttack = Date.now();
       bot.attack(target);
+      this.hits = (this.hits || 0) + 1;
+      if (crit) this.crits = (this.crits || 0) + 1;
+    } finally {
+      bot.setControlState('jump', false);
+      this.striking = false;
     }
   }
 

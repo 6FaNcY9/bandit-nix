@@ -107,6 +107,12 @@ post), torches + ore search + review fixes (`147431c`: `mine iron_ore 8` gave 9 
   (bot7 fell to death, bots died to skeletons before the fight range).
 - P1 torch spacing: one pair still landed 1 block apart (light/torch updates lag the dig).
 - P1 a shift that finds nothing in range moves on (spiral 48 blocks) instead of failing.
+- P2 precision everywhere (owner's wish: use what humans cannot time): instant tool swap per block
+  (done), perfect crit/sweep timing (done), next: shield-free arrow dodging by side-stepping only
+  when a skeleton draws, block-perfect bridging over gaps, MLG water bucket on falls, instant
+  inventory sorting at the chest. No duplication glitches (they damage the shared world).
+- AFK: bot4 stands at the owner's Nether-roof gold farm (167 234.5 603.5); after the deploy set its
+  settings to defend off so it never walks off the roof.
 - P2 ore levels: send a bot to the ore's best Y first (diamond/redstone -59, gold -16, lapis 0,
   iron 16, copper 48, coal 96; 26.2 keeps the 1.18 distribution) and branch-mine there.
 - P2 a cave layer on the map (top-down slice at the bot's height from its loaded blocks).

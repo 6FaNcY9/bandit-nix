@@ -65,6 +65,12 @@ kept in `STATE_DIR/settings.json`, on the lab the named volume `mcbots-state` (t
 stopped, the bot fights every hostile within the radius of the spot or player and walks back when
 all is quiet. Map menu: "guard this spot" / "guard <player>"; composer: "Guard a spot", "Guard a player".
 
+**Combat precision**: every swing lands exactly when the weapon is fully charged (sword 0.65 s,
+axe 1.03 s) and is a critical hit (jump, strike on the way down: x1.5 and the crit sparkles); with
+a sword and two or more hostiles together it is a ground swing instead, so the sweep hits all of
+them. Live: two zombies killed in about 10 s, no server pull-backs. No sprint or strafing: movement
+is where Paper pulls bots back.
+
 **Torches** (setting "place torches where it is dark", on by default): during `mine`, `chop` and
 `shift`, where the block light at the bot's feet is below 7 and no torch is within 5 blocks, it puts a
 torch on a wall at head height (floor if there is no wall). Out of torches with coal or charcoal in
