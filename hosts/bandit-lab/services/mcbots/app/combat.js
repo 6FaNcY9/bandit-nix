@@ -47,6 +47,14 @@ class Combat {
     this.r.bot.pathfinder.setGoal(new goals.GoalInvert(new goals.GoalFollow(target, dist)), true);
   }
 
+  // Lava or fire within 3 blocks of a mob: do not chase it there (a bot burned
+  // to death hunting a zombie, 2026-10-10); it is still fought if it comes close.
+  hazardNear(pos) {
+    const bot = this.r.bot;
+    const ids = ['lava', 'fire', 'soul_fire', 'magma_block'].map((n) => bot.registry.blocksByName[n]?.id).filter((i) => i !== undefined);
+    return !!bot.findBlock({matching: ids, point: pos, maxDistance: 3});
+  }
+
   hunt(target) {
     this.mode = 'hunt';
     this.target = target;
@@ -93,7 +101,7 @@ class Combat {
 
     if (near && near.name === 'creeper' && dist < 6) return this.takeover('creeper', near, 8);
     if (near && s.defend && dist <= FIGHT_RANGE && (!this.busy || this.mode === 'hunt')) return this.fight(near);
-    if (near && s.defend && dist <= s.fightRange && !this.busy && !this.r.inventoryBusy && !bot.currentWindow) return this.hunt(near);
+    if (near && s.defend && dist <= s.fightRange && !this.busy && !this.r.inventoryBusy && !bot.currentWindow && !this.hazardNear(near.position)) return this.hunt(near);
     if (!this.busy && !near && !this.r.inventoryBusy && !bot.currentWindow) await this.eat();
   }
 

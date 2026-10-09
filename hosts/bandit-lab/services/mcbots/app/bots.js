@@ -513,7 +513,20 @@ async function waitSafe(r, job, x, z) {
   }
 }
 
-async function goNear(r, job, x, y, z, dist, {brave = false, goal = null, doing = null} = {}) {
+// Long walks (respawn at world spawn -> work site, ~225 blocks) go in legs of
+// LEG blocks: one 90 s deadline and one path search cannot cover that far.
+const LEG = 48;
+async function goNear(r, job, x, y, z, dist, opts = {}) {
+  for (let i = 0; i < 20 && !opts.goal && r.bot?.entity; i++) {
+    const p = r.bot.entity.position, d = Math.hypot(x - p.x, z - p.z);
+    if (d <= LEG + 16) break;
+    const lx = p.x + ((x - p.x) * LEG) / d, lz = p.z + ((z - p.z) * LEG) / d;
+    await goLeg(r, job, lx, y, lz, 4, {...opts, goal: new goals.GoalNearXZ(lx, lz, 4), doing: opts.doing || `walking to ${at({x, y, z})}`});
+  }
+  return goLeg(r, job, x, y, z, dist, opts);
+}
+
+async function goLeg(r, job, x, y, z, dist, {brave = false, goal = null, doing = null} = {}) {
   guard(job);
   if (job.t) job.t.doing = doing || `walking to ${at({x, y, z})}`;
   // Unreachable goals make the pathfinder retry partial paths
