@@ -21,12 +21,14 @@ const GOTO_TIMEOUT_MS = 90000;
 const BACKOFF_START = 5000;
 const BACKOFF_CAP = 300000;
 // Kept on deposit: what a bot needs to craft a replacement tool or light a mine.
+// Natural ground an excavation may remove; never placed blocks (cobblestone is a wall).
+const NATURAL = /^(stone|deepslate|dirt|grass_block|coarse_dirt|rooted_dirt|podzol|mud|clay|gravel|sand|red_sand|andesite|diorite|granite|tuff|calcite|dripstone_block|[a-z_]*_ore|short_grass|tall_grass|fern|large_fern|[a-z_]*_flower|dandelion|poppy|moss_block|moss_carpet|glow_lichen|cave_vines|cave_vines_plant)$/;
 const KEEP_RE = /^(stick|[a-z_]+_planks|coal|charcoal|torch|crafting_table|furnace)$/;
 const FOOD_BELOW = 14; // fetch food from the supply chest when hungry and carrying none
 const FOOD_RETRY_MS = 600000; // an empty chest is not worth a walk every minute
-const RESUMABLE = new Set(['mine', 'chop', 'shift', 'goto', 'deposit', 'follow', 'come', 'guard', 'build']);
+const RESUMABLE = new Set(['mine', 'chop', 'shift', 'goto', 'deposit', 'follow', 'come', 'guard', 'build', 'excavate']);
 // Long jobs that survive a restart (see keptOf, saved by server.js, reported by workers).
-const KEEP = new Set(['shift', 'guard', 'mine', 'chop', 'build']); // a resumed build skips what is already placed
+const KEEP = new Set(['shift', 'guard', 'mine', 'chop', 'build', 'excavate']); // a resumed build/excavate skips what is done
 const MAX_INTERRUPTIONS = 3; // deaths/disconnects of one job before it is given up
 const TOOL_RE = /_(pickaxe|axe|shovel|hoe|sword)$|^(shears|bow|crossbow|fishing_rod|shield|trident|flint_and_steel|elytra)$/;
 
@@ -97,6 +99,13 @@ const VALIDATE = {
   place: (a) => {
     if (!/^[a-z_]{1,48}$/.test(a.item || '')) throw new Error('item must be a block name like chest');
     return {item: a.item, ...xyz(a)};
+  },
+  // A box to dig out (an underground room): two corners, at most 9x9 wide and 5 high.
+  excavate: (a) => {
+    const p = xyz({x: a.x1, y: a.y1, z: a.z1}), q = xyz({x: a.x2, y: a.y2, z: a.z2});
+    const box = {x1: Math.min(p.x, q.x), y1: Math.min(p.y, q.y), z1: Math.min(p.z, q.z), x2: Math.max(p.x, q.x), y2: Math.max(p.y, q.y), z2: Math.max(p.z, q.z)};
+    if (box.x2 - box.x1 > 8 || box.z2 - box.z1 > 8 || box.y2 - box.y1 > 4) throw new Error('a room is at most 9 x 9 blocks and 5 high');
+    return box;
   },
   // Blueprint {origin, blocks: [{x,y,z,block}], remove?}; protected areas are
   // checked again when the job runs (the hub and workers may differ).
@@ -1421,6 +1430,44 @@ const JOBS = {
   },
 
   build: (r, job) => build(r, job),
+  // Dig out a box top-down (an underground room). Only natural ground goes: anything a player or a
+  // bot placed (cobblestone walls, chests, torches, planks ...) stays, and so do protected areas.
+  async excavate(r, job) {
+    const {bot} = r;
+    const {x1, y1, z1, x2, y2, z2} = job.args;
+    for (const [x, z] of [[x1, z1], [x1, z2], [x2, z1], [x2, z2]]) if (insideAreas(r.protectedAreas, x, z)) throw new Error(`${x} ${z} is inside a protected area`);
+    const Vec3 = require('vec3').Vec3;
+    const dim = normDim(bot.game?.dimension);
+    const total = (x2 - x1 + 1) * (y2 - y1 + 1) * (z2 - z1 + 1);
+    let left = 0;
+    job.t.total = total;
+    for (let y = y2; y >= y1; y--) {
+      for (let x = x1; x <= x2; x++) {
+        for (let z = z1; z <= z2; z++) {
+          guard(job);
+          const pos = new Vec3(x, y, z);
+          const b = bot.blockAt(pos);
+          if (!b || b.boundingBox === 'empty' || !NATURAL.test(b.name)) continue;
+          const k = `${dim}:${x},${y},${z}`;
+          if (r.world && !(await r.world.claim(r.name, k))) {
+            left++;
+            continue;
+          }
+          try {
+            await upkeep(r, job, [b.type]);
+            job.t.doing = `digging out the room at ${x1} ${y1} ${z1}`;
+            if (!(await digAt(r, job, pos, (n) => n === b.name))) left++;
+          } finally {
+            r.world?.release(r.name, k);
+          }
+          const done = total - left;
+          job.progress = `room ${x1} ${y1} ${z1}: layer y ${y}`;
+          job.t.done = done;
+        }
+      }
+    }
+    if (left) throw new Error(`${left} blocks of the room were not dug (held by another bot, unreachable or unsafe)`);
+  },
 
   craft: (r, job) => crafting.ensureItem(r, job, job.args.item, crafting.count(r.bot, job.args.item) + job.args.count),
 

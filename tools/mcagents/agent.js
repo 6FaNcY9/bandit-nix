@@ -89,6 +89,8 @@ const DOCS = {
   craftRecipe: ['Craft the given recipe a given number of times.', {recipe_name: ['string', 'The name of the output item to craft.'], num: ['number', 'The number of items to craft.']}],
   smeltItem: ['Smelt the given item the given number of times.', {item_name: ['string', 'The name of the input item to smelt.'], num: ['number', 'The number of times to smelt the item.']}],
   placeHere: ['Place a given block in the current location. Do NOT use to build structures, only use for single blocks.', {type: ['string', 'The block type to place.']}],
+  digRoom: ['Dig out a room (natural ground only, placed blocks stay) from corner x, y, z: width along x, length along z, height up. At most 9 x 9 x 5. Use it for an underground base.', {x: ['number', 'The x coordinate of the corner.'], y: ['number', 'The floor y.'], z: ['number', 'The z coordinate of the corner.'], width: ['number', 'Blocks along x, 1-9.'], length: ['number', 'Blocks along z, 1-9.'], height: ['number', 'Blocks up, 1-5.']}],
+  placeBlockAt: ['Place one block (for example a chest) at x, y, z; it needs a solid block below.', {type: ['string', 'The block type to place.'], x: ['number', 'The x coordinate.'], y: ['number', 'The y coordinate.'], z: ['number', 'The z coordinate.']}],
   buildBlueprint: ['Build a saved blueprint with its origin at x, y, z (one above the ground). Use this for every structure.', {name: ['string', 'The blueprint name.'], x: ['number', 'The x coordinate.'], y: ['number', 'The y coordinate.'], z: ['number', 'The z coordinate.']}],
   startConversation: ['Start a conversation with a bot. (FOR OTHER BOTS ONLY)', {player_name: ['string', 'The name of the player to send the message to.'], message: ['string', 'The message to send.']}],
   endConversation: ['End the conversation with the given bot. (FOR OTHER BOTS ONLY)', {player_name: ['string', 'The name of the player to end the conversation with.']}],
@@ -134,10 +136,13 @@ class Budget {
 // Why a bot's brain should be asked now: 'message' | 'event' | 'checkin' | null. `a.wake` is set by
 // job results, deaths and respawns; a message prompts even while the bot works; a plain running job
 // (not a routine) is never interrupted.
-function promptReason(a, bot, now, checkinMs = CHECKIN_MS) {
+function promptReason(a, bot, now, checkinMs = CHECKIN_MS, idle = 0) {
   if (!bot?.online || bot.dead) return null;
   if (a.inbox.length) return 'message';
   if (a.afk || !a.goal) return null;
+  // A foreman with idle workers is asked even while its own job runs (walking back after a death,
+  // building): orders cost it nothing (lab 2026-10-10: workers idled while bot1 re-armed).
+  if (a.wake && idle) return 'workers';
   const free = (!bot.job && !bot.queue.length) || isRoutine(bot.job);
   if (!free) return null;
   if (a.wake) return 'event';
@@ -200,6 +205,15 @@ function translate(cmd, ctx) {
       if (drop) return {refuse: `Mining ${item} gives ${drop}; ore blocks are never smelted.${drop.startsWith('raw_') ? ` Smelt ${drop} instead.` : ''}`};
       return {job: ['smelt', {item, count: Math.min(n(a[1], 1), 64)}]};
     }
+    case 'digRoom': {
+      const [x, y, z] = a.slice(0, 3).map(Number);
+      const [w, l, h] = a.slice(3, 6).map((v) => Math.round(Number(v)));
+      if (![x, y, z, w, l, h].every(Number.isFinite) || w < 1 || l < 1 || h < 1 || w > 9 || l > 9 || h > 5) return {refuse: 'Use !digRoom(x, y, z, width, length, height) with width and length 1-9 and height 1-5.'};
+      return {job: ['excavate', {x1: x, y1: y, z1: z, x2: x + w - 1, y2: y + h - 1, z2: z + l - 1}]};
+    }
+    case 'placeBlockAt':
+      if (![a[1], a[2], a[3]].every((v) => Number.isFinite(Number(v)))) return {refuse: 'Use !placeBlockAt(type, x, y, z).'};
+      return {job: ['place', {item: String(a[0] ?? ''), x: Number(a[1]), y: Number(a[2]), z: Number(a[3])}]};
     case 'placeHere':
       if (!ctx.pos) return {refuse: 'Position unknown.'};
       return {job: ['place', {item: String(a[0] ?? ''), x: ctx.pos[0], y: ctx.pos[1], z: ctx.pos[2]}]};
@@ -316,6 +330,15 @@ async function http(method, url, body) {
   return data;
 }
 
+// Every model call with its full prompt and reply: the data set for a later LoRA fine-tune. Kept at
+// most ~2 x 50 MB (the current file and one rotated copy).
+function logCall(line) {
+  try {
+    if (fs.statSync(LOG).size > 50e6) fs.renameSync(LOG, `${LOG}.1`);
+  } catch {} // no file yet
+  fs.appendFileSync(LOG, line);
+}
+
 async function think(agent, state, bot) {
   const t0 = Date.now();
   // Qwen-based models (Andy-4.2) allow one system message, first; later "system" lines
@@ -326,7 +349,7 @@ async function think(agent, state, bot) {
   if (!out.message) throw new Error(`model: ${out.error || 'no answer'}`);
   agent.modelMs += Date.now() - t0;
   const text = String(out.message.content || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-  if (LOG) fs.appendFileSync(LOG, JSON.stringify({t: new Date().toISOString(), agent: agent.name, ms: Date.now() - t0, messages, thinking: out.message.thinking || '', reply: text}) + '\n');
+  if (LOG) logCall(JSON.stringify({t: new Date().toISOString(), agent: agent.name, ms: Date.now() - t0, messages, thinking: out.message.thinking || '', reply: text}) + '\n');
   return text;
 }
 
@@ -520,11 +543,12 @@ async function main() {
       for (const agent of agents.values()) {
         if (busy.has(agent.name)) continue;
         const bot = state.bots.find((b) => b.name === agent.name);
-        if (agent.workers.size && now - agent.lastDecisionAt > 30000 && idleWorkers(agent.workers, state).length) {
+        const idle = agent.workers.size ? idleWorkers(agent.workers, state) : [];
+        if (idle.length && now - agent.lastDecisionAt > 30000) {
           agent.wake = true;
           agent.wakeAt ||= now;
         }
-        const why = promptReason(agent, bot, now);
+        const why = promptReason(agent, bot, now, CHECKIN_MS, idle.length);
         if (why) ready.push([agent, why, bot]);
       }
       ready.sort((x, y) => (x[0].wakeAt || x[0].lastDecisionAt) - (y[0].wakeAt || y[0].lastDecisionAt)); // longest waiting first
@@ -535,6 +559,8 @@ async function main() {
           while (agent.inbox.length) agent.push('user', agent.inbox.shift());
         } else if (why === 'checkin') {
           agent.push('system', `Check-in: ${bot.job ? `you have been running "${bot.job.label}" for a while (use !stop first to change it)` : 'you are idle'}. Continue your goal: "${agent.goal}". If all is well reply with just a tab.`);
+        } else if (why === 'workers') {
+          agent.push('system', `Idle workers: ${idleWorkers(agent.workers, state).join(', ')}. Give each an order with !assign; your own action${bot.job ? ` (${bot.job.label})` : ''} keeps running.`);
         } else agent.push('system', `You are self-prompting with the goal: "${agent.goal}". Respond:`);
         Object.assign(agent, {wake: false, wakeAt: 0, lastDecisionAt: now});
         agent.decisions++;

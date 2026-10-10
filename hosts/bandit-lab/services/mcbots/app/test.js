@@ -1463,6 +1463,30 @@ require('./crafting');
     await assert.rejects(x.go(), Cancelled); // its own cover is dug (and the Stop then holds) ...
     assert.strictEqual(x.log.digs, 1, '... but never the single neighbour\'s');
   }
+  { // excavate: digs natural ground top-down, leaves placed blocks and protected areas alone
+    const {JOBS, VALIDATE} = require('./bots');
+    assert.deepStrictEqual(VALIDATE.excavate({x1: 5, y1: 60, z1: 5, x2: 3, y2: 58, z2: 4}), {x1: 3, y1: 58, z1: 4, x2: 5, y2: 60, z2: 5});
+    assert.throws(() => VALIDATE.excavate({x1: 0, y1: 60, z1: 0, x2: 9, y2: 60, z2: 0}), /at most 9/);
+    assert.throws(() => VALIDATE.excavate({x1: 0, y1: 60, z1: 0, x2: 0, y2: 65, z2: 0}), /5 high/);
+    const {Vec3} = require('vec3');
+    const blocks = new Map([['0,60,0', 'stone'], ['1,60,0', 'cobblestone'], ['0,59,0', 'dirt'], ['1,59,0', 'chest'], ['0,58,0', 'iron_ore']]);
+    const order = [];
+    const bot = {
+      blockAt: (p) => (blocks.get(`${p.x},${p.y},${p.z}`) ? {name: blocks.get(`${p.x},${p.y},${p.z}`), type: 1, position: p, boundingBox: 'block', getProperties: () => ({})} : null),
+      entity: {position: new Vec3(0, 61, 2), onGround: true}, game: {dimension: 'overworld'}, entities: {}, food: 20,
+      registry: {blocks: {}, foodsByName: {}},
+      inventory: {items: () => [{type: 2, name: 'stone_pickaxe'}], emptySlotCount: () => 30, slots: []}, getEquipmentDestSlot: () => 5,
+      pathfinder: {goto: async () => {}, stop() {}, setGoal() {}}, tool: {equipForBlock: async () => {}},
+      dig: async (b) => { order.push(`${b.name}@${b.position.y}`); blocks.delete(`${b.position.x},${b.position.y},${b.position.z}`); },
+      stopDigging() {},
+    };
+    const job = {t: {}, cancelled: false, type: 'excavate', args: {x1: 0, y1: 58, z1: 0, x2: 1, y2: 60, z2: 0}};
+    const r = {bot, world: {hostilesNear: () => [], claim: async () => true, release() {}}, emit() {}, protectedAreas: [], supplyChest: null, combat: null};
+    await JOBS.excavate(r, job);
+    assert.deepStrictEqual(order, ['stone@60', 'dirt@59', 'iron_ore@58'], 'top-down, natural ground only');
+    assert.deepStrictEqual([...blocks.values()].sort(), ['chest', 'cobblestone'], 'placed blocks stay');
+    await assert.rejects(JOBS.excavate({...r, protectedAreas: [[-5, -5, 5, 5]]}, {...job, t: {}}), /protected/);
+  }
   { // digAt rechecks the block after every walk and equip: a Stop or a swapped block means no dig
     const {digAt, Cancelled} = require('./bots');
     const {Vec3} = require('vec3');

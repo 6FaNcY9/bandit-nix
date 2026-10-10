@@ -5,7 +5,7 @@
 const crypto = require('node:crypto');
 
 const hash = (s) => crypto.createHash('sha256').update(String(s)).digest();
-const AGENT_JOBS = new Set(['stop', 'come', 'follow', 'goto', 'mine', 'chop', 'shift', 'guard', 'deposit', 'withdraw', 'stock', 'craft', 'smelt', 'place', 'build']);
+const AGENT_JOBS = new Set(['stop', 'come', 'follow', 'goto', 'mine', 'chop', 'shift', 'guard', 'deposit', 'withdraw', 'stock', 'craft', 'smelt', 'place', 'build', 'excavate']);
 const CHEST_JOBS = new Set(['deposit', 'withdraw', 'stock', 'shift']);
 
 // null: no bearer sent (human path); true/false: a bearer was sent and does / does not match.

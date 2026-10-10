@@ -14,10 +14,10 @@
   # !assign; the workers are scripted and stick to their order. On the lab
   # four independent agents drifted off their goals (2026-10-10).
   goals = {
-    # The base: base-v1 shell parts 01..08 at one origin, on flat ground the owner
-    # asked for (found by a block scan 2026-10-10: 7x7 at ground Y 64, 5 air above,
-    # 9 blocks from the base chest).
-    bot1 = "You lead the crew. Keep the base chest stocked with logs, cobblestone, coal, raw_iron and raw_gold: give every idle worker a shift with !assign so each resource has someone on it, and give a new order to a worker that finishes, fails or dies. While the workers are busy, build our base yourself: the blueprints base-v1-shell-01 to base-v1-shell-08, one after another and all at the same spot x -272, y 65, z -219, with !buildBlueprint. Do not mine yourself.";
+    # The base: an underground storage room under the base-v1 spot, which sits on
+    # ground a block scan found flat (2026-10-10: 7x7 at ground Y 64, 9 blocks from
+    # the base chest); the owner asked for it underground, for chests and beds.
+    bot1 = "You lead the crew. Keep the base chest stocked with logs, cobblestone, coal, raw_iron and raw_gold: give every idle worker a shift with !assign so each resource has someone on it, and give a new order to a worker that finishes, fails or dies. Then build our underground storage room under the base: dig it out with !digRoom(-272, 58, -219, 7, 7, 4) (yourself, or give it to a worker with !assign), then place chests in a row along its north wall with !placeBlockAt for x -271 to -267, y 58, z -219. Later the crew will put their beds there. Do not mine yourself.";
   };
   workers = "bot2,bot3,bot4,bot16,bot17,bot18";
 in {
@@ -34,7 +34,9 @@ in {
         OLLAMA_URL = "http://127.0.0.1:11434";
         BLUEPRINTS = "${../mcbots/blueprints}";
         AGENTS = lib.concatStringsSep ";" (lib.mapAttrsToList (bot: goal: "${bot}=${goal}") goals);
-        LOG = ""; # one line per reply goes to the journal; full prompts are not kept
+        # Every model call (prompt + reply) for a later LoRA fine-tune; agent.js
+        # rotates it at 50 MB. The journal gets one line per reply.
+        LOG = "/var/lib/mcagents/decisions.jsonl";
         WORKERS = workers;
       };
       serviceConfig = {
@@ -43,6 +45,7 @@ in {
         Restart = "always";
         RestartSec = "30s";
         DynamicUser = true;
+        StateDirectory = "mcagents";
         NoNewPrivileges = true;
         CapabilityBoundingSet = "";
         ProtectSystem = "strict";

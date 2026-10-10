@@ -22,6 +22,9 @@ assert.deepStrictEqual(tr('!takeFromChest("coal", 3)'), {job: ['withdraw', {x: 5
 assert.deepStrictEqual(tr('!goToRememberedPlace("base")'), {job: ['goto', {x: 9, y: 70, z: 9}]});
 assert.deepStrictEqual(tr('!craftRecipe("stick", 4)'), {job: ['craft', {item: 'stick', count: 4}]});
 assert.deepStrictEqual(tr('!stop'), {job: ['stop', {}]});
+assert.deepStrictEqual(tr('!digRoom(-272, 58, -219, 7, 7, 4)'), {job: ['excavate', {x1: -272, y1: 58, z1: -219, x2: -266, y2: 61, z2: -213}]});
+assert.ok(tr('!digRoom(0, 60, 0, 12, 3, 3)').refuse, 'too wide');
+assert.deepStrictEqual(tr('!placeBlockAt("chest", -270, 58, -213)'), {job: ['place', {item: 'chest', x: -270, y: 58, z: -213}]});
 assert.match(tr('!smeltItem("coal_ore", 5)').refuse, /gives coal/);
 assert.match(tr('!smeltItem("deepslate_iron_ore", 2)').refuse, /Smelt raw_iron instead/);
 assert.deepStrictEqual(tr('!smeltItem("raw_iron", 3)'), {job: ['smelt', {item: 'raw_iron', count: 3}]});
@@ -98,6 +101,12 @@ assert.deepStrictEqual(idleWorkers(new Set(['bot2', 'bot16', 'bot17', 'bot18']),
   {name: 'bot2', online: true, job: {type: 'shift'}, queue: []}, {name: 'bot16', online: true, job: null, queue: []},
   {name: 'bot17', online: false, job: null, queue: []}, {name: 'bot18', online: true, dead: true, job: null, queue: []}, {name: 'bot1', online: true, job: null, queue: []}]}), ['bot16']);
 assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}, {name: 'bot1', pos: [0, 0, 0], inventory: []}).includes("Sure, I'll stop"), 'no example answer to copy');
+{ // a foreman with idle workers is asked even while its own job runs
+  const a = {inbox: [], goal: 'lead', wake: true, lastDecisionAt: 0};
+  const busyBot = {online: true, job: {type: 'rearm'}, queue: []};
+  assert.strictEqual(promptReason(a, busyBot, 1000, 600000, 0), null);
+  assert.strictEqual(promptReason(a, busyBot, 1000, 600000, 2), 'workers');
+}
 // decide() against a fake dashboard and model (global fetch): MC-4 regressions.
 (async () => {
   const realFetch = globalThis.fetch;
