@@ -68,7 +68,7 @@ function Servers($listeners) {
 function Busy {
     if (-not $TestPort -and [BanditWindow]::WTSGetActiveConsoleSessionId() -ne (Get-Process -Id $PID).SessionId) { return 'another console session (or no console)' }
     # Light games never count as games and do not trigger the fullscreen rule while focused.
-    $light = @('isaac-ng.exe', 'isaac.exe', 'wallpaper64.exe', 'wallpaper32.exe')
+    $light = @('isaac-ng.exe', 'isaac.exe', 'wallpaper64.exe', 'wallpaper32.exe', 'chrome.exe', 'msedge.exe', 'firefox.exe', 'brave.exe', 'vlc.exe')
     if (Test-Path "$base\light-games.txt") {
         $light += @(Get-Content "$base\light-games.txt" | ForEach-Object { $_.Trim() } | Where-Object { $_ -and -not $_.StartsWith('#') })
     }
