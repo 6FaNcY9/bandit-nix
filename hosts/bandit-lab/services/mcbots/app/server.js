@@ -22,6 +22,7 @@ const {Places} = require('./places');
 const {Projects, PROJECTS} = require('./projects');
 const {Crews} = require('./crews');
 const agentauth = require('./agentauth');
+const voxels = require('./voxels');
 const {Slayer} = require('./slayer');
 
 const cfg = loadConfig();
@@ -41,10 +42,12 @@ const projects = new Projects(process.env.STATE_DIR || '');
 const crews = new Crews(process.env.STATE_DIR || '', {agentBots: cfg.agentBots, bots: cfg.names});
 for (const r of runners.values()) r.getSettings = () => settings.get(r.name);
 const page = fs.readFileSync(path.join(__dirname, 'public', 'index.html'));
+const three = fs.readFileSync(path.join(__dirname, 'public', 'vendor', 'three.min.js')); // three.js r159 (MIT), the last release with a classic-script build
 // The page is one file with inline script and style: allow exactly those two
-// bodies by hash and nothing else (no CDN, no eval, no other origin).
+// bodies by hash, plus this server's own files ('self': the vendored three.js of the 3D map);
+// no CDN, no eval, no other origin.
 const sha = (re) => `'sha256-${require('node:crypto').createHash('sha256').update(String(page).match(re)?.[1] ?? '').digest('base64')}'`;
-const CSP = `default-src 'none'; script-src ${sha(/<script>([\s\S]*?)<\/script>/)}; style-src ${sha(/<style>([\s\S]*?)<\/style>/)}; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`;
+const CSP = `default-src 'none'; script-src 'self' ${sha(/<script>([\s\S]*?)<\/script>/)}; style-src ${sha(/<style>([\s\S]*?)<\/style>/)}; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`;
 // Remote workers register themselves in `runners` (see hub.js), so the
 // dashboard, /api/state and /api/debug list them next to the lab's bots.
 const hub = cfg.workerToken ? new Hub({world, runners, token: cfg.workerToken, workers: cfg.hubWorkers, log, protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest, events, settings}) : null;
@@ -205,6 +208,32 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === 'GET' && url.pathname === '/') return send(200, 'text/html; charset=utf-8', page);
   if (req.method === 'GET' && url.pathname === '/api/state') return json(200, state());
+  if (req.method === 'GET' && url.pathname === '/vendor/three.min.js') {
+    res.writeHead(200, {'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'max-age=86400', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer'});
+    return res.end(three);
+  }
+  // The 3D map's presets (the plan's areas) and the bots an order may go to; no secrets.
+  if (req.method === 'GET' && url.pathname === '/api/areas') {
+    const B = planConfig.BASE, room = B.room;
+    return json(200, {areas: {shaft: {...B.shaft, y1: -59, y2: 66}, base: {x1: B.box.x1 - 3, z1: B.box.z1 - 3, x2: B.box.x2 + 3, z2: B.box.z2 + 3, y1: room.y1 - 3, y2: 70}, room: {x1: room.x1, z1: room.z1, x2: room.x2, z2: room.z2, y1: room.y1 - 1, y2: room.y2 + 1}, treefarm: {...B.farm, y1: 55, y2: 80}, wheat: {...B.wheat, y1: 58, y2: 72}}, agentBots: cfg.agentBots, roster: cfg.planRoster || [], protectedAreas: cfg.protectedAreas});
+  }
+  // Blocks of a box for the dashboard's 3D map, read from the bot nearest to its centre whose chunks are
+  // loaded. Human path only (not an agent endpoint). Only bots of this process are readable: a worker's
+  // bots (RemoteRunner) keep their chunks in the worker, and there is no RPC for them.
+  if (req.method === 'GET' && url.pathname === '/api/voxels') {
+    try {
+      const box = voxels.parseBox(Object.fromEntries(url.searchParams));
+      const cx = (box.x1 + box.x2) / 2, cz = (box.z1 + box.z2) / 2;
+      const near = [...runners.values()].filter((x) => !(x instanceof RemoteRunner) && x.online && x.bot?.entity && /overworld/.test(x.bot.game?.dimension || ''))
+        .sort((a, b) => Math.hypot(a.bot.entity.position.x - cx, a.bot.entity.position.z - cz) - Math.hypot(b.bot.entity.position.x - cx, b.bot.entity.position.z - cz))[0];
+      if (!near) return json(409, {error: 'no bot of the hub is online in the overworld to read blocks from (worker bots cannot be read)'});
+      const {Vec3} = require('vec3'), p = new Vec3(0, 0, 0); // ponytail: synchronous, ~0.5 s for a full 600k box; chunk it if the event loop ever hurts
+      const out = voxels.collect(box, (x, y, z) => near.bot.blockAt(p.set(x, y, z), false)?.name ?? null);
+      return json(200, {box, bot: near.name, ...out});
+    } catch (e) {
+      return json(400, {error: e.message});
+    }
+  }
   if (req.method === 'GET' && url.pathname === '/api/events') return json(200, {lastId: events.lastId, events: events.since(Number(url.searchParams.get('since')) || 0)});
   if (req.method === 'GET' && url.pathname === '/api/decisions') return json(200, {lastId: decisions.lastId, events: decisions.since(Number(url.searchParams.get('since')) || 0)});
   if (req.method === 'GET' && url.pathname === '/api/slayer') return json(200, slayer.view());

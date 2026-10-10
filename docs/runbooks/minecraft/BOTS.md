@@ -274,6 +274,16 @@ lastError{message,agoS}}]}`. It sits behind the same login check as the rest of
 the dashboard. Positions are sampled every 500 ms (rounded to 0.01) and kept for
 30 s. The bot cards also show "pulled back N x in 30 s" when it is not zero.
 
+## 3D map and box orders
+
+Dashboard panel "3D map and box orders" (closed by default; the vendored three.js `app/public/vendor/three.min.js`, r159, MIT, is fetched only when you press Load, and the CSP allows scripts from the app itself).
+
+1. Pick an area (shaft, base, room, treefarm, wheat: the plan's boxes from `plan-config.js`, or "custom"), press **Load**. `GET /api/voxels?x1..z2` reads the blocks with `bot.blockAt` from the hub's online overworld bot nearest to the box centre and sends only visible blocks (a solid next to air, water, glass, leaves or a plant; a fluid only where it meets air; `app/voxels.js`). Limits: 80 x 80 columns, 200 high, 600000 cells, y -64..319. Unloaded chunks come back empty and are counted in the status line. The read is synchronous (about a second for a full box).
+2. Drag to orbit, right-drag or shift-drag to pan, wheel or pinch to zoom. The y sliders, the cutaway slider (hides the southern part) and the rock/fluid toggles thin the view; cyan outlines are the plan areas, red the protected areas.
+3. Click a block for corner A, another for corner B (a third click starts over); the six numbers can be edited by hand. Choose the job (excavate, seal, shaft, level, treefarm, wheatfarm, tidy), the bot (online bots, marked agent bot / plan roster) and read the exact job line before **Send** (`POST /api/job`; the server's answer or error appears below). Mapping: excavate and seal take the box; shaft and level take x/z with `top` = box top and `bottom` / `y` = box bottom; the farms take x/z; tidy takes the centre at the box's lowest y and a radius from its size.
+
+Limits: bots running in a worker process (bot16-18 etc.) cannot be read, only the hub's own bots can; there is no hub RPC for chunks. The endpoint is human-only (an agent bearer gets 403). Needs WebGL; without it the panel reports the error and the rest of the dashboard is unaffected.
+
 ## Hub: bots on other machines (laptop bot5)
 
 The lab app is also the hub. A worker on another machine runs its own bots

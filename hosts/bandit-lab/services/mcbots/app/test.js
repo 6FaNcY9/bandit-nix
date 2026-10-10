@@ -589,6 +589,37 @@ require('./crafting');
 }
 
 // GET /api/debug end to end: start the real server, hit it with and without a tailscale login.
+{ // 3D map (voxels.js): the box is bounded and ordered; only blocks that touch something see-through are sent
+  const V = require('./voxels');
+  const ok = {x1: 5, y1: 0, z1: 5, x2: 1, y2: 3, z2: 1};
+  assert.deepStrictEqual(V.parseBox(ok), {x1: 1, y1: 0, z1: 1, x2: 5, y2: 3, z2: 5});
+  assert.deepStrictEqual(V.parseBox({...ok, x1: '5'}).x2, 5);
+  for (const bad of [{x1: 'a'}, {x1: 1.5}, {x1: ''}, {y1: -65}, {y2: 320}, {x1: 100, x2: 0}, {y1: -64, y2: 150, x1: 0, x2: 79, z1: 0, z2: 79}]) assert.throws(() => V.parseBox({...ok, ...bad}), bad.y1 === -64 ? /box too big/ : undefined, JSON.stringify(bad));
+  assert.throws(() => V.parseBox({...ok, x1: undefined}), /x1/);
+  // a 3x3x3 stone cube in air with a water cell on top, a glass cell beside it, a torch and an unloaded column
+  const m = (x, y, z) => {
+    if (x === 9) return null;
+    if (x >= 0 && x <= 2 && y >= 0 && y <= 2 && z >= 0 && z <= 2) return 'stone';
+    if (x === 1 && y === 3 && z === 1) return 'water';
+    if (x === 3 && y === 1 && z === 1) return 'glass';
+    if (x === 1 && y === 3 && z === 2) return 'torch';
+    return 'air';
+  };
+  const r = V.collect({x1: 0, y1: 0, z1: 0, x2: 2, y2: 3, z2: 2}, m);
+  const of = (n) => r.blocks.filter((b) => r.names[b[3]] === n);
+  assert.strictEqual(of('stone').length, 26, 'the buried middle of the cube is left out');
+  assert.ok(!of('stone').some((b) => b[0] === 1 && b[1] === 1 && b[2] === 1));
+  assert.strictEqual(of('water').length, 1, 'a fluid shown where it touches air');
+  assert.strictEqual(of('torch').length + of('air').length, 0, 'air and torches are not drawn');
+  assert.strictEqual(r.unloaded, 0);
+  const g = V.collect({x1: 0, y1: 1, z1: 1, x2: 4, y2: 1, z2: 1}, m);
+  assert.strictEqual(g.blocks.filter((b) => g.names[b[3]] === 'glass').length, 1, 'glass is drawn');
+  const u = V.collect({x1: 8, y1: 0, z1: 0, x2: 9, y2: 0, z2: 0}, m);
+  assert.strictEqual(u.unloaded, 1, 'unloaded cells are counted, never invented');
+  // a fluid body shows only its surface; a block hidden by an unloaded neighbour is not "visible" through it
+  const sea = V.collect({x1: 0, y1: 0, z1: 0, x2: 2, y2: 2, z2: 2}, (x, y) => (y < 2 ? 'water' : 'air'));
+  assert.ok(sea.blocks.every((b) => b[1] === 1) && sea.blocks.length === 9);
+}
 (async () => {
   const {spawn} = require('node:child_process');
   const net = require('node:net');
@@ -650,9 +681,13 @@ require('./crafting');
     assert.strictEqual(ev.lastId, ev.events.at(-1).id);
     const after = await (await fetch(`http://127.0.0.1:${port}/api/events?since=${ev.lastId}`, {headers: {'tailscale-user-login': 'a@github'}})).json();
     assert.deepStrictEqual(after.events, []);
-    // the page may only run its own two inline blocks
+    // the page may only run its own two inline blocks and the app's own files (the vendored three.js)
     const csp = (await fetch(`http://127.0.0.1:${port}/`, {headers: {'tailscale-user-login': 'a@github'}})).headers.get('content-security-policy');
-    assert.match(csp, /default-src 'none'; script-src 'sha256-[\w+/=]{44}'; style-src 'sha256-[\w+/=]{44}'; connect-src 'self'/);
+    assert.match(csp, /default-src 'none'; script-src 'self' 'sha256-[\w+/=]{44}'; style-src 'sha256-[\w+/=]{44}'; connect-src 'self'/);
+    // the 3D map: human path only, bad boxes refused, the vendored script served
+    assert.strictEqual((await fetch(`http://127.0.0.1:${port}/api/voxels?x1=0&y1=0&z1=0&x2=500&y2=1&z2=1`, {headers: {'tailscale-user-login': 'a@github'}})).status, 400);
+    assert.strictEqual((await fetch(`http://127.0.0.1:${port}/api/voxels?x1=0&y1=0&z1=0&x2=1&y2=1&z2=1`, {headers: {'tailscale-user-login': 'a@github'}})).status, 409, 'no bot online to read from');
+    assert.match(await (await fetch(`http://127.0.0.1:${port}/vendor/three.min.js`, {headers: {'tailscale-user-login': 'a@github'}})).text(), /Three\.js Authors/);
     // a supply marker replaces the configured supply chest for everyone
     const placesPost = (body, origin = `http://127.0.0.1:${port}`) => fetch(`http://127.0.0.1:${port}/api/places`, {method: 'POST', headers: {'content-type': 'application/json', origin, 'tailscale-user-login': 'a@github'}, body: JSON.stringify(body)});
     assert.strictEqual((await placesPost({action: 'set', place: {name: 'Main', kind: 'supply', x: 5, y: 64, z: 6}}, 'http://evil.example')).status, 403, 'cross-origin refused');

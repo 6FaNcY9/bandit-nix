@@ -62,6 +62,9 @@
   .proj { border-top:1px solid var(--bd); padding:6px 0; } .proj progress { width:140px; }
   textarea { font:inherit; color:inherit; background:var(--bg); border:1px solid var(--bd); border-radius:6px; padding:4px 8px; width:100%; box-sizing:border-box; }
   #chestitems { max-height:140px; overflow:auto; }
+  #v3 { max-width:none; aspect-ratio:4/3; cursor:grab; }
+  #vbar input[type=number] { width:64px; } #vbar input[type=range] { width:110px; padding:0; }
+  #vjob { font:12px/1.5 ui-monospace,monospace; word-break:break-all; }
   .view img { width:100%; height:auto; image-rendering:pixelated; border-radius:6px; background:#000; display:block; margin-top:6px; }
 </style>
 </head>
@@ -96,6 +99,21 @@
     <div class="mapwrap"><canvas id="radar" width="1280" height="720"></canvas><div id="mapmenu" class="menu" hidden></div></div>
     <div class="mut">drag to move, wheel to zoom, click (or right-click) a bot, a player, a marker or a spot for actions; add markers for your chests, work sites, home and AFK spots. Terrain from BlueMap. green = bots, blue = players, red = hostile mobs, yellow = chests/ores, orange = blocks a bot is working on, white square = supply chest, hatched red = protected areas</div>
   </div>
+<details class="bar" id="vbar"><summary>3D map and box orders <span class="mut">(read from a bot's loaded chunks: click one block for corner A, another for corner B, then send the box as a job)</span></summary>
+  <div class="row">area <select id="varea"></select>
+    <span id="vload" class="row"></span><button id="vgo" type="button">Load</button><span id="vinfo" class="mut"></span></div>
+  <div class="row">
+    <label>y from <input id="vy1" type="range" min="-64" max="319" value="-64"></label><label>to <input id="vy2" type="range" min="-64" max="319" value="319"></label>
+    <label>cutaway <input id="vcut" type="range" min="1" max="100" value="100" title="hides the southern part so the inside shows"></label>
+    <label><input type="checkbox" id="vrock"> hide natural rock</label><label><input type="checkbox" id="vfluid"> hide fluids</label>
+    <label><input type="checkbox" id="vplan" checked> outlines</label></div>
+  <canvas id="v3" width="960" height="720"></canvas>
+  <div class="mut">drag: orbit, right-drag or shift-drag: pan, wheel or pinch: zoom. Cyan: the plan's areas, red: protected areas, yellow: your box.</div>
+  <div class="row">box <span id="vsel" class="row"></span><button id="vclear" type="button" class="ghost">Clear selection</button><span id="vsize" class="mut"></span></div>
+  <div class="row">order <select id="vtype"></select><span id="vextra" class="row"></span> to <select id="vbot"></select>
+    <label><input type="checkbox" id="vrepl"> replace running job</label><button id="vsend" type="button">Send</button></div>
+  <div id="vjob" class="mut"></div><div id="vmsg" class="mut"></div>
+</details>
 <div id="bots" class="grid"></div>
 <div class="bar" id="allbar"><h3>Give the same job to several bots</h3><div id="allcomposer"></div></div>
 <div class="bar"><h3>Events <select id="evbot"></select></h3><div id="events"></div></div>
@@ -825,6 +843,194 @@ pollSlayer();
 const tickViews = (workers) => { if (document.hidden) return; for (const c of agentCards.values()) { if (workers) { for (const r of c.wk.values()) if (onScreen(r.img)) r.img.src = viewSrc(r.img.alt.replace(' view', '')); } else if (onScreen(c.img)) c.img.src = viewSrc(c.img.alt.replace(' in-game view', '')); } };
 setInterval(() => { tickViews(false); renderAgents(); }, 3000);
 setInterval(() => tickViews(true), 5000);
+
+// ---- 3D map: blocks from /api/voxels in three.js (vendored, loaded on first open), a box picked by two clicks, sent as a job ----
+const VT = { areas: null, data: null, A: null, B: null, meshes: [], sel: null, lines: [], dirty: false };
+const VC = { tx: 0, ty: 0, tz: 0, r: 60, az: 0.7, el: 0.6 };
+const VKEYS = ['x1', 'y1', 'z1', 'x2', 'y2', 'z2'];
+const ROCK = /^(stone|deepslate|andesite|diorite|granite|tuff|calcite|dirt|coarse_dirt|gravel|sand|sandstone|cobblestone|cobbled_deepslate|grass_block)$/;
+const FLUIDS = /^(water|lava|bubble_column)$/;
+const COLORS = [[/diamond_ore/, 0x2ee6e6], [/emerald_ore/, 0x17dd62], [/gold_ore/, 0xffd700], [/iron_ore/, 0xe8a070], [/copper_ore/, 0xe07840], [/redstone_ore/, 0xff2020], [/lapis_ore/, 0x2a52ff], [/coal_ore/, 0x111111], [/_ore$/, 0xff00ff], [/^lava$/, 0xff6a00], [/^water$/, 0x3366ff], [/bedrock/, 0x222222], [/deepslate/, 0x4a4a55], [/^(stone|andesite|diorite|granite|tuff|calcite)$/, 0x8a8a8a], [/cobble/, 0x777777], [/grass_block/, 0x5fa83a], [/dirt|mud|podzol/, 0x7a5230], [/sand/, 0xdccf8a], [/gravel/, 0x8d8680], [/leaves/, 0x2f7d2f], [/log|wood/, 0x6b4a2a], [/planks/, 0xb08850], [/glass/, 0xbfe8f5], [/chest/, 0xc08a2a], [/torch/, 0xffe080]];
+function blockColor(n) {
+  for (const [re, c] of COLORS) if (re.test(n)) return c;
+  let h = 0; for (const ch of n) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return new THREE.Color().setHSL((h % 360) / 360, 0.3, 0.55).getHex();
+}
+// The job's args for a box (pure: also what the preview shows). Returns [type, args] or throws a message.
+function boxJob(type, b, extra) {
+  const flat = { x1: b.x1, z1: b.z1, x2: b.x2, z2: b.z2 };
+  switch (type) {
+    case 'excavate': case 'seal': return [type, { ...b }];
+    case 'shaft': return [type, { ...flat, top: b.y2, bottom: b.y1 }];
+    case 'level': return [type, { ...flat, top: b.y2, y: b.y1, length: extra.length, branch: extra.branch }];
+    case 'treefarm': case 'wheatfarm': return [type, flat];
+    case 'tidy': return [type, { x: Math.round((b.x1 + b.x2) / 2), y: b.y1, z: Math.round((b.z1 + b.z2) / 2), radius: Math.min(32, Math.max(2, Math.ceil(Math.max(b.x2 - b.x1, b.z2 - b.z1) / 2) + 1)) }];
+  }
+  throw new Error('unknown job');
+}
+const VJOBS = { excavate: 'Excavate (dig the box out)', seal: 'Seal (wall the cave openings)', shaft: 'Shaft (down from top y to bottom y)', level: 'Level (mine at the box\'s lowest y)', treefarm: 'Tree farm (x/z of the box)', wheatfarm: 'Wheat farm (x/z of the box)', tidy: 'Tidy (pick up drops around the centre)' };
+const vnum = (id) => { const v = $(id)?.value; return v === undefined || v === '' ? NaN : Number(v); };
+const vbox = (pre) => { const v = VKEYS.map((k) => vnum(pre + k)); if (v.some((n) => !Number.isInteger(n))) return null; return { x1: Math.min(v[0], v[3]), y1: Math.min(v[1], v[4]), z1: Math.min(v[2], v[5]), x2: Math.max(v[0], v[3]), y2: Math.max(v[1], v[4]), z2: Math.max(v[2], v[5]) }; };
+const vmk = (id, pre, onin) => { for (const k of VKEYS) { const i = el('input', 'xyz'); i.type = 'number'; i.id = pre + k; i.placeholder = k; i.title = k; i.oninput = onin; $(id).append(i); } };
+function vOverlap(b) { return (last.protectedAreas || []).some(([x1, z1, x2, z2]) => b.x1 <= x2 && b.x2 >= x1 && b.z1 <= z2 && b.z2 >= z1); }
+
+function vExtra() { // level's tunnel length and branch size; built once per job type so typing keeps its focus
+  $('vextra').replaceChildren(...($('vtype').value === 'level' ? [['length', 32], ['branch', 8]].map(([n, v]) => Object.assign(el('input'), { id: 'vx' + n, type: 'number', value: v, title: n, placeholder: n, oninput: vPreview })) : []));
+  vPreview();
+}
+function vPreview() {
+  const b = vbox('s'), type = $('vtype').value;
+  $('vsize').textContent = b ? `${b.x2 - b.x1 + 1} x ${b.z2 - b.z1 + 1} wide, ${b.y2 - b.y1 + 1} high` : '';
+  drawSel(b);
+  VT.job = null;
+  if (!b) { $('vjob').textContent = 'pick two corners (or type the box)'; return; }
+  try {
+    VT.job = boxJob(type, b, { length: vnum('vxlength') || 32, branch: Number.isNaN(vnum('vxbranch')) ? 8 : vnum('vxbranch') });
+    $('vjob').textContent = `${VT.job[0]} ${JSON.stringify(VT.job[1])}` + (vOverlap(b) ? '  - overlaps a protected area: the bots will refuse' : '');
+    $('vjob').className = vOverlap(b) ? 'err' : 'mut';
+  } catch (e) { $('vjob').textContent = e.message; }
+}
+function vBots() {
+  const keep = $('vbot').value, ag = VT.areas?.agentBots || [], ro = VT.areas?.roster || [];
+  $('vbot').replaceChildren(...last.bots.filter((b) => b.online).map((b) => new Option(b.name + (ag.includes(b.name) ? ' [agent bot]' : '') + (ro.includes(b.name) ? ' [plan roster]' : ''), b.name)));
+  if (keep) $('vbot').value = keep;
+}
+$('vsend').onclick = async () => {
+  if (!VT.job) { $('vmsg').textContent = 'no valid order yet'; return; }
+  if (!$('vbot').value) { $('vmsg').textContent = 'no online bot'; return; }
+  try {
+    const r = await fetch('/api/job', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bots: [$('vbot').value], type: VT.job[0], args: VT.job[1], replace: $('vrepl').checked }) });
+    const j = await r.json();
+    $('vmsg').textContent = r.ok ? `sent to ${$('vbot').value}: ${VT.job[0]}` : j.error;
+    $('vmsg').className = r.ok ? 'mut' : 'err';
+  } catch (e) { $('vmsg').textContent = 'send failed: ' + e.message; $('vmsg').className = 'err'; }
+};
+
+// three.js scene, loaded on the first open of the panel (a phone that never opens it never downloads it)
+let G = null;
+function vThree() {
+  if (window.THREE) return Promise.resolve();
+  return new Promise((ok, no) => { const s = document.createElement('script'); s.src = '/vendor/three.min.js'; s.onload = ok; s.onerror = () => no(new Error('three.js did not load')); document.head.append(s); });
+}
+function vInit() {
+  if (G) return;
+  const canvas = $('v3'), renderer = new THREE.WebGLRenderer({ canvas, antialias: true }), scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(50, 4 / 3, 0.5, 2000);
+  scene.background = new THREE.Color(0x14161a);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x555566, 1.6));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.4); sun.position.set(0.4, 1, 0.7); scene.add(sun);
+  G = { canvas, renderer, scene, camera, geo: new THREE.BoxGeometry(1, 1, 1), ray: new THREE.Raycaster(), group: new THREE.Group(), outl: new THREE.Group() };
+  scene.add(G.group, G.outl);
+  const fit = () => { const w = canvas.clientWidth || 640, h = Math.round(w * 0.75); renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); VT.dirty = true; };
+  new ResizeObserver(fit).observe(canvas); fit();
+  // orbit / pan / zoom by hand (three's OrbitControls is a module, which the script CSP does not take)
+  const ptr = new Map(); let moved = 0, pinch = 0;
+  canvas.onpointerdown = (e) => { canvas.setPointerCapture(e.pointerId); ptr.set(e.pointerId, e); moved = 0; pinch = 0; };
+  canvas.onpointermove = (e) => {
+    const p = ptr.get(e.pointerId); if (!p) return;
+    const dx = e.clientX - p.clientX, dy = e.clientY - p.clientY; ptr.set(e.pointerId, e); moved += Math.abs(dx) + Math.abs(dy);
+    if (ptr.size === 2) { const [a, b] = [...ptr.values()], d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY); if (pinch) VC.r = Math.min(900, Math.max(3, VC.r * pinch / d)); pinch = d; }
+    else if (e.buttons & 2 || e.shiftKey) { const k = VC.r * 0.0016; VC.tx -= (dx * Math.cos(VC.az)) * k; VC.tz += (dx * Math.sin(VC.az)) * k; VC.ty += dy * k; }
+    else { VC.az -= dx * 0.008; VC.el = Math.min(1.55, Math.max(-1.55, VC.el + dy * 0.008)); }
+    vCam();
+  };
+  canvas.onpointerup = (e) => { ptr.delete(e.pointerId); if (moved < 5 && e.button === 0 && !ptr.size) vPick(e); };
+  canvas.onpointercancel = (e) => ptr.delete(e.pointerId);
+  canvas.oncontextmenu = (e) => e.preventDefault();
+  canvas.addEventListener('wheel', (e) => { e.preventDefault(); VC.r = Math.min(900, Math.max(3, VC.r * Math.exp(e.deltaY * 0.001))); vCam(); }, { passive: false });
+  const tick = () => { if (VT.dirty) { VT.dirty = false; renderer.render(scene, camera); } requestAnimationFrame(tick); };
+  tick(); vCam();
+}
+function vCam() {
+  const c = G.camera, ce = Math.cos(VC.el);
+  c.position.set(VC.tx + VC.r * ce * Math.sin(VC.az), VC.ty + VC.r * Math.sin(VC.el), VC.tz + VC.r * ce * Math.cos(VC.az)); c.lookAt(VC.tx, VC.ty, VC.tz); VT.dirty = true;
+}
+// world -> scene coordinates: centred on the loaded box, so float32 keeps its precision at x = -270
+const vo = () => { const b = VT.data.box; return [Math.floor((b.x1 + b.x2) / 2), Math.floor((b.y1 + b.y2) / 2), Math.floor((b.z1 + b.z2) / 2)]; };
+function vRebuild() {
+  const d = VT.data; if (!d || !G) return;
+  for (const m of VT.meshes) { G.group.remove(m); m.dispose(); }
+  VT.meshes = [];
+  const [ox, oy, oz] = vo(), y1 = Math.min(vnum('vy1'), vnum('vy2')), y2 = Math.max(vnum('vy1'), vnum('vy2')), depth = d.box.z2 - d.box.z1 + 1, cut = Math.round(depth * vnum('vcut') / 100);
+  const groups = d.names.map(() => []);
+  for (const b of d.blocks) {
+    const n = d.names[b[3]];
+    if (b[1] < y1 || b[1] > y2 || b[2] - d.box.z1 >= cut || ($('vrock').checked && ROCK.test(n)) || ($('vfluid').checked && FLUIDS.test(n))) continue;
+    groups[b[3]].push(b);
+  }
+  const m4 = new THREE.Matrix4(), col = new THREE.Color();
+  groups.forEach((list, i) => {
+    if (!list.length) return;
+    const n = d.names[i], fluid = FLUIDS.test(n), glass = /glass/.test(n);
+    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: fluid || glass, opacity: fluid ? 0.45 : glass ? 0.35 : 1, depthWrite: !fluid && !glass });
+    const mesh = new THREE.InstancedMesh(G.geo, mat, list.length), base = new THREE.Color(blockColor(n));
+    list.forEach((b, k) => {
+      mesh.setMatrixAt(k, m4.makeTranslation(b[0] - ox + 0.5, b[1] - oy + 0.5, b[2] - oz + 0.5));
+      mesh.setColorAt(k, col.copy(base).multiplyScalar(0.92 + ((b[0] * 7 + b[1] * 13 + b[2] * 29) % 9) * 0.02)); // a little noise so equal neighbours stay apart
+    });
+    mesh.userData.list = list; mesh.renderOrder = fluid || glass ? 2 : 1;
+    G.group.add(mesh); VT.meshes.push(mesh);
+  });
+  VT.dirty = true;
+}
+const vLines = (b, color, always) => { // wireframe of a block box (x2/z2/y2 inclusive), in scene coordinates
+  const [ox, oy, oz] = vo(), w = b.x2 - b.x1 + 1, h = b.y2 - b.y1 + 1, l = b.z2 - b.z1 + 1;
+  const m = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, l)), new THREE.LineBasicMaterial({ color, depthTest: !always }));
+  m.position.set(b.x1 - ox + w / 2, b.y1 - oy + h / 2, b.z1 - oz + l / 2); m.renderOrder = 3; return m;
+};
+function vOutlines() {
+  G.outl.clear();
+  const d = VT.data; if (!d) return;
+  for (const a of Object.values(VT.areas?.areas || {})) G.outl.add(vLines(a, 0x22d3ee, false));
+  for (const [x1, z1, x2, z2] of last.protectedAreas || []) G.outl.add(vLines({ x1, z1, x2, z2, y1: d.box.y1, y2: d.box.y2 }, 0xef4444, false));
+  G.outl.visible = $('vplan').checked; VT.dirty = true;
+}
+function drawSel(b) {
+  if (!G || !VT.data) return;
+  if (VT.sel) { G.scene.remove(VT.sel); VT.sel = null; }
+  if (b) { G.scene.add((VT.sel = vLines(b, 0xfacc15, true))); }
+  VT.dirty = true;
+}
+function vPick(e) {
+  if (!G || !VT.meshes.length) return;
+  const r = G.canvas.getBoundingClientRect();
+  G.ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), G.camera);
+  const hit = G.ray.intersectObjects(VT.meshes)[0];
+  if (!hit) return;
+  const b = hit.object.userData.list[hit.instanceId];
+  if (!VT.A || VT.B) { VT.A = b; VT.B = null; vSetSel(b, b); } else { VT.B = b; vSetSel(VT.A, b); }
+}
+function vSetSel(a, b) { ['x', 'y', 'z'].forEach((c, i) => { $('s' + c + '1').value = a[i]; $('s' + c + '2').value = b[i]; }); vPreview(); }
+async function vLoad() {
+  const b = vbox('l'); if (!b) { $('vinfo').textContent = 'fill in the six numbers'; return; }
+  $('vinfo').textContent = 'loading...'; $('vgo').disabled = true;
+  try {
+    await vThree(); vInit();
+    const r = await fetch('/api/voxels?' + new URLSearchParams(Object.fromEntries(VKEYS.map((k) => [k, b[k]]))), { cache: 'no-store' }), j = await r.json();
+    if (!r.ok) throw new Error(j.error);
+    VT.data = j; VT.A = VT.B = null;
+    $('vy1').min = $('vy2').min = j.box.y1; $('vy1').max = $('vy2').max = j.box.y2; $('vy1').value = j.box.y1; $('vy2').value = j.box.y2;
+    const [ox, oy, oz] = vo(); [VC.tx, VC.ty, VC.tz] = [(j.box.x1 + j.box.x2 + 1) / 2 - ox, (j.box.y1 + j.box.y2 + 1) / 2 - oy, (j.box.z1 + j.box.z2 + 1) / 2 - oz];
+    VC.r = Math.max(j.box.x2 - j.box.x1, j.box.z2 - j.box.z1, j.box.y2 - j.box.y1) * 1.4 + 10;
+    vCam(); vRebuild(); vOutlines(); vBots(); vPreview();
+    $('vinfo').textContent = `${j.blocks.length} visible blocks from ${j.bot}` + (j.unloaded ? `; ${j.unloaded} cells not loaded (empty)` : '');
+  } catch (e) { $('vinfo').textContent = e.message; $('vinfo').className = 'err'; return; } finally { $('vgo').disabled = false; }
+  $('vinfo').className = 'mut';
+}
+vmk('vload', 'l', null); vmk('vsel', 's', vPreview);
+for (const [k, v] of Object.entries(VJOBS)) $('vtype').append(new Option(v, k));
+$('vtype').onchange = vExtra; $('vgo').onclick = vLoad; $('vbot').onfocus = vBots;
+$('vclear').onclick = () => { VT.A = VT.B = null; for (const k of VKEYS) $('s' + k).value = ''; vPreview(); };
+for (const id of ['vy1', 'vy2', 'vcut', 'vrock', 'vfluid']) $(id).oninput = vRebuild;
+$('vplan').onchange = () => { if (G) { G.outl.visible = $('vplan').checked; VT.dirty = true; } };
+$('varea').onchange = () => { const a = VT.areas?.areas[$('varea').value]; if (a) VKEYS.forEach((k) => { $('l' + k).value = a[k]; }); };
+$('vbar').addEventListener('toggle', async () => {
+  if (!$('vbar').open || VT.areas) return;
+  try {
+    VT.areas = await (await fetch('/api/areas', { cache: 'no-store' })).json();
+    $('varea').replaceChildren(...Object.keys(VT.areas.areas).map((k) => new Option(k, k)), new Option('custom', ''));
+    $('varea').onchange(); vBots(); vPreview();
+  } catch (e) { $('vinfo').textContent = 'areas: ' + e.message; }
+});
 </script>
 </body>
 </html>
