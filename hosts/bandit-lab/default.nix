@@ -15,6 +15,7 @@
     ./services/vaultwarden
     ./services/minecraft
     ./services/mcbots
+    ./services/ntfy
     ./services/ollama
     ./services/llamacpp
     ./services/mcagents

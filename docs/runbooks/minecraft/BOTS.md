@@ -35,6 +35,48 @@ Disable: set `bandit-lab.mcbots.enable = false;` (or remove the
 `./services/mcbots` import in `hosts/bandit-lab/default.nix`) and deploy.
 Immediate stop without a deploy: `sudo systemctl stop docker-mcbots mcbots-https`.
 
+## Phone notifications
+
+After an operator deploys this configuration, ntfy listens only on host loopback
+(`127.0.0.1:2586`); `ntfy-https` serves it on the tailnet at
+`https://bandit-lab.tail7facc9.ts.net:8447` (never Funnel). No public firewall
+port is needed. Keep Tailscale connected on the phone.
+
+1. Install the **ntfy** app from the phone's app store and allow notifications.
+2. On bandit-lab, read the generated read-only login with this exact command:
+   `sudo cat /var/lib/mcbots/ntfy/read-credentials`.
+   Keep the password private; do not paste it into chat or commit it.
+3. In ntfy's account/server settings, add the server URL above and the `phone`
+   username/password. Add a subscription for topic **mcbots**, selecting that
+   server (full topic URL: `https://bandit-lab.tail7facc9.ts.net:8447/mcbots`).
+4. On Android, allow background operation/battery exemption for ntfy so its
+   connection to the private server remains active. On iOS, the configured
+   `upstream-base-url` sends wake-up poll requests through ntfy.sh/APNS; message
+   content remains on this server and the phone fetches it over Tailscale.
+   See [ntfy's iOS setup](https://docs.ntfy.sh/config/#ios-instant-notifications).
+
+Messages cover deaths (with the reported cause), repeated failures/resting,
+supply chest capacity and missing food/torches/pickaxes, completed shaft/room/
+level/treefarm jobs, and worker processes absent for more than five minutes.
+Minecraft reconnects alone do not trigger worker-loss notifications. Deaths
+and worker loss use high priority; other messages use normal priority. The hub
+limits each kind per bot to once in ten minutes and all publish attempts to
+30 per rolling hour. Limits reset when the hub restarts; sends are best-effort.
+
+Mute: use the subscription's **Mute notifications** setting in the ntfy app
+(or disable that subscription's notifications in the phone settings). To turn
+publishing off in a manual/laptop run, leave `NTFY_URL` or `NTFY_TOKEN` unset.
+The lab hub gets its URL/topic declaratively and its token from a root-only
+Docker environment file; workers never receive it.
+
+`ntfy-seed` generates credentials once, atomically, in `/var/lib/mcbots/ntfy`
+(mode 0700, files 0600), following the existing agent-token pattern. The native
+ntfy service provisions two non-admin users into its StateDirectory auth DB,
+`/var/lib/ntfy-sh/user.db`: `mcbots` can only write topic `mcbots`, and `phone`
+can only read it. All other topic access, including anonymous access, is denied.
+No credentials are stored in Git or SOPS. If Serve was not ready on first
+activation, the operator can run `sudo systemctl restart ntfy-https` afterward.
+
 ## Dashboard
 
 Open `https://bandit-lab.tail7facc9.ts.net:8445` from a tailnet device.

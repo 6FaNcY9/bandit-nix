@@ -10,6 +10,7 @@ const {WorldModel, startBlueMap} = require('./world');
 const {WINDOW_MS} = require('./debug');
 const {Hub, RemoteRunner, createWorkerServer} = require('./hub');
 const {EventLog} = require('./events');
+const {NtfyNotifier} = require('./notify');
 const {Keeper} = require('./keeper');
 const {botView} = require('./view');
 const {scanAround} = require('./scan');
@@ -24,7 +25,8 @@ const {Slayer} = require('./slayer');
 const cfg = loadConfig();
 const log = (who, msg) => console.log(`${new Date().toISOString()} [${who}] ${msg}`);
 const world = new WorldModel();
-const events = new EventLog();
+const notifier = new NtfyNotifier();
+const events = new EventLog({onAdd: (e) => notifier.event(e)});
 // What the LLM agents said and chose (POST /api/decision from the agent service), kept apart so
 // they never push job events out of the 200-entry event log.
 const decisions = new EventLog();
@@ -452,6 +454,8 @@ const alerts = new Alerts({events});
 const alertTick = setInterval(() => {
   try {
     alerts.checkChest(world.stock);
+    notifier.chest(world.stock, world.stock && chestWarnings(world.stock.items, world.stock.free));
+    notifier.tick();
     const r = [...runners.values()].find((x) => !(x instanceof RemoteRunner) && x.online && x.bot?.entity && /overworld/.test(x.bot.game?.dimension || ''));
     if (!r || !supplyChest) return;
     const {Vec3} = require('vec3');

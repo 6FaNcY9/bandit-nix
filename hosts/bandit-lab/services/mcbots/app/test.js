@@ -61,6 +61,86 @@ assert.throws(() => VALIDATE.mine({block: 'Iron Ore'}));
 assert.deepStrictEqual(loadConfig({BOT_NAMES: 'bot1', PROTECTED_AREAS: '10,5,-10,-5; 1,2,3,4'}).protectedAreas, [[-10, -5, 10, 5], [1, 2, 3, 4]]);
 assert.throws(() => loadConfig({BOT_NAMES: 'bot1', PROTECTED_AREAS: '1,2,3'}));
 
+// notify.js: real event shapes, safe formatting, delayed loss, and rolling rate limits.
+{
+  const {NtfyNotifier, TEN_MIN, HOUR, WORKER_LOSS} = require('./notify');
+  const {EventLog} = require('./events');
+  let now = 0;
+  const sent = [];
+  const options = {url: 'https://ntfy.example/', topic: 'mcbots', token: 'fixture', now: () => now,
+    fetcher: (url, opts) => { sent.push({url, ...opts}); return Promise.resolve({body: {cancel: () => Promise.resolve()}}); }};
+  const n = new NtfyNotifier(options);
+  const event = (bot, kind, text) => n.event({bot, kind, text});
+  event('bot1', 'death', 'died at 1 64 2: fell from a high place');
+  assert.deepStrictEqual([sent[0].url, sent[0].headers.Authorization, sent[0].headers.Priority, sent[0].body],
+    ['https://ntfy.example/mcbots', 'Bearer fixture', 'high', 'bot1 died at 1 64 2: fell from a high place']);
+  event('bot1', 'death', 'died: lava');
+  now = TEN_MIN - 1;
+  event('bot1', 'death', 'died: lava');
+  assert.strictEqual(sent.length, 1);
+  now = TEN_MIN;
+  event('bot1', 'death', 'died');
+  assert.strictEqual(sent.length, 2, 'ten-minute boundary allows another message');
+  assert.match(sent[1].body, /cause unknown/);
+  event('bot2', 'fail', 'failed: mine stone 10 - no path at 1 2 3');
+  event('bot2', 'job', 'started: mine stone 5');
+  event('bot2', 'info', 'trying again');
+  event('bot2', 'fail', 'failed: mine stone 5 - no path at 4 5 6');
+  assert.match(sent.at(-1).body, /stuck after repeated failures/);
+  event('bot3', 'fail', 'failed: mine - a');
+  event('bot3', 'done', 'finished: goto 1 2 3 (2 s)');
+  event('bot3', 'fail', 'failed: mine - a');
+  assert.strictEqual(n.failures.get('bot3').count, 1, 'successful jobs clear the failure streak');
+  event('bot4', 'fail', 'gave up: shaft 1 2 (died 4 times)');
+  assert.match(sent.at(-1).body, /bot4 is stuck/);
+  for (const type of ['shaft', 'excavate', 'level', 'treefarm']) {
+    event(`bot-${type}`, 'done', `finished: ${type} 1 2 3 (20 s)`);
+    assert.strictEqual(sent.at(-1).body, `bot-${type} finished ${type} 1 2 3`);
+    assert.strictEqual(sent.at(-1).headers.Priority, 'default');
+  }
+  const beforeChest = sent.length;
+  n.chest({}, ['full (0 free slots)', 'no food', 'no torches or coal', 'no pickaxes', 'no saplings']);
+  assert.strictEqual(sent.length - beforeChest, 4, 'each requested chest warning has its own kind');
+  n.chest({}, ['full (1 free slots)', 'no food', 'no torches or coal', 'no pickaxes']);
+  assert.strictEqual(sent.length - beforeChest, 4, 'full slot-count changes do not trigger new alerts');
+  event('bot5', 'disconnect', 'left the game');
+  event('bot6', 'hub', 'worker laptop disconnected');
+  now += WORKER_LOSS - 1;
+  event('bot6', 'hub', 'worker laptop disconnected');
+  n.tick();
+  const beforeLoss = sent.length;
+  now += 1;
+  n.tick();
+  assert.strictEqual(sent.length, beforeLoss + 1, 'duplicate disconnect preserves the first loss time');
+  assert.deepStrictEqual([sent.at(-1).body, sent.at(-1).headers.Priority], ['bot6 worker disconnected for over 5 minutes', 'high']);
+  event('bot7', 'hub', 'worker laptop disconnected');
+  event('bot7', 'hub', 'worker laptop connected');
+  now += WORKER_LOSS;
+  n.tick();
+  assert.strictEqual(sent.length, beforeLoss + 1, 'reconnect cancels pending worker loss; game disconnect is ignored');
+  const cap = new NtfyNotifier(options);
+  const beforeCap = sent.length;
+  for (let i = 0; i < 31; i++) cap.send(`bot${i}`, 'death', 'x');
+  assert.strictEqual(sent.length - beforeCap, 30);
+  now += HOUR - 1;
+  assert.strictEqual(cap.send('extra', 'death', 'x'), false);
+  now += 1;
+  assert.strictEqual(cap.send('extra', 'death', 'x'), true, 'rolling hour expires at its boundary');
+  n.send('format', 'info', 'hello\n\u0000\rworld ' + 'x'.repeat(400));
+  assert.ok(sent.at(-1).body.startsWith('hello world '));
+  assert.strictEqual(sent.at(-1).body.length, 300);
+  for (const overrides of [{url: ''}, {token: ''}, {url: 'http://ntfy.example'}]) {
+    assert.strictEqual(new NtfyNotifier({...options, ...overrides}).send('bot1', 'x', 'off'), false);
+  }
+  assert.doesNotThrow(() => new NtfyNotifier({...options, fetcher: () => { throw Error('offline'); }}).send('bot1', 'x', 'x'));
+  assert.doesNotThrow(() => new NtfyNotifier({...options, fetcher: () => Promise.reject(Error('offline'))}).send('bot1', 'x', 'x'));
+  // Both local and sanitized remote events share this callback; notification errors cannot stop logging.
+  const hooked = new EventLog({onAdd: (e) => n.event(e)});
+  hooked.add('bot99', 'death', 'died: drowned');
+  assert.match(sent.at(-1).body, /bot99 died: drowned/);
+  assert.strictEqual(new EventLog({onAdd: () => { throw Error('offline'); }}).add('bot1', 'death', 'died').id, 1);
+}
+
 // ---- build job: blueprint validation, order, next block (fake world) ----
 {
   const B = require('./build');

@@ -22,6 +22,8 @@
 in
   assert lib.assertMsg (lib.elem "--security-opt=no-new-privileges" lab.virtualisation.oci-containers.containers.aiia-redis.extraOptions) "aiia-redis must retain no-new-privileges";
   assert lib.assertMsg (lib.elem "--security-opt=no-new-privileges" lab.virtualisation.oci-containers.containers.aiia-ghost.extraOptions) "aiia-ghost must retain no-new-privileges";
+  assert lib.assertMsg (lab.services.ntfy-sh.settings.listen-http == "127.0.0.1:2586" && lab.services.ntfy-sh.settings.auth-default-access == "deny-all") "ntfy must listen on loopback with deny-all access";
+  assert lib.assertMsg (lab.services.ntfy-sh.settings.auth-access == ["mcbots:mcbots:wo" "phone:mcbots:ro"]) "ntfy must grant only topic-scoped publisher and reader access";
   assert lib.assertMsg (!lab.services.openssh.openFirewall) "sshd must not open the firewall globally; port 22 is allowed on tailscale0 only";
   assert lib.assertMsg (lib.all (p: lib.elem p fw.interfaces.tailscale0.allowedTCPPorts) [22 139 445]) "tailscale0 must allow SSH (22) and SMB (139, 445)";
   assert lib.assertMsg (noPorts fw) "the global firewall lists must be empty: open ports per interface, on tailscale0 only";
@@ -31,7 +33,7 @@ in
   assert lib.assertMsg (fw.enable && !lab.networking.nftables.enable && fw.trustedInterfaces == ["lo"]) "the iptables firewall must be on, with no trusted interface besides lo (a trusted tailscale0 would open every port)";
   assert lib.assertMsg (sambaAllow == "127.0.0.1 ::1 100.64.0.0/10 fd7a:115c:a1e0::/48" && lab.services.samba.settings.global."hosts deny" == "ALL") "Samba 'hosts allow' must be exactly loopback plus the tailnet and 'hosts deny' must be ALL";
   assert lib.assertMsg (lab.services.resolved.settings.Resolve.LLMNR == "false" && lab.services.resolved.settings.Resolve.MulticastDNS == "false") "LLMNR and mDNS must stay off on the server";
-    pkgs.runCommand "lab-surface" {nativeBuildInputs = [pkgs.gnugrep pkgs.yq-go];} ''
+    pkgs.runCommand "lab-surface" {nativeBuildInputs = [pkgs.gnugrep pkgs.yq-go pkgs.python3 pkgs.bash pkgs.gnused lab.services.ntfy-sh.package];} ''
       yq -e '.services.grafana.security_opt | any_c(. == "no-new-privileges:true")' ${../hosts/bandit-lab/services/monitoring/compose.yml} >/dev/null
       yq -e '.services."blackbox-exporter".security_opt | any_c(. == "no-new-privileges:true")' ${../hosts/bandit-lab/services/monitoring/compose.yml} >/dev/null
       yq -e '.services."node-exporter".security_opt | any_c(. == "no-new-privileges:true")' ${../hosts/bandit-lab/services/monitoring/compose.yml} >/dev/null
@@ -42,5 +44,6 @@ in
           exit 1
         fi
       done
+      python3 ${./ntfy-test.py} ${pkgs.writeText "ntfy-seed.sh" lab.systemd.services.ntfy-seed.script} ${lab.environment.etc."ntfy/server.yml".source}
       touch "$out"
     ''
