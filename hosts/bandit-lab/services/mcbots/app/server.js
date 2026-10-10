@@ -207,7 +207,7 @@ const server = http.createServer(async (req, res) => {
     try {
       const {bot, text, backend = 'lab'} = await readJson(req);
       if (!cfg.agentBots.includes(bot) || typeof text !== 'string') throw new Error('bot must be an agent bot, text a string');
-      if (backend !== 'lab' && backend !== 'slayer') throw new Error('backend must be lab or slayer');
+      if (!agentauth.validBackend(backend)) throw new Error('backend must be a name of at most 128 characters');
       decisions.add(bot, 'info', text.replace(/\s+/g, ' ').trim()).backend = backend;
       return json(200, {ok: true});
     } catch (e) {

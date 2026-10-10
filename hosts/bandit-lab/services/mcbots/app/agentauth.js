@@ -38,4 +38,6 @@ function agentJobRefusal({bots, type, args}, {agentBots, supplyChest}) {
   return null;
 }
 
-module.exports = {agentStatus, hash, bearerMatches, agentEndpoint, agentJobRefusal, AGENT_JOBS};
+const validBackend = (backend) => typeof backend === 'string' && /^[a-zA-Z0-9_.:\[\]-]{1,128}$/.test(backend);
+
+module.exports = {validBackend, agentStatus, hash, bearerMatches, agentEndpoint, agentJobRefusal, AGENT_JOBS};

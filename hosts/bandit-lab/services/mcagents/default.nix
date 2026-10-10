@@ -10,6 +10,9 @@
   ...
 }: let
   cfg = config.bandit-lab.mcagents;
+  inferenceHosts = lib.filterAttrs (_: host: host.enable) config.bandit-lab.inferenceHosts;
+  inferenceNames = lib.optional (inferenceHosts ? slayer) "slayer" ++ lib.filter (name: name != "slayer") (builtins.attrNames inferenceHosts);
+  inferenceUrls = map (name: "http://127.0.0.1:${toString inferenceHosts.${name}.localPort}") inferenceNames;
   # Two Andy-4.2 brains, each with its own scripted crew (lead mode, H4):
   # bot1 keeps the base chest stocked, bot2 builds; they talk with
   # !startConversation. One lead with four independent goals drifted, and one
@@ -46,8 +49,12 @@ in {
           # rotates it at 50 MB. The journal gets one line per reply.
           LOG = "/var/lib/mcagents/decisions.jsonl";
         }
-        // lib.optionalAttrs config.bandit-lab.slayerTunnel.enable {
-          ANDY_URL_2 = "http://127.0.0.1:18081";
+        // lib.optionalAttrs (inferenceNames != []) {
+          ANDY_URLS = lib.concatStringsSep "," inferenceUrls;
+          ANDY_BACKEND_NAMES = lib.concatStringsSep "," inferenceNames;
+        }
+        // lib.optionalAttrs (inferenceHosts ? slayer) {
+          ANDY_URL_2 = "http://127.0.0.1:${toString inferenceHosts.slayer.localPort}";
         };
       serviceConfig = {
         ExecStart = "${pkgs.nodejs}/bin/node ${../../../../tools/mcagents}/agent.js";

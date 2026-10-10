@@ -201,3 +201,21 @@ Do not invent boundaries from agent names. Supply reviewed boundaries and more
 sessions to obtain meaningful held-out evaluation. Human goal-consistency review,
 frozen-replay quarantine and tokenizer/context-size checks remain the operator's
 steps in [AGENT-TRAINING.md](../../docs/runbooks/minecraft/AGENT-TRAINING.md).
+
+## Gaming PC backends
+
+`ANDY_URLS=http://127.0.0.1:18081,http://127.0.0.1:18082` supplies an ordered
+comma list of llama.cpp URLs. `ANDY_URL_2` remains the single-PC alias when
+`ANDY_URLS` is unset. Optional `ANDY_BACKEND_NAMES=slayer,second` supplies names
+for decision records; otherwise the alias is `slayer` and other URLs use their
+host and port. The lab module supplies both lists from enabled inference hosts,
+placing Slayer first and other names in alphabetical order.
+
+Healthy backends with fewer in-flight calls win, then the configured order;
+lab Ollama is last on ties. Health probes run concurrently and are cached for
+10 seconds. Request errors try the remaining backends, including a backend
+whose cached health probe failed. Decisions retain the numeric backend in the
+JSONL log for compatibility and add `backendName`; dashboard decisions carry
+the name.
+
+See `tools/slayer/README.md` for the Windows installer and lab host configuration.

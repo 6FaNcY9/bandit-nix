@@ -525,19 +525,23 @@ const modelBackends = new Map();
 function backends() {
   const ollamaUrl = process.env.OLLAMA_URL || OLLAMA_URL;
   const andyUrl2 = process.env.ANDY_URL_2 || ANDY_URL_2;
-  const urls = [[ollamaUrl, 'ollama'], ...(andyUrl2 ? [[andyUrl2, 'openai']] : [])];
-  return urls.map(([url, api], index) => {
+  const offloads = [...new Set((process.env.ANDY_URLS || andyUrl2).split(',').map((url) => url.trim()).filter(Boolean))];
+  const names = (process.env.ANDY_BACKEND_NAMES || '').split(',').map((name) => name.trim());
+  const urls = [[ollamaUrl, 'ollama', 'lab'], ...offloads.map((url, i) => [url, 'openai', names[i] || (url === andyUrl2 ? 'slayer' : new URL(url).host)])];
+  return urls.map(([url, api, name], index) => {
     const key = `${api}:${url}`;
     if (!modelBackends.has(key)) modelBackends.set(key, {url, api, inflight: 0, health: null});
     const backend = modelBackends.get(key);
     backend.number = index + 1;
+    backend.name = name;
+    backend.order = api === 'ollama' ? offloads.length : index - 1;
     return backend;
   });
 }
 
 async function healthy(backend) {
   // Ollama returns 404 for /health; /api/tags is its cheap 1-second health probe.
-  if (backend.number === 1 && !(process.env.ANDY_URL_2 || ANDY_URL_2)) return true;
+  if (backend.number === 1 && backends().length === 1) return true;
   const now = Date.now();
   if (backend.health && now - backend.health.at < 10000) {
     backend.health.ok = await backend.health.promise;
@@ -552,12 +556,13 @@ async function healthy(backend) {
 
 async function callModel(messages) {
   const all = backends(), available = [], unavailable = [];
-  for (const backend of all) (await healthy(backend) ? available : unavailable).push(backend);
-  // Backend 2 wins ties because it is the offloaded, faster GPU.
-  available.sort((a, b) => a.inflight - b.inflight || b.number - a.number);
+  const health = await Promise.all(all.map(healthy));
+  all.forEach((backend, i) => (health[i] ? available : unavailable).push(backend));
+  // Prefer the first gaming PC on ties; lab is last.
+  available.sort((a, b) => a.inflight - b.inflight || a.order - b.order);
   // A cached health failure must not prevent request-level fallback after the
   // other backend errors or times out.
-  unavailable.sort((a, b) => a.inflight - b.inflight || b.number - a.number);
+  unavailable.sort((a, b) => a.inflight - b.inflight || a.order - b.order);
   const candidates = available.concat(unavailable);
   const failures = [];
   for (const backend of candidates) {
@@ -565,7 +570,7 @@ async function callModel(messages) {
     try {
       const data = await http('POST', `${backend.url.replace(/\/$/, '')}${backend.api === 'ollama' ? '/api/chat' : '/v1/chat/completions'}`,
         modelRequest(backend.api, {model: MODEL, messages, sampling: SAMPLING, think: THINK}));
-      return {text: modelReply(backend.api, data), backend: backend.number};
+      return {text: modelReply(backend.api, data), backend: backend.number, backendName: backend.name};
     } catch (error) { failures.push(error); }
     finally { backend.inflight--; }
   }
@@ -593,7 +598,7 @@ async function think(agent, state, bot) {
   const out = await callModel(messages);
   agent.modelMs += Date.now() - t0;
   const text = String(out.text || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-  if (LOG) logCall(JSON.stringify({t: new Date().toISOString(), agent: agent.name, ms: Date.now() - t0, messages, backend: out.backend, reply: text}) + '\n');
+  if (LOG) logCall(JSON.stringify({t: new Date().toISOString(), agent: agent.name, ms: Date.now() - t0, messages, backend: out.backend, backendName: out.backendName, reply: text}) + '\n');
   return out;
 }
 
@@ -616,7 +621,7 @@ async function decide(agent, agents, getState, budget) {
     agent.push('assistant', reply || '\t');
     const cmd = parseCommand(reply);
     console.log(`[${agent.name}] ${reply.slice(0, 160).replace(/\n/g, ' ')}`);
-    if (TOKEN) http('POST', `${API}/api/decision`, {bot: agent.name, text: reply.slice(0, 200) || '(nothing to do)', backend: answer.backend}).catch(() => {}); // the dashboard's "Agent decisions"
+    if (TOKEN) http('POST', `${API}/api/decision`, {bot: agent.name, text: reply.slice(0, 200) || '(nothing to do)', backend: answer.backendName}).catch(() => {}); // the dashboard's "Agent decisions"
     if (!cmd) return; // just talk
     const same = reply.match(COMMAND_RE)[0];
     // A foreman may gather too (the owner, 2026-10-10: bot1 stood around); idle workers still wake it every 30 s.

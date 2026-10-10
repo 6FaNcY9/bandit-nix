@@ -546,6 +546,28 @@ assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}
         process.env.ANDY_URL_2 = 'http://slayer-recovered.test';
         assert.equal((await callModel([])).backend, 2, 'both errors recover on next call');
       }
+      { // Three PCs: stable order, concurrent load, failures and named decisions.
+        process.env.ANDY_URLS = 'http://pc1.test, http://pc2.test,http://pc3.test,http://pc1.test';
+        process.env.ANDY_BACKEND_NAMES = 'slayer,second,third';
+        process.env.OLLAMA_URL = 'http://lab-multihost.test';
+        const failed = new Set();
+        globalThis.fetch = async (url) => {
+          const u = String(url), host = new URL(u).hostname;
+          if (failed.has(host)) return {ok: false, status: 503, json: async () => ({})};
+          if (u.endsWith('/health') || u.endsWith('/api/tags')) return {ok: true};
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          return {ok: true, json: async () => (u.endsWith('/api/chat')
+            ? {message: {content: host}} : {choices: [{message: {content: host}}]})};
+        };
+        assert.equal((await callModel([])).backendName, 'slayer');
+        const spread = await Promise.all([callModel([]), callModel([]), callModel([]), callModel([])]);
+        assert.deepStrictEqual(spread.map((r) => r.backendName), ['slayer', 'second', 'third', 'lab']);
+        failed.add('pc1.test');
+        assert.equal((await callModel([])).backendName, 'second', 'request failure tries next PC');
+        failed.add('pc2.test'); failed.add('pc3.test');
+        assert.equal((await callModel([])).backendName, 'lab', 'all PCs failing falls back to lab');
+        delete process.env.ANDY_URLS; delete process.env.ANDY_BACKEND_NAMES;
+      }
       if (oldAndy === undefined) delete process.env.ANDY_URL_2; else process.env.ANDY_URL_2 = oldAndy;
       if (oldOllama === undefined) delete process.env.OLLAMA_URL; else process.env.OLLAMA_URL = oldOllama;
     }

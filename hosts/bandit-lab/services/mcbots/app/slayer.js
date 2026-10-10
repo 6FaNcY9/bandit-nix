@@ -53,7 +53,7 @@ function parseStatus(text) {
 // ponytail: the decisions log keeps 200 entries, so a busy day counts only the newest 200.
 function countBackends(items, now = Date.now()) {
   const n = {lab: 0, slayer: 0};
-  for (const e of items) if (now - e.t < DAY) n[e.backend === 'slayer' ? 'slayer' : 'lab']++;
+  for (const e of items) if (now - e.t < DAY && (e.backend === undefined || Object.hasOwn(n, e.backend))) n[e.backend || 'lab']++;
   return n;
 }
 

@@ -21,6 +21,8 @@ for (const bad of ['bot', 'bot100', 'Bot1', 'steve', 'bot1,x']) assert.throws(()
   assert.strictEqual(A.bearerMatches(`Bearer ${tok}`, h), true);
   for (const bad of [`Bearer ${'b'.repeat(40)}`, `bearer ${tok}`, tok, `Bearer ${tok} x`, '']) assert.strictEqual(A.bearerMatches(bad, h), false, bad);
   assert.strictEqual(A.bearerMatches(`Bearer ${tok}`, null), false, 'no agent token configured: every bearer fails');
+  for (const backend of ['lab', 'slayer', 'second-pc', '127.0.0.1:18082', '[::1]:8081']) assert.ok(A.validBackend(backend));
+  for (const backend of [1, null, '', 'x'.repeat(129), 'pc\n', '<script>']) assert.ok(!A.validBackend(backend));
   assert.ok(A.agentEndpoint('GET', '/api/state') && A.agentEndpoint('GET', '/api/events') && A.agentEndpoint('POST', '/api/job') && A.agentEndpoint('POST', '/api/decision'));
   assert.ok(A.agentEndpoint('POST', '/api/agentstatus') && !A.agentEndpoint('GET', '/api/agents') && !A.agentEndpoint('POST', '/api/agents'), 'only the agent posts its status');
   const sp = {agentBots: ['bot1', 'bot2']};
@@ -3147,6 +3149,7 @@ require('./crafting');
     decs.add('bot1', 'info', 'lab').backend = 'lab';
     decs.add('bot1', 'info', 'pc').backend = 'slayer';
     decs.add('bot1', 'info', 'pc2').backend = 'slayer';
+    decs.add('bot1', 'info', 'other PC').backend = 'second';
     assert.deepStrictEqual(countBackends(decs.items, now), {lab: 2, slayer: 2});
     // offline: the tunnel refuses, no PC; the answer keeps its shape
     const mk = (fetchFn, run) => new Slayer({url: 'http://127.0.0.1:18081', cmd: ['ssh', 'slayer', 'type', 'x'], decisions: decs, fetchFn, run, now: () => now});
