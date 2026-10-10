@@ -4336,22 +4336,23 @@ require('./crafting');
   assert.deepStrictEqual(AD.parse.bans('Bob was banned by Console: x\nAl was banned by Console: y'), ['Bob', 'Al']);
   const t = AD.parse.tps('§6TPS from last 1m, 5m, 15m: §a19.98, §a20.0, §a*20.0\nCurrent Memory Usage: 3,459/8,192 mb (Max: 8192 mb)');
   assert.deepStrictEqual([t.tps, t.memUsedMb, t.memTotalMb], [[19.98, 20, 20], 3459, 8192]);
-  // the client against a fake server (auth, a reply split in two packets, the probe)
+  // the client against a fake server that behaves like Minecraft's: it drops a client whose read holds
+  // more than one packet, and splits a long reply into 4096-byte pieces
+  const piece = 'x'.repeat(4096);
   const srv = net.createServer((s) => {
-    let buf = Buffer.alloc(0);
     s.on('data', (d) => {
-      const r = AD.decode(Buffer.concat([buf, d])); buf = r.rest;
-      for (const q of r.packets) {
-        if (q.type === 3) s.write(AD.encode(q.body === 'pw' ? q.id : -1, 2, ''));
-        else if (q.type === 2) { s.write(AD.encode(q.id, 0, 'ec')); s.write(AD.encode(q.id, 0, `ho ${q.body}`)); }
-        else s.write(AD.encode(q.id, 0, 'Unknown request 64'));
-      }
+      const r = AD.decode(d);
+      if (r.packets.length !== 1 || r.rest.length) return s.destroy();
+      const q = r.packets[0];
+      if (q.type === 3) s.write(AD.encode(q.body === 'pw' ? q.id : -1, 2, ''));
+      else if (q.type === 2) { s.write(AD.encode(q.id, 0, piece)); s.write(AD.encode(q.id, 0, `echo ${q.body}`)); }
+      else s.write(AD.encode(q.id, 0, 'Unknown request 64'));
     });
   });
   srv.listen(0, '127.0.0.1', async () => {
     const o = {host: '127.0.0.1', port: srv.address().port, password: 'pw'};
     const call = AD.queued(o);
-    assert.deepStrictEqual(await call(['a', 'b']), ['echo a', 'echo b']);
+    assert.deepStrictEqual(await call(['a', 'b']), [`${piece}echo a`, `${piece}echo b`]);
     await assert.rejects(AD.rcon({...o, password: 'bad'}, ['a']), /refused the password/);
     // the Admin actions: events log, restart countdown and cancel
     const sent = [], timers = [];

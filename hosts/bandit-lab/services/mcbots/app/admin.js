@@ -5,7 +5,8 @@
 const net = require('node:net');
 
 const NAME_RE = /^[A-Za-z0-9_]{1,16}$/;
-const T_AUTH = 3, T_CMD = 2, T_PROBE = 100;
+const T_AUTH = 3, T_CMD = 2;
+const PIECE = 4096; // the server splits a reply into pieces of this many bytes
 
 // [len][id][type][body]\0\0 - len counts everything after itself.
 function encode(id, type, body) {
@@ -32,8 +33,9 @@ function decode(buf) {
   return {packets, rest: buf.subarray(o)};
 }
 
-// One connection: authenticate, run the commands in order, return the replies. A reply can span several
-// packets, so each command is followed by an unknown-type probe: the server answers it after the reply.
+// One connection: authenticate, run the commands in order, return the replies. Minecraft reads one packet
+// per socket read and drops the client when a read holds two (live 2026-10-10: "RCON closed the
+// connection"), so each command goes alone. A long reply comes in 4096-byte pieces; a shorter piece ends it.
 function rcon({host, port, password, timeoutMs = 5000}, commands) {
   return new Promise((resolve, reject) => {
     const sock = net.connect({host, port});
@@ -50,7 +52,7 @@ function rcon({host, port, password, timeoutMs = 5000}, commands) {
       if (step >= commands.length) return done();
       text = '';
       id += 2;
-      sock.write(Buffer.concat([encode(id, T_CMD, commands[step]), encode(id + 1, T_PROBE, '')]));
+      sock.write(encode(id, T_CMD, commands[step]));
     };
     sock.on('connect', () => sock.write(encode(1, T_AUTH, password)));
     sock.on('error', (e) => done(new Error(`RCON: ${e.code || e.message}`)));
@@ -63,10 +65,12 @@ function rcon({host, port, password, timeoutMs = 5000}, commands) {
           if (step === -1) {
             if (p.id === -1) return done(new Error('RCON refused the password'));
             if (p.type === T_CMD) next();
-          } else if (p.id === id) text += p.body;
-          else if (p.id === id + 1) {
-            replies.push(text);
-            next();
+          } else if (p.id === id) {
+            text += p.body;
+            if (Buffer.byteLength(p.body) < PIECE) {
+              replies.push(text);
+              next();
+            }
           }
         }
       } catch (e) {
