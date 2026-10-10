@@ -35,7 +35,7 @@ in {
       serviceConfig = {
         ExecStart = "${pkgs.nodejs}/bin/node ${../../../../tools/mcagents}/agent.js";
         LoadCredential = "dashboard-token:/var/lib/mcbots/agent-token";
-        Restart = "always"; # it exits when the dashboard is down at start
+        Restart = "always";
         RestartSec = "30s";
         DynamicUser = true;
         NoNewPrivileges = true;
@@ -50,7 +50,11 @@ in {
         LockPersonality = true;
         RestrictNamespaces = true;
         RestrictAddressFamilies = ["AF_INET" "AF_INET6"];
-        IPAddressAllow = "localhost";
+        # Docker publishes the loopback ports by DNAT (no userland proxy), so the
+        # packets leave with the container addresses: mcbots on 10.250.77.0/29
+        # or the minecraft network, Ollama on the default bridge (172.16/12).
+        # Internet, LAN and tailnet stay closed.
+        IPAddressAllow = ["localhost" "10.250.77.0/29" "172.16.0.0/12"];
         IPAddressDeny = "any";
         SystemCallFilter = "@system-service";
         MemoryMax = "512M";

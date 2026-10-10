@@ -423,7 +423,17 @@ async function main() {
   }
   const workers = new Set((process.env.WORKERS || '').split(',').map((w) => w.trim()).filter((w) => /^\w+$/.test(w) && !agents.has(w)));
   for (const a of agents.values()) a.workers = workers;
-  let lastEventId = (await http('GET', `${API}/api/events?since=0`)).lastId || 0;
+  // The dashboard may still be starting (the lab restarts mcbots and this service together): wait.
+  let lastEventId;
+  for (;;) {
+    try {
+      lastEventId = (await http('GET', `${API}/api/events?since=0`)).lastId || 0;
+      break;
+    } catch (e) {
+      console.error(`dashboard not reachable yet (${e.cause?.code || e.message}); retrying in 10 s`);
+      await new Promise((r) => setTimeout(r, 10000));
+    }
+  }
   const getState = () => http('GET', `${API}/api/state`);
   const busy = new Set();
   const budget = new Budget(MAX_DECISIONS_PER_MIN);
