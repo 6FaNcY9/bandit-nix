@@ -322,6 +322,7 @@ async function decide(agent, agents, getState, budget) {
     agent.push('assistant', reply || '\t');
     const cmd = parseCommand(reply);
     console.log(`[${agent.name}] ${reply.slice(0, 160).replace(/\n/g, ' ')}`);
+    if (TOKEN) http('POST', `${API}/api/decision`, {bot: agent.name, text: reply.slice(0, 200) || '(nothing to do)'}).catch(() => {}); // the dashboard's "Agent decisions"
     if (!cmd) return; // just talk
     const ctx = {pos: bot.pos, supplyChest: state.supplyChest, places: {...Object.fromEntries((state.places || []).map((p) => [p.name, p])), ...agent.places}};
     const t = translate(cmd, ctx);

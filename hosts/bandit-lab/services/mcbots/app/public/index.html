@@ -37,8 +37,8 @@
   .composer { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:6px; }
   .cols { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:12px; align-items:start; }
   .cols > .bar { margin:0; }
-  #events { max-height:360px; overflow:auto; font:12px/1.5 ui-monospace,monospace; }
-  #events div { border-bottom:1px solid var(--bd); padding:1px 0; word-break:break-word; }
+  #events, #decisions { max-height:360px; overflow:auto; font:12px/1.5 ui-monospace,monospace; }
+  #events div, #decisions div { border-bottom:1px solid var(--bd); padding:1px 0; word-break:break-word; }
   .k-fail,.k-death { color:var(--bad); } .k-done,.k-deposit,.k-respawn,.k-connect { color:var(--ok); } .k-claim { color:var(--warn); } .k-stop,.k-disconnect,.k-hub { color:var(--mut); }
   .dbg { border-top:1px solid var(--bd); padding:8px 0; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start; }
   .dbg .t { flex:1; min-width:260px; font:12px/1.5 ui-monospace,monospace; word-break:break-word; }
@@ -76,6 +76,7 @@
 <div id="bots" class="grid"></div>
 <div class="bar" id="allbar"><h3>Give the same job to several bots</h3><div id="allcomposer"></div></div>
 <div class="bar"><h3>Events <select id="evbot"></select></h3><div id="events"></div></div>
+<div class="bar"><h3>Agent decisions <span class="mut">(what the LLM said and chose, newest first)</span></h3><div id="decisions"></div></div>
 <details id="dbg" class="bar"><summary>Advanced: debug (last 30 s per bot: server pull-backs, job step, last error)</summary>
   <div class="row"><button id="dbgcopy" type="button">Copy /api/debug JSON</button><span id="dbgmsg" class="mut"></span></div>
   <div id="dbgbots"></div>
@@ -293,7 +294,7 @@ function renderEvents() {
     return d;
   }));
 }
-$('evbot').onchange = renderEvents;
+$('evbot').onchange = () => { renderEvents(); renderDecisions(); };
 async function pollEvents() {
   try {
     const r = await fetch('/api/events?since=' + evLast, { cache: 'no-store' }), j = await r.json();
@@ -556,6 +557,22 @@ $('dbgcopy').onclick = async () => {
 };
 connect();
 pollEvents();
+// ---- agent decisions: GET /api/decisions?since=<id>, filtered like the events ----
+let decs = [], decLast = 0;
+function renderDecisions() {
+  const only = $('evbot').value;
+  $('decisions').replaceChildren(...decs.filter((e) => !only || only === 'all bots' || e.bot === only).slice().reverse().map((e) => el('div', '', `${new Date(e.t).toLocaleTimeString()} ${e.bot} ${e.text}`)));
+}
+async function pollDecisions() {
+  try {
+    const j = await (await fetch('/api/decisions?since=' + decLast, { cache: 'no-store' })).json();
+    if (j.lastId < decLast) { decs = []; decLast = 0; return; } // server restarted
+    if (j.events.length) { decs = decs.concat(j.events).slice(-200); renderDecisions(); }
+    decLast = j.lastId;
+  } catch {}
+}
+setInterval(pollDecisions, 4000);
+pollDecisions();
 </script>
 </body>
 </html>

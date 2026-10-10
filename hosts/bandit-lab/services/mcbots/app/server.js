@@ -20,6 +20,9 @@ const cfg = loadConfig();
 const log = (who, msg) => console.log(`${new Date().toISOString()} [${who}] ${msg}`);
 const world = new WorldModel();
 const events = new EventLog();
+// What the LLM agents said and chose (POST /api/decision from the agent service), kept apart so
+// they never push job events out of the 200-entry event log.
+const decisions = new EventLog();
 const stopBlueMap = startBlueMap(world, cfg.bluemapUrl, log);
 const runners = new Map(cfg.names.map((n) => [n, new BotRunner(n, {host: cfg.mcHost, port: cfg.mcPort, log, world, protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest, loginSeed: cfg.loginSeed, hostLabel: cfg.hostLabel, onEvent: (b, k, t) => events.add(b, k, t)})]));
 const settings = new Settings(process.env.STATE_DIR || '');
@@ -185,6 +188,18 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/') return send(200, 'text/html; charset=utf-8', page);
   if (req.method === 'GET' && url.pathname === '/api/state') return json(200, state());
   if (req.method === 'GET' && url.pathname === '/api/events') return json(200, {lastId: events.lastId, events: events.since(Number(url.searchParams.get('since')) || 0)});
+  if (req.method === 'GET' && url.pathname === '/api/decisions') return json(200, {lastId: decisions.lastId, events: decisions.since(Number(url.searchParams.get('since')) || 0)});
+  if (req.method === 'POST' && url.pathname === '/api/decision') {
+    if (!agent) return json(403, {error: 'forbidden'}); // only the agent service reports decisions
+    try {
+      const {bot, text} = await readJson(req);
+      if (!cfg.agentBots.includes(bot) || typeof text !== 'string') throw new Error('bot must be an agent bot, text a string');
+      decisions.add(bot, 'info', text.replace(/\s+/g, ' ').trim());
+      return json(200, {ok: true});
+    } catch (e) {
+      return json(400, {error: e.message});
+    }
+  }
   if (req.method === 'GET' && url.pathname === '/api/world') return json(200, world.snapshot());
   const vm = req.method === 'GET' && /^\/api\/view\/(\w{1,16})\.png$/.exec(url.pathname);
   if (vm) {

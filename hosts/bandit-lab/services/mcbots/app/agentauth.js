@@ -15,7 +15,7 @@ function bearerMatches(header, tokenHash) {
   return !!(m && tokenHash && crypto.timingSafeEqual(hash(m[1]), tokenHash));
 }
 
-const agentEndpoint = (method, path) => (method === 'GET' && (path === '/api/state' || path === '/api/events')) || (method === 'POST' && path === '/api/job');
+const agentEndpoint = (method, path) => (method === 'GET' && (path === '/api/state' || path === '/api/events')) || (method === 'POST' && (path === '/api/job' || path === '/api/decision'));
 
 // Why the agent may not send this job, or null.
 function agentJobRefusal({bots, type, args}, {agentBots, supplyChest}) {
