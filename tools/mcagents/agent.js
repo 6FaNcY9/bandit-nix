@@ -410,7 +410,9 @@ async function decide(agent, agents, getState, budget) {
     }
     agent.lastCommand = same;
     try {
-      await sendJob(agent.name, ...t.job);
+      // A routine never ends, so a job queued behind it would never start (bot2 had two stone shifts
+      // queued, live 2026-10-10): the new order replaces it, as !assign does for workers.
+      await sendJob(agent.name, ...t.job, isRoutine(bot.job) || (bot.queue || []).some((label) => ROUTINES.has(String(label).split(" ")[0])));
     } catch (e) {
       agent.push('system', `Code output: Action failed. ${e.message}`);
       continue;

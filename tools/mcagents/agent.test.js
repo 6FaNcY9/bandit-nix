@@ -133,6 +133,17 @@ console.log('ok');
       assert.ok(!jobs.some((u) => u.endsWith('/api/job')), 'no job for a twice-failed command');
       assert.match(agent.history.at(-1).content, /Refused: .*no pickaxe/);
     }
+    { // a new order replaces a running routine instead of queueing behind it forever
+      const agent = new Agent('bot1', 'mine coal', null);
+      let sent;
+      globalThis.fetch = async (url, opt = {}) => ({ok: true, status: 200, json: async () => (url.endsWith('/api/chat') ? {message: {content: '!collectBlocks("coal_ore", 5)'}} : (url.endsWith('/api/job') && (sent = JSON.parse(opt.body)), {}))});
+      const state = {bots: [{name: 'bot1', online: true, pos: [0, 64, 0], inventory: [], queue: [], job: {type: 'shift', label: 'shift stone'}}], places: []};
+      await decide(agent, new Map([['bot1', agent]]), async () => state, {take: () => true});
+      assert.strictEqual(sent.replace, true);
+      state.bots[0].job = {type: 'mine', label: 'mine'};
+      await decide(agent, new Map([['bot1', agent]]), async () => state, {take: () => true});
+      assert.strictEqual(sent.replace, false, 'a plain job finishes first');
+    }
     let takes = 0; // queries only: every model call after the first takes budget
     const {calls} = await run({replies: ['!stats'], budget: {take: () => (takes++, true)}});
     assert.strictEqual(calls.model, 5);
