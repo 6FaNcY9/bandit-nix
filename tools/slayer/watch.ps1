@@ -85,6 +85,8 @@ function Busy {
     if ($null -ne $GpuPercent) { $usage = $GpuPercent }
     else {
         $llama = @(Get-CimInstance Win32_Process -Filter "Name='llama-server.exe'" | ForEach-Object ProcessId)
+        # Light games (Minecraft, Isaac, browsers) may use the GPU next to Andy: their load does not count either.
+        $llama += @(Get-CimInstance Win32_Process | Where-Object { $light -contains $_.Name } | ForEach-Object ProcessId)
         $counters = @(Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine)
         if (-not $counters.Count) { throw 'No GPU engine counters; refusing inference' }
         $engines = @{}
