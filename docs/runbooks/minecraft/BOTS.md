@@ -305,8 +305,23 @@ Each bot runs its queue one job at a time. Chat is never read as a command.
 | `withdraw` | item, count, x y z | takes up to `count` of an item (or `logs`) out of the chest/barrel |
 | `stock` | x y z | opens the chest and reports its contents (changes nothing); for the supply chest the numbers go to the keeper |
 | `place` | item, x y z | puts one block (chest, crafting table, ...) on top of the solid block under x y z; crafts it first when missing; refused inside protected areas |
+| `hunt` | animal, count, x y z, optional radius | kills `count` (1-32) sheep, cows, pigs or chickens within `radius` (4-64, default 24) of x y z and picks the drops up; with shears a sheep is sheared instead (the sheep lives, one that gives no wool does not count); never named or baby animals, never in protected areas; a sword sweep that kills a neighbour counts too; fails with how many it got when none are left in range |
+| `bed` | x y z, facing | a bed with its foot at x y z and its head towards `facing` (north/south/east/west): both cells must be free with solid ground below and outside protected areas; crafts it from 3 wool of one colour and 3 planks when the bot holds none (`need 3 wool of one colour` otherwise: hunt first); a bed already lying there is not placed again; then clicks it (at night sleeps in it for a moment), which sets the spawn point; the event `spawn set at x y z` says so |
 | `say` | text | up to 200 characters; text starting with `/` is rejected |
 | `stop` | | clears the queue and stops walking/digging |
+
+### Beds and respawn (R5)
+
+`hunt` and `bed` (`app/hunt.js`; the agents reach them as `!huntAnimals(type, num)` and
+`!placeBed(x, y, z, facing)`, and `hunt`/`bed` are in the agent token policy). Minecraft sets the spawn point
+when a player right-clicks a bed, by day too ("Respawn point set"); sleeping is not needed. Seen live on the
+stage (bot12, 2026-10-10): 3 summoned sheep killed in 11 s, 4 in 21 s including the drops; a bed crafted from
+white wool and birch planks (the bot placed its own crafting table), placed and clicked in 12 s with
+`spawn set at`; after `kill bot12` the bot came back next to the bed, not at the world spawn. Traps found:
+a sword sweeps and kills the sheep beside the target (counted now); the bed's head block reaches the client a
+moment after the foot, so the job waits for both before it judges the facing; with wool but no planks `ensureItem` picked the "any bed + dye" recipe and failed (`need 1 more bone`), so `bed` makes the 3 planks first and says `need 3 more planks and have no logs (chop first)`; a bed whose head cell hangs over a
+pit is refused beforehand (`nothing solid under ...`). The night path (`bot.sleep`, refused near monsters or when
+too far) falls back to the plain click; it was not run live (the stage was in daylight).
 
 ## Long runs
 

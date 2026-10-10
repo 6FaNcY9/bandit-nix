@@ -14,6 +14,7 @@ const {cacheGetBlock} = require('./pathcache');
 const {BotTrace, SAMPLE_MS, round} = require('./debug');
 const {normDim, deadlineMs, insideAreas, shouldFight} = require('./world');
 const buildJob = require('./build');
+const huntJob = require('./hunt');
 
 const NAME_RE = /^bot[0-9]{1,2}$/; // BotGate's pattern (Velocity plugin)
 const LOGIN_GAP_MS = 4500; // Velocity rate-limits logins
@@ -26,9 +27,9 @@ const NATURAL = /^(stone|deepslate|dirt|grass_block|coarse_dirt|rooted_dirt|podz
 const KEEP_RE = /^(stick|[a-z_]+_planks|coal|charcoal|torch|crafting_table|furnace)$/;
 const FOOD_BELOW = 14; // fetch food from the supply chest when hungry and carrying none
 const FOOD_RETRY_MS = 600000; // an empty chest is not worth a walk every minute
-const RESUMABLE = new Set(['mine', 'chop', 'shift', 'goto', 'deposit', 'follow', 'come', 'guard', 'build', 'excavate']);
+const RESUMABLE = new Set(['mine', 'chop', 'shift', 'goto', 'deposit', 'follow', 'come', 'guard', 'build', 'excavate', 'hunt', 'bed']);
 // Long jobs that survive a restart (see keptOf, saved by server.js, reported by workers).
-const KEEP = new Set(['shift', 'guard', 'mine', 'chop', 'build', 'excavate']); // a resumed build/excavate skips what is done
+const KEEP = new Set(['shift', 'guard', 'mine', 'chop', 'build', 'excavate', 'hunt']); // a resumed build/excavate skips what is done
 const MAX_INTERRUPTIONS = 3; // deaths/disconnects of one job before it is given up
 const TOOL_RE = /_(pickaxe|axe|shovel|hoe|sword)$|^(shears|bow|crossbow|fishing_rod|shield|trident|flint_and_steel|elytra)$/;
 
@@ -113,6 +114,16 @@ const VALIDATE = {
     const plan = buildJob.validate(a);
     const o = plan.origin;
     return {origin: o, blocks: plan.blocks.map((b) => ({x: b.x - o.x, y: b.y - o.y, z: b.z - o.z, block: b.block})), remove: plan.remove};
+  },
+  // Kill (shear) `count` animals of one kind within `radius` of x,y,z and pick the drops up.
+  hunt: (a) => {
+    if (!Object.hasOwn(huntJob.ANIMALS, a.animal)) throw new Error(`animal must be one of ${Object.keys(huntJob.ANIMALS).join(', ')}`);
+    return {animal: a.animal, count: num(a.count ?? 1, 1, 32, 'count'), ...xyz(a), radius: num(a.radius ?? 24, 4, 64, 'radius')};
+  },
+  // A bed with its foot at x,y,z and its head one block towards `facing`; sets the spawn point.
+  bed: (a) => {
+    if (!Object.hasOwn(huntJob.FACING, a.facing)) throw new Error('facing must be north, south, east or west');
+    return {...xyz(a), facing: a.facing};
   },
   say: (a) => {
     const text = String(a.text ?? '').trim();
@@ -1271,7 +1282,11 @@ const buildContext = (r) => {
 };
 const build = buildJob.makeBuild({goNear, guard, sleep, goals, digAt, withdraw: buildWithdraw, runJob: buildRunJob, gatherContext: buildContext});
 
+const {hunt, bed} = huntJob.makeHunt({goNear, guard, sleep, goals, waitCalm, crafting, at});
+
 const JOBS = {
+  hunt,
+  bed,
   goto: (r, job) => goNear(r, job, job.args.x, job.args.y, job.args.z, 1),
 
   // Walks to the player (live entity when tracked, else the BlueMap position)

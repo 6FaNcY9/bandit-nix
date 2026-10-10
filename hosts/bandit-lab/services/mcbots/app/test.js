@@ -1901,5 +1901,140 @@ require('./crafting');
     assert.strictEqual(await x.go(), true);
     assert.strictEqual(x.digs(), 1);
   }
+  { // hunt and bed (R5): validation, the pure picks, then both jobs against a fake bot
+    const {JOBS, VALIDATE, Cancelled} = require('./bots');
+    const H = require('./hunt');
+    const {Vec3} = require('vec3');
+    const A = require('./agentauth');
+    assert.deepStrictEqual(VALIDATE.hunt({animal: 'sheep', count: 3, x: 1, y: 64, z: 2}), {animal: 'sheep', count: 3, x: 1, y: 64, z: 2, radius: 24});
+    for (const bad of [{animal: 'wolf'}, {animal: 'constructor'}, {animal: 'cow', count: 99}, {animal: 'cow', radius: 2}]) assert.throws(() => VALIDATE.hunt({x: 1, y: 64, z: 2, ...bad}), bad.animal);
+    assert.deepStrictEqual(VALIDATE.bed({x: 1, y: 60, z: 2, facing: 'north'}), {x: 1, y: 60, z: 2, facing: 'north'});
+    for (const facing of ['up', 'constructor', undefined]) assert.throws(() => VALIDATE.bed({x: 1, y: 60, z: 2, facing}), /facing/);
+    const pol = {agentBots: ['bot1'], supplyChest: {x: 1, y: 2, z: 3}};
+    for (const type of ['hunt', 'bed']) assert.strictEqual(A.agentJobRefusal({bots: ['bot1'], type, args: {}}, pol), null, type);
+
+    // huntTarget: nearest sheep in range; never named, baby, handled, protected, other kinds or players
+    const sheep = (id, x, z, extra = {}) => ({id, name: 'sheep', position: new Vec3(x, 64, z), ...extra});
+    const base = {animal: 'sheep', x: 0, y: 64, z: 0, radius: 20, areas: [[100, 100, 120, 120]], done: new Set([9]), me: new Vec3(0, 64, 0)};
+    const list = [sheep(1, 10, 0), sheep(2, 3, 0, {metadata: [0, 0, {text: 'Dolly'}]}), sheep(3, 4, 0, {metadata: Object.assign([], {16: true})}), sheep(4, 5, 0, {isValid: false}),
+      sheep(5, 6, 0, {type: 'player'}), sheep(9, 2, 0), sheep(6, 105, 105), sheep(7, 30, 0), {id: 8, name: 'cow', position: new Vec3(1, 64, 0)}, sheep(10, 0, 0, {metadata: [0, 0, null]})];
+    assert.strictEqual(H.huntTarget(list, base).id, 10, 'a null name is no name');
+    assert.strictEqual(H.huntTarget(list.filter((e) => e.id !== 10), base).id, 1, 'nearest unnamed adult sheep in range');
+    assert.strictEqual(H.huntTarget(list, {...base, x: 105, z: 105, radius: 30}), undefined, 'protected (and the rest out of range)');
+    assert.strictEqual(H.huntTarget(list, {...base, areas: [[5, -5, 12, 5]], me: new Vec3(10, 64, 0)})?.id, 10, 'the one at 10,0 is inside the area, so the next nearest');
+
+    // bed cells and checks
+    const world = (cells) => (x, y, z) => cells[`${x},${y},${z}`] || null;
+    const ground = {name: 'stone', boundingBox: 'block'}, air = {name: 'air', boundingBox: 'empty'};
+    const flat = (extra = {}) => world({'5,59,5': ground, '5,59,6': ground, '5,60,5': air, '5,60,6': air, ...extra});
+    const cells = H.bedCells({x: 5, y: 60, z: 5}, 'south');
+    assert.deepStrictEqual([cells.head, cells.back(2)], [{x: 5, y: 60, z: 6}, {x: 5, y: 60, z: 3}]);
+    assert.deepStrictEqual(H.bedCheck(flat(), cells, []), {});
+    assert.match(H.bedCheck(flat(), cells, [[0, 0, 9, 9]]).problem, /protected/);
+    assert.match(H.bedCheck(flat({'5,60,6': {name: 'chest', boundingBox: 'block'}}), cells, []).problem, /chest is in the way/);
+    assert.match(H.bedCheck(flat({'5,59,6': air}), cells, []).problem, /nothing solid under 5 60 6/);
+    assert.match(H.bedCheck(flat({'5,60,5': {name: 'water', boundingBox: 'empty'}}), cells, []).problem, /water is in the way/);
+    assert.match(H.bedCheck(flat({'5,60,6': null}), cells, []).problem, /not loaded/);
+    assert.deepStrictEqual(H.bedCheck(flat({'5,60,5': {name: 'red_bed'}, '5,60,6': {name: 'red_bed'}}), cells, []), {present: true});
+    assert.ok(H.standable(flat({'5,59,3': ground, '5,60,3': air, '5,61,3': air}), cells.back(2)) === true && !H.standable(flat(), cells.back(2)));
+    const woolOf = (o) => Object.entries(o).map(([k, count]) => ({name: `${k}_wool`, count}));
+    assert.strictEqual(H.woolColour(woolOf({white: 2, red: 1})), null, 'no colour has 3');
+    assert.strictEqual(H.woolColour([...woolOf({white: 2}), {name: 'white_wool', count: 1}, ...woolOf({black: 5})]), 'black', 'the most of a colour with 3+');
+    assert.strictEqual(H.woolColour([{name: 'oak_planks', count: 9}]), null);
+
+    // a fake bot: sheep that die after 3 hits (or give wool when sheared), drops, a bed that appears when placed
+    const fake = ({sheeps = [], inv = [], blocks = {}, areas = [], night = false, onAttack = () => {}} = {}) => {
+      const entities = {}, hits = {}, events = [], infos = [], listeners = new Set();
+      for (const s of sheeps) entities[s.id] = {name: 'sheep', height: 1.3, ...s};
+      const cell = new Map(Object.entries(blocks));
+      const it = (name, count = 1) => ({name, count, type: name.length});
+      const bot = {
+        entities, inventory: {items: () => inv}, heldItem: null, game: {dimension: 'overworld'}, time: {timeOfDay: night ? 14000 : 1000}, isSleeping: false,
+        entity: {position: new Vec3(0, 64, 0), onGround: true},
+        pathfinder: {goto: async () => {}, setGoal() {}, stop() {}, isMoving: () => true},
+        equip: async (item) => { bot.heldItem = item; events.push(`equip ${item.name}`); },
+        lookAt: async () => {},
+        attack: (e) => { hits[e.id] = (hits[e.id] || 0) + 1; onAttack(e, hits[e.id]); if (hits[e.id] >= 3) { delete entities[e.id]; entities[100 + e.id] = {name: 'item', position: e.position}; inv.push(it('mutton')); } },
+        activateEntity: async (e) => { events.push(`shear ${e.id}`); inv.push(it('white_wool', 2)); },
+        blockAt: (p) => { const c = cell.get(`${p.x},${p.y},${p.z}`); return c ? {position: p, ...c} : null; },
+        placeBlock: async (ref, face) => { events.push(`place ${ref.position.x},${ref.position.y + 1},${ref.position.z}`); cell.set(`${ref.position.x},${ref.position.y + 1},${ref.position.z}`, {name: 'red_bed'}); cell.set(`${ref.position.x},${ref.position.y + 1},${ref.position.z + 1}`, {name: 'red_bed'}); },
+        activateBlock: async (b) => { events.push(`click ${b.name}`); for (const l of listeners) l('Respawn point set'); },
+        sleep: async () => { events.push('sleep'); bot.isSleeping = true; for (const l of listeners) l('Respawn point set'); },
+        wake: async () => { events.push('wake'); bot.isSleeping = false; },
+        on: (n, f) => n === 'messagestr' && listeners.add(f), off: (n, f) => listeners.delete(f),
+      };
+      return {bot, events, infos, hits, entities, cell, it, r: {bot, world: {hostilesNear: () => []}, combat: {busy: false, epoch: 0}, emit: (k, t) => infos.push(t), protectedAreas: areas}};
+    };
+    const hunt = (extra = {}) => ({t: {}, cancelled: false, type: 'hunt', args: {animal: 'sheep', count: 2, x: 0, y: 64, z: 0, radius: 20}, ...extra});
+
+    // kills the 2 nearest sheep with the sword, leaves the third and the named one alone
+    let f = fake({sheeps: [{id: 1, position: new Vec3(4, 64, 0)}, {id: 2, position: new Vec3(6, 64, 1)}, {id: 3, position: new Vec3(8, 64, 0)}, {id: 4, position: new Vec3(2, 64, 0), metadata: [0, 0, {text: 'Bob'}]}], inv: [{name: 'iron_sword', count: 1, type: 99}]});
+    f.bot.entity.position = new Vec3(3.5, 64, 0); // everything within 3 blocks: no walking needed
+    let job = hunt();
+    await JOBS.hunt(f.r, job);
+    assert.strictEqual(job.collected, 2);
+    assert.ok(f.entities[3] && f.entities[4] && !f.entities[1] && !f.entities[2], 'two killed, the far and the named one alive');
+    assert.ok(f.events.includes('equip iron_sword') && f.infos.some((m) => /hunted 2 sheep/.test(m)), f.infos.join('|'));
+    // a sword sweep kills the sheep next to the target: it counts, and nothing is attacked twice
+    f = fake({sheeps: [{id: 1, position: new Vec3(2, 64, 0)}, {id: 2, position: new Vec3(2, 64, 1)}, {id: 3, position: new Vec3(3, 64, 0)}], onAttack: (e, n) => { if (e.id === 1 && n === 3) delete f.entities[2]; }});
+    job = hunt({args: {animal: 'sheep', count: 3, x: 0, y: 64, z: 0, radius: 20}});
+    await JOBS.hunt(f.r, job);
+    assert.ok(job.collected === 3 && f.hits[2] === undefined && f.hits[3] === 3, `sweep: ${job.collected}`);
+    // not enough sheep: the job fails with the count it reached; protected sheep do not count
+    f = fake({sheeps: [{id: 1, position: new Vec3(2, 64, 0)}, {id: 2, position: new Vec3(3, 64, 0)}], areas: [[2.5, -5, 10, 5]]});
+    await assert.rejects(JOBS.hunt(f.r, hunt()), /1 of 2 sheep hunted: no more within 20 blocks/);
+    assert.strictEqual(f.hits[2], undefined, 'nothing attacked inside the protected area');
+    // shears: the sheep lives and the wool counts; a sheep that gives no wool is left and does not count
+    f = fake({sheeps: [{id: 1, position: new Vec3(2, 64, 0)}, {id: 2, position: new Vec3(2, 64, 1)}], inv: [{name: 'shears', count: 1, type: 7}]});
+    job = hunt({args: {animal: 'sheep', count: 2, x: 0, y: 64, z: 0, radius: 20}});
+    await JOBS.hunt(f.r, job);
+    assert.deepStrictEqual(f.events.filter((e) => e.startsWith('shear')), ['shear 1', 'shear 2']);
+    assert.ok(f.entities[1] && f.entities[2] && !f.hits[1], 'sheared, not hit');
+    f.bot.inventory.items().length = 1; // only the shears are left: nothing more to gain from a sheared sheep
+    f.bot.activateEntity = async () => {};
+    job = hunt({args: {animal: 'sheep', count: 1, x: 0, y: 64, z: 0, radius: 20}});
+    await assert.rejects(JOBS.hunt(f.r, job), /0 of 1 sheep hunted/);
+    // a Stop in the middle of the fight ends the job
+    f = fake({sheeps: [{id: 1, position: new Vec3(2, 64, 0)}], onAttack: () => (job.cancelled = true)});
+    job = hunt();
+    await assert.rejects(JOBS.hunt(f.r, job), Cancelled);
+    assert.strictEqual(f.hits[1], 1, 'no second blow after the Stop');
+
+    // bed: protected and blocked cells are refused, a bed lying there is only clicked, a new one is placed then clicked
+    const floor = (z) => ({[`5,59,${z}`]: {name: 'stone', boundingBox: 'block'}, [`5,60,${z}`]: {name: 'air', boundingBox: 'empty'}, [`5,61,${z}`]: {name: 'air', boundingBox: 'empty'}});
+    const field = () => ({...floor(3), ...floor(4), ...floor(5), ...floor(6)});
+    const bedJob = (extra = {}) => ({t: {}, cancelled: false, type: 'bed', args: {x: 5, y: 60, z: 5, facing: 'south'}, ...extra});
+    f = fake({blocks: field(), areas: [[0, 0, 9, 9]]});
+    await assert.rejects(JOBS.bed(f.r, bedJob()), /protected/);
+    f = fake({blocks: {...field(), '5,60,6': {name: 'chest', boundingBox: 'block'}}});
+    await assert.rejects(JOBS.bed(f.r, bedJob()), /chest is in the way/);
+    f = fake({blocks: field(), inv: woolOf({white: 2, red: 1}).map((w) => ({...w, type: 1}))});
+    await assert.rejects(JOBS.bed(f.r, bedJob()), /need 3 wool of one colour/);
+    f = fake({blocks: field(), inv: [{name: 'white_wool', count: 3, type: 1}]});
+    await assert.rejects(JOBS.bed(f.r, bedJob()), /need 3 more planks and have no logs/);
+    f = fake({blocks: field(), inv: [{name: 'red_bed', count: 1, type: 5}]});
+    await JOBS.bed(f.r, bedJob());
+    assert.deepStrictEqual(f.events, ['equip red_bed', 'place 5,60,5', 'click red_bed'], 'placed on the stone under the foot, then clicked');
+    assert.ok(f.infos.some((m) => /^spawn set at 5 60 5$/.test(m)), f.infos.join('|'));
+    f = fake({blocks: {...field(), '5,60,5': {name: 'red_bed'}, '5,60,6': {name: 'red_bed'}}}); // the bed is already there: click only
+    await JOBS.bed(f.r, bedJob());
+    assert.deepStrictEqual(f.events, ['click red_bed']);
+    f = fake({blocks: {...field(), '5,60,5': {name: 'red_bed'}, '5,60,6': {name: 'red_bed'}}, night: true}); // at night it sleeps a moment and wakes
+    await JOBS.bed(f.r, bedJob());
+    assert.deepStrictEqual(f.events, ['sleep', 'wake']);
+    f = fake({blocks: {...field(), '5,60,5': {name: 'red_bed'}, '5,60,6': {name: 'red_bed'}}, night: true}); // monsters near: sleep refuses, the click is made anyway
+    f.bot.sleep = async () => { throw new Error('there are monsters nearby'); };
+    await JOBS.bed(f.r, bedJob());
+    assert.deepStrictEqual(f.events, ['click red_bed']);
+    assert.ok(f.infos.some((m) => /could not sleep \(there are monsters nearby\)/.test(m)));
+    f = fake({blocks: field(), inv: [{name: 'red_bed', count: 1, type: 5}]}); // a Stop during the equip places nothing
+    const stopped = bedJob();
+    f.bot.equip = async () => { stopped.cancelled = true; };
+    await assert.rejects(JOBS.bed(f.r, stopped), Cancelled);
+    assert.deepStrictEqual(f.events, []);
+    f = fake({blocks: field(), inv: [{name: 'red_bed', count: 1, type: 5}]}); // the server never shows the bed
+    f.bot.placeBlock = async () => {};
+    await assert.rejects(JOBS.bed(f.r, bedJob()), /did not take/);
+  }
   console.log('ok');
 })();

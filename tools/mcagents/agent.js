@@ -91,6 +91,8 @@ const DOCS = {
   placeHere: ['Place a given block in the current location. Do NOT use to build structures, only use for single blocks.', {type: ['string', 'The block type to place.']}],
   digRoom: ['Dig out a room (natural ground only, placed blocks stay) from corner x, y, z: width along x, length along z, height up. At most 9 x 9 x 5. Use it for an underground base.', {x: ['number', 'The x coordinate of the corner.'], y: ['number', 'The floor y.'], z: ['number', 'The z coordinate of the corner.'], width: ['number', 'Blocks along x, 1-9.'], length: ['number', 'Blocks along z, 1-9.'], height: ['number', 'Blocks up, 1-5.']}],
   placeBlockAt: ['Place one block (for example a chest) at x, y, z; it needs a solid block below.', {type: ['string', 'The block type to place.'], x: ['number', 'The x coordinate.'], y: ['number', 'The y coordinate.'], z: ['number', 'The z coordinate.']}],
+  huntAnimals: ['Hunt animals near where you stand and collect the drops (a sheep is sheared when you have shears). Use it for wool: a bed needs 3 wool of one colour.', {type: ['string', 'sheep, cow, pig or chicken.'], num: ['number', 'How many animals, 1-32.']}],
+  placeBed: ['Make a bed from 3 wool of one colour and 3 planks if you have none, place it with its foot at x, y, z and its head one block towards the facing, and sleep or click it so your respawn point is there. It needs 2 free blocks with solid ground below.', {x: ['number', 'The x coordinate of the foot.'], y: ['number', 'The y coordinate.'], z: ['number', 'The z coordinate of the foot.'], facing: ['string', 'north, south, east or west: where the head of the bed points.']}],
   buildBlueprint: ['Build a saved blueprint with its origin at x, y, z (one above the ground). Use this for every structure.', {name: ['string', 'The blueprint name.'], x: ['number', 'The x coordinate.'], y: ['number', 'The y coordinate.'], z: ['number', 'The z coordinate.']}],
   startConversation: ['Start a conversation with a bot. (FOR OTHER BOTS ONLY)', {player_name: ['string', 'The name of the player to send the message to.'], message: ['string', 'The message to send.']}],
   endConversation: ['End the conversation with the given bot. (FOR OTHER BOTS ONLY)', {player_name: ['string', 'The name of the player to end the conversation with.']}],
@@ -98,12 +100,12 @@ const DOCS = {
   endGoal: ['Call when you have accomplished your goal. It will stop self-prompting and the current action.', {}],
 };
 
-const ASSIGN_DOC = ['Give one of your workers (a bot that cannot think) ONE command, for example !assign("bot12", "!collectBlocks(\\"cobblestone\\", 32)"). It reports back when done. Commands a worker understands: !startShift("coal") (keeps collecting into the base chest; one of logs, cobblestone, coal, raw_iron, raw_gold), !collectBlocks("iron_ore", 32), !putInChest("coal", 20), !craftRecipe("stick", 4), !smeltItem("raw_iron", 8), !digRoom(...), !goToCoordinates(...).', {bot_name: ['string', 'The worker to command.'], command: ['string', 'The command for the worker, in quotes.']}];
+const ASSIGN_DOC = ['Give one of your workers (a bot that cannot think) ONE command, for example !assign("bot12", "!collectBlocks(\\"cobblestone\\", 32)"). It reports back when done. Commands a worker understands: !startShift("coal") (keeps collecting into the base chest; one of logs, cobblestone, coal, raw_iron, raw_gold), !collectBlocks("iron_ore", 32), !putInChest("coal", 20), !craftRecipe("stick", 4), !smeltItem("raw_iron", 8), !huntAnimals("sheep", 6), !placeBed(x, y, z, "north"), !digRoom(...), !goToCoordinates(...).', {bot_name: ['string', 'The worker to command.'], command: ['string', 'The command for the worker, in quotes.']}];
 
 const BASE_DOC = ['Get the state of the base: each worker with its job and last result, what the base chest held when last counted, and what is already built or dug.', {}];
 
 // A foreman (an agent with workers) gets few commands: the workers do the gathering, crafting and smelting.
-const FOREMAN = new Set(['assign', 'baseStatus', 'buildBlueprint', 'digRoom', 'placeBlockAt', 'viewChest', 'stats', 'inventory', 'goToCoordinates', 'stop', 'startConversation']);
+const FOREMAN = new Set(['assign', 'baseStatus', 'buildBlueprint', 'digRoom', 'huntAnimals', 'placeBed', 'placeBlockAt', 'viewChest', 'stats', 'inventory', 'goToCoordinates', 'stop', 'startConversation']);
 const GATHERING = new Set(['collectBlocks', 'collectBlock', 'startShift']);
 
 function commandDocs(blueprints = [], workers = []) {
@@ -221,6 +223,17 @@ function translate(cmd, ctx) {
       const [w, l, h] = a.slice(3, 6).map((v) => Math.round(Number(v)));
       if (![x, y, z, w, l, h].every(Number.isFinite) || w < 1 || l < 1 || h < 1 || w > 9 || l > 9 || h > 5) return {refuse: 'Use !digRoom(x, y, z, width, length, height) with width and length 1-9 and height 1-5.'};
       return {job: ['excavate', {x1: x, y1: y, z1: z, x2: x + w - 1, y2: y + h - 1, z2: z + l - 1}]};
+    }
+    case 'huntAnimals': {
+      if (!ctx.pos) return {refuse: 'Position unknown.'};
+      const animal = String(a[0] ?? '').replace(/^minecraft:/, '').toLowerCase().replace(/^(cow|pig|chicken)s$/, '$1');
+      if (!['sheep', 'cow', 'pig', 'chicken'].includes(animal)) return {refuse: 'Use !huntAnimals(type, num) with type sheep, cow, pig or chicken.'};
+      return {job: ['hunt', {animal, count: Math.min(n(a[1], 1), 32), x: ctx.pos[0], y: ctx.pos[1], z: ctx.pos[2], radius: 24}]};
+    }
+    case 'placeBed': {
+      const facing = String(a[3] ?? '').toLowerCase();
+      if (![a[0], a[1], a[2]].every((v) => Number.isFinite(Number(v))) || !['north', 'south', 'east', 'west'].includes(facing)) return {refuse: 'Use !placeBed(x, y, z, facing) with facing north, south, east or west.'};
+      return {job: ['bed', {x: Number(a[0]), y: Number(a[1]), z: Number(a[2]), facing}]};
     }
     case 'placeBlockAt':
       if (![a[1], a[2], a[3]].every((v) => Number.isFinite(Number(v)))) return {refuse: 'Use !placeBlockAt(type, x, y, z).'};

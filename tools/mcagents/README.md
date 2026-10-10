@@ -56,8 +56,13 @@ foreman is asked again at once (a shift never reports back). Live 2026-10-10 wit
 base chest with 32 cobblestone and 16 logs": it gave bot12 and bot14 a stone shift and bot13 a log
 shift within about a minute; after 13 min the shifts carried 778 + 351 cobblestone and 196 logs.
 
+Beds (R5): `!huntAnimals(type, num)` (sheep, cow, pig, chicken; the `hunt` job within 24 blocks of where
+the bot stands; sheep are sheared when it has shears) and `!placeBed(x, y, z, facing)` (the `bed` job: crafts a
+bed from 3 wool of one colour and 3 planks if it holds none, places it with the foot at x y z and the head
+towards `facing`, and clicks or sleeps in it so the spawn point is there). A foreman may assign both.
+
 A foreman sees a short command list: `!assign`, `!baseStatus`, `!buildBlueprint`, `!digRoom`,
-`!placeBlockAt`, `!viewChest`, `!stats`, `!inventory`, `!goToCoordinates`, `!stop`, `!startConversation`
+`!huntAnimals`, `!placeBed`, `!placeBlockAt`, `!viewChest`, `!stats`, `!inventory`, `!goToCoordinates`, `!stop`, `!startConversation`
 (anything else is refused with a one-line hint; workers and agents without workers keep the full set). Its
 prompt carries one `BASE:` line (the base chest as last counted, lowest first, from `/api/state`
 `world.stock`, and which builds and rooms it saw finish), each worker's last result (`STUCK` after two

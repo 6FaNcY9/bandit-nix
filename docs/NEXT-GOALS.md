@@ -57,6 +57,7 @@ at most once a day.
 | R3 | Survival (Stage 3) | Arrow side-step, no swimming in lava, retreat at night, collect drops after a death; one day of shifts without a lost kit | 2-4 | R2 |
 | R4 | Bigger builds | Blueprints larger than 5x5x3, block states (chest, furnace, bed facing; torch), reach from inside a structure or simple scaffolding, several builders on one blueprint; `base-v1.json` builds | 4-8 | B4; design reviewed by `architect` first |
 | R5 | Respawn point | Each bot clicks the base bed once (and again after the bed is replaced); deaths respawn at the base | 1 (beds from the owner) / 2 (sheep for wool) | R4 |
+| | | *Jobs `hunt` (sheep etc., shears first) and `bed` (craft, place, click, "spawn set at") and the agent commands `!huntAnimals`/`!placeBed` shipped 2026-10-10, live-tested on the stage incl. respawn at the bed. Left: the crew's beds in the lab's storage room (the foreman orders them), a night sleep run.* | |
 | R6 | Storage | Deposits go to the chest that holds that item (`storage` roles in `base-v1.json`); the dashboard answers "where is X" | 2-3 | R4 |
 | R7 | The plan | One ordered list (build base-v1 -> storage roles -> iron/gold quotas -> ...) that the hub works through, giving roles to bots and showing progress on the dashboard | 3-5 | R1, R4, R6 |
 | R8 | Soak | Several days unattended; every failure fixed or turned into a self-recovery | 1-2 weeks alongside | R7 |

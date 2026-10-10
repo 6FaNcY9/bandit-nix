@@ -196,7 +196,7 @@ function makeCrafting({goNear, guard}) {
     }
   }
 
-  return {ensureItem, smelt, count};
+  return {ensureItem, ensurePlanks, smelt, count};
 }
 
 // mineflayer's craft fakes the result slot locally and takes it right after
