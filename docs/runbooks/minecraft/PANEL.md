@@ -1,5 +1,11 @@
 # Minecraft browser administration: selection, access, daily use
 
+> **VoxelDash is retired (2026-10-10).** The owner dropped the plugin; administration is now
+> the **Server** panel in the bots dashboard (`https://<lab>:8445/`, see "Server panel" in
+> [ADMIN.md](ADMIN.md)). The jar, port 7867 and the `tailscale serve` route on 443 are gone;
+> `plugins/VoxelDash/` (including `voxeldash.db`) is left on disk untouched. BlueMap stays.
+> The sections below that mention VoxelDash are the historical selection record.
+
 Status 2026-10-10: **deployed.** The panel change has been on `main` since `40a947e`
 (2026-10-06) and `lab-update` applies `main` to the lab; BlueMap and VoxelDash are in daily use
 (the bots read BlueMap since 2026-10-08). Whether the GO steps of [MIGRATION.md](MIGRATION.md)

@@ -10,7 +10,7 @@ Evidence is from `origin/main` at `74f15c4` unless a branch is named. Lines mark
 | Laptop `bandit` | GRUB+EFI, no LUKS block in `hosts/bandit/hardware.nix`; `trusted-users = ["root"]`, MCP servers sandboxed, libvirt needs admin auth (SECURITY-PLAN). Peer backup to the lab (`nixos/backup-peer.nix`). Recent laptop work is small (Prism Launcher). | No disk encryption, boot chain undecided: **parked by the owner (2026-10-10), the laptop stays at home.** Prep work waits on branch `luks-prepare`. Pick it up again when the laptop starts travelling. |
 | Lab services | 14 service modules imported in `hosts/bandit-lab/default.nix`; Portainer and Wazuh removed from config; signed fast-forward-only auto-deploy (`lab-update`, `ci/test-lab-update.py`); 10 flake checks incl. `lab-surface`, `local-privilege`, `sops-isolation`. | Backblaze job exists but `bandit-lab.backups.enable` is off (secrets missing). **No restore has ever been tested** (SECURITY-PLAN, `backup-restore.md`). No container sets `no-new-privileges` or a read-only root (`container-hardening.md`). |
 | Security hardening | Phases 1-2, 5, D3-D7 done; attack surface cut to tailnet; sops split into per-host files. | LUKS and boot chain parked (see laptop). Legacy `secrets/secrets.yaml` + its `TEMPORARY` rule in `.sops.yaml` still present (`sops-split.md` step 4 not done). GitHub branch protection is a manual step; whether it is set is **unknown**. |
-| Minecraft server | Paper 26.2 build 130 behind Velocity + BotGate, BlueMap, VoxelDash, `minecraft-backup` timer in `services/minecraft/default.nix`, restore drill script `tools/minecraft-restore-test.sh`. | Archive restore drill passed (PANEL.md matrix row 5); a restic-to-world restore has not. A `docker-minecraft` restart kicks players and orphans Jarvis NPCs, so server changes need a quiet window. |
+| Minecraft server | Paper 26.2 build 130 behind Velocity + BotGate, BlueMap, `minecraft-backup`, server admin in the bots dashboard (RCON; VoxelDash retired 2026-10-10) timer in `services/minecraft/default.nix`, restore drill script `tools/minecraft-restore-test.sh`. | Archive restore drill passed (PANEL.md matrix row 5); a restic-to-world restore has not. A `docker-minecraft` restart kicks players and orphans Jarvis NPCs, so server changes need a quiet window. |
 | Bots (mcbots) | 55 of the 202 commits on `main` since 2026-09-10. Hub + laptop worker, block claims, dashboard with BlueMap terrain, markers (`places.js`), in-game view, settings, guard, shifts, keeper (standing orders), torches, ore bands, sealing, safe digging, jobs survive restarts, crit/sweep combat. 855-line `test.js`. | Keeper never live-tested on the lab (AUTOPILOT M4). Kits still get lost (P1). **No `build` job** (design only, BOTS.md). `bots.js` is 1292 lines and growing. `mcbots-soak` monitor exists only on `claude/autopilot`. |
 
 ## 2. Next 10 goals, ranked
@@ -113,7 +113,7 @@ Codex reviews it before H5 starts.
 
 ## 4. Contradictions and stale content
 
-Fixed 2026-10-10 (docs only): panel/BlueMap/VoxelDash shown as deployed in `PANEL.md`,
+Fixed 2026-10-10 (docs only): panel/BlueMap shown as deployed (VoxelDash since retired) in `PANEL.md`,
 `MIGRATION.md` (now historical), `ADMIN.md`, `services.md`, `backup-restore.md`; PGP removal marked
 done and laptop encryption parked in `SECURITY-PLAN.md`; retired containers marked in
 `container-hardening.md`; markers and safe digging marked done in `CONTROL-CENTRE-GOAL.md` and

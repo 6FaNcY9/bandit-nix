@@ -7,16 +7,10 @@
 }: let
   scripts = import ./scripts.nix {inherit pkgs;};
 
-  # Panel and map, pinned and owned by Nix (see stage.sh for the ownership
-  # split). VoxelDash is the browser admin panel (MIT, a Paper plugin that runs
-  # inside the server process); BlueMap (MIT) is the live map. Both are
-  # reachable only through the loopback ports published below and the tailnet
-  # HTTPS proxy.
-  voxelDashVersion = "1.2.1";
-  voxelDash = pkgs.fetchurl {
-    url = "https://github.com/gnmyt/VoxelDash/releases/download/v${voxelDashVersion}/voxeldash-spigot-${voxelDashVersion}.jar";
-    hash = "sha256-mwUYRpW1thF6zspu1rE7FvPwRYTjxNtZKYDzGC8hWLc=";
-  };
+  # Map, pinned and owned by Nix (see stage.sh for the ownership split).
+  # BlueMap (MIT) is the live map, reachable only through the loopback port
+  # published below and the tailnet HTTPS proxy. Administration is the bots
+  # dashboard's Server panel (mcbots, over RCON); VoxelDash is retired.
   blueMapVersion = "5.28";
   blueMap = pkgs.fetchurl {
     url = "https://github.com/BlueMap-Minecraft/BlueMap/releases/download/v${blueMapVersion}/bluemap-${blueMapVersion}-paper.jar";
@@ -76,7 +70,6 @@
     };
   };
 
-  panelPort = "7867";
   mapPort = "8100";
 
   # Velocity proxy in front of Paper (docs/runbooks/minecraft/PROXY.md). The jar
@@ -211,8 +204,6 @@ in {
         before = ["docker-minecraft.service"];
         requiredBy = ["docker-minecraft.service"];
         environment = {
-          STAGE_VOXELDASH = voxelDash;
-          STAGE_VOXELDASH_VERSION = voxelDashVersion;
           STAGE_BLUEMAP = blueMap;
           STAGE_BLUEMAP_VERSION = blueMapVersion;
           STAGE_BLUEMAP_CORE = ./bluemap-core.conf;
@@ -314,17 +305,17 @@ in {
         '';
       };
 
-      # Private HTTPS for the panel (443) and the map (8443): Tailscale Serve,
+      # Private HTTPS for the map (8443): Tailscale Serve,
       # tailnet only (never Funnel). Serve and "HTTPS Certificates" must be enabled
       # once in the Tailscale admin console. Until then `tailscale serve --bg`
       # blocks waiting for that, so each call is time-boxed, and the unit logs a
       # warning and still succeeds: a missing console setting must not hang or
       # fail a deployment. After enabling it, run
       #   sudo systemctl restart minecraft-panel-https
-      # (bandit-lab-health warns while the panel has no HTTPS route). Meanwhile
-      # the panel is reachable through an SSH tunnel (docs/runbooks/minecraft/PANEL.md).
+      # Meanwhile the map is reachable through an SSH tunnel (docs/runbooks/minecraft/PANEL.md).
+      # (The unit keeps its old name; VoxelDash's route on 443 is retired.)
       minecraft-panel-https = {
-        description = "Tailnet-only HTTPS for the Minecraft panel and map";
+        description = "Tailnet-only HTTPS for the Minecraft map";
         after = ["tailscaled.service" "docker-minecraft.service"];
         wants = ["tailscaled.service"];
         wantedBy = ["multi-user.target"];
@@ -340,11 +331,10 @@ in {
               echo "WARNING: could not publish 127.0.0.1:$2 on tailnet HTTPS port $1; enable Serve and HTTPS Certificates in the Tailscale admin console, then restart this unit" >&2
             fi
           }
-          serve 443 ${panelPort}
           serve 8443 ${mapPort}
         '';
         preStop = ''
-          timeout 30 tailscale serve --https=443 off || true
+          timeout 30 tailscale serve --https=443 off || true # VoxelDash's old route; also clears it on the deploy that retires it
           timeout 30 tailscale serve --https=8443 off || true
         '';
       };
@@ -399,8 +389,8 @@ in {
   # reachable only from the Velocity proxy over the `minecraft` Docker network
   # (modern forwarding, shared secret), which is what lets Paper run with
   # online-mode=false without being joinable by anyone else.
-  # The container has no docker.sock, no privileges and a single mount: the
-  # panel runs as a plugin inside it and cannot reach the host.
+  # The container has no docker.sock, no privileges and a single mount; its
+  # plugins cannot reach the host.
   virtualisation.oci-containers.containers.minecraft = {
     # java25 tag: Minecraft 26.1+ refuses to start on anything older.
     image = "itzg/minecraft-server@sha256:769a826c340586e9d483a0eb6437b8e2c3611aea6a115ff072a2fe372d43e2be"; # java25
@@ -437,10 +427,9 @@ in {
       config.sops.templates."minecraft-velocity.env".path
       "/run/minecraft-rcon/rcon.env"
     ];
-    # Panel and map listen on loopback only; tailscale serve (above) is their
+    # The map listens on loopback only; tailscale serve (above) is their
     # sole network path. The game port is published by the proxy, not here.
     ports = [
-      "127.0.0.1:${panelPort}:7867"
       "127.0.0.1:${mapPort}:8100"
     ];
     volumes = ["/srv/containers/minecraft/data:/data"];

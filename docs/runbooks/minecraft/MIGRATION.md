@@ -22,7 +22,7 @@ the live directory (step 3).
 
 Changes at activation: container recreated with `PAPER_BUILD=130` (same build as today),
 `MOTD` env removed (value stays in `server.properties`), two loopback ports, a 60 s stop
-timeout, `Restart=always`; `minecraft-stage` installs VoxelDash and BlueMap, then runs
+timeout, `Restart=always`; `minecraft-stage` installed VoxelDash (retired 2026-10-10) and BlueMap, then runs
 the one-time seed (existing plugin jars are left alone); new units
 `minecraft-backup.{service,timer}` and `minecraft-panel-https.service`; the restic job
 gains the Minecraft snapshot (still disabled until B2 secrets exist).

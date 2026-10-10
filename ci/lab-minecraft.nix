@@ -25,7 +25,7 @@
 in
   assert lib.assertMsg (c.volumes == ["/srv/containers/minecraft/data:/data"]) "the Minecraft container may mount only its data directory (no docker.sock, no unrelated paths)";
   assert lib.assertMsg (!(lib.hasInfix "privileged" extra) && !(lib.hasInfix "cap-add" extra) && !(lib.hasInfix "docker.sock" extra)) "the Minecraft container must stay unprivileged: ${extra}";
-  assert lib.assertMsg (lib.sort lib.lessThan c.ports == ["127.0.0.1:7867:7867" "127.0.0.1:8100:8100"]) "Paper publishes only the panel/map on loopback, never a game port: ${toString c.ports}";
+  assert lib.assertMsg (lib.sort lib.lessThan c.ports == ["127.0.0.1:8100:8100"]) "Paper publishes only the map on loopback, never a game port: ${toString c.ports}";
   assert lib.assertMsg (v.ports == ["${tailnet}:25565:25565"]) "the Velocity proxy publishes exactly the game port on the tailnet address: ${toString v.ports}";
   assert lib.assertMsg (c.environment.ONLINE_MODE != "FALSE" || (lab.virtualisation.oci-containers.containers ? velocity && !(lib.any (lib.hasSuffix ":25565") c.ports))) "Paper may run online-mode=false only behind Velocity and without a published game port";
   assert lib.assertMsg (lib.hasInfix "--network=minecraft" extra && lib.hasInfix "--network=minecraft" vExtra) "Paper and Velocity share the dedicated minecraft network";
@@ -36,7 +36,8 @@ in
   assert lib.assertMsg (lib.hasInfix "--memory=12g" extra && lib.hasInfix "--cpus=4" extra && c.environment.MEMORY == "8G") "resource caps (12 GiB, 4 CPUs, 8 GiB heap) are part of the contract";
   assert lib.assertMsg (c.environment.PAPER_BUILD != "" && !(c.environment ? MOTD)) "the Paper build is pinned and server.properties keys owned by the panel (MOTD) have no environment variable";
   assert lib.assertMsg (units.docker-minecraft.serviceConfig.Restart == "always") "docker-minecraft must restart after a clean stop (panel Stop = restart)";
-  assert lib.assertMsg (lib.hasInfix "tailscale serve" units.minecraft-panel-https.script && !(lib.hasInfix "funnel" units.minecraft-panel-https.script)) "panel HTTPS is Tailscale Serve (tailnet only), never Funnel";
+  assert lib.assertMsg (lib.hasInfix "tailscale serve" units.minecraft-panel-https.script && !(lib.hasInfix "funnel" units.minecraft-panel-https.script)) "map HTTPS is Tailscale Serve (tailnet only), never Funnel";
+  assert lib.assertMsg (!(lib.hasInfix "serve 443" units.minecraft-panel-https.script) && !(lib.any (lib.hasInfix "7867") c.ports)) "the retired VoxelDash panel stays unpublished (no port 7867, no serve on 443)";
   assert lib.assertMsg (lab.systemd.timers ? minecraft-backup) "the consistent Minecraft backup timer must exist";
     pkgs.runCommand "lab-minecraft" {} ''
       export PATH=${lib.makeBinPath [pkgs.coreutils pkgs.gnugrep pkgs.gnused]}:$PATH
@@ -50,15 +51,18 @@ in
 
       stage() {
         MC_DATA=$data MC_OWNER= \
-          STAGE_VOXELDASH=${dummyJar "voxeldash"} STAGE_VOXELDASH_VERSION=1.0 \
           STAGE_BLUEMAP=${dummyJar "bluemap"} STAGE_BLUEMAP_VERSION=2.0 \
+          STAGE_IMAGEFRAME=${dummyJar "imageframe"} STAGE_IMAGEFRAME_VERSION=1.0 STAGE_IMAGEFRAME_CONFIG=${dummyJar "ifcfg"} \
           STAGE_BLUEMAP_CORE=${dummyJar "core"} STAGE_PANELS=${panels} STAGE_PATCHES=${dummyJar "patch"} \
           STAGE_SEED=${seeds} STAGE_EXPANSIONS=${expansions} \
           ${scripts.stage}/bin/minecraft-stage
       }
 
+      # The retired VoxelDash jar is cleaned up, its data directory is not touched.
+      mkdir -p $data/plugins/VoxelDash && touch $data/plugins/VoxelDash-1.2.1.jar $data/plugins/VoxelDash/voxeldash.db
       stage
-      test -e $data/plugins/VoxelDash-1.0.jar && test -e $data/plugins/BlueMap-2.0.jar
+      test ! -e $data/plugins/VoxelDash-1.2.1.jar && test -e $data/plugins/VoxelDash/voxeldash.db
+      test -e $data/plugins/BlueMap-2.0.jar
       test -e $data/plugins/AxGraves-1.32.0.jar                         # seeded
       test ! -e $data/plugins/LuckPerms-Bukkit-5.5.71.jar               # panel's version wins
       test -e $data/plugins/PlaceholderAPI/expansions/PAPI-Expansion-Player_R5xV754.jar
@@ -72,11 +76,10 @@ in
       # removed, a changed setting stays changed, Nix-owned jars are replaced.
       rm $data/plugins/AxGraves-1.32.0.jar
       sed -i 's/^allow-flight=true$/allow-flight=false/' $data/server.properties
-      touch $data/plugins/VoxelDash-0.9.jar
       stage
       test ! -e $data/plugins/AxGraves-1.32.0.jar
       grep -q '^allow-flight=false$' $data/server.properties
-      test ! -e $data/plugins/VoxelDash-0.9.jar && test -e $data/plugins/VoxelDash-1.0.jar
+      test -e $data/plugins/BlueMap-2.0.jar
 
       # A BlueMap config that exists is never overwritten.
       echo custom > $data/plugins/BlueMap/core.conf

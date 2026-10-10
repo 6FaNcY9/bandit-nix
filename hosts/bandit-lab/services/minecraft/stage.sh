@@ -1,7 +1,7 @@
 # Stage the Minecraft data volume before the container starts (runs as root).
 #
 # File ownership, one writer per file:
-#   Nix   - the panel (VoxelDash) and map (BlueMap) jars, BlueMap's core.conf
+#   Nix   - the map (BlueMap) and ImageFrame jars, BlueMap's core.conf
 #           when it does not exist yet, and the CommandPanels menu YAML files.
 #           Replaced on every start. Also nix-patches/ (itzg config patch set).
 #   Panel - every other plugin jar and all runtime settings once the one-time
@@ -124,8 +124,8 @@ seed_jar() {
 mkdir -p "$plugins"
 
 # --- Nix-owned: panel and map -------------------------------------------------
+# VoxelDash is retired (2026-10-10): its jar is removed, its data directory plugins/VoxelDash is kept.
 rm -f "$plugins"/VoxelDash-*.jar "$plugins"/BlueMap-*.jar "$plugins"/voxeldash-*.jar "$plugins"/bluemap-*.jar "$plugins"/ImageFrame-*.jar
-install -m 0644 "$STAGE_VOXELDASH" "$plugins/VoxelDash-$STAGE_VOXELDASH_VERSION.jar"
 install -m 0644 "$STAGE_BLUEMAP" "$plugins/BlueMap-$STAGE_BLUEMAP_VERSION.jar"
 install -m 0644 "$STAGE_IMAGEFRAME" "$plugins/ImageFrame-$STAGE_IMAGEFRAME_VERSION.jar"
 

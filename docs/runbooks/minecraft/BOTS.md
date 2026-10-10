@@ -360,7 +360,7 @@ dashboard radar and served by `GET /api/state` (`bots`, `world`,
   joins the `minecraft` network to read it. Paper there has `velocity.enabled`
   and rejects logins without Velocity's forwarding secret (config-derived, not
   tested at runtime); the container has no mounts or capabilities. It can also
-  reach the VoxelDash panel port 7867 (password protected) there.
+  reach Paper's RCON port 25575 there (password in its own environment, used by the Server panel).
 - `come`/`follow`: when the player is not tracked, the bot walks toward the
   BlueMap position (same dimension only; otherwise the job fails) and switches
   to the live player once visible. `come` allows 90 s plus 1 s per block of
