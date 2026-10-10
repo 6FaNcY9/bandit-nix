@@ -18,7 +18,7 @@ const {botView} = require('./view');
 const {scanAround} = require('./scan');
 const {Alerts, chestWarnings} = require('./alerts');
 const {Settings} = require('./settings');
-const {Places} = require('./places');
+const {Places, use: usePlaces, protectedBoxes} = require('./places');
 const {Projects, PROJECTS} = require('./projects');
 const {Crews} = require('./crews');
 const agentauth = require('./agentauth');
@@ -28,6 +28,7 @@ const {Slayer} = require('./slayer');
 const cfg = loadConfig();
 const log = (who, msg) => console.log(`${new Date().toISOString()} [${who}] ${msg}`);
 const world = new WorldModel();
+if (process.env.STATE_DIR) world.persistChests(path.join(process.env.STATE_DIR, 'chests.json')); // the storage index
 const notifier = new NtfyNotifier();
 const events = new EventLog({onAdd: (e) => notifier.event(e)});
 // What the LLM agents said and chose (POST /api/decision from the agent service), kept apart so
@@ -60,8 +61,13 @@ const keeper = cfg.keeperQuotas.length || cfg.planEnable ? new Keeper({runners, 
 // Map markers: the first 'supply' place is the supply chest for every bot, the
 // hub's workers and the keeper; the first 'site' place is where the keeper works.
 const places = new Places(process.env.STATE_DIR || '');
+usePlaces(places); // zones: plan-config and the job validators read them from here
+places.seed(planConfig.seedZones()); // first start only
 let supplyChest = cfg.supplyChest;
+const staticAreas = cfg.protectedAreas.slice();
 function applyPlaces() {
+  // 'protected' zones join PROTECTED_AREAS in place: runners and the hub hold this very array.
+  cfg.protectedAreas.splice(0, cfg.protectedAreas.length, ...staticAreas, ...protectedBoxes(places.list));
   const s = places.first('supply'), site = places.first('site');
   supplyChest = s ? {x: s.x, y: s.y, z: s.z} : cfg.supplyChest;
   for (const r of runners.values()) if (!(r instanceof RemoteRunner)) r.supplyChest = supplyChest;
@@ -214,8 +220,8 @@ const server = http.createServer(async (req, res) => {
   }
   // The 3D map's presets (the plan's areas) and the bots an order may go to; no secrets.
   if (req.method === 'GET' && url.pathname === '/api/areas') {
-    const B = planConfig.BASE, room = B.room;
-    return json(200, {areas: {shaft: {...B.shaft, y1: -59, y2: 66}, base: {x1: B.box.x1 - 3, z1: B.box.z1 - 3, x2: B.box.x2 + 3, z2: B.box.z2 + 3, y1: room.y1 - 3, y2: 70}, room: {x1: room.x1, z1: room.z1, x2: room.x2, z2: room.z2, y1: room.y1 - 1, y2: room.y2 + 1}, treefarm: {...B.farm, y1: 55, y2: 80}, wheat: {...B.wheat, y1: 58, y2: 72}}, agentBots: cfg.agentBots, roster: cfg.planRoster || [], protectedAreas: cfg.protectedAreas});
+    const zones = places.list.filter((p) => p.box);
+    return json(200, {areas: Object.fromEntries(zones.map((p) => [p.name, p.box])), zones, agentBots: cfg.agentBots, roster: cfg.planRoster || [], protectedAreas: cfg.protectedAreas});
   }
   // Blocks of a box for the dashboard's 3D map, read from the bot nearest to its centre whose chunks are
   // loaded. Human path only (not an agent endpoint). Only bots of this process are readable: a worker's
@@ -351,11 +357,18 @@ const server = http.createServer(async (req, res) => {
       return json(400, {error: e.message});
     }
   }
+  // Where is it: the storage index (chests the bots opened), by item name part.
+  if (req.method === 'GET' && url.pathname === '/api/storage/find') {
+    const q = (url.searchParams.get('q') || '').trim().toLowerCase().replace(/ /g, '_');
+    if (!/^[a-z_]{2,48}$/.test(q)) return json(400, {error: 'q: 2-48 letters, e.g. iron'});
+    const zoneOf = (w) => places.list.find((p) => p.box && p.kind === 'storage' && w.x >= p.box.x1 && w.x <= p.box.x2 && w.y >= p.box.y1 && w.y <= p.box.y2 && w.z >= p.box.z1 && w.z <= p.box.z2)?.name || (Math.abs(w.x - planConfig.BASE.chest.x) <= 1 && w.y === planConfig.BASE.chest.y && Math.abs(w.z - planConfig.BASE.chest.z) <= 1 ? 'Base chest' : null);
+    return json(200, world.findItems(q).slice(0, 20).map((e) => ({...e, where: e.where.slice(0, 10).map((w) => ({...w, zone: zoneOf(w)}))})));
+  }
   if (req.method === 'POST' && url.pathname === '/api/places') {
     if (!sameOrigin(req) || !String(req.headers['content-type']).startsWith('application/json')) return json(403, {error: 'bad origin'});
     try {
       const {action, place, name} = await readJson(req);
-      if (action === 'set') events.add('map', 'info', `marker ${places.set(place).name} (${place.kind}) at ${place.x} ${place.y} ${place.z}`);
+      if (action === 'set') { const p = places.set(place); events.add('map', 'info', `${p.box ? 'zone' : 'marker'} ${p.name} (${p.kind}) at ${p.x} ${p.y} ${p.z}`); }
       else if (action === 'delete') { places.remove(name); events.add('map', 'info', `marker ${name} removed`); }
       else throw new Error('action must be set or delete');
       applyPlaces();

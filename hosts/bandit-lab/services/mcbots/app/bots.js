@@ -13,6 +13,7 @@ require('./physicsfix');
 const {cacheGetBlock} = require('./pathcache');
 const {BotTrace, SAMPLE_MS, round} = require('./debug');
 const {normDim, deadlineMs, insideAreas, shouldFight} = require('./world');
+const {zoneNamed, inZone} = require('./places');
 const buildJob = require('./build');
 const huntJob = require('./hunt');
 const gravesJob = require('./graves');
@@ -22,6 +23,7 @@ const homebedJob = require('./homebed');
 const levelJob = require('./level');
 const tidyJob = require('./tidy');
 const storage = require('./storage');
+const layout = require('./storage-layout');
 const planConfig = require('./plan-config');
 const gearJob = require('./gear');
 const sealJob = require('./seal');
@@ -55,6 +57,13 @@ const num = (v, lo, hi, what) => {
   const n = Number(v);
   if (!Number.isFinite(n) || n < lo || n > hi) throw new Error(`${what} must be a number in ${lo}..${hi}`);
   return Math.floor(n);
+};
+// `zone: "<name>"` stands for that zone's box (places.js), resolved when the job is enqueued; unknown = error.
+const zoned = (a) => {
+  if (a.zone === undefined) return a;
+  const b = zoneNamed(String(a.zone));
+  if (!b) throw new Error(`no zone called ${a.zone}`);
+  return {...a, ...b, top: a.top ?? b.y2, bottom: a.bottom ?? b.y1};
 };
 const xyz = (a) => ({x: num(a.x, -3e7, 3e7, 'x'), y: num(a.y, -64, 320, 'y'), z: num(a.z, -3e7, 3e7, 'z')});
 const player = (a) => {
@@ -109,6 +118,7 @@ const VALIDATE = {
     if (!/^[a-z_]{1,48}$/.test(a.block || '')) throw new Error('block must be a block name like stone, or logs');
     return {block: a.block, ...xyz(a)};
   },
+  filechests: () => ({}), // empty the old room's chest wall (and some base-chest junk) into the hall
   stock: xyz, // read what is in the chest (the keeper's inventory count)
   withdraw: (a) => {
     if (!/^[a-z_]{1,48}$/.test(a.item || '')) throw new Error('item must be an item name like coal, or logs');
@@ -119,7 +129,8 @@ const VALIDATE = {
     return {item: a.item, ...xyz(a)};
   },
   // A box to dig out (an underground room): two corners, at most 9x9 wide and 5 high.
-  excavate: (a) => {
+  excavate: (a0) => {
+    const a = zoned(a0);
     const p = xyz({x: a.x1, y: a.y1, z: a.z1}), q = xyz({x: a.x2, y: a.y2, z: a.z2});
     const box = {x1: Math.min(p.x, q.x), y1: Math.min(p.y, q.y), z1: Math.min(p.z, q.z), x2: Math.max(p.x, q.x), y2: Math.max(p.y, q.y), z2: Math.max(p.z, q.z)};
     if (box.x2 - box.x1 > 8 || box.z2 - box.z1 > 8 || box.y2 - box.y1 > 4) throw new Error('a room is at most 9 x 9 blocks and 5 high');
@@ -127,7 +138,8 @@ const VALIDATE = {
   },
   // A shaft down to bedrock: a square of up to 16 x 16 from y `top` (default 80) to `bottom`
   // (default -59, the lowest layer without bedrock), with a staircase left along its walls.
-  shaft: (a) => {
+  shaft: (a0) => {
+    const a = zoned(a0);
     const p = xyz({x: a.x1, y: a.top ?? 80, z: a.z1}), q = xyz({x: a.x2, y: a.bottom ?? -59, z: a.z2});
     const box = {x1: Math.min(p.x, q.x), z1: Math.min(p.z, q.z), x2: Math.max(p.x, q.x), z2: Math.max(p.z, q.z), top: Math.max(p.y, q.y), bottom: Math.max(-59, Math.min(p.y, q.y))};
     if (box.x2 - box.x1 > 15 || box.z2 - box.z1 > 15 || box.x2 - box.x1 < 2 || box.z2 - box.z1 < 2) throw new Error('a shaft is 3 x 3 to 16 x 16 blocks');
@@ -141,7 +153,8 @@ const VALIDATE = {
     return {x1: box.x1, z1: box.z1, x2: box.x2, z2: box.z2, top: box.top, y, length: num(a.length ?? 32, 4, 64, 'length'), branch: num(a.branch ?? 8, 0, 16, 'branch')};
   },
   // Walls over the cave openings in the side faces of a box (shaft, base and a margin): two corners and a y range.
-  seal: (a) => {
+  seal: (a0) => {
+    const a = zoned(a0);
     const p = xyz({x: a.x1, y: a.y1 ?? -59, z: a.z1}), q = xyz({x: a.x2, y: a.y2 ?? 80, z: a.z2});
     return sealJob.validateBox(p, q);
   },
@@ -178,9 +191,9 @@ const VALIDATE = {
     return a.slot === undefined ? {} : {slot: num(a.slot, 0, homebedJob.SLOTS - 1, 'slot')};
   },
   // Plant and chop trees in an area of at most 24 x 24 until stopped; logs go to the supply chest.
-  treefarm: treeFarmJob.farmBox,
+  treefarm: (a) => treeFarmJob.farmBox(zoned(a)),
   // Keep a wheat field of at most 9 x 9 going until stopped: harvest, till, plant, bake bread, hand it in at the base chest.
-  wheatfarm: wheatFarmJob.farmBox,
+  wheatfarm: (a) => wheatFarmJob.farmBox(zoned(a)),
   say: (a) => {
     const text = String(a.text ?? '').trim();
     if (!text || text.length > 200) throw new Error('text must be 1..200 characters');
@@ -1009,7 +1022,29 @@ async function openChest(r, job, block) {
     if (!(await digAt(r, job, p, (name) => name === cover))) throw new Error(`could not clear ${cover} off the chest at ${at(half.position)}`);
   }
   guard(job);
-  return bot.openContainer(block);
+  const win = await bot.openContainer(block);
+  indexChest(r, block, partner, win);
+  return win;
+}
+
+// The storage index (world.chests) is fed from here only, on open and again on close: every chest job
+// funnels through openChest. Only chests in a 'storage' zone and the base chest are indexed. A double is
+// keyed by its smaller half (x, then z) so both halves are one entry.
+function indexChest(r, block, partner, win) {
+  try {
+    const a = block.position, b = partner?.position || a;
+    const low = b.x < a.x || (b.x === a.x && b.z < a.z) ? b : a;
+    const mine = (p) => inZone('storage', p.x, p.y, p.z) || storage.sameXYZ(p, planConfig.BASE.chest);
+    if (!r.world?.noteChest || !(mine(a) || mine(b))) return;
+    const note = () => {
+      const items = {};
+      for (const it of win.containerItems()) items[it.name] = (items[it.name] || 0) + it.count;
+      const used = win.containerItems().length;
+      r.world.noteChest(`${low.x},${low.y},${low.z}`, items, Number.isInteger(win.inventoryStart) ? win.inventoryStart - used : null);
+    };
+    note();
+    win.once?.('close', note);
+  } catch {} // the index is a convenience: never fail a chest job over it
 }
 
 // Where a job may empty the inventory: a shift's own chest, else the supply chest.
@@ -1576,6 +1611,41 @@ const {wheatfarm} = wheatFarmJob.makeWheatFarm({
   deposit: (r, job, only) => JOBS.deposit(r, child(job, {type: 'deposit', args: {...planConfig.BASE.chest, only}})),
 });
 
+// Put what `left()` returns into the hall: each item to its category's chests (the ones holding it first,
+// known-full ones skipped), overflow to misc, and a "full: expand the hall" event when a run is out of room.
+async function fileToHall(r, job, {fill, left, isFood, hall}) {
+  const Vec3 = require('vec3').Vec3;
+  const open = new Set(hall.map(layout.keyOf));
+  const put = async (run, pick) => {
+    for (const c of run) {
+      const mine = left().filter(pick);
+      if (!mine.length) return;
+      const known = r.world?.chests?.get(layout.keyOf(c));
+      if (known?.free === 0 && !mine.some((it) => known.items[it.name])) continue; // full, and no stack of ours to top up
+      let chest;
+      try {
+        await goNear(r, job, c.stand.x, c.stand.y, c.stand.z, 1, {doing: `walking to the storage hall chest at ${at(c)}`});
+        chest = await openChest(r, job, r.bot.blockAt(new Vec3(c.x, c.y, c.z)));
+        await fill(chest, mine);
+      } catch (e) {
+        guard(job); // a Stop is not "this chest is out of reach"
+        job.lastFull = e.message;
+      } finally {
+        chest?.close();
+      }
+    }
+  };
+  const catOf = (it) => layout.categoryOf(it.name, isFood);
+  const runOf = (cat, items) => layout.order(cat, items.map((i) => i.name), r.world?.chests || new Map()).filter((c) => open.has(layout.keyOf(c)));
+  for (const cat of new Set(left().map(catOf))) {
+    const pick = (it) => catOf(it) === cat;
+    await put(runOf(cat, left().filter(pick)), pick);
+    if (!left().some(pick)) continue;
+    r.emit('info', `${cat} chests full: expand the hall`);
+    if (cat !== 'misc') await put(runOf('misc', left().filter(pick)), pick);
+  }
+}
+
 const JOBS = {
   tidy,
   wheatfarm,
@@ -1677,9 +1747,12 @@ const JOBS = {
     // Storage roles: at the base chest, junk goes to the storage-room chests (see storage.js).
     const rooms = !only && storage.sameXYZ(job.args, planConfig.BASE.chest)
       ? planConfig.BASE.roomChests.filter((c) => bot.blockAt(new Vec3(c.x, c.y, c.z))?.name === 'chest') : [];
+    // The storage hall (storage-layout.js): its chests that exist, else the old behaviour.
+    const isChest = (c) => bot.blockAt(new Vec3(c.x, c.y, c.z))?.name === 'chest';
+    const hall = !only && storage.sameXYZ(job.args, planConfig.BASE.chest) ? layout.SLOTS.filter(isChest) : [];
     let chest = await openChest(r, job, block);
     try {
-      if (!rooms.length) {
+      if (!rooms.length && !hall.length) {
         if ((await fill(chest, eligible())).length) throw fullError();
         if (moved) r.emit('deposit', `deposited ${depositList(byName)} at ${place(r, job.args)}`);
         noteStock(r, job, chest);
@@ -1696,6 +1769,7 @@ const JOBS = {
       noteStock(r, job, chest);
       chest.close();
       chest = null;
+      if (hall.length) await fileToHall(r, job, {fill, left: eligible, isFood, hall});
       for (const c of rooms) {
         const left = eligible();
         if (!left.length) break;
@@ -1718,9 +1792,38 @@ const JOBS = {
         noteStock(r, job, chest);
         if (rest.length) throw fullError();
       }
-      if (moved) r.emit('deposit', `deposited ${depositList(byName)} (junk to the storage room)`);
+      if (moved) r.emit('deposit', `deposited ${depositList(byName)} (${hall.length ? 'filed in the storage hall' : 'junk to the storage room'})`);
     } finally {
       chest?.close();
+    }
+  },
+
+  // File the old room's chest wall into the storage hall: take what a deposit would file out of each
+  // wall chest, deposit at the base chest (which files it by category and carries 9 stacks of base-chest
+  // junk along), repeat while the wall still gave something. Bounded: 8 rounds.
+  async filechests(r, job) {
+    const {bot} = r;
+    const Vec3 = require('vec3').Vec3;
+    const fileable = (it) => !(TOOL_RE.test(it.name) || KEEP_RE.test(it.name) || bot.registry.foodsByName[it.name]);
+    for (let round = 0; round < 8; round++) {
+      let got = 0;
+      for (const c of planConfig.BASE.roomChests) {
+        guard(job);
+        if (bot.blockAt(new Vec3(c.x, c.y, c.z))?.name !== 'chest') continue;
+        await goNear(r, job, c.x, c.y, c.z, 3, {doing: `walking to the storage room chest at ${at(c)} to file it`});
+        const chest = await openChest(r, job, bot.blockAt(new Vec3(c.x, c.y, c.z)));
+        try {
+          for (const it of chest.containerItems().filter(fileable)) {
+            guard(job);
+            try { await chest.withdraw(it.type, it.metadata, it.count); got += it.count; } catch { break; } // inventory full
+          }
+        } finally {
+          chest.close();
+        }
+      }
+      job.progress = `round ${round + 1}, ${got} taken from the wall`;
+      await JOBS.deposit(r, child(job, {type: 'deposit', args: planConfig.BASE.chest}));
+      if (!got) break;
     }
   },
 
@@ -1746,15 +1849,18 @@ const JOBS = {
     const {x, y, z, item, count} = job.args;
     const Vec3 = require('vec3').Vec3;
     // Storage roles: what the base chest lacks may have overflowed to the storage-room chests (storage.js).
-    const rooms = storage.sameXYZ(job.args, planConfig.BASE.chest) ? planConfig.BASE.roomChests : [];
+    // At the base chest the rest is looked up: the index, then the item's hall category, then the old wall.
+    const atBase = storage.sameXYZ(job.args, planConfig.BASE.chest);
     const match = itemMatcher(item);
+    const rooms = atBase ? layout.withdrawOrder({item, match, chests: r.world?.chests || new Map(), wall: planConfig.BASE.roomChests, from: bot.entity.position, exists: (c) => bot.blockAt(new Vec3(c.x, c.y, c.z))?.name === 'chest'}) : [];
     let taken = 0;
     for (const c of [{x, y, z}, ...rooms]) {
       if (taken >= count) break;
       const room = rooms.includes(c);
-      const where = room ? `the storage room chest at ${at(c)}` : place(r, job.args);
-      if (room && bot.blockAt(new Vec3(c.x, c.y, c.z))?.name !== 'chest') continue;
-      await goNear(r, job, c.x, c.y, c.z, 3, {doing: `walking to ${where} to take ${item}`});
+      const where = room ? `the storage chest at ${at(c)}` : place(r, job.args);
+      const stand = c.stand; // hall chests carry their aisle cell
+      if (stand) await goNear(r, job, stand.x, stand.y, stand.z, 1, {doing: `walking to ${where} to take ${item}`});
+      else await goNear(r, job, c.x, c.y, c.z, 3, {doing: `walking to ${where} to take ${item}`});
       const block = bot.blockAt(new Vec3(c.x, c.y, c.z));
       if (!block || !/chest|barrel/.test(block.name)) throw new Error(`no chest at ${c.x} ${c.y} ${c.z} (found ${block?.name})`);
       job.t.doing = `taking ${item} from ${where}`;

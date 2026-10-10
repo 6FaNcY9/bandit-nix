@@ -3,6 +3,7 @@
 // hostile mobs and notable blocks reported by any bot. Pure logic + a poller.
 
 const MAPS = {world: 'overworld', world_the_nether: 'the_nether', world_the_end: 'the_end'};
+const fs = require('node:fs');
 const MOB_TTL_MS = 30000;
 const BLOCK_TTL_MS = 600000;
 const PLAYER_TTL_MS = 10000; // BlueMap polled every 2 s; older = stale, drop
@@ -49,12 +50,51 @@ class WorldModel {
     this.bluemap = {enabled: false, ok: false, error: '', t: 0};
     this.claims = new Map(); // `${dim}:${x},${y},${z}` -> {by, t}: blocks a bot is working on
     this.tally = new Map(); // bot -> {granted, refused, timedOut}: shown in /api/debug
+    this.chests = new Map(); // storage index: "x,y,z" (smaller half of a double) -> {items: {name: count}, free, t}; fed by openChest()
+    this.chestFile = null;
     this.stock = null; // what a bot last saw in the supply chest: {items: {name: count}, by, free (empty slots or null), t}
   }
 
   // A bot that opened the supply chest reports its contents; the keeper plans from this.
   noteStock(by, items, free = null) {
     this.stock = {items, by, free, t: this.now()};
+  }
+
+  // The storage index (survives restarts: STATE_DIR/chests.json, written at most every 5 s).
+  persistChests(file) {
+    this.chestFile = file;
+    try {
+      for (const [k, v] of Object.entries(JSON.parse(fs.readFileSync(file, 'utf8')))) if (/^-?\d+,-?\d+,-?\d+$/.test(k) && v && typeof v.items === 'object') this.chests.set(k, {items: v.items, free: v.free ?? null, t: Number(v.t) || 0});
+    } catch {} // missing or unreadable: empty
+  }
+
+  noteChest(key, items, free = null) {
+    this.chests.set(key, {items, free, t: this.now()});
+    if (!this.chestFile || this.chestTimer) return;
+    this.chestTimer = setTimeout(() => {
+      this.chestTimer = null;
+      try {
+        fs.writeFileSync(`${this.chestFile}.tmp`, JSON.stringify(Object.fromEntries(this.chests)));
+        fs.renameSync(`${this.chestFile}.tmp`, this.chestFile);
+      } catch {}
+    }, 5000);
+    this.chestTimer.unref?.();
+  }
+
+  // Where is it: items whose name contains q -> [{item, total, where: [{x, y, z, count, ageS}]}], biggest stack first.
+  findItems(q) {
+    const t = this.now(), out = new Map();
+    for (const [key, c] of this.chests) {
+      const [x, y, z] = key.split(',').map(Number);
+      for (const [item, count] of Object.entries(c.items)) {
+        if (!item.includes(q)) continue;
+        const e = out.get(item) || {item, total: 0, where: []};
+        e.total += count;
+        e.where.push({x, y, z, count, ageS: Math.round((t - c.t) / 1000)});
+        out.set(item, e);
+      }
+    }
+    return [...out.values()].map((e) => ({...e, where: e.where.sort((a, b) => b.count - a.count)})).sort((a, b) => b.total - a.total);
   }
 
   // Bots share one process, so claims are exact: a bot only takes a block no

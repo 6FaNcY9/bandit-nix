@@ -15,7 +15,7 @@ function bearerMatches(header, tokenHash) {
   return !!(m && tokenHash && crypto.timingSafeEqual(hash(m[1]), tokenHash));
 }
 
-const agentEndpoint = (method, path) => (method === 'GET' && (path === '/api/state' || path === '/api/events' || path === '/api/crews' || path.startsWith('/api/scan/'))) || (method === 'POST' && (path === '/api/job' || path === '/api/decision' || path === '/api/agentstatus'));
+const agentEndpoint = (method, path) => (method === 'GET' && (path === '/api/state' || path === '/api/events' || path === '/api/crews' || path === '/api/storage/find' || path.startsWith('/api/scan/'))) || (method === 'POST' && (path === '/api/job' || path === '/api/decision' || path === '/api/agentstatus'));
 
 // The agent's self-description for the dashboard's Agents section: a cleaned status, or {error}.
 function agentStatus({agent, goal, workers, role}, {agentBots}) {

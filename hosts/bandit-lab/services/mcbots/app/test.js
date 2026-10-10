@@ -694,7 +694,7 @@ require('./crafting');
     const pr = await placesPost({action: 'set', place: {name: 'Main', kind: 'supply', x: 5, y: 64, z: 6}});
     assert.deepStrictEqual([pr.status, (await pr.json()).supplyChest], [200, {x: 5, y: 64, z: 6}]);
     const full = await (await fetch(`http://127.0.0.1:${port}/api/state`, {headers: {'tailscale-user-login': 'a@github'}})).json();
-    assert.deepStrictEqual([full.supplyChest, full.places.length], [{x: 5, y: 64, z: 6}, 1]);
+    assert.deepStrictEqual([full.supplyChest, full.places.length], [{x: 5, y: 64, z: 6}, 1 + 7]); // the marker plus the 7 seeded zones
     assert.strictEqual((await placesPost({action: 'set', place: {name: 'Bad', kind: 'nope', x: 0, y: 0, z: 0}})).status, 400);
 
     // map tiles: proxied from BlueMap; anything else never reaches it
@@ -3718,7 +3718,7 @@ require('./crafting');
     assert.ok(VALIDATE.wheatfarm({x1: 0, z1: 0, x2: 8, z2: 8}), '9 x 9 is the limit');
     const wf = OBJECTIVES.find((o) => o.id === 'wheat-farm');
     assert.deepStrictEqual([wf.needs, wf.onBlocked, wf.roles[0].jobs[0]], [['stock-basics'], 'skip', ['wheatfarm', BASE.wheat]]);
-    assert.deepStrictEqual(OBJECTIVES.map((o) => o.id).slice(4, 6), ['tree-farm', 'wheat-farm']);
+    assert.deepStrictEqual(OBJECTIVES.map((o) => o.id).slice(5, 7), ['tree-farm', 'wheat-farm']);
     assert.strictEqual(W.wheatAge({getProperties: () => ({age: 7})}), 7);
     assert.strictEqual(W.wheatAge({metadata: 3}), 3, 'metadata is the age when there is no property reader');
     assert.ok(Number.isNaN(W.wheatAge({})));
@@ -4052,3 +4052,72 @@ require('./crafting');
   assert.ok(!f.log.placed.some((p) => /@0,1,4$/.test(p)), 'no wall beside a bed');
   console.log('ok');
 })();
+
+{ // zones (places with a box), the storage layout and the chest index; all plain objects
+  const os = require('node:os'), fs = require('node:fs'), path = require('node:path');
+  const P = require('./places'), pc = require('./plan-config'), L = require('./storage-layout');
+  const {WorldModel} = require('./world');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zones-'));
+  const pl = new P.Places(dir);
+  // a point place still works; a zone needs a box, is normalised and capped
+  assert.strictEqual(pl.set({name: 'Home', kind: 'home', x: 1, y: 64, z: 2}).box, undefined);
+  assert.throws(() => pl.set({name: 'Z', kind: 'shaft'}), /needs a box/);
+  assert.throws(() => pl.set({name: 'Z', kind: 'shaft', box: {x1: 0, x2: 70, z1: 0, z2: 3, y1: 0, y2: 3}}), /at most 64/);
+  const z = pl.set({name: 'Z', kind: 'storage', box: {x1: 5, x2: 1, z1: 9, z2: 7, y1: 60, y2: 58}});
+  assert.deepStrictEqual(z.box, {x1: 1, y1: 58, z1: 7, x2: 5, y2: 60, z2: 9});
+  assert.deepStrictEqual([z.x, z.y, z.z], [3, 59, 8], 'the point is the centre');
+  assert.deepStrictEqual(new P.Places(dir).zone('storage').box, z.box, 'survives a restart');
+  // seeding only on a first start; zoneBox reads the zone of a kind, else the fallback (BASE follows it)
+  const fresh = new P.Places(fs.mkdtempSync(path.join(os.tmpdir(), 'zones-')));
+  fresh.seed(pc.seedZones());
+  assert.deepStrictEqual(fresh.list.map((p) => p.kind).sort(), ['base', 'protected', 'shaft', 'storage', 'storage', 'treefarm', 'wheat']);
+  const n = fresh.list.length;
+  fresh.seed(pc.seedZones());
+  assert.strictEqual(fresh.list.length, n, 'seeded once');
+  assert.deepStrictEqual(P.protectedBoxes(fresh.list), [[-265, -221, -248, -212]], 'the hall walls are protected');
+  const was = {...pc.BASE.shaft};
+  P.use(fresh);
+  assert.deepStrictEqual(pc.BASE.shaft, was, 'seeded zones equal the shipped geometry');
+  fresh.set({...fresh.zone('shaft'), box: {x1: -300, x2: -290, z1: -10, z2: 0, y1: -59, y2: 80}});
+  assert.deepStrictEqual(pc.BASE.shaft, {x1: -300, z1: -10, x2: -290, z2: 0}, 'moving the zone moves the work');
+  assert.strictEqual(pc.OBJECTIVES.find((o) => o.id === 'shaft-to-ore').roles[0].jobs[0][1].x1, -300);
+  assert.ok(P.inZone('storage', -260, 59, -217) && !P.inZone('storage', -260, 70, -217));
+  // jobs take zone: "<name>"
+  assert.deepStrictEqual(VALIDATE.treefarm({zone: 'Tree farm'}), {x1: -262, z1: -238, x2: -248, z2: -224});
+  assert.deepStrictEqual(VALIDATE.shaft({zone: 'Shaft'}), {x1: -300, z1: -10, x2: -290, z2: 0, top: 80, bottom: -59});
+  assert.deepStrictEqual(VALIDATE.excavate({zone: 'Storage room'}), {x1: -272, y1: 58, z1: -219, x2: -266, y2: 60, z2: -213});
+  assert.throws(() => VALIDATE.wheatfarm({zone: 'Nope'}), /no zone called Nope/);
+  P.use(null);
+  assert.deepStrictEqual(pc.BASE.shaft, was, 'no zones: the shipped geometry');
+  assert.ok(pc.OBJECTIVES.some((o) => o.id === 'file-storage' && o.needs.includes('storage-room')));
+  // layout: 56 distinct double-chest cells in 10 contiguous category runs
+  assert.strictEqual(L.SLOTS.length, 56);
+  assert.strictEqual(new Set(L.SLOTS.map(L.keyOf)).size, 56);
+  assert.strictEqual(L.LAYOUT.reduce((s, [, k]) => s + k, 0), 56);
+  assert.ok(L.SLOTS.every((s) => s.x >= -263 && s.x <= -251 && s.stand.z === (s.z <= -217 ? -218 : -215)));
+  assert.ok(L.LAYOUT.every(([c, k]) => L.chestsFor(c).length === k));
+  assert.deepStrictEqual(['iron_ingot', 'raw_iron', 'oak_log', 'cobblestone', 'bone', 'iron_pickaxe', 'wheat_seeds', 'redstone', 'stone_bricks', 'dandelion', 'sand'].map((i) => L.categoryOf(i)),
+    ['ore', 'ore', 'wood', 'stone', 'mobs', 'tools_gear', 'farm_food', 'redstone', 'build', 'misc', 'dirt_sand']);
+  assert.strictEqual(L.categoryOf('bread', (n) => n === 'bread'), 'farm_food');
+  // the index: persisted, searched; withdraw order = holders (nearest first), the category run, the wall
+  let t = 1000;
+  const w = new WorldModel({now: () => t});
+  w.persistChests(path.join(dir, 'chests.json'));
+  w.noteChest('-263,58,-219', {iron_ingot: 5, coal: 2}, 20);
+  w.noteChest('-251,59,-214', {iron_ingot: 9}, 0);
+  t = 61000;
+  const hit = w.findItems('iron');
+  assert.strictEqual(hit[0].total, 14);
+  assert.deepStrictEqual(hit[0].where.map((x) => [x.x, x.count, x.ageS]), [[-251, 9, 60], [-263, 5, 60]]);
+  assert.deepStrictEqual(w.findItems('nothing'), []);
+  const order = L.withdrawOrder({item: 'iron_ingot', match: (n) => n === 'iron_ingot', chests: w.chests, wall: pc.BASE.roomChests, exists: () => true, from: {x: -250, y: 58, z: -214}});
+  assert.deepStrictEqual(order.slice(0, 2).map(L.keyOf), ['-251,59,-214', '-263,58,-219'], 'holders first, nearest first');
+  assert.strictEqual(order.length, 2 + 3 + pc.BASE.roomChests.length, 'holders, the rest of the ore run, the wall: never all 64');
+  assert.strictEqual(L.keyOf(L.order('ore', ['iron_ingot'], w.chests)[0]), '-263,58,-219');
+  w.noteChest('-263,58,-219', {coal: 2}, 20); // flush path: the debounce timer is unref'd, so write now via a second instance
+  const w2 = new WorldModel();
+  fs.writeFileSync(path.join(dir, 'chests.json'), JSON.stringify(Object.fromEntries(w.chests)));
+  w2.persistChests(path.join(dir, 'chests.json'));
+  assert.strictEqual(w2.chests.get('-251,59,-214').items.iron_ingot, 9, 'reloads');
+  assert.ok(require('./agentauth').agentEndpoint('GET', '/api/storage/find'));
+}

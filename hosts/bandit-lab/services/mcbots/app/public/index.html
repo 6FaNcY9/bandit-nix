@@ -89,6 +89,8 @@
 <div class="bar" id="chestbar" hidden>
   <h3>Supply chest <button id="chestcount" type="button" class="ghost" title="Send an idle bot to count it">Count it</button></h3>
   <div class="mut" id="chestinfo"></div><div id="chestwarn"></div><div class="mut" id="chestitems"></div>
+  <div class="row">Where is… <input id="findq" maxlength="48" placeholder="iron, oak_log, ..." style="width:12em"><button id="findgo" type="button" class="ghost">Find</button><span id="findmsg" class="mut"></span></div>
+  <div id="findres" class="mut"></div>
 </div>
 <div class="bar" id="projbar" hidden><h3>Projects <span class="mut">(Pause keeps the project so Resume can queue it again; Pause or Stop of a running project also clears that bot's queue)</span></h3><div id="projects"></div></div>
 <div class="bar" id="mapbar">
@@ -108,10 +110,12 @@
     <label><input type="checkbox" id="vrock"> hide natural rock</label><label><input type="checkbox" id="vfluid"> hide fluids</label>
     <label><input type="checkbox" id="vplan" checked> outlines</label></div>
   <canvas id="v3" width="960" height="720"></canvas>
-  <div class="mut">drag: orbit, right-drag or shift-drag: pan, wheel or pinch: zoom. Cyan: the plan's areas, red: protected areas, yellow: your box.</div>
+  <div class="mut">drag: orbit, right-drag or shift-drag: pan, wheel or pinch: zoom. Zones are outlined by kind (storage amber, shaft purple, tree farm green, wheat yellow, base blue, protected red), yellow: your box.</div>
   <div class="row">box <span id="vsel" class="row"></span><button id="vclear" type="button" class="ghost">Clear selection</button><span id="vsize" class="mut"></span></div>
   <div class="row">order <select id="vtype"></select><span id="vextra" class="row"></span> to <select id="vbot"></select>
     <label><input type="checkbox" id="vrepl"> replace running job</label><button id="vsend" type="button">Send</button></div>
+  <div class="row">zone <input id="zname" maxlength="32" placeholder="name" style="width:9em"><select id="zkind"></select><button id="zsave" type="button">Save selection as zone</button><span id="zmsg" class="mut"></span></div>
+  <div id="zlist" class="mut"></div>
   <div id="vjob" class="mut"></div><div id="vmsg" class="mut"></div>
 </details>
 <div id="bots" class="grid"></div>
@@ -390,7 +394,8 @@ function connect() {
 
 // ---- map: top-down, north up (-z), centred on a bot or player ----
 const cv = $('radar'), g = cv.getContext('2d');
-const KIND_COLOR = { supply: '#facc15', chest: '#a16207', site: '#22c55e', home: '#38bdf8', afk: '#c084fc' };
+const ZONE_COLOR = { storage: '#f59e0b', shaft: '#a855f7', treefarm: '#22c55e', wheat: '#eab308', base: '#38bdf8', protected: '#ef4444' };
+const KIND_COLOR = { supply: '#facc15', chest: '#a16207', site: '#22c55e', home: '#38bdf8', afk: '#c084fc', ...ZONE_COLOR };
 const MAPNAME = { overworld: 'world', the_nether: 'world_the_nether', the_end: 'world_the_end' };
 let free = null, view = null, hits = [], picked = null, drag = null;
 const tiles = new Map();
@@ -441,13 +446,14 @@ async function savePlace(place) {
   const r = await fetch('/api/places', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'set', place }) });
   const j = await r.json().catch(() => ({}));
   $('msg').textContent = r.ok ? `saved marker ${place.name}` : 'marker: ' + (j.error || r.status);
-  if (r.ok) { last.places = j.places; last.supplyChest = j.supplyChest; radar(); }
+  if (r.ok) { last.places = j.places; last.supplyChest = j.supplyChest; radar(); zoneUi(); }
+  else $('zmsg').textContent = j.error || r.status;
   return r.ok;
 }
 async function deletePlace(name) {
   const r = await fetch('/api/places', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'delete', name }) });
   const j = await r.json().catch(() => ({}));
-  if (r.ok) { last.places = j.places; last.supplyChest = j.supplyChest; radar(); } else $('msg').textContent = 'marker: ' + (j.error || r.status);
+  if (r.ok) { last.places = j.places; last.supplyChest = j.supplyChest; radar(); zoneUi(); } else $('msg').textContent = 'marker: ' + (j.error || r.status);
 }
 let moving = null; // a place waiting for its new spot (next click on the map)
 function markerForm(at, start = {}) {
@@ -456,7 +462,8 @@ function markerForm(at, start = {}) {
   yIn.type = 'number'; yIn.min = -64; yIn.max = 320; yIn.value = at.y; yIn.title = 'y: for a chest the height of the chest block itself (F3)';
   for (const k of ['supply', 'site', 'home', 'afk', 'chest']) kind.append(new Option(k, k));
   kind.value = start.kind || 'site'; ok.type = 'button';
-  ok.onclick = async () => { if (await savePlace({ name: name.value.trim(), kind: kind.value, ...at, y: Number(yIn.value) })) $('mapmenu').hidden = true; };
+  if (start.box) kind.append(new Option(start.kind, start.kind)); // a zone keeps its kind and box
+  ok.onclick = async () => { if (await savePlace({ name: name.value.trim(), kind: kind.value, ...at, y: Number(yIn.value), ...(start.box ? { box: start.box } : {}) })) $('mapmenu').hidden = true; };
   f.append(name, kind, el('span', 'mut', 'y'), yIn, ok);
   setTimeout(() => name.focus(), 0);
   return f;
@@ -477,7 +484,7 @@ function placeMenu(e, pl) {
   }
   if (pl.kind === 'afk') items.push([`${w}: park here (stays, does not fight)`, async () => { for (const b of who()) await fetch('/api/settings', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ bot: b, settings: { defend: false } }) }); send(who(), 'goto', xyz, true); }]);
   items.push([`${w}: go here`, () => send(who(), 'goto', xyz, true)]);
-  if (!pl.fixed) items.push(['Move (click the new spot)', () => { moving = pl; $('msg').textContent = `click the new spot for ${pl.name}`; }], ['Rename / change kind', () => menu(e, pl.name, [markerForm(xyz, pl), ['Cancel', () => {}]])], ['Delete marker', () => deletePlace(pl.name)]);
+  if (!pl.fixed) items.push(...(pl.box ? [] : [['Move (click the new spot)', () => { moving = pl; $('msg').textContent = `click the new spot for ${pl.name}`; }]]), ['Rename / change kind', () => menu(e, pl.name, [markerForm(xyz, pl), ['Cancel', () => {}]])], ['Delete marker', () => deletePlace(pl.name)]);
   else items.push(['(from the config: add a supply marker to replace it)', () => {}]);
   menu(e, `${pl.name} (${pl.kind}) ${pl.x} ${pl.y} ${pl.z}`, items);
 }
@@ -980,7 +987,7 @@ const vLines = (b, color, always) => { // wireframe of a block box (x2/z2/y2 inc
 function vOutlines() {
   G.outl.clear();
   const d = VT.data; if (!d) return;
-  for (const a of Object.values(VT.areas?.areas || {})) G.outl.add(vLines(a, 0x22d3ee, false));
+  for (const p of last.places || []) if (p.box && p.dim === 'overworld') G.outl.add(vLines(p.box, parseInt((ZONE_COLOR[p.kind] || '#22d3ee').slice(1), 16), false));
   for (const [x1, z1, x2, z2] of last.protectedAreas || []) G.outl.add(vLines({ x1, z1, x2, z2, y1: d.box.y1, y2: d.box.y2 }, 0xef4444, false));
   G.outl.visible = $('vplan').checked; VT.dirty = true;
 }
@@ -1019,16 +1026,42 @@ async function vLoad() {
 vmk('vload', 'l', null); vmk('vsel', 's', vPreview);
 for (const [k, v] of Object.entries(VJOBS)) $('vtype').append(new Option(v, k));
 $('vtype').onchange = vExtra; $('vgo').onclick = vLoad; $('vbot').onfocus = vBots;
+$('findgo').onclick = async () => {
+  const r = await fetch('/api/storage/find?q=' + encodeURIComponent($('findq').value), { cache: 'no-store' }), j = await r.json().catch(() => ({}));
+  if (!r.ok) { $('findmsg').textContent = j.error || r.status; $('findres').replaceChildren(); return; }
+  $('findmsg').textContent = j.length ? '' : 'nothing indexed under that name (the index fills as bots open chests)';
+  $('findres').replaceChildren(...j.map((e) => el('div', '', `${e.item} x${e.total}: ` + e.where.map((w) => `${w.zone || 'chest'} ${w.x} ${w.y} ${w.z} x${w.count} (${w.ageS < 3600 ? Math.round(w.ageS / 60) + ' min' : Math.round(w.ageS / 3600) + ' h'} ago)`).join('; '))));
+};
+$('findq').onkeydown = (e) => { if (e.key === 'Enter') $('findgo').onclick(); };
 $('vclear').onclick = () => { VT.A = VT.B = null; for (const k of VKEYS) $('s' + k).value = ''; vPreview(); };
 for (const id of ['vy1', 'vy2', 'vcut', 'vrock', 'vfluid']) $(id).oninput = vRebuild;
+// Zones: list with delete, and "save selection as zone" (a place with a box).
+function zoneUi() {
+  const zs = (last.places || []).filter((p) => p.box);
+  $('zlist').replaceChildren(...zs.map((p) => {
+    const row = el('div', 'row'), b = p.box, del = el('button', 'ghost', 'delete');
+    del.type = 'button'; del.onclick = () => deletePlace(p.name);
+    row.append(el('b', '', p.name), el('span', '', ` ${p.kind} ${b.x2 - b.x1 + 1}x${b.y2 - b.y1 + 1}x${b.z2 - b.z1 + 1} at ${b.x1} ${b.y1} ${b.z1}`), del);
+    row.firstChild.style.color = ZONE_COLOR[p.kind] || '';
+    return row;
+  }));
+  if (G && VT.data) vOutlines();
+}
+for (const k of Object.keys(ZONE_COLOR)) $('zkind').append(new Option(k, k));
+$('zsave').onclick = async () => {
+  const box = vbox('s'); if (!box) { $('zmsg').textContent = 'select a box first (two clicks)'; return; }
+  $('zmsg').textContent = '';
+  await savePlace({ name: $('zname').value.trim(), kind: $('zkind').value, dim: 'overworld', box });
+};
 $('vplan').onchange = () => { if (G) { G.outl.visible = $('vplan').checked; VT.dirty = true; } };
-$('varea').onchange = () => { const a = VT.areas?.areas[$('varea').value]; if (a) VKEYS.forEach((k) => { $('l' + k).value = a[k]; }); };
+$('varea').onchange = () => { const a = VT.areas?.areas[$('varea').value]; if (a) { VKEYS.forEach((k) => { $('l' + k).value = a[k]; }); vLoad(); } }; // a preset loads at once; 'custom' keeps the Load button
 $('vbar').addEventListener('toggle', async () => {
   if (!$('vbar').open || VT.areas) return;
   try {
     VT.areas = await (await fetch('/api/areas', { cache: 'no-store' })).json();
     $('varea').replaceChildren(...Object.keys(VT.areas.areas).map((k) => new Option(k, k)), new Option('custom', ''));
-    $('varea').onchange(); vBots(); vPreview();
+    if (VT.areas.areas.Shaft) $('varea').value = 'Shaft';
+    $('varea').onchange(); vBots(); vPreview(); zoneUi();
   } catch (e) { $('vinfo').textContent = 'areas: ' + e.message; }
 });
 </script>

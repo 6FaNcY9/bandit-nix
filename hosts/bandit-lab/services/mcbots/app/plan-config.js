@@ -8,17 +8,32 @@
 // without an error closes its slot; an objective is done when all its slots are closed, or when
 // `done(ctx)` says so earlier. ctx = {world, stock, places, keeper, snaps, results, roster, blockAt}.
 const {CREW} = require('./homebed');
+const {zoneBox} = require('./places');
 
+// The shipped geometry; BASE.shaft/farm/wheat read the zone of that kind first (zoneBox), so moving a
+// zone on the dashboard moves the work. Getters (not copies) because zones change at runtime.
+const DEFAULTS = {
+  shaft: {x1: -291, z1: -222, x2: -276, z2: -207},
+  farm: {x1: -262, z1: -238, x2: -248, z2: -224},
+  wheat: {x1: -262, z1: -250, x2: -254, z2: -242},
+};
+const xz = (kind, fb) => {
+  const b = zoneBox(kind, fb);
+  return {x1: b.x1, z1: b.z1, x2: b.x2, z2: b.z2};
+};
 const BASE = {
   box: {x1: -272, z1: -219, x2: -266, z2: -213},
   chest: {x: -271, y: 66, z: -214}, // the base chest: every withdraw/deposit of the plan uses it, not SUPPLY_CHEST
-  shaft: {x1: -291, z1: -222, x2: -276, z2: -207},
-  farm: {x1: -262, z1: -238, x2: -248, z2: -224},
+  get shaft() { return xz('shaft', DEFAULTS.shaft); },
+  get farm() { return xz('treefarm', DEFAULTS.farm); },
   // levelled to y 64 by console 2026-10-10, water source under a slab at -258 64 -246
-  wheat: {x1: -262, z1: -250, x2: -254, z2: -242},
+  get wheat() { return xz('wheat', DEFAULTS.wheat); },
   room: {x1: -272, y1: 58, z1: -219, x2: -266, y2: 60, z2: -213}, // under the base box; floor y 57
   // the wall of single chests on the room's south side (live 2026-10-10): x -272..-266, y 58 and 59, nearest the door first
   // The chest wall: 8 double chests (x -272..-265, y 58 and 59, z -219); one cell each, a double opens from either half.
+  // The storage hall next to it (built by console 2026-10-10): 56 double chests, see storage-layout.js.
+  hall: {x1: -263, y1: 58, z1: -219, x2: -250, y2: 60, z2: -214},
+  hallShell: {x1: -265, y1: 57, z1: -221, x2: -248, y2: 61, z2: -212},
   roomChests: [58, 59].flatMap((y) => [-272, -270, -268, -266].map((x) => ({x, y, z: -219}))),
 };
 const C = BASE.chest;
@@ -36,7 +51,7 @@ const OBJECTIVES = [
   {id: 'stock-basics', label: 'stock the base chest: logs, cobblestone, coal, torches', needs: [], onBlocked: 'park',
     keeper: [['logs', 64], ['cobblestone', 128], ['coal', 32], ['torch', 64]]},
   {id: 'shaft-to-ore', label: `dig the shaft down to y ${SHAFT_BOTTOM}`, needs: ['stock-basics', 'home-beds'], onBlocked: 'park',
-    roles: [{count: 3, split: 'x', jobs: [['shaft', {...BASE.shaft, top: 66, bottom: SHAFT_BOTTOM}]]}],
+    roles: [{count: 3, split: 'x', get jobs() { return [['shaft', {...BASE.shaft, top: 66, bottom: SHAFT_BOTTOM}]]; }}],
     done: (ctx) => {
       const s = BASE.shaft;
       return AIR.has(ctx.blockAt?.(Math.floor((s.x1 + s.x2) / 2), SHAFT_BOTTOM, Math.floor((s.z1 + s.z2) / 2)));
@@ -49,11 +64,14 @@ const OBJECTIVES = [
       ...BASE.roomChests.slice(0, 2).map((c) => ['place', {item: 'chest', ...c}]),
     ]}],
     done: (ctx) => BASE.roomChests.every((c) => ctx.blockAt?.(c.x, c.y, c.z) === 'chest')},
+  // One bot, one run (the slot closing is "done"): the old wall's stock moves into the hall's categories.
+  {id: 'file-storage', label: 'file the old storage room wall into the storage hall', needs: ['storage-room'], onBlocked: 'skip',
+    roles: [{count: 1, jobs: [['filechests', {}]]}]},
   {id: 'tree-farm', label: 'start the tree farm', needs: ['stock-basics'], onBlocked: 'skip',
-    roles: [{count: 1, jobs: [['treefarm', BASE.farm]]}],
+    roles: [{count: 1, get jobs() { return [['treefarm', BASE.farm]]; }}],
     done: (ctx) => running(ctx, 'treefarm', 120)}, // the job never ends: planting for two minutes counts
   {id: 'wheat-farm', label: 'start the wheat farm', needs: ['stock-basics'], onBlocked: 'skip',
-    roles: [{count: 1, jobs: [['wheatfarm', BASE.wheat]]}],
+    roles: [{count: 1, get jobs() { return [['wheatfarm', BASE.wheat]]; }}],
     done: (ctx) => running(ctx, 'wheatfarm', 120)}, // never ends either
   {id: 'iron-quota', label: 'raw iron for a full kit in the chest', needs: ['shaft-to-ore'], onBlocked: 'park',
     keeper: [['raw_iron', 32]]},
@@ -69,4 +87,18 @@ const OBJECTIVES = [
     done: (ctx) => carries(ctx, 'iron_pickaxe')},
 ];
 
-module.exports = {BASE, OBJECTIVES, bedSlot};
+// First-start zones (Places.seed): the plan's areas as dashboard markers, one kind per zone.
+const seedZones = () => {
+  const b = (o) => ({x1: o.x1, y1: o.y1, z1: o.z1, x2: o.x2, y2: o.y2, z2: o.z2});
+  return [
+    {name: 'Shaft', kind: 'shaft', box: {...DEFAULTS.shaft, y1: -59, y2: 80}},
+    {name: 'Tree farm', kind: 'treefarm', box: {...DEFAULTS.farm, y1: 55, y2: 80}},
+    {name: 'Wheat field', kind: 'wheat', box: {...DEFAULTS.wheat, y1: 58, y2: 72}},
+    {name: 'Storage room', kind: 'storage', box: b(BASE.room)},
+    {name: 'Storage hall', kind: 'storage', box: b(BASE.hall)},
+    {name: 'Base', kind: 'base', box: {...BASE.box, y1: 55, y2: 75}},
+    {name: 'Storage hall walls', kind: 'protected', box: b(BASE.hallShell)},
+  ];
+};
+
+module.exports = {BASE, OBJECTIVES, bedSlot, seedZones};
