@@ -586,11 +586,64 @@ function logCall(line) {
   fs.appendFileSync(LOG, line);
 }
 
+// ---- outcomes: what became of each logged decision --------------------------------
+// Every decision record carries an `id` and an `episode_id` (agent session + goal). When its fate is known
+// one {kind: 'outcome', id, result: good|bad|neutral, reason, ms} line goes to the same log, so the data set
+// labels itself (tools/mcagents/dataset.js). ms = time from the decision's log line to its outcome.
+const RUN = Date.now().toString(36); // ids restart with the process; the run stamp keeps them unique across restarts
+const OUTCOME_MS = Number(process.env.OUTCOME_MS) || 900000; // a job with no result by then ends neutral
+const OUTCOME_MAX = 400; // jobs awaiting a result; beyond this the oldest ends neutral
+const awaiting = []; // {d, bot, type}: decisions whose job has not reported yet, oldest first
+const ownStops = new Map(); // bot -> when we last stopped or replaced its jobs: their "stopped:" events are not news
+
+function settle(d, result, reason, now = Date.now()) {
+  if (LOG && d) logCall(JSON.stringify({kind: 'outcome', t: new Date(now).toISOString(), id: d.id, agent: d.agent, result, reason: String(reason).slice(0, 160), ms: now - d.at}) + '\n');
+}
+function awaitJob(d, bot, type) {
+  awaiting.push({d, bot, type});
+  while (awaiting.length > OUTCOME_MAX) settle(awaiting.shift().d, 'neutral', 'dropped');
+}
+// Settle (and forget) the waiting decisions of one bot, optionally only the oldest of one job type.
+function settleBot(bot, result, reason, type, now = Date.now()) {
+  for (let i = 0; i < awaiting.length; i++) {
+    if (awaiting[i].bot !== bot || (type && awaiting[i].type !== type)) continue;
+    settle(awaiting.splice(i--, 1)[0].d, result, reason, now);
+    if (type) return;
+  }
+}
+function expireOutcomes(now = Date.now()) {
+  while (awaiting.length && now - awaiting[0].d.at >= OUTCOME_MS) settle(awaiting.shift().d, 'neutral', `no result in ${Math.round(OUTCOME_MS / 60000)} min`, now);
+}
+// A dashboard event for a bot that may have a decision's job: finished/failed/gave up/died. Jobs of one bot
+// run in order, so the oldest waiting job of that type is the one. ponytail: the type is matched, not the full label.
+function outcomeEvent(e, now = Date.now()) {
+  if (e.kind === 'death') return settleBot(e.bot, 'bad', 'died', undefined, now);
+  const m = /^(finished|failed|gave up|stopped): (\w+)/.exec(e.text || '');
+  if (!m) return;
+  const [, status, type] = m;
+  if (status === 'stopped') { // a stop we sent already settled its jobs; this one came from the owner or the dashboard
+    if (now - (ownStops.get(e.bot) || 0) > 60000) settleBot(e.bot, 'neutral', 'stopped', type, now);
+    return;
+  }
+  settleBot(e.bot, status === 'finished' ? 'good' : 'bad', status === 'finished' ? 'finished' : status === 'gave up' ? 'gave up' : `failed: ${e.text.replace(/^failed: \w+ .* - /, '')}`, type, now);
+}
+// Send a job and book its outcome: a stop or replacement settles what it cuts off; a stop settles itself.
+async function order(d, bot, job, replace = false) {
+  await sendJob(bot, ...job, replace);
+  if (job[0] === 'stop' || replace) {
+    settleBot(bot, 'neutral', job[0] === 'stop' ? 'stopped' : 'replaced');
+    ownStops.set(bot, Date.now());
+  }
+  if (job[0] === 'stop') settle(d, 'neutral', 'stop sent');
+  else awaitJob(d, bot, job[0]);
+}
+
 // The model card's sampling for Andy-4.2 (Ollama's own defaults differ: top_k 40, top_p 0.9, repeat_penalty 1.1).
 const SAMPLING = {num_ctx: 8192, temperature: 0.6, top_k: 20, top_p: 0.95, min_p: 0, repeat_penalty: 1.0};
 
 async function think(agent, state, bot) {
   const t0 = Date.now();
+  if (agent.goal !== agent.episodeGoal) Object.assign(agent, {episodeGoal: agent.goal, episodeN: (agent.episodeN || 0) + 1}); // a new goal starts a new episode
   // Qwen-based models (Andy-4.2) allow one system message, first; later "system" lines
   // (job results, self-prompts) go in as user turns marked SYSTEM, as Mindcraft does for such models.
   const messages = [{role: 'system', content: agent.system(state, bot)},
@@ -598,8 +651,10 @@ async function think(agent, state, bot) {
   const out = await callModel(messages);
   agent.modelMs += Date.now() - t0;
   const text = String(out.text || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-  if (LOG) logCall(JSON.stringify({t: new Date().toISOString(), agent: agent.name, ms: Date.now() - t0, messages, backend: out.backend, backendName: out.backendName, reply: text}) + '\n');
-  return out;
+  const at = Date.now();
+  const d = {id: `${agent.name}-${RUN}-${agent.seq = (agent.seq || 0) + 1}`, agent: agent.name, at};
+  if (LOG) logCall(JSON.stringify({t: new Date(at).toISOString(), id: d.id, episode_id: `${agent.name}-${RUN}-g${agent.episodeN}`, agent: agent.name, ms: at - t0, messages, backend: out.backend, backendName: out.backendName, reply: text}) + '\n');
+  return {...out, d};
 }
 
 async function sendJob(name, type, args, replace = false) {
@@ -617,26 +672,29 @@ async function decide(agent, agents, getState, budget) {
     if (round === 0 && agent.workers.size) agent.workerScans = new Map(await Promise.all(state.bots.filter((b) => agent.workers.has(b.name) && b.online).map(async (b) => [b.name, await fetchScan(b.name)])));
     while (!budget.take()) await new Promise((r) => setTimeout(r, 1000));
     const answer = await think(agent, state, bot);
-    const reply = answer.text;
+    const reply = answer.text, d = answer.d;
     agent.push('assistant', reply || '\t');
     const cmd = parseCommand(reply);
     console.log(`[${agent.name}] ${reply.slice(0, 160).replace(/\n/g, ' ')}`);
     if (TOKEN) http('POST', `${API}/api/decision`, {bot: agent.name, text: reply.slice(0, 200) || '(nothing to do)', backend: answer.backendName}).catch(() => {}); // the dashboard's "Agent decisions"
-    if (!cmd) return; // just talk
+    if (!cmd) return settle(d, 'neutral', 'talk'); // just talk
     const same = reply.match(COMMAND_RE)[0];
     // A foreman may gather too (the owner, 2026-10-10: bot1 stood around); idle workers still wake it every 30 s.
     if (agent.workers.size && !FOREMAN.has(cmd.name) && !GATHERING.has(cmd.name)) {
       agent.push('system', `Refused: !${cmd.name} is not one of your commands. Yours: ${[...FOREMAN, ...GATHERING].map((c) => `!${c}`).join(', ')}.`);
+      settle(d, 'bad', 'refused');
       continue;
     }
     if (agent.workers.size && cmd.name === 'baseStatus') {
       agent.push('system', baseStatusText(agent, state));
+      settle(d, 'good', 'query response');
       continue;
     }
     const ctx = {pos: bot.pos, supplyChest: state.supplyChest, places: {...Object.fromEntries((state.places || []).map((p) => [p.name, p])), ...agent.places}};
     const t = translate(cmd, ctx);
     if (t.refuse) {
       agent.push('system', t.refuse);
+      settle(d, 'bad', 'refused');
       continue;
     }
     if (t.query) {
@@ -644,6 +702,7 @@ async function decide(agent, agents, getState, budget) {
         nearbyBlocks: () => `NEARBY_BLOCKS (offsets dx,dy,dz from you: +x east, +y up, +z south; N is -z)\n${agent.around || 'No scan available right now.'}\n`,
         savedPlaces: () => `Saved place names: ${Object.keys(ctx.places).join(', ') || 'none'}`, help: () => commandDocs(blueprintNames(), [...agent.workers])}[t.query];
       agent.push('system', q());
+      settle(d, 'good', 'query response');
       continue;
     }
     if (t.local) {
@@ -651,12 +710,14 @@ async function decide(agent, agents, getState, budget) {
       if (t.local === 'rememberHere') {
         agent.places[String(a[0])] = {x: bot.pos[0], y: bot.pos[1], z: bot.pos[2]};
         agent.push('system', `Location saved as "${a[0]}".`);
+        settle(d, 'good', 'place saved');
         continue;
       }
       if (t.local === 'startConversation') {
         const to = agents.get(String(a[0]));
         const text = String(a[1] ?? '').toLowerCase().replace(/\W+/g, ' ').trim();
         const sent = (agent.talk.get(a[0]) || []).filter((m) => Date.now() - m.at < TALK_WINDOW_MS);
+        let sentOk = false;
         if (!to) agent.push('system', `${a[0]} is not a bot here. Bots: ${[...agents.keys()].join(', ')}`);
         else if (to === agent) agent.push('system', 'Not sent: you cannot talk to yourself.');
         // Two agents answered "done" to each other until the whole model budget was gone (R3-3): the same
@@ -665,25 +726,29 @@ async function decide(agent, agents, getState, budget) {
         else {
           agent.talk.set(a[0], [...sent, {at: Date.now(), text}]);
           to.inbox.push(`${agent.name}: (FROM OTHER BOT)${a[1] ?? ''}`);
+          sentOk = true;
         }
-        return;
+        return settle(d, sentOk ? 'neutral' : 'bad', sentOk ? 'talk' : 'not sent');
       }
-      if (t.local === 'endConversation') return;
+      if (t.local === 'endConversation') return settle(d, 'neutral', 'talk');
       if (t.local === 'assign') {
         const as = assignJob(cmd, agent.workers, state, ctx.places);
         if (as.refuse) {
           agent.push('system', as.refuse);
+          settle(d, 'bad', 'refused');
           continue;
         }
         const done = alreadyDone(agent, as.job);
         if (done) {
           agent.push('system', done);
+          settle(d, 'bad', 'refused');
           continue;
         }
         try {
-          await sendJob(as.worker, ...as.job, as.replace);
+          await order(d, as.worker, as.job, as.replace);
         } catch (e) {
           agent.push('system', `Code output: Assignment to ${as.worker} failed. ${e.message}`);
+          settle(d, 'bad', `send failed: ${e.message}`);
           continue;
         }
         assigner.set(as.worker, agent.name);
@@ -700,9 +765,10 @@ async function decide(agent, agents, getState, budget) {
         // Go quiet only once the bot has really stopped (MC-4): a failed Stop would leave a shift
         // running with nobody watching. Instead the brain is asked again.
         try {
-          await sendJob(agent.name, 'stop', {});
+          await order(d, agent.name, ['stop', {}]);
         } catch (e) {
           agent.push('system', `Code output: Stop failed (${e.message}); your current action is still running. Try again.`);
+          settle(d, 'bad', `send failed: ${e.message}`);
           agent.wake = true;
           agent.wakeAt ||= Date.now();
           return;
@@ -713,7 +779,7 @@ async function decide(agent, agents, getState, budget) {
       }
       if (t.local === 'goal') {
         agent.goal = String(a[0] ?? '');
-        return;
+        return settle(d, 'neutral', 'goal set');
       }
       if (t.local === 'buildBlueprint') {
         let bp;
@@ -721,6 +787,7 @@ async function decide(agent, agents, getState, budget) {
           bp = JSON.parse(fs.readFileSync(path.join(BLUEPRINTS, `${path.basename(String(a[0]))}.json`), 'utf8'));
         } catch {
           agent.push('system', `No blueprint called "${a[0]}". Blueprints: ${blueprintNames().join(', ')}`);
+          settle(d, 'bad', 'refused');
           continue;
         }
         t.job = ['build', {origin: {x: a[1], y: a[2], z: a[3]}, blocks: bp.blocks}];
@@ -728,17 +795,20 @@ async function decide(agent, agents, getState, budget) {
     }
     if (['shaft', 'excavate', 'level'].includes(t.job[0]) && leadsGathering(agent)) {
       agent.push('system', 'Refused: you lead, you do not dig. Give it to a worker with !assign.');
+      settle(d, 'bad', 'refused');
       continue;
     }
     if (same !== agent.lastCommand) agent.failures = 0;
     // Andy-4.2 ignored the repeat hint and sent one failing command eight times (live 2026-10-10).
     if (same === agent.lastCommand && agent.failures >= 2) {
       agent.push('system', `Refused: ${same} failed ${agent.failures} times in a row (${agent.lastFailure || 'same error'}). Do something different.`);
+      settle(d, 'bad', 'refused');
       continue;
     }
     // The lead bot tried all eight base parts in a row, each failing on the same unreachable chest (lab).
     if (agent.errStreak >= 2 && t.job[0] === agent.lastErrType) {
       agent.push('system', `Refused: ${t.job[0]} jobs failed ${agent.errStreak} times in a row with the same error (${agent.lastFailure}). Fix that cause first, or do something else.`);
+      settle(d, 'bad', 'refused');
       continue;
     }
     // The lead bot "built" the eight finished base parts again and again (lab 2026-10-10); the model copies
@@ -746,15 +816,17 @@ async function decide(agent, agents, getState, budget) {
     const done = alreadyDone(agent, t.job, String(cmd.args[0]));
     if (done) {
       agent.push('system', done);
+      settle(d, 'bad', 'refused');
       continue;
     }
     agent.lastCommand = same;
     try {
       // A routine never ends, so a job queued behind it would never start (bot2 had two stone shifts
       // queued, live 2026-10-10): the new order replaces it, as !assign does for workers.
-      await sendJob(agent.name, ...t.job, isRoutine(bot.job) || (bot.queue || []).some((label) => ROUTINES.has(String(label).split(" ")[0])));
+      await order(d, agent.name, t.job, isRoutine(bot.job) || (bot.queue || []).some((label) => ROUTINES.has(String(label).split(" ")[0])));
     } catch (e) {
       agent.push('system', `Code output: Action failed. ${e.message}`);
+      settle(d, 'bad', `send failed: ${e.message}`);
       continue;
     }
     noteSent(agent, t.job, String(cmd.args[0]));
@@ -764,6 +836,7 @@ async function decide(agent, agents, getState, budget) {
 
 // One dashboard event: job results become "Code output" lines, as Mindcraft reports them, and wake the brain.
 function onEvent(agents, e) {
+  outcomeEvent(e);
   // Alerts (mcbots alerts.js: supply chest gone, night, mobs at the base) go to every foreman.
   if (e.kind === 'alert') {
     for (const a of agents.values()) {
@@ -852,6 +925,7 @@ async function main() {
       for (const e of ev.events) onEvent(agents, e);
       const state = await getState();
       const now = Date.now();
+      expireOutcomes(now);
       const ready = [];
       for (const agent of agents.values()) {
         if (busy.has(agent.name)) continue;
@@ -893,4 +967,4 @@ if (require.main === module) main().catch((e) => {
   process.exit(1);
 });
 
-module.exports = {applyCrews, SCAN_MAX, WORKER_SCAN_MAX, fetchScan, SAMPLING, decide, Agent, workersOf, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished, alreadyDone, callModel, healthy};
+module.exports = {applyCrews, SCAN_MAX, WORKER_SCAN_MAX, fetchScan, SAMPLING, decide, Agent, workersOf, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished, alreadyDone, callModel, healthy, awaitJob, awaiting, outcomeEvent, expireOutcomes, order, OUTCOME_MAX};

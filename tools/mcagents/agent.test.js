@@ -2,7 +2,7 @@
 // node tools/mcagents/agent.test.js — the Mindcraft command translator.
 const assert = require('node:assert');
 process.env.LOG ||= require('node:path').join(require('node:os').tmpdir(), `mcagents-test-${process.pid}.jsonl`); // decide() logs every model call
-const {applyCrews, decide, Agent, workersOf, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished, alreadyDone, callModel, SCAN_MAX, WORKER_SCAN_MAX} = require('./agent');
+const {awaitJob, awaiting, outcomeEvent, expireOutcomes, OUTCOME_MAX, applyCrews, decide, Agent, workersOf, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished, alreadyDone, callModel, SCAN_MAX, WORKER_SCAN_MAX} = require('./agent');
 const {modelRequest, modelReply} = require('./model-protocol');
 
 { // agent.js and replay.js share one wire mapping for both model APIs
@@ -575,6 +575,7 @@ assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}
     globalThis.fetch = realFetch;
   }
   await scanTests();
+  await outcomeTests();
   console.log('ok decide');
 })();
 
@@ -640,5 +641,105 @@ async function scanTests() {
     } finally {
       globalThis.fetch = realFetch;
     }
+  }
+}
+
+// Outcome records: every decision gets an id and an episode; its fate follows as {kind: 'outcome', id, ...}.
+async function outcomeTests() {
+  const fs = require('node:fs');
+  const realFetch = globalThis.fetch;
+  const read = () => fs.readFileSync(process.env.LOG, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  const outcomes = (from) => read().slice(from).filter((r) => r.kind === 'outcome');
+  const decisions = (from) => read().slice(from).filter((r) => r.kind !== 'outcome');
+  const run = async (agent, reply, {state, jobOk = true} = {}) => {
+    const from = read().length;
+    globalThis.fetch = async (url) => {
+      const res = (code, obj) => ({ok: code < 400, status: code, json: async () => obj});
+      if (url.endsWith('/api/chat')) return res(200, {message: {content: reply}});
+      if (url.endsWith('/api/job')) return jobOk ? res(200, {}) : res(500, {error: 'dashboard down'});
+      return res(200, {});
+    };
+    const st = state || {bots: [{name: 'bot1', online: true, pos: [0, 64, 0], inventory: [], queue: [], job: null}, {name: 'bot2', online: true, pos: [0, 64, 0], inventory: [], queue: [], job: null}], places: [], supplyChest: {x: 5, y: 64, z: 5}};
+    await decide(agent, new Map([['bot1', agent]]), async () => st, {take: () => true});
+    return from;
+  };
+  try {
+    fs.writeFileSync(process.env.LOG, '');
+    awaiting.length = 0;
+    const agent = new Agent('bot1', 'mine coal', null);
+    // ids and episodes: unique ids, one episode per goal
+    let from = await run(agent, 'Hello there');
+    assert.deepStrictEqual(outcomes(from).map((o) => [o.result, o.reason]), [['neutral', 'talk']], 'talk-only is neutral');
+    const [first] = decisions(from);
+    assert.equal(outcomes(from)[0].id, first.id);
+    assert.ok(first.id && first.episode_id && typeof outcomes(from)[0].ms === 'number');
+    from = await run(agent, '!inventory');
+    assert.ok(outcomes(from).length === 5 && outcomes(from).every((o) => o.result === 'good' && o.reason === 'query response'), 'each query round is a decision with its own outcome');
+    const second = decisions(from)[0];
+    assert.notEqual(second.id, first.id);
+    assert.equal(second.episode_id, first.episode_id, 'same goal, same episode');
+    agent.goal = 'smelt iron';
+    from = await run(agent, '!newAction("x")');
+    assert.notEqual(decisions(from)[0].episode_id, first.episode_id, 'a new goal starts a new episode');
+    assert.ok(outcomes(from).length === 5 && outcomes(from).every((o) => o.result === 'bad' && o.reason === 'refused'), 'translate refusal, every round');
+    // a job outcome waits for its result
+    from = await run(agent, '!collectBlocks("coal_ore", 5)');
+    assert.deepStrictEqual(outcomes(from), [], 'job sent: no outcome yet');
+    assert.equal(awaiting.length, 1);
+    const mineId = decisions(from)[0].id;
+    outcomeEvent({bot: 'bot2', kind: 'done', text: 'finished: mine coal_ore 5 (3 s)'});
+    assert.equal(awaiting.length, 1, 'another bot\'s event is not ours');
+    from = read().length;
+    outcomeEvent({bot: 'bot1', kind: 'done', text: 'finished: mine coal_ore 5 (3 s)'});
+    assert.deepStrictEqual(outcomes(from).map((o) => [o.id, o.result, o.reason]), [[mineId, 'good', 'finished']]);
+    assert.equal(awaiting.length, 0);
+    // failed, gave up, died, stopped by the owner
+    const wait = async (reply) => { await run(agent, reply); return awaiting.at(-1).d.id; };
+    for (const [ev, result, reason] of [
+      [{kind: 'fail', text: 'failed: mine coal_ore 5 - no pickaxe'}, 'bad', 'failed: no pickaxe'],
+      [{kind: 'fail', text: 'gave up: mine coal_ore 5 (failed 3 times)'}, 'bad', 'gave up'],
+      [{kind: 'death', text: 'died at 1 2 3'}, 'bad', 'died'],
+      [{kind: 'stop', text: 'stopped: mine coal_ore 5'}, 'neutral', 'stopped'],
+    ]) {
+      const id = await wait('!collectBlocks("coal_ore", 5)');
+      from = read().length;
+      outcomeEvent({bot: 'bot1', ...ev}, Date.now() + 120000); // later than any stop an earlier test sent
+      assert.deepStrictEqual(outcomes(from).map((o) => [o.id, o.result, o.reason]), [[id, result, reason]], ev.text);
+    }
+    // an unanswered job ends neutral after OUTCOME_MS
+    const slow = await wait('!collectBlocks("coal_ore", 5)');
+    from = read().length;
+    expireOutcomes(Date.now() + 60000);
+    assert.deepStrictEqual(outcomes(from), [], 'not yet');
+    expireOutcomes(Date.now() + 16 * 60000);
+    assert.deepStrictEqual(outcomes(from).map((o) => [o.id, o.result, o.reason]), [[slow, 'neutral', 'no result in 15 min']]);
+    // a replacing order settles the routine it cuts off; a stop settles itself and the job
+    const routine = await wait('!startShift("coal")');
+    const lazy = {bots: [{name: 'bot1', online: true, pos: [0, 64, 0], inventory: [], queue: [], job: {type: 'shift', label: 'shift coal_ore', runningS: 99}}], places: [], supplyChest: {x: 5, y: 64, z: 5}};
+    from = await run(agent, '!stop', {state: lazy});
+    assert.deepStrictEqual(outcomes(from).map((o) => [o.id === routine, o.result, o.reason]), [[true, 'neutral', 'stopped'], [false, 'neutral', 'stop sent']]);
+    outcomeEvent({bot: 'bot1', kind: 'stop', text: 'stopped: shift coal_ore'}); // our own stop's echo: nothing waits
+    // send failure and a foreman's assign: the worker's job is the pending one
+    from = await run(agent, '!collectBlocks("coal_ore", 5)', {jobOk: false});
+    assert.ok(outcomes(from).length && outcomes(from).every((o) => o.result === 'bad' && o.reason === 'send failed: dashboard down'));
+    const boss = new Agent('bot1', 'gather', null);
+    boss.workers = new Set(['bot2']);
+    from = await run(boss, '!assign("bot2", "!collectBlocks(\\"cobblestone\\", 8)")');
+    assert.equal(awaiting.at(-1).bot, 'bot2');
+    const assignId = awaiting.at(-1).d.id;
+    from = read().length;
+    outcomeEvent({bot: 'bot2', kind: 'done', text: 'finished: mine stone 8 (9 s)'});
+    assert.deepStrictEqual(outcomes(from).map((o) => [o.id, o.result]), [[assignId, 'good']]);
+    from = await run(boss, '!assign("bot9", "!stop")');
+    assert.ok(outcomes(from).length && outcomes(from).every((o) => o.result === 'bad' && o.reason === 'refused'), 'assign refusal');
+    // the map is capped
+    from = read().length;
+    for (let i = 0; i < OUTCOME_MAX + 5; i++) awaitJob({id: `x${i}`, agent: 'bot1', at: Date.now()}, 'bot7', 'mine');
+    assert.equal(awaiting.length, OUTCOME_MAX);
+    assert.deepStrictEqual(outcomes(from).map((o) => [o.id, o.reason]), [0, 1, 2, 3, 4, 5].map((i) => [`x${i}`, 'dropped']).slice(0, 5), 'the oldest ends neutral');
+    console.log('ok outcomes');
+  } finally {
+    globalThis.fetch = realFetch;
+    awaiting.length = 0;
   }
 }

@@ -88,6 +88,26 @@ assert.equal(out.stats.sft, 2);
 assert.equal(out.stats.dropped.situation_cap, 3);
 assert.equal(buildDataset([row(100, '!startShift("logs")')]).stats.labels.unknown, 1, 'no invented routine finish');
 
+// Logged outcome records (agent.js) label decisions by id and beat event joins; events stay the fallback.
+const outcome = (id, result, reason, ms = 5000) => ({kind: 'outcome', t: 105, id, agent: 'bot1', result, reason, ms});
+const logged = [row(100, goto, {id: 'a1'}), row(200, '!inventory', {id: 'a2'}), row(300, 'Hello', {id: 'a3'}), row(400, goto, {id: 'a4'}), row(500, goto, {id: 'a5'}), row(600, goto)];
+out = buildDataset([...logged, outcome('a1', 'good', 'finished'), outcome('a2', 'bad', 'refused'), outcome('a4', 'neutral', 'no result in 15 min'), outcome('a5', 'bad', 'failed: no path'), outcome('a1', 'bad', 'second one ignored'), outcome('zz', 'good', 'orphan'), {kind: 'outcome', id: 'a3', result: 'great'}],
+  [event(1, 450, 'bot1', 'failed: goto 1 64 2 - no path', 'fail'), event(2, 650, 'bot1', 'finished: goto 1 64 2 (1 s)')]);
+assert.deepEqual(out.labels.map((l) => [l.label, l.reason, l.label_source]),
+  [['good', 'finished', 'outcome'], ['bad', 'refused', 'outcome'], ['neutral', 'no command', 'inferred'], ['neutral', 'no result in 15 min', 'outcome'], ['bad', 'failed: no path', 'outcome'], ['good', 'finished', 'inferred']]);
+assert.deepEqual(out.labels.map((l) => l.decision_id), ['a1', 'a2', 'a3', 'a4', 'a5', null]);
+assert.deepEqual(out.stats.outcomes, {records: 5, labelled: 4});
+assert.equal(out.stats.dropped.invalid_outcome, 1, 'bad result value');
+assert.equal(out.stats.input, 13, 'outcome lines are not decisions and are never invalid rows');
+assert.equal(out.stats.dropped.invalid, undefined);
+// a logged good beats a later event failure; a logged outcome is not overridden by the repeat rule
+out = buildDataset([row(100, goto, {id: 'b1'}), row(120, goto, {id: 'b2'}), outcome('b1', 'bad', 'failed: no path', 10), outcome('b2', 'good', 'finished')]);
+assert.deepEqual(out.labels.map((l) => l.label), ['bad', 'good'], 'repeat rule leaves logged outcomes alone');
+out = buildDataset([row(100, goto, {id: 'c1'}), row(120, goto, {id: 'c2'}), outcome('c1', 'bad', 'failed: no path', 10)]);
+assert.equal(out.labels[1].reason, 'repeated failed command', 'a logged failure still feeds the repeat rule for unlabeled repeats');
+out = buildDataset([row(100, goto, {id: 'd1'}), outcome('d1', 'good', 'Bearer abcdef123456')]);
+assert.ok(!JSON.stringify(out.labels).includes('abcdef123456'), 'outcome reasons are sanitized');
+
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dataset-test-'));
 try {
   const log = new EventLog({now: () => 110});

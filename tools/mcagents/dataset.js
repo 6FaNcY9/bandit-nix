@@ -75,7 +75,16 @@ function buildDataset(records, events = [], {cap = 3} = {}) {
   if (!Number.isSafeInteger(cap) || cap < 1) throw new Error('Situation cap must be a positive integer');
   const stats = {input: records.length, dropped: {}, labels: {good: 0, bad: 0, neutral: 0, unknown: 0}, commands: Object.create(null), agents: Object.create(null), sft: 0, splits: {}, episodes: 0, split_groups: 0};
   const rows = [], exact = new Set();
+  // agent.js logs {kind:'outcome', id, result, reason, ms} when a decision's fate is known: the first one per id wins.
+  const outcomes = new Map();
+  for (const r of records) {
+    if (r?.kind !== 'outcome') continue;
+    if (typeof r.id !== 'string' || !['good', 'bad', 'neutral'].includes(r.result) || (r.ms !== undefined && !(r.ms >= 0))) count(stats.dropped, 'invalid_outcome');
+    else if (!outcomes.has(r.id)) outcomes.set(r.id, r);
+  }
+  stats.outcomes = {records: outcomes.size, labelled: 0};
   for (const [i, r] of records.entries()) {
+    if (r?.kind === 'outcome') continue;
     const drop = (why) => count(stats.dropped, why);
     if (!r || !Array.isArray(r.messages) || !r.messages.length || typeof r.reply !== 'string' || typeof r.agent !== 'string' || !Number.isFinite(time(r.t)) || (r.ms !== undefined && (!Number.isFinite(r.ms) || r.ms < 0)) || r.messages.some((m) => !m || !['system', 'user', 'assistant'].includes(m.role) || typeof m.content !== 'string') || r.messages[0].role !== 'system') { drop('invalid'); continue; }
     if (JSON.stringify(sanitize(r)) !== JSON.stringify(r)) { drop('secrets'); continue; }
@@ -89,7 +98,11 @@ function buildDataset(records, events = [], {cap = 3} = {}) {
     if (typeof episode !== 'string' || !episode) throw new Error('Invalid episode/session');
     const job = jobFor(r, command);
     if (!command && /!\w/.test(reply)) job.refuse = true;
-    rows.push({...r, reply, command, job, episode, line: i + 1, at: time(r.t), label: job.refuse ? 'bad' : !command ? 'neutral' : 'unknown', reason: job.refuse ? 'refused' : !command ? 'no command' : 'no unambiguous outcome'});
+    const row = {...r, reply, command, job, episode, line: i + 1, at: time(r.t), label: job.refuse ? 'bad' : !command ? 'neutral' : 'unknown', reason: job.refuse ? 'refused' : !command ? 'no command' : 'no unambiguous outcome'};
+    // A logged outcome beats every inference below (event joins, prompt histories, repeat rule).
+    const o = typeof r.id === 'string' && outcomes.get(r.id);
+    if (o) { Object.assign(row, {label: o.result, reason: String(sanitize(o.reason ?? o.result)).slice(0, 160), outcomeAt: row.at + (o.ms || 0), logged: true}); stats.outcomes.labelled++; }
+    rows.push(row);
   }
   rows.sort((a, b) => a.at - b.at || a.line - b.line);
   const history = new Map(), signals = [];
@@ -105,9 +118,9 @@ function buildDataset(records, events = [], {cap = 3} = {}) {
       const worker = m.content.match(/^SYSTEM: Worker ([^:]+): ([\s\S]*)$/);
       const text = worker ? worker[2] : m.content.replace(/^SYSTEM: Code output:\s*/, '');
       if (old && !events.length && terminal(text) && (worker || m.content.startsWith('SYSTEM: Code output:'))) signals.push({at: row.at - (row.ms || 0), bot: worker ? worker[1] : row.agent, text, session: row.server_session || 'capture', episode: row.episode});
-      if (anchor && /^(?:SYSTEM: )?(?:Refused:|Not sent:|Code output: (?:Action|Assignment to .*|Stop) failed)/i.test(m.content)) {
+      if (anchor && !anchor.logged && /^(?:SYSTEM: )?(?:Refused:|Not sent:|Code output: (?:Action|Assignment to .*|Stop) failed)/i.test(m.content)) {
         anchor.label = 'bad'; anchor.reason = 'refused';
-      } else if (anchor?.job.query && /^SYSTEM: (?:STATS|INVENTORY|ENTITIES|Nearby|Saved place names:|BASE STATUS|\*COMMAND DOCS)/.test(m.content)) {
+      } else if (anchor && !anchor.logged && anchor.job.query && /^SYSTEM: (?:STATS|INVENTORY|ENTITIES|Nearby|Saved place names:|BASE STATUS|\*COMMAND DOCS)/.test(m.content)) {
         anchor.label = 'good'; anchor.reason = 'query response';
       }
     }
@@ -120,7 +133,7 @@ function buildDataset(records, events = [], {cap = 3} = {}) {
   const consumed = new Set();
   for (const s of signals) {
     const [, status, label] = terminal(s.text);
-    const candidates = rows.filter((r) => r.at <= s.at && (!s.episode || r.episode === s.episode) && (r.server_session || 'capture') === s.session && r.job.bot === s.bot && r.job.label === label && !consumed.has(r));
+    const candidates = rows.filter((r) => !r.logged && r.at <= s.at && (!s.episode || r.episode === s.episode) && (r.server_session || 'capture') === s.session && r.job.bot === s.bot && r.job.label === label && !consumed.has(r));
     if (candidates.length !== 1) {
       for (const r of candidates) { consumed.add(r); r.reason = 'ambiguous overlapping jobs'; }
       continue;
@@ -136,8 +149,8 @@ function buildDataset(records, events = [], {cap = 3} = {}) {
   for (const r of rows) {
     const situation = normalize(r.messages.filter((m) => m.role === 'user').at(-1)?.content || '');
     const repeatKey = hash([r.episode, r.agent, r.command, r.messages[0].content]);
-    if (r.command && failed.has(repeatKey) && failed.get(repeatKey) <= r.at) { r.label = 'bad'; r.reason = 'repeated failed command'; }
-    if (r.label === 'bad' && ['failed', 'gave up', 'repeated failed command'].includes(r.reason)) failed.set(repeatKey, Math.min(failed.get(repeatKey) ?? Infinity, r.outcomeAt ?? r.at));
+    if (r.command && !r.logged && failed.has(repeatKey) && failed.get(repeatKey) <= r.at) { r.label = 'bad'; r.reason = 'repeated failed command'; }
+    if (r.label === 'bad' && /^(?:failed|gave up|repeated failed command)\b/.test(r.reason)) failed.set(repeatKey, Math.min(failed.get(repeatKey) ?? Infinity, r.outcomeAt ?? r.at));
     count(stats.labels, r.label);
     const name = r.command?.name || '(none)';
     stats.commands[name] ||= {good: 0, bad: 0, neutral: 0, unknown: 0}; count(stats.commands[name], r.label);
@@ -173,7 +186,7 @@ function buildDataset(records, events = [], {cap = 3} = {}) {
       messages.push({role: 'assistant', content: r.reply});
       splits[split(r.episode)].push({messages});
     } else count(stats.dropped, filter);
-    labels.push({id: hash([r.agent, r.t, r.messages, r.reply]), episode_id: r.episode, source: {line: r.line, agent: r.agent, t: r.t}, command: r.command, label: r.label, reason: r.reason, split: filter ? null : split(r.episode), filter, dedup_key: r.cluster});
+    labels.push({id: hash([r.agent, r.t, r.messages, r.reply]), episode_id: r.episode, source: {line: r.line, agent: r.agent, t: r.t}, command: r.command, label: r.label, reason: r.reason, label_source: r.logged ? 'outcome' : 'inferred', decision_id: r.id ?? null, split: filter ? null : split(r.episode), filter, dedup_key: r.cluster});
   }
   stats.episodes = parent.size; stats.split_groups = groups.length;
   for (const [name, data] of Object.entries(splits)) { stats.splits[name] = data.length; stats.sft += data.length; }

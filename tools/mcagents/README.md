@@ -79,7 +79,17 @@ situations against the lab model (8 samples each, old vs new `agent.js`): see th
 Env: `MODEL` (default `andy-4.2`), `ANDY_URL_2` (optional OpenAI-compatible Andy endpoint, for
 example `http://127.0.0.1:18081`), `THINK=1` (reasoning on: about 20-30 s per decision with 4
 agents on one GPU instead of about 1 s), `LOG` (JSONL of every model call: prompt, thinking,
-reply; raw material for a later fine-tune), `BLUEPRINTS`.
+reply; raw material for a later fine-tune), `BLUEPRINTS`, `OUTCOME_MS` (default 900000: a job with no
+result by then ends `neutral`).
+
+Each logged decision has an `id` and an `episode_id` (agent + process run + goal). When its fate is
+known the agent appends `{"kind":"outcome","id","result":"good|bad|neutral","reason","ms"}` to the
+same `LOG`: `finished` is good; `failed`, `gave up`, `died`, a refusal by `translate`, `assignJob` or the
+agent's policy and a failed send are bad; talk, stop, replaced, owner-stopped and timed-out jobs are
+neutral; a query answered is good. `ms` counts from the decision's log line. Pending jobs live in an
+in-memory list of at most 400 (the oldest ends `neutral`/`dropped`), so a restart leaves its pending
+decisions without an outcome. A job's result is matched to the oldest waiting job of that type on the
+same bot, not by full label.
 
 When `ANDY_URL_2` is set, requests use the healthy backend with fewer in-flight calls (backend 2
 wins ties), and retry the other backend after a request error or timeout. Ollama health is probed
@@ -151,6 +161,12 @@ Event inputs accept an `/api/events` object (`events`, `lastId`), an event array
 or JSONL archive wrappers (`server_session`, `event`). Events use the mcbots
 `{id,t,bot,kind,text}` schema; conflicting IDs within one server session fail.
 Annotate matching decisions and events with `server_session` across restarts.
+
+**Outcome records win.** A decision with a logged `{kind:"outcome"}` line (same `id`) takes its
+label and reason from it (`labels.jsonl` shows `label_source: "outcome"` and `decision_id`);
+the event join and prompt-history rules below label only decisions without one (older logs), so
+`--events` stays optional. Orphan or malformed outcome lines are ignored or counted
+(`stats.outcomes`, `dropped.invalid_outcome`).
 
 Labels are automatic **outcome candidates**, not human judgements of a safe or
 useful plan. `good` requires a compatible `finished` result for the exact
