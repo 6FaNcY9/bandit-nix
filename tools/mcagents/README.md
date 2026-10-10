@@ -126,3 +126,73 @@ boolean/latency deltas. Repeat this for seeds 11, 22, 33, alternating backend or
 Human goal consistency, harmful-repeat adjudication, tokenizer/context checks and the
 provenance manifest remain the separate protocol in
 [AGENT-TRAINING.md](../../docs/runbooks/minecraft/AGENT-TRAINING.md).
+
+Offline decision dataset builder (plain Node, no dependencies or network calls):
+
+```bash
+node tools/mcagents/dataset.js /private/decisions.jsonl --out /private/dataset
+# Optional local GET /api/events dump; this tool never fetches it:
+node tools/mcagents/dataset.js /private/decisions.jsonl --events /private/events.json --out /private/dataset-with-events --cap 3
+node tools/mcagents/dataset.test.js
+```
+
+The output directory must be new; existing paths and symlinks are refused. It is
+created mode 0700, with mode-0600 `train.jsonl`, `val.jsonl`, `test.jsonl`,
+`labels.jsonl` and `stats.json`. Keep these local and outside Git. Input is JSONL
+with `t` (ISO time or epoch milliseconds), `agent`, full `messages` and `reply`;
+`ms`, `episode_id`, `server_session` and `goal` are optional. Malformed JSON fails
+the build; records missing the required decision fields are counted as invalid.
+Event inputs accept an `/api/events` object (`events`, `lastId`), an event array,
+or JSONL archive wrappers (`server_session`, `event`). Events use the mcbots
+`{id,t,bot,kind,text}` schema; conflicting IDs within one server session fail.
+Annotate matching decisions and events with `server_session` across restarts.
+
+Labels are automatic **outcome candidates**, not human judgements of a safe or
+useful plan. `good` requires a compatible `finished` result for the exact
+translated job label and affected bot, or an anchored immediate query response.
+`bad` means failed/gave-up, parser/translator or explicit executor refusal, or a
+repeat of a known failed command without a change to the logged system/state.
+`neutral` is pure talk/no command. Missing, ambiguous, stopped and unobserved
+routine outcomes remain `unknown`. An `!assign` uses its inner command and the
+worker, not the foreman's next result. Event matches must follow dispatch;
+rolling prompt histories count new messages once. With events supplied, terminal
+results come only from that archive; prompt histories still provide refusals and
+query responses. Multiple outstanding identical jobs are ambiguous. No stable
+job ID exists, so even an exact unique match needs review for external/replaced
+jobs, event gaps, missing worker state and irrelevant successes.
+
+Rows containing anything changed by `replay.js`'s sanitizer are **dropped**, not
+redacted into training. The additional privacy filter rejects unrecognized user
+chat, explicit human/player chat, non-bot names in Nearby Human Players, URLs
+and common private paths. It is a conservative heuristic, not an exhaustive
+privacy scanner: review every retained prompt and reply before training/export.
+Thinking is never exported. Bad historical assistant turns are removed from SFT
+context; system/user state and outcomes remain. The final assistant is the good
+reply, with think tags removed. Trainer rows have exactly this chat format:
+
+```json
+{"messages":[{"role":"system","content":"Command docs, goal and state"},{"role":"user","content":"SYSTEM: Work needed"},{"role":"assistant","content":"!assign(\"bot2\", \"!collectBlocks(\\\"stone\\\", 32)\")"}]}
+```
+
+Use the trainer's chat template and assistant/completion-only loss; verify its
+mask before training. `labels.jsonl` holds IDs, source line/agent/time, episode,
+parsed command, label/reason, dedup key and retained split/filter reason. It is a
+private audit sidecar, not trainer input. `stats.json` and stdout count labels
+before SFT filtering, labels per command/agent, filter reasons and split sizes.
+Only `good` candidates reach SFT. Secret/privacy/invalid rows have counts only.
+
+Raw overlapping decisions are deduped first. Near prompts cluster normalized
+system text and the latest user situation (case, whitespace and numbers folded),
+retaining one good representative. This deliberately collapses coordinate/count
+variants; it can discard useful distinctions and needs review. A separate cap
+(default 3, positive integer `--cap`) limits each goal/command/trigger category
+(failed, finished, idle, etc.). All episodes sharing a near-prompt cluster are
+joined **before** filtering. Entire joined groups split chronologically 80/10/10
+(rounded boundaries), with newer groups reserved for evaluation. Ratios are by
+group, not row; small captures can have empty validation/test sets. Explicit
+`episode_id` is preferred; otherwise use `server_session`. With neither, the
+entire input is one `capture` episode, across all agents, and stays in train.
+Do not invent boundaries from agent names. Supply reviewed boundaries and more
+sessions to obtain meaningful held-out evaluation. Human goal-consistency review,
+frozen-replay quarantine and tokenizer/context-size checks remain the operator's
+steps in [AGENT-TRAINING.md](../../docs/runbooks/minecraft/AGENT-TRAINING.md).
