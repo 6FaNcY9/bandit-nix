@@ -19,6 +19,11 @@ API=http://127.0.0.1:8097 AGENTS='bot11=Collect 16 cobblestone and put it in the
   node tools/mcagents/agent.js
 ```
 
+Routines: `!startShift(type)` (logs or a block, into the base chest), `!guardHere(radius)` and
+`!afkHere` (stop, no more prompts until a message comes). A running `shift`, `guard` or `follow`
+never ends by itself; the agent loop only prompts a bot that has no job (or got a message), so a
+routine is never re-prompted. End one with `!stop`.
+
 Env: `MODEL` (default `andy-4.2`), `THINK=1` (reasoning on: about 20-30 s per decision with 4
 agents on one GPU instead of about 1 s), `LOG` (JSONL of every model call: prompt, thinking,
 reply; raw material for a later fine-tune), `BLUEPRINTS`.

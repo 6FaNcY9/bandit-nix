@@ -53,6 +53,9 @@ const DOCS = {
   rememberHere: ['Save the current location with a given name.', {name: ['string', 'The name to remember the location as.']}],
   goToRememberedPlace: ['Go to a saved location.', {name: ['string', 'The name of the location to go to.']}],
   collectBlocks: ['Collect the nearest blocks of a given type.', {type: ['string', 'The block type to collect.'], num: ['number', 'The number of blocks to collect.']}],
+  startShift: ['Start a work shift: endlessly collect a block type (or logs) and put it in the base chest whenever the inventory fills. It never ends by itself; end it with !stop.', {type: ['string', 'The block type to collect, or logs.']}],
+  guardHere: ['Stand guard where you are: fight every hostile within the radius. It never ends by itself; end it with !stop.', {radius: ['number', 'How far from here to guard (4-48).']}],
+  afkHere: ['Stop and wait here until another bot or player writes to you. Use it when there is nothing left to do.', {}],
   putInChest: ['Put the given item in the base chest.', {item_name: ['string', 'The name of the item to put in the chest.'], num: ['number', 'The number of items to put in the chest.']}],
   takeFromChest: ['Take the given items from the base chest.', {item_name: ['string', 'The name of the item to take.'], num: ['number', 'The number of items to take.']}],
   viewChest: ['View the items/counts of the base chest.', {}],
@@ -79,6 +82,10 @@ function commandDocs(blueprints = []) {
   return docs + '*\n';
 }
 
+// Jobs that never end by themselves. A bot running one is busy, not "needs a prompt".
+const ROUTINES = new Set(['shift', 'guard', 'follow']);
+const isRoutine = (job) => !!job && ROUTINES.has(job.type);
+
 const LOG_TYPES = /_log$|^logs?$|^wood$/;
 
 // Mindcraft command -> {job: [type, args]} | {query: name} | {local: name} | {refuse: why}.
@@ -99,6 +106,16 @@ function translate(cmd, ctx) {
       if (LOG_TYPES.test(type)) return {job: ['chop', {count: n(a[1], 1)}]};
       return {job: ['mine', {block: type === 'cobblestone' ? 'stone' : type, count: n(a[1], 1)}]};
     }
+    case 'startShift': {
+      if (!chest) return {refuse: 'There is no base chest yet.'};
+      const type = String(a[0] ?? '').replace(/^minecraft:/, '');
+      if (!type) return {refuse: 'Say what to collect, for example !startShift("logs").'};
+      return {job: ['shift', {block: LOG_TYPES.test(type) ? 'logs' : type === 'cobblestone' ? 'stone' : type, ...chest}]};
+    }
+    case 'guardHere':
+      if (!ctx.pos) return {refuse: 'Position unknown.'};
+      return {job: ['guard', {x: ctx.pos[0], y: ctx.pos[1], z: ctx.pos[2], radius: Math.max(4, Math.min(n(a[0], 16), 48))}]};
+    case 'afkHere': return {local: 'afkHere'};
     case 'putInChest':
       if (!chest) return {refuse: 'There is no base chest yet.'};
       return {job: ['deposit', {...chest, only: String(a[0] ?? '')}]};
@@ -237,6 +254,11 @@ async function decide(agent, agents, getState) {
         return;
       }
       if (t.local === 'endConversation') return;
+      if (t.local === 'afkHere') {
+        agent.afk = true; // no more prompts until a message comes
+        await sendJob(agent.name, 'stop', {}).catch(() => {});
+        return;
+      }
       if (t.local === 'goal') {
         agent.goal = String(a[0] ?? '');
         return;
@@ -300,10 +322,11 @@ async function main() {
         if (!bot?.online || bot.dead || busy.has(agent.name)) continue;
         const idle = !bot.job && !bot.queue.length;
         const message = agent.inbox.length > 0;
-        if (!idle && !message) continue;
+        if (!idle && !message) continue; // a running job, routines included, is not a reason to prompt
+        if (message) agent.afk = false;
         while (agent.inbox.length) agent.push('user', agent.inbox.shift());
         if (idle && !message) {
-          if (!agent.goal) continue;
+          if (!agent.goal || agent.afk) continue;
           agent.push('system', `You are self-prompting with the goal: "${agent.goal}". Respond:`);
         }
         busy.add(agent.name);
@@ -322,4 +345,4 @@ if (require.main === module) main().catch((e) => {
   process.exit(1);
 });
 
-module.exports = {parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint};
+module.exports = {parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine};

@@ -1,7 +1,7 @@
 'use strict';
 // node tools/mcagents/agent.test.js — the Mindcraft command translator.
 const assert = require('node:assert');
-const {parseCommand, translate, commandDocs, inventoryText, repeatHint} = require('./agent');
+const {parseCommand, translate, commandDocs, inventoryText, repeatHint, isRoutine} = require('./agent');
 
 assert.deepStrictEqual(parseCommand('Sure! !collectBlocks("oak_log", 10)'), {name: 'collectBlocks', args: ['oak_log', 10]});
 assert.deepStrictEqual(parseCommand("Bye! !endConversation('john')"), {name: 'endConversation', args: ['john']});
@@ -27,4 +27,18 @@ assert.ok(commandDocs(['test-pad-3x3']).includes('!collectBlocks: Collect the ne
 assert.ok(!commandDocs().includes('!newAction'), 'code writing is not offered');
 assert.strictEqual(inventoryText({inventory: ['cobblestone x12', 'oak_log x3']}), 'INVENTORY\n- cobblestone: 12\n- oak_log: 3\n');
 assert.match(repeatHint('!buildBlueprint("test-pad-3x3", -95, 66, -15)'), /failed twice.*Do not repeat it/);
+// H1: routines as commands.
+assert.deepStrictEqual(tr('!startShift("oak_log")'), {job: ['shift', {block: 'logs', x: 5, y: 64, z: 5}]});
+assert.deepStrictEqual(tr('!startShift("cobblestone")'), {job: ['shift', {block: 'stone', x: 5, y: 64, z: 5}]});
+assert.deepStrictEqual(tr('!startShift("iron_ore")'), {job: ['shift', {block: 'iron_ore', x: 5, y: 64, z: 5}]});
+assert.ok(translate(parseCommand('!startShift("logs")'), {pos: null, supplyChest: null}).refuse, 'a shift needs the base chest');
+assert.ok(tr('!startShift()').refuse);
+assert.deepStrictEqual(tr('!guardHere(20)'), {job: ['guard', {x: 1, y: 64, z: 2, radius: 20}]});
+assert.deepStrictEqual(tr('!guardHere(500)').job[1].radius, 48);
+assert.deepStrictEqual(tr('!guardHere(1)').job[1].radius, 4);
+assert.deepStrictEqual(tr('!guardHere').job[1].radius, 16);
+assert.strictEqual(tr('!afkHere').local, 'afkHere');
+assert.ok(isRoutine({type: 'shift'}) && isRoutine({type: 'guard'}) && isRoutine({type: 'follow'}));
+assert.ok(!isRoutine({type: 'mine'}) && !isRoutine(null));
+for (const c of ['startShift', 'guardHere', 'afkHere']) assert.ok(commandDocs().includes(`!${c}:`), c);
 console.log('ok');
