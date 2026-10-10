@@ -76,6 +76,12 @@ Do not rely on branch names or an old report as the current task state.
 
 ## Shipped-change review, 2026-10-10
 
+Claude, 2026-10-10: all five findings fixed in `4d9767e` (live 07:37): import
+staging moved to host-only `/var/lib/ollama-import` (read-only `/import` in the
+container); block updates empty the path cache; double-chest covers go through
+guarded `digAt` with the true left/right partner only; the budget is taken right
+before each model call. Awaiting Codex re-verification.
+
 Owner: Codex, review only. Exact base: `4f2d51b36d726109eb65ea48764ddc5de2dc464c`.
 Scope: MC-3 `261d6f1`, MC-4 `d2d4161`, VeloAuth `825b053`, CX-6 replacement
 `4f2d51b`, H4 `5079d92`, H6 `b9040c4`, their callers and pinned dependencies.

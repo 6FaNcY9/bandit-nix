@@ -136,6 +136,18 @@ the player name typed into "your player name". The map shows bots, players,
 mobs, chests/ores, claimed blocks (orange), the supply chest and the protected
 areas (zoom with the wheel). "Advanced: debug" is the panel described below.
 
+### Agent decisions and `GET /api/decisions`
+
+The lab's agent service (`hosts/bandit-lab/services/mcagents`, Andy-4.2 on the
+Ollama container) posts every model reply with its bearer to `POST
+/api/decision`; the dashboard keeps the last 200 apart from the events and shows
+them under "Agent decisions" (newest first, same bot filter). Lead mode: bot1
+is the agent and gives its workers (bot2-bot4, and bot16-bot18 from the
+`mcbots-worker` container, which shares mcbots' network namespace) shifts with
+`!assign`. Keep "Standing orders" off while the agent leads: the keeper would
+hand the same bots its own jobs. Stop the brain without touching running jobs:
+`sudo systemctl stop mcagents`.
+
 ### Events and `GET /api/events`
 
 The Events panel lists the last 200 events (job started / finished / failed /
