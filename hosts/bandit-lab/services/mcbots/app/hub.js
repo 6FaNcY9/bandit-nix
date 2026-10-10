@@ -489,7 +489,7 @@ class Hub {
     const st = obj(m.stock);
     if (st) {
       const items = Object.fromEntries(Object.entries(obj(st.items) || {}).slice(0, 80).filter(([k, v]) => BLOCK_RE.test(k) && Number.isInteger(v) && v >= 0).map(([k, v]) => [k, Math.min(v, 1e6)]));
-      this.world.noteStock(by(st.by), items);
+      this.world.noteStock(by(st.by), items, Number.isInteger(st.free) && st.free >= 0 && st.free <= 54 ? st.free : null);
     }
   }
 

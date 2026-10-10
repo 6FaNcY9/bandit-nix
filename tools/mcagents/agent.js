@@ -331,6 +331,17 @@ function trackError(a, text) {
 // Agents are never workers.
 const workersOf = (env, name, agents) => new Set((env[`WORKERS_${name}`] ?? env.WORKERS ?? '').split(',').map((w) => w.trim()).filter((w) => /^\w+$/.test(w) && !agents.has(w)));
 
+// Crews and goals chosen in the dashboard (GET /api/crews) win over the env while present; removing them
+// restores the env. A goal the agent set itself with !goal stays until the dashboard's value changes.
+function applyCrews(agents, data) {
+  for (const a of agents.values()) {
+    const goal = data?.goals?.[a.name] ?? a.envGoal;
+    const crew = (data?.crews?.[a.name] ?? a.envWorkers).filter((w) => /^\w+$/.test(w) && !agents.has(w));
+    if (goal !== a.shownGoal) Object.assign(a, {goal, shownGoal: goal});
+    if (crew.join() !== a.shownWorkers) Object.assign(a, {workers: new Set(crew), shownWorkers: crew.join()});
+  }
+}
+
 // Online workers with nothing to do: the foreman is woken for them (at most every 30 s). A worker that
 // logs in after the foreman's first round sends no event, so it waited for the 10-minute check-in (lab).
 // A worker whose last two orders failed for the same reason (stuck without a pickaxe underground) does
@@ -797,6 +808,7 @@ async function main() {
     agents.set(name.trim(), new Agent(name.trim(), goal.trim(), null));
   }
   for (const a of agents.values()) a.workers = workersOf(process.env, a.name, agents);
+  for (const a of agents.values()) Object.assign(a, {envGoal: a.goal, shownGoal: a.goal, envWorkers: [...a.workers], shownWorkers: [...a.workers].join()});
   // The dashboard may still be starting (the lab restarts mcbots and this service together): wait.
   let lastEventId;
   for (;;) {
@@ -813,6 +825,9 @@ async function main() {
     if (!TOKEN) return;
     for (const a of agents.values()) http('POST', `${API}/api/agentstatus`, {agent: a.name, goal: a.goal, workers: [...a.workers].slice(0, 12), role: a.workers.size ? 'foreman' : 'solo'}).catch((e) => console.error(`agentstatus failed: ${e.message}`));
   };
+  const pullCrews = () => TOKEN && http('GET', `${API}/api/crews`).then((d) => applyCrews(agents, d)).catch((e) => console.error(`crews failed: ${e.message}`));
+  await pullCrews();
+  setInterval(pullCrews, 30000).unref();
   postStatus();
   setInterval(postStatus, 30000).unref();
   const getState = () => http('GET', `${API}/api/state`);
@@ -873,4 +888,4 @@ if (require.main === module) main().catch((e) => {
   process.exit(1);
 });
 
-module.exports = {SCAN_MAX, WORKER_SCAN_MAX, fetchScan, SAMPLING, decide, Agent, workersOf, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished, alreadyDone, callModel, healthy};
+module.exports = {applyCrews, SCAN_MAX, WORKER_SCAN_MAX, fetchScan, SAMPLING, decide, Agent, workersOf, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished, alreadyDone, callModel, healthy};

@@ -140,6 +140,32 @@ the player name typed into "your player name". The map shows bots, players,
 mobs, chests/ores, claimed blocks (orange), the supply chest and the protected
 areas (zoom with the wheel). "Advanced: debug" is the panel described below.
 
+### Managing from the dashboard (phone friendly)
+
+All write endpoints below are for humans only (same-origin JSON POST behind the Tailscale login
+check, `TRUSTED_PROXIES` rule unchanged); the agent token is refused on them.
+
+- **Projects** (`POST /api/project {bot, action: pause|resume|stop}`): one row per bot with a
+  shaft/excavate/level/rim/treefarm/homebed/build/grave job running, queued or remembered, with progress.
+  The server remembers each bot's last project and its validated arguments in `STATE_DIR/projects.json`
+  (any `/api/job`, also the agents', notes it; a stop marks it paused). Pause keeps it, Resume queues
+  the *last project given to that bot* again, Stop forgets it. Pausing a *running* project is a bot stop, so that bot's queue
+  goes too; a merely queued project is removed alone.
+- **Quick actions** in every bot card: Stop, Home (`goto` the supply chest), Come to me (the "your player
+  name" field), Rearm, Home bed (+ slot field: the slot is stored per bot in `crews.json`, unique, 0..13;
+  blank = by crew order), and a job picker (any job type, arguments as JSON, validated by `VALIDATE`).
+  There is no Graves button: the graves feature only queues a grave job at a death and keeps no list.
+- **Supply chest** panel: the last count (age, who, free slots, contents) and warnings: full (< 4 free
+  slots), no food, no torches/coal, no pickaxes, no saplings. "Count it" sends an idle bot. When the chest
+  turns full one `alert` event is emitted (once per fill). Free slots come from `chest.inventoryStart`
+  minus the stacks in it; an older worker that does not send them shows no "full" warning.
+- **Crews and goals** (`GET/POST /api/crews`, `STATE_DIR/crews.json`): move a worker between agents, edit
+  an agent's goal (max 1000 characters). Names must be `AGENT_BOTS`, an agent is never a worker, a worker
+  is in at most one crew; a refused edit changes nothing. The agent service pulls `GET /api/crews`
+  (the agent bearer may read it) every 30 s and uses it instead of `WORKERS_<agent>` / `AGENTS` in
+  `default.nix`, which stay the defaults; "Reset to defaults" (`{crews: null, goals: null}`) restores
+  them. A goal the agent set itself with `!goal` is kept until the stored goal changes.
+
 ### Agent decisions and `GET /api/decisions`
 
 The lab's agent service (`hosts/bandit-lab/services/mcagents`, Andy-4.2 on the

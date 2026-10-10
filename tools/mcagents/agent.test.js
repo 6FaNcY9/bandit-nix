@@ -2,7 +2,7 @@
 // node tools/mcagents/agent.test.js — the Mindcraft command translator.
 const assert = require('node:assert');
 process.env.LOG ||= require('node:path').join(require('node:os').tmpdir(), `mcagents-test-${process.pid}.jsonl`); // decide() logs every model call
-const {decide, Agent, workersOf, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished, alreadyDone, callModel, SCAN_MAX, WORKER_SCAN_MAX} = require('./agent');
+const {applyCrews, decide, Agent, workersOf, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished, alreadyDone, callModel, SCAN_MAX, WORKER_SCAN_MAX} = require('./agent');
 const {modelRequest, modelReply} = require('./model-protocol');
 
 { // agent.js and replay.js share one wire mapping for both model APIs
@@ -269,6 +269,23 @@ assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}
   assert.deepStrictEqual([...workersOf(env, 'bot1', ag)], ['bot3', 'bot4']);
   assert.deepStrictEqual([...workersOf(env, 'bot2', ag)], ['bot3']);
   assert.deepStrictEqual([...workersOf({}, 'bot1', ag)], []);
+}
+{ // dashboard crews and goals win over the env, a self-set goal survives, removing them restores the env
+  const ag = new Map(['bot1', 'bot2'].map((n) => [n, new Agent(n, `env goal ${n}`, null)]));
+  ag.get('bot1').workers = new Set(['bot3']);
+  ag.get('bot2').workers = new Set(['bot4']);
+  for (const a of ag.values()) Object.assign(a, {envGoal: a.goal, shownGoal: a.goal, envWorkers: [...a.workers], shownWorkers: [...a.workers].join()});
+  ag.get('bot1').goal = 'set by !goal';
+  applyCrews(ag, {crews: {}, goals: {}});
+  assert.strictEqual(ag.get('bot1').goal, 'set by !goal', 'nothing stored: the agent keeps its own goal');
+  const stored = {crews: {bot1: ['bot3', 'bot4', 'bot2', 'bad name'], bot2: []}, goals: {bot2: 'new goal'}};
+  applyCrews(ag, stored);
+  assert.deepStrictEqual([[...ag.get('bot1').workers], [...ag.get('bot2').workers], ag.get('bot2').goal, ag.get('bot1').goal], [['bot3', 'bot4'], [], 'new goal', 'set by !goal'], 'agents and bad names are no workers');
+  ag.get('bot2').goal = 'set by !goal too';
+  applyCrews(ag, stored);
+  assert.strictEqual(ag.get('bot2').goal, 'set by !goal too', 'an unchanged stored goal is not re-applied every 30 s');
+  applyCrews(ag, {crews: {}, goals: {}});
+  assert.deepStrictEqual([[...ag.get('bot1').workers], [...ag.get('bot2').workers], ag.get('bot2').goal], [['bot3'], ['bot4'], 'env goal bot2'], 'reset: back to the env');
 }
 // decide() against a fake dashboard and model (global fetch): MC-4 regressions.
 (async () => {

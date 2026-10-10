@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {WebSocketServer} = require('ws');
 const {loadConfig} = require('./config');
-const {BotRunner, keptOf} = require('./bots');
+const {BotRunner, keptOf, VALIDATE} = require('./bots');
 const {WorldModel, startBlueMap} = require('./world');
 const {WINDOW_MS} = require('./debug');
 const {Hub, RemoteRunner, createWorkerServer} = require('./hub');
@@ -13,9 +13,11 @@ const {EventLog} = require('./events');
 const {Keeper} = require('./keeper');
 const {botView} = require('./view');
 const {scanAround} = require('./scan');
-const {Alerts} = require('./alerts');
+const {Alerts, chestWarnings} = require('./alerts');
 const {Settings} = require('./settings');
 const {Places} = require('./places');
+const {Projects, PROJECTS} = require('./projects');
+const {Crews} = require('./crews');
 const agentauth = require('./agentauth');
 const {Slayer} = require('./slayer');
 
@@ -31,6 +33,8 @@ const agentStatuses = new Map(); // agent -> its last POST /api/agentstatus (goa
 const stopBlueMap = startBlueMap(world, cfg.bluemapUrl, log);
 const runners = new Map(cfg.names.map((n) => [n, new BotRunner(n, {host: cfg.mcHost, port: cfg.mcPort, log, world, protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest, loginSeed: cfg.loginSeed, hostLabel: cfg.hostLabel, onEvent: (b, k, t) => events.add(b, k, t)})]));
 const settings = new Settings(process.env.STATE_DIR || '');
+const projects = new Projects(process.env.STATE_DIR || '');
+const crews = new Crews(process.env.STATE_DIR || '', {agentBots: cfg.agentBots, bots: cfg.names});
 for (const r of runners.values()) r.getSettings = () => settings.get(r.name);
 const page = fs.readFileSync(path.join(__dirname, 'public', 'index.html'));
 // The page is one file with inline script and style: allow exactly those two
@@ -138,7 +142,7 @@ const sameOrigin = (req) => {
     return false;
   }
 };
-const state = () => ({now: Date.now(), lastEventId: events.lastId, keeper: keeper?.state() || null, bots: [...runners.values()].map((r) => ({...r.snapshot(), settings: settings.get(r.name)})), world: world.snapshot(), protectedAreas: cfg.protectedAreas, supplyChest, places: places.list});
+const state = () => ({now: Date.now(), lastEventId: events.lastId, keeper: keeper?.state() || null, bots: [...runners.values()].map((r) => ({...r.snapshot(), settings: settings.get(r.name)})), world: world.snapshot(), protectedAreas: cfg.protectedAreas, supplyChest, places: places.list, projects: projects.view(), chest: world.stock && {warnings: chestWarnings(world.stock.items, world.stock.free)}});
 
 function readJson(req) {
   return new Promise((resolve, reject) => {
@@ -221,6 +225,7 @@ const server = http.createServer(async (req, res) => {
       return json(400, {error: e.message});
     }
   }
+  if (req.method === 'GET' && url.pathname === '/api/crews') return json(200, crews.data);
   if (req.method === 'GET' && url.pathname === '/api/agents') return json(200, [...agentStatuses.values()]);
   if (req.method === 'GET' && url.pathname === '/api/world') return json(200, world.snapshot());
   const vm = req.method === 'GET' && /^\/api\/view\/(\w{1,16})\.png$/.exec(url.pathname);
@@ -326,6 +331,49 @@ const server = http.createServer(async (req, res) => {
       return json(400, {error: e.message});
     }
   }
+  if (req.method === 'POST' && url.pathname === '/api/crews') {
+    if (!sameOrigin(req) || !String(req.headers['content-type']).startsWith('application/json')) return json(403, {error: 'bad origin'});
+    try {
+      const input = await readJson(req);
+      const data = crews.set(input, new Set([...agentStatuses.keys(), ...Object.keys(crews.data.crews)]));
+      events.add('crews', 'info', `crews edited: ${Object.keys(input).join(', ')}`);
+      return json(200, data);
+    } catch (e) {
+      return json(400, {error: e.message});
+    }
+  }
+  // Pause/Stop end a bot's project (the running one, else the queued ones); Resume queues the last one again.
+  if (req.method === 'POST' && url.pathname === '/api/project') {
+    if (!sameOrigin(req) || !String(req.headers['content-type']).startsWith('application/json')) return json(403, {error: 'bad origin'});
+    try {
+      const {bot, action} = await readJson(req);
+      const r = runners.get(bot);
+      const p = projects.get(bot);
+      if (!r) throw new Error('unknown bot');
+      if (action === 'resume') {
+        if (!p) throw new Error('no project to resume');
+        r.enqueue(p.type, p.args);
+        projects.note(bot, p.type, p.args);
+      } else if (action === 'pause' || action === 'stop') {
+        const s = r.snapshot();
+        if (PROJECTS.has(s.job?.type)) {
+          r.enqueue('stop'); // clears the queue too
+          delete toResume[bot];
+        } else {
+          s.queue.forEach((label, i) => PROJECTS.has(label.split(' ')[0]) && r.enqueue('remove', {id: s.queueIds[i]}));
+          if (toResume[bot]) toResume[bot] = toResume[bot].filter((j) => !PROJECTS.has(j.type));
+        }
+        if (action === 'stop') projects.forget(bot);
+        else projects.pause(bot);
+        const saveErr = saveJobs(true);
+        if (saveErr) throw new Error(`stopped, but the stopped state could not be saved (${saveErr})`);
+      } else throw new Error('action must be pause, resume or stop');
+      broadcast();
+      return json(200, {ok: true});
+    } catch (e) {
+      return json(400, {error: e.message});
+    }
+  }
   if (req.method === 'POST' && url.pathname === '/api/job') {
     if (!sameOrigin(req) || !String(req.headers['content-type']).startsWith('application/json')) return json(403, {error: 'bad origin'});
     try {
@@ -342,7 +390,11 @@ const server = http.createServer(async (req, res) => {
       for (const r of targets) {
         try {
           r.enqueue(type, args || {}, {replace: replace === true});
-          if (stopping) delete toResume[r.name]; // its saved jobs must not come back after a restart or reconnect
+          if (stopping) {
+            delete toResume[r.name]; // its saved jobs must not come back after a restart or reconnect
+            projects.pause(r.name);
+          }
+          if (PROJECTS.has(type)) projects.note(r.name, type, VALIDATE[type](args || {}));
         } catch (e) {
           errors.push(`${r.name}: ${e.message}`); // one bot failing must not keep the others from getting the job
         }
@@ -399,6 +451,7 @@ const keeperTick = setInterval(() => {
 const alerts = new Alerts({events});
 const alertTick = setInterval(() => {
   try {
+    alerts.checkChest(world.stock);
     const r = [...runners.values()].find((x) => !(x instanceof RemoteRunner) && x.online && x.bot?.entity && /overworld/.test(x.bot.game?.dimension || ''));
     if (!r || !supplyChest) return;
     const {Vec3} = require('vec3');

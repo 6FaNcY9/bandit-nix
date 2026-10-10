@@ -92,9 +92,9 @@ class RemoteWorld extends WorldModel {
     this.outBlocks.set(`${dim}:${pos.x},${pos.y},${pos.z}`, {type, x: pos.x, y: pos.y, z: pos.z, dim, by});
   }
 
-  noteStock(by, items) {
-    super.noteStock(by, items);
-    this.outStock = {by, items};
+  noteStock(by, items, free) {
+    super.noteStock(by, items, free);
+    this.outStock = {by, items, free};
   }
 
   forgetMob(id) {

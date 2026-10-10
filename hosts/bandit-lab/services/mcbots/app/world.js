@@ -49,12 +49,12 @@ class WorldModel {
     this.bluemap = {enabled: false, ok: false, error: '', t: 0};
     this.claims = new Map(); // `${dim}:${x},${y},${z}` -> {by, t}: blocks a bot is working on
     this.tally = new Map(); // bot -> {granted, refused, timedOut}: shown in /api/debug
-    this.stock = null; // what a bot last saw in the supply chest: {items: {name: count}, by, t}
+    this.stock = null; // what a bot last saw in the supply chest: {items: {name: count}, by, free (empty slots or null), t}
   }
 
   // A bot that opened the supply chest reports its contents; the keeper plans from this.
-  noteStock(by, items) {
-    this.stock = {items, by, t: this.now()};
+  noteStock(by, items, free = null) {
+    this.stock = {items, by, free, t: this.now()};
   }
 
   // Bots share one process, so claims are exact: a bot only takes a block no
@@ -166,7 +166,7 @@ class WorldModel {
       mobs: [...this.mobs.values()].map(age),
       blocks: [...this.blocks.values()].map(age),
       claims: [...this.claims].map(([key, c]) => ({key, by: c.by})),
-      stock: this.stock && {items: this.stock.items, by: this.stock.by, age: Math.round((t - this.stock.t) / 1000)}, // the supply chest as last seen
+      stock: this.stock && {items: this.stock.items, by: this.stock.by, free: this.stock.free, age: Math.round((t - this.stock.t) / 1000)}, // the supply chest as last seen
     };
   }
 }

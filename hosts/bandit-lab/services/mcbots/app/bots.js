@@ -938,7 +938,7 @@ function noteStock(r, job, chest) {
   if (!isSupply(r, job.args)) return;
   const items = {};
   for (const it of chest.containerItems()) items[it.name] = (items[it.name] || 0) + it.count;
-  r.world?.noteStock(r.name, items);
+  r.world?.noteStock(r.name, items, Number.isInteger(chest.inventoryStart) ? chest.inventoryStart - chest.containerItems().length : null); // the container's slots minus the stacks in it
 }
 // "64 cobblestone, 12 coal, 3 more kinds": what a deposit put in, biggest first (an event is 200 characters).
 function depositList(byName) {

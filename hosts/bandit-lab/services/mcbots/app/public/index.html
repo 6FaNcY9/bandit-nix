@@ -57,6 +57,11 @@
   .ag .dec { font:12px/1.5 ui-monospace,monospace; word-break:break-word; }
   #slayerbody { display:flex; flex-wrap:wrap; gap:4px 16px; align-items:center; }
   #slayerbody .st { font-weight:600; } #slayerbody .st.serving { color:var(--ok); } #slayerbody .st.paused-game { color:var(--warn); } #slayerbody .st.offline { color:var(--bad); }
+  @media (pointer:coarse) { button, input, select { padding:10px 14px; } input.xyz { width:72px; } }
+  .proj[hidden] { display:none; }
+  .proj { border-top:1px solid var(--bd); padding:6px 0; } .proj progress { width:140px; }
+  textarea { font:inherit; color:inherit; background:var(--bg); border:1px solid var(--bd); border-radius:6px; padding:4px 8px; width:100%; box-sizing:border-box; }
+  #chestitems { max-height:140px; overflow:auto; }
   .view img { width:100%; height:auto; image-rendering:pixelated; border-radius:6px; background:#000; display:block; margin-top:6px; }
 </style>
 </head>
@@ -72,6 +77,11 @@
   <div class="mut" id="kinfo"></div>
   <table id="ktable"></table>
 </div>
+<div class="bar" id="chestbar" hidden>
+  <h3>Supply chest <button id="chestcount" type="button" class="ghost" title="Send an idle bot to count it">Count it</button></h3>
+  <div class="mut" id="chestinfo"></div><div id="chestwarn"></div><div class="mut" id="chestitems"></div>
+</div>
+<div class="bar" id="projbar" hidden><h3>Projects <span class="mut">(Pause keeps the project so Resume can queue it again; Pause or Stop of a running project also clears that bot's queue)</span></h3><div id="projects"></div></div>
 <div class="bar" id="mapbar">
     <h3>Map</h3>
     <div class="row">centre <select id="centre"></select>
@@ -84,6 +94,10 @@
 <div class="bar" id="allbar"><h3>Give the same job to several bots</h3><div id="allcomposer"></div></div>
 <div class="bar"><h3>Events <select id="evbot"></select></h3><div id="events"></div></div>
 <div class="bar"><h3>Agents <span class="mut">(LLM brains: goal, own view, workers, last decisions)</span></h3><div id="agents"></div></div>
+<details class="bar" id="crewbar"><summary>Crews and goals <span class="mut">(saved on the hub; the agents take them within 30 s, Reset goes back to the defaults)</span></summary>
+  <div id="crews"></div>
+  <div class="row"><button id="crewsave" type="button">Save</button><button id="crewreset" type="button" class="ghost">Reset to defaults</button><span id="crewmsg" class="mut"></span></div>
+</details>
 <div class="bar" id="slayer" hidden><h3>slayer <span class="mut">(gaming PC: llama-server for the agents; games always win)</span></h3><div id="slayerbody"></div></div>
 <div class="bar"><h3>Agent decisions <span class="mut">(what the LLM said and chose, newest first)</span></h3><div id="decisions"></div></div>
 <details id="dbg" class="bar"><summary>Advanced: debug (last 30 s per bot: server pull-backs, job step, last error)</summary>
@@ -183,6 +197,7 @@ function makeCard(name) {
   hp.max = food.max = 20; vit.append(hp, food, vitTxt);
   const tool = el('div'), inv = el('div', 'mut'), pos = el('div', 'mut'), err = el('div'), queue = el('ol', 'queue'), pb = el('div', 'warn');
   const comp = el('details'); comp.append(el('summary', '', 'Give a job'), composer(() => [name]));
+  const qa = quick(name), pick = jobPicker(name);
   const view = el('details', 'view'), img = el('img'); img.alt = name + ' in-game view'; img.width = 320; img.height = 180;
   view.append(el('summary', '', 'In-game view'), img);
   let viewTimer = null;
@@ -206,8 +221,8 @@ function makeCard(name) {
   };
   set.append(save, smsg);
   set.ontoggle = () => { if (set.open) { const cur = last.bots.find((b) => b.name === name)?.settings || {}; for (const [k, i] of Object.entries(sf)) { if (i.type === 'checkbox') i.checked = !!cur[k]; else i.value = cur[k] ?? ''; } smsg.textContent = ''; } };
-  root.append(h, act, bar, barTxt, vit, tool, inv, pos, queue, pb, err, view, set, comp);
-  return { root, view, set, dot, state, where, act, bar, barTxt, vit, hp, food, vitTxt, tool, inv, pos, err, queue, pb, qsig: '' };
+  root.append(h, act, bar, barTxt, vit, tool, inv, pos, queue, pb, err, qa.root, view, set, comp, pick);
+  return { slot: qa.slot, root, view, set, dot, state, where, act, bar, barTxt, vit, hp, food, vitTxt, tool, inv, pos, err, queue, pb, qsig: '' };
 }
 function updateCard(c, b, now) {
   c.root.className = 'card' + (b.name === picked ? ' pick' : '') + (b.online ? ' on' : '') + (b.dead ? ' dead' : '');
@@ -240,6 +255,8 @@ function updateCard(c, b, now) {
     }));
   }
   c.queue.hidden = !b.queue.length;
+  const want = crewData.slots[b.name];
+  if (c.slotWant !== want) { c.slotWant = want; c.slot.value = want ?? ''; }
   c.pb.textContent = b.pullbacks ? `pulled back by the server ${b.pullbacks}x in 30 s` : '';
   const old = b.lastErrorAgoS != null && b.lastErrorAgoS > 300;
   c.err.className = old ? 'old' : 'err';
@@ -316,7 +333,7 @@ function connect() {
   const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
   ws.onopen = () => { $('conn').textContent = ''; };
   ws.onmessage = (e) => {
-    const m = JSON.parse(e.data); last = m; render(m.bots, m.now); renderKeeper(m.keeper); allComposer(); radar();
+    const m = JSON.parse(e.data); last = m; render(m.bots, m.now); renderKeeper(m.keeper); renderProjects(); renderChest(); allComposer(); radar();
     if (m.lastEventId !== evLast) pollEvents();
   };
   ws.onclose = () => { $('conn').textContent = '(reconnecting...)'; setTimeout(connect, 2000); };
@@ -564,6 +581,153 @@ $('dbgcopy').onclick = async () => {
   try { await pollDebug(); await navigator.clipboard.writeText(JSON.stringify(dbgData, null, 1)); $('dbgmsg').textContent = 'copied'; }
   catch { $('dbgmsg').textContent = 'copy failed - open /api/debug instead'; }
 };
+
+// ---- quick actions, job picker, project board, chest panel, crew editor ----
+const PICKER = ['goto', 'come', 'follow', 'guard', 'mine', 'chop', 'deposit', 'rearm', 'tidy', 'grave', 'craft', 'smelt', 'shift', 'stock', 'withdraw', 'place', 'excavate', 'shaft', 'level', 'rim', 'build', 'hunt', 'bed', 'homebed', 'treefarm', 'say'];
+const PROJ = new Set(['shaft', 'excavate', 'level', 'rim', 'treefarm', 'homebed', 'build', 'grave']);
+let crewData = { crews: {}, goals: {}, slots: {} };
+async function post(url, body) {
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.status);
+  return j;
+}
+const say = (text, bad) => { $('msg').textContent = text; $('msg').className = bad ? 'err' : 'mut'; };
+const button = (label, title, fn, cls) => { const b = el('button', cls || 'ghost', label); b.type = 'button'; b.title = title; b.onclick = fn; return b; };
+function quick(name) {
+  const root = el('div', 'composer'), slot = el('input', 'xyz');
+  slot.type = 'number'; slot.min = 0; slot.max = 13; slot.placeholder = 'slot'; slot.title = 'bed slot in the storage rooms (blank: by crew order)';
+  const chest = () => last.supplyChest || (say('no supply chest is set', true), null);
+  root.append(
+    button('Stop', 'Stop this bot and clear its queue', () => send([name], 'stop', {}, false), 'stop'),
+    button('Home', 'Go to the supply chest', () => { const c = chest(); if (c) send([name], 'goto', { x: c.x, y: c.y, z: c.z }, true); }),
+    button('Come to me', 'Walk to the player named in "your player name"', () => { const p = $('me').value; if (!p) return say('type your player name at the top first', true); send([name], 'come', { player: p }, true); }),
+    button('Rearm', 'Fetch tool, armour and food from the supply chest', () => { const c = chest(); if (c) send([name], 'rearm', { x: c.x, y: c.y, z: c.z }, true); }),
+    button('Home bed', 'Place and sleep in the bed of this slot', async () => {
+      const n = slot.value === '' ? null : Number(slot.value);
+      if (n !== null) {
+        if (!slot.reportValidity()) return;
+        if (crewData.slots[name] !== n) { try { crewData = await post('/api/crews', { slots: { ...crewData.slots, [name]: n } }); } catch (e) { return say(e.message, true); } }
+      }
+      send([name], 'homebed', n === null ? {} : { slot: n }, true);
+    }), slot);
+  return { root, slot };
+}
+function jobPicker(name) {
+  const d = el('details'), type = el('select'), args = el('textarea');
+  for (const t of PICKER) type.append(new Option(t, t));
+  args.rows = 2; args.value = '{}'; args.spellcheck = false; args.title = 'arguments as JSON, e.g. {"x": 1, "y": 64, "z": 2}';
+  const run = (replace) => {
+    let a;
+    try { a = JSON.parse(args.value || '{}'); } catch (e) { return say('arguments: ' + e.message, true); }
+    send([name], type.value, a, replace); // the server validates the arguments
+  };
+  d.append(el('summary', '', 'Job picker (any job, arguments as JSON)'), type, args, button('Run now', 'Replace the running job and the queue', () => run(true), 'acc'), button('Queue', 'Add behind the queue', () => run(false)));
+  return d;
+}
+
+const projRows = new Map();
+function renderProjects() {
+  let any = false;
+  for (const b of last.bots) {
+    let row = projRows.get(b.name);
+    if (!row) {
+      row = { root: el('div', 'proj row'), txt: el('span'), bar: el('progress') };
+      const act = (action) => () => post('/api/project', { bot: b.name, action }).then(() => say(action + ': ' + b.name), (e) => say(e.message, true));
+      row.pause = button('Pause', 'Stop the project but keep it for Resume', act('pause'));
+      row.resume = button('Resume', 'Queue the last project again', act('resume'), 'acc');
+      row.stop = button('Stop', 'Stop the project and forget it', act('stop'), 'stop');
+      row.root.append(el('b', '', b.name), row.txt, row.bar, row.pause, row.resume, row.stop);
+      projRows.set(b.name, row);
+      $('projects').append(row.root);
+    }
+    const st = (last.projects || {})[b.name], run = b.job && PROJ.has(b.job.type) ? b.job : null, queued = b.queue.filter((q) => PROJ.has(q.split(' ')[0]));
+    const busy = !!(run || queued.length);
+    row.root.hidden = !(busy || st);
+    any = any || !row.root.hidden;
+    row.txt.textContent = run ? `${run.label}${run.progress ? ' - ' + run.progress : ''} (running ${dur(run.runningS)})` : queued.length ? 'queued: ' + queued.join(', ') : st ? `${st.paused ? 'paused' : 'last'}: ${st.type} ${st.summary}` : '';
+    row.bar.hidden = !(run && run.total);
+    if (run && run.total) { row.bar.max = run.total; row.bar.value = run.done; }
+    row.pause.hidden = !busy;
+    row.resume.hidden = busy || !st;
+    row.stop.hidden = !(busy || (st && st.paused));
+  }
+  $('projbar').hidden = !any;
+}
+
+function renderChest() {
+  const c = last.supplyChest, s = last.world.stock;
+  $('chestbar').hidden = !c;
+  if (!c) return;
+  const w = (last.chest && last.chest.warnings) || [];
+  $('chestinfo').textContent = `at ${c.x} ${c.y} ${c.z} - ` + (s ? `counted ${dur(s.age)} ago by ${s.by}${s.free != null ? `, ${s.free} free slots` : ''}` : 'not counted yet');
+  $('chestwarn').textContent = !s ? '' : w.length ? 'missing: ' + w.join(', ') : 'stocked: food, light, pickaxes, saplings';
+  $('chestwarn').className = w.length ? 'warn' : 'mut';
+  $('chestitems').textContent = s ? Object.entries(s.items).sort((a, b) => b[1] - a[1]).map(([n, k]) => `${n} x${k}`).join(', ') || 'empty' : '';
+}
+$('chestcount').onclick = () => {
+  const c = last.supplyChest, b = last.bots.find((x) => x.online && !x.dead && !x.job && !x.queue.length);
+  if (!c) return say('no supply chest is set', true);
+  if (!b) return say('no idle bot to count it', true);
+  send([b.name], 'stock', { x: c.x, y: c.y, z: c.z }, false);
+};
+
+// Crew editor: a draft of what the agents report (stored crews on top); goals are only sent for the agents edited.
+let draft = { goals: {}, crews: {} }, dirty = false, crewsEdited = false;
+const goalsEdited = new Set();
+const freshDraft = () => {
+  const d = { goals: {}, crews: {} };
+  for (const a of agentList) { d.goals[a.agent] = crewData.goals[a.agent] ?? a.goal; d.crews[a.agent] = [...(crewData.crews[a.agent] ?? a.workers)]; }
+  return d;
+};
+function drawCrews() {
+  const agents = Object.keys(draft.crews), taken = new Set(Object.values(draft.crews).flat());
+  const edit = () => { dirty = crewsEdited = true; drawCrews(); };
+  $('crews').replaceChildren(...agents.map((a) => {
+    const box = el('div', 'proj'), goal = el('textarea');
+    goal.rows = 4; goal.maxLength = 1000; goal.value = draft.goals[a];
+    goal.oninput = () => { draft.goals[a] = goal.value; goalsEdited.add(a); dirty = true; };
+    box.append(el('b', '', a + ' - goal'), goal, el('div', 'mut', 'workers'));
+    for (const w of draft.crews[a]) {
+      const row = el('div', 'row'), move = el('select');
+      move.append(new Option('move to...', ''), ...agents.filter((x) => x !== a).map((x) => new Option(x, x)), new Option('remove from crews', '-'));
+      move.onchange = () => { draft.crews[a] = draft.crews[a].filter((x) => x !== w); if (move.value !== '-') draft.crews[move.value].push(w); edit(); };
+      row.append(el('span', '', w), move);
+      box.append(row);
+    }
+    const add = el('select');
+    add.append(new Option('add a worker...', ''), ...last.bots.map((b) => b.name).filter((n) => !taken.has(n) && !agents.includes(n)).map((n) => new Option(n, n)));
+    add.onchange = () => { if (add.value) { draft.crews[a].push(add.value); edit(); } };
+    box.append(add);
+    return box;
+  }));
+}
+function refreshCrews() {
+  if (!$('crewbar').open || dirty || $('crewbar').contains(document.activeElement)) return;
+  draft = freshDraft();
+  drawCrews();
+}
+async function saveCrews(body) {
+  try {
+    crewData = await post('/api/crews', body);
+    dirty = crewsEdited = false; goalsEdited.clear();
+    $('crewmsg').textContent = 'saved';
+    refreshCrews();
+  } catch (e) { $('crewmsg').textContent = e.message; }
+}
+$('crewsave').onclick = () => {
+  const body = {};
+  if (crewsEdited) body.crews = draft.crews;
+  if (goalsEdited.size) body.goals = { ...crewData.goals, ...Object.fromEntries([...goalsEdited].map((a) => [a, draft.goals[a]])) };
+  if (!Object.keys(body).length) { $('crewmsg').textContent = 'nothing changed'; return; }
+  saveCrews(body);
+};
+$('crewreset').onclick = () => saveCrews({ crews: null, goals: null });
+$('crewbar').ontoggle = refreshCrews;
+async function loadCrews() { try { crewData = await (await fetch('/api/crews', { cache: 'no-store' })).json(); refreshCrews(); } catch {} }
+setInterval(loadCrews, 30000);
+loadCrews();
+setInterval(refreshCrews, 3000);
 connect();
 pollEvents();
 // ---- agent decisions: GET /api/decisions?since=<id>, filtered like the events ----

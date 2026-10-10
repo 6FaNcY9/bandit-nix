@@ -15,14 +15,14 @@ function bearerMatches(header, tokenHash) {
   return !!(m && tokenHash && crypto.timingSafeEqual(hash(m[1]), tokenHash));
 }
 
-const agentEndpoint = (method, path) => (method === 'GET' && (path === '/api/state' || path === '/api/events' || path.startsWith('/api/scan/'))) || (method === 'POST' && (path === '/api/job' || path === '/api/decision' || path === '/api/agentstatus'));
+const agentEndpoint = (method, path) => (method === 'GET' && (path === '/api/state' || path === '/api/events' || path === '/api/crews' || path.startsWith('/api/scan/'))) || (method === 'POST' && (path === '/api/job' || path === '/api/decision' || path === '/api/agentstatus'));
 
 // The agent's self-description for the dashboard's Agents section: a cleaned status, or {error}.
 function agentStatus({agent, goal, workers, role}, {agentBots}) {
   if (!agentBots.includes(agent)) return {error: 'agent must be an agent bot'};
   if (typeof goal !== 'string' || (role !== undefined && typeof role !== 'string')) return {error: 'goal and role must be strings'};
   if (!Array.isArray(workers) || workers.length > 12 || !workers.every((w) => agentBots.includes(w))) return {error: 'workers must be at most 12 agent bot names'}; // a fixed domain: free names would grow the dashboard's per-worker rows (Codex R4-6)
-  return {agent, goal: goal.slice(0, 500), workers, role: (role || '').slice(0, 40)};
+  return {agent, goal: goal.slice(0, 1000), workers, role: (role || '').slice(0, 40)};
 }
 
 // Why the agent may not send this job, or null.
