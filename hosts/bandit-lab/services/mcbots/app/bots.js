@@ -10,6 +10,7 @@ const {Vec3} = require('vec3');
 const {plugin: collectBlock} = require('mineflayer-collectblock');
 const {Combat, AVOID_FOOD, deathCause} = require('./combat');
 require('./physicsfix');
+const {cacheGetBlock} = require('./pathcache');
 const {BotTrace, SAMPLE_MS, round} = require('./debug');
 const {normDim, deadlineMs, insideAreas, shouldFight} = require('./world');
 const buildJob = require('./build');
@@ -497,7 +498,7 @@ function safeMovements(bot, areas) {
   const veto = (blk) => (inside(blk) ? 100 : 0);
   mv.exclusionAreasBreak = [veto];
   mv.exclusionAreasPlace = [veto];
-  return mv;
+  return cacheGetBlock(mv);
 }
 
 // ---- job implementations: (runner, job) => Promise; throw on failure ----

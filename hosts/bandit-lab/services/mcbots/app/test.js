@@ -220,6 +220,20 @@ assert.deepStrictEqual(VALIDATE.craft({item: 'stone_pickaxe', count: '2'}), {ite
 assert.throws(() => VALIDATE.craft({item: 'Stone Pickaxe'}));
 assert.deepStrictEqual(VALIDATE.shift({block: 'logs', x: 1, y: 2, z: 3}), {block: 'logs', x: 1, y: 2, z: 3});
 require('./crafting');
+// pathcache.js: one Block per position inside the window, a fresh one after it.
+{
+  const {cacheGetBlock, WINDOW_MS} = require('./pathcache');
+  let calls = 0;
+  let t = 1000;
+  const mv = cacheGetBlock({getBlock: (pos, dx, dy, dz) => ({n: ++calls, y: pos ? pos.y + dy : null})}, () => t);
+  const a = mv.getBlock({x: 1, y: 2, z: 3}, 0, 1, 0);
+  assert.strictEqual(mv.getBlock({x: 1, y: 3, z: 3}, 0, 0, 0), a, 'same absolute position, same block');
+  assert.notStrictEqual(mv.getBlock({x: 1, y: 2, z: 3}, 0, 0, 0), a);
+  t += WINDOW_MS + 1;
+  assert.notStrictEqual(mv.getBlock({x: 1, y: 2, z: 3}, 0, 1, 0), a, 'expired');
+  assert.strictEqual(calls, 3);
+  assert.strictEqual(mv.getBlock(null, 0, 0, 0).n, 4, 'no position: not cached');
+}
 // Paper refuses a position whose box touches a block face exactly, so every
 // horizontal collision must end a hair short (physicsfix.js).
 {

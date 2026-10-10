@@ -87,9 +87,10 @@ digging, fighting, building, claims and protected areas stay the existing code. 
 
 Measured: about 1 s per decision with reasoning off, about 5.6 GB VRAM for the model. At one
 decision per bot every 3 minutes, 20 bots use about 10 % of the GPU. **The limit is CPU, not the
-GPU:** all lab bots run in one Node process, which used a full core (101 %) with 4 bots. The
-mcbots Docker network (`/29`) does not limit the bot count, because all bots share the container's
-one address. That BOTS.md line is probably stale; H6 checks it.
+GPU:** all lab bots run in one Node process, which used a full core (101 %) with 4 bots on the
+lab (H6 profile on the laptop: 0.5-0.6 core, pathfinder block lookups were the top cost, cut by 18 %
+with `pathcache.js`). The mcbots Docker network (`/29`) does not limit the bot count, because all
+bots share the container's one address (BOTS.md fixed in H6).
 
 | # | Step | Done when | Size | Owner |
 | --- | --- | --- | --- | --- |
@@ -98,7 +99,7 @@ one address. That BOTS.md line is probably stale; H6 checks it.
 | H3 | Mixed teams (**done 2026-10-10**, docs only: the agent already ignores bots outside `AGENTS`; live in the H1 run: bot14 had no agent and never got a job while bot11-bot13 worked) | Bots not listed in `AGENTS` stay scripted; documented roles: bot4 AFK, the rest LLM-led | S | Claude |
 | H4 | Foreman (**done 2026-10-10**: live with bot11 + workers bot12-bot14, the three were assigned within ~1 min and a shift collected 778 cobblestone / 196 logs in 13 min) | `!assign("bot2", "!collectBlocks(\"iron_ore\", 32)")` lets one brain run scripted workers; live with 1 brain + 3 workers | M | Claude |
 | H5 | Run on the lab, not the laptop | Ollama as a NixOS service (CUDA, loopback only, scoped unfree predicate); mcagents as a hardened systemd service; the agent authenticates to the dashboard with its own token (design reviewed first, see below) | M | Codex (Nix), Claude (token in mcbots) |
-| H6 | More bots per lab | The CPU hog is found and fixed (profile first: view renderer, pathfinder, physics), then more bots through the existing hub/worker processes; the `/29` claim checked | M | Claude |
+| H6 | More bots per lab (**done 2026-10-10**: profiled, pathfinder block lookups cached, `/29` claim corrected) | The CPU hog is found and fixed (profile first: view renderer, pathfinder, physics), then more bots through the existing hub/worker processes; the `/29` claim checked | M | Claude |
 | H7 | Base from the agents | The four agents build `base-v1-shell-01..08` from gathered cobblestone on a flat 7x7 spot the owner picks | M | Claude, after H1-H2 |
 
 H5 needs a design decision before code: the dashboard trusts the `Tailscale-User-Login` header,

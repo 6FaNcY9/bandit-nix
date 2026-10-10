@@ -425,7 +425,7 @@ These rules come from Codex's MC-3 review (2026-10-10).
   diagonals (server pull-backs), so it may dig through and bridge over blocks
   outside protected areas; a goal it still cannot reach is reported as
   "could not reach".
-- Velocity admits at most the `/29` network: gateway, Velocity and 4 bots.
+- BotGate admits names `bot0`..`bot99` by source address, and the mcbots container is one address on the `/29` network (gateway .1, Velocity .2), so the `/29` does not limit the bot count (checked 2026-10-10 against `BotGate.java` and `minecraft/default.nix`). Bots log in 4.5 s apart because Velocity rate-limits logins per address. CPU is the real limit: one Node process (see Performance).
 - The dashboard trusts the `Tailscale-User-Login` header. Only `tailscale serve`
   (host) and containers on `mcbots` (Velocity) can reach it; keep it that way.
 
@@ -481,3 +481,7 @@ dirty tree does not leak).
   deepslate redstone with a diamond pickaxe; vanilla takes about 840 ms).
 - Image changed but the old one runs: the image tag is the Nix store hash;
   `sudo systemctl restart docker-mcbots` after activation.
+
+## Performance
+
+Profile 2026-10-10 (local stage, four bots: log shift, stone shift, coal mine, idle; 10 min, `NODE_OPTIONS="--cpu-prof"`): the process was busy 52 % of the time (about 0.6 of a core) and the top self-time was the pathfinder asking for blocks: `Block`/`fromStateId`/`getBlockEntity`/`Biome` in prismarine (about 111 s of 319 busy seconds), because each A* node looks at the same neighbours dozens of times and every lookup built a new Block. `app/pathcache.js` now returns the same Block within a 100 ms window; the same run then needed 262 busy seconds (-18 %) and the Block construction fell to about 46 s. The next items are the pathfinder's own `digTime`, `bestHarvestTool` and `getNumEntitiesAt`. Runs differ with what the bots happen to do, so compare busy seconds over equal mixes only.
