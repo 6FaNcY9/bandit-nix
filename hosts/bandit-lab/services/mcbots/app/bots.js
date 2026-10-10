@@ -200,6 +200,7 @@ class BotRunner {
     this.log(this.name, `connecting to ${this.host}:${this.port}`);
     const bot = mineflayer.createBot({host: this.host, port: this.port, username: this.name, auth: 'offline', version: '26.1', hideErrors: true});
     this.bot = bot;
+    bot.once('spawn', () => guardDigs(this, bot)); // bot.dig exists only once the plugins loaded
     bot.loadPlugin(pathfinder);
     bot.loadPlugin(collectBlock);
     require('./crafting').fixCraftTiming(bot);
@@ -676,6 +677,24 @@ function digWhy(bot, block, pos) {
   const effects = Object.values(e.effects || {}).map((f) => bot.registry.effects?.[f.id]?.name || f.id).join(',') || 'none';
   const t = bot.digTime ? bot.digTime(block) : '?';
   return `held ${bot.heldItem?.name || 'nothing'}, onGround ${e.onGround}, inWater ${!!e.isInWater}, effects ${effects}, dist ${e.position.distanceTo(pos.offset(0.5, 0.5, 0.5)).toFixed(1)}, est ${Math.round(t)} ms`;
+}
+
+// Every dig goes through bot.dig - digAt's and the pathfinder's own (it digs its stairs and tunnels by
+// itself, after an awaited equip that a Stop or a path reset does not cancel: Codex R2-2). So the last
+// checks sit here: no dig for a stopped job, inside a protected area, or next to a fluid (digAt seals
+// fluids first; the pathfinder never does).
+function guardDigs(runner, bot) {
+  const dig = bot.dig.bind(bot);
+  bot.dig = (block, ...rest) => {
+    const p = block?.position;
+    if (runner.current?.cancelled) return Promise.reject(new Error('Digging aborted: the job was stopped'));
+    if (p && insideAreas(runner.protectedAreas, p.x, p.z)) return Promise.reject(new Error('Digging aborted: protected area'));
+    const live = p && bot.blockAt(p);
+    if (p && (!live || live.name !== block.name)) return Promise.reject(new Error('Digging aborted: the block changed'));
+    const danger = p && unsafeDig(bot, p);
+    if (danger && / next to it$/.test(danger)) return Promise.reject(new Error(`Digging aborted: ${danger}`));
+    return dig(block, ...rest);
+  };
 }
 
 // true only when this bot dug the block; false when it was gone already, changed, or the dig got
@@ -1392,6 +1411,7 @@ const JOBS = {
           const have = best(mine(), re);
           const offer = best(box.containerItems(), re);
           if (offer && (!have || tier(offer.name) > tier(have.name))) await box.withdraw(offer.type, offer.metadata, 1);
+          guard(job); // a Stop between withdrawals takes nothing more (the chest still closes)
         }
         // A spare pickaxe and 2 logs (table + sticks for a stone pickaxe): a pickaxe that breaks deep
         // underground otherwise strands the bot - no wood there, and the way up by hand is "No path"
@@ -1399,8 +1419,10 @@ const JOBS = {
         const count = (re) => bot.inventory.items().filter((i) => re.test(i.name)).reduce((n, i) => n + i.count, 0);
         const spare = best(box.containerItems(), /_pickaxe$/);
         if (spare && count(/_pickaxe$/) < 2) await box.withdraw(spare.type, spare.metadata, 1);
+        guard(job);
         const log = box.containerItems().find((i) => /_log$/.test(i.name));
         if (log && count(/_log$/) < 2) await box.withdraw(log.type, log.metadata, Math.min(2 - count(/_log$/), log.count));
+        guard(job);
         const food = box.containerItems().filter((i) => isFood(i.name)).sort((a, b) => (b.name === 'golden_carrot') - (a.name === 'golden_carrot'))[0];
         if (food && foodCount() < 32) await box.withdraw(food.type, food.metadata, Math.min(32 - foodCount(), food.count));
       } finally {
@@ -1413,8 +1435,10 @@ const JOBS = {
     for (const log of carried.reduce((n, i) => n + i.count, 0) <= 2 ? carried : []) {
       const planks = bot.registry.itemsByName[log.name.replace(/_log$/, '_planks')];
       const recipe = planks && bot.recipesFor(planks.id, null, 1, null)[0];
+      guard(job); // no craft after a Stop (Codex R2-3)
       if (recipe) await bot.craft(recipe, log.count, null).catch(() => {});
     }
+    guard(job);
     for (const [re, slot] of [[/_helmet$/, 'head'], [/_chestplate$/, 'torso'], [/_leggings$/, 'legs'], [/_boots$/, 'feet']]) {
       const it = best(bot.inventory.items(), re);
       if (it) await bot.equip(it, slot).catch(() => {});
@@ -1527,4 +1551,4 @@ const JOBS = {
   },
 };
 
-module.exports = {BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest};
+module.exports = {BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest, guardDigs};

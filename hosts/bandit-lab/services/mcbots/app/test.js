@@ -7,6 +7,8 @@ assert.deepStrictEqual(loadConfig({BOT_NAMES: 'bot1, bot22'}).names, ['bot1', 'b
 for (const bad of ['bot', 'bot100', 'Bot1', 'steve', 'bot1,x']) assert.throws(() => loadConfig({BOT_NAMES: bad}), bad);
 { // agent bearer (H5): config pairs token and bots; the policy limits endpoints, bots, jobs and chests
   const tok = 'a'.repeat(40);
+  assert.deepStrictEqual(loadConfig({BOT_NAMES: 'bot1', TRUSTED_PROXIES: '10.250.77.1, 172.22.0.1'}).trustedProxies, ['10.250.77.1', '172.22.0.1']);
+  assert.throws(() => loadConfig({BOT_NAMES: 'bot1', TRUSTED_PROXIES: 'evil.example'}), /IP addresses/);
   assert.deepStrictEqual(loadConfig({BOT_NAMES: 'bot1,bot2', AGENT_TOKEN: tok, AGENT_BOTS: 'bot1'}).agentBots, ['bot1']);
   assert.throws(() => loadConfig({BOT_NAMES: 'bot1', AGENT_TOKEN: tok}), /set together/);
   assert.deepStrictEqual(loadConfig({BOT_NAMES: 'bot1', AGENT_TOKEN: tok, AGENT_BOTS: 'bot1,bot16'}).agentBots, ['bot1', 'bot16'], 'worker bots too');
@@ -1462,6 +1464,25 @@ require('./crafting');
     x = run(['single', 'single']);
     await assert.rejects(x.go(), Cancelled); // its own cover is dug (and the Stop then holds) ...
     assert.strictEqual(x.log.digs, 1, '... but never the single neighbour\'s');
+  }
+  { // guardDigs: the pathfinder's own digs stop for a stopped job, a protected area, a changed block or a fluid
+    const {guardDigs} = require('./bots');
+    const {Vec3} = require('vec3');
+    const world = new Map([['0,60,0', 'stone'], ['5,60,5', 'stone'], ['6,60,5', 'water'], ['20,60,20', 'stone']]);
+    let dug = 0;
+    const bot = {dig: async () => { dug++; }, entity: {position: new Vec3(0, 62, 3)},
+      blockAt: (p) => (world.get(`${p.x},${p.y},${p.z}`) ? {name: world.get(`${p.x},${p.y},${p.z}`), position: p, getProperties: () => ({})} : null)};
+    const runner = {current: {cancelled: false}, protectedAreas: [[15, 15, 25, 25]]};
+    guardDigs(runner, bot);
+    const blk = (x, y, z, name = 'stone') => ({name, position: new Vec3(x, y, z)});
+    await bot.dig(blk(0, 60, 0));
+    assert.strictEqual(dug, 1, 'a plain dig passes');
+    await assert.rejects(bot.dig(blk(5, 60, 5)), /water next to it/);
+    await assert.rejects(bot.dig(blk(20, 60, 20)), /protected/);
+    await assert.rejects(bot.dig(blk(0, 60, 0, 'dirt')), /changed/);
+    runner.current.cancelled = true;
+    await assert.rejects(bot.dig(blk(0, 60, 0)), /stopped/);
+    assert.strictEqual(dug, 1);
   }
   { // excavate: digs natural ground top-down, leaves placed blocks and protected areas alone
     const {JOBS, VALIDATE} = require('./bots');

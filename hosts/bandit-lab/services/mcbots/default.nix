@@ -49,6 +49,12 @@ in {
         HOST_LABEL = "bandit-lab";
         # tailscale serve identifies the tailnet user; everything else gets 403.
         ALLOWED_TS_LOGINS = "6FaNcY9@github";
+        # ... but only from where Tailscale Serve's requests arrive: the Docker
+        # gateway of the published port (mcbots network, pinned; the minecraft
+        # network's current gateway as a fallback). The worker shares this network
+        # namespace and could send the header itself (Codex R2-1). A refused
+        # identity is logged with its source address.
+        TRUSTED_PROXIES = "10.250.77.1,172.22.0.1";
         # Global player positions (read-only JSON) from BlueMap in the minecraft
         # container, reachable over the `minecraft` network.
         BLUEMAP_URL = "http://minecraft:8100";

@@ -116,7 +116,12 @@ const jobsTimer = jobsFile ? setInterval(() => {
   resumeJobs();
   saveJobs();
 }, 2000) : null;
-const authorized = (req) => !cfg.allowed.length || cfg.allowed.includes(req.headers['tailscale-user-login']);
+const peer = (req) => String(req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
+const authorized = (req) => {
+  if (!cfg.allowed.length) return true;
+  if (cfg.trustedProxies.length && !cfg.trustedProxies.includes(peer(req))) return false;
+  return cfg.allowed.includes(req.headers['tailscale-user-login']);
+};
 const agentTokenHash = cfg.agentToken ? agentauth.hash(cfg.agentToken) : null;
 // Cross-site guard: browsers send Origin on POST/WS; it must match Host.
 const sameOrigin = (req) => {
@@ -179,7 +184,10 @@ const server = http.createServer(async (req, res) => {
   // back to the human path, and the token only reaches state, events and its own bots' jobs.
   const agent = agentauth.bearerMatches(req.headers.authorization, agentTokenHash);
   if (agent === false || (agent && !agentauth.agentEndpoint(req.method, url.pathname))) return json(403, {error: 'forbidden'});
-  if (!agent && !authorized(req)) return json(403, {error: 'forbidden'});
+  if (!agent && !authorized(req)) {
+    if (req.headers['tailscale-user-login']) log('auth', `refused a Tailscale identity from ${peer(req)} (not a trusted proxy)`);
+    return json(403, {error: 'forbidden'});
+  }
   if (req.method === 'GET' && url.pathname === '/') return send(200, 'text/html; charset=utf-8', page);
   if (req.method === 'GET' && url.pathname === '/api/state') return json(200, state());
   if (req.method === 'GET' && url.pathname === '/api/events') return json(200, {lastId: events.lastId, events: events.since(Number(url.searchParams.get('since')) || 0)});

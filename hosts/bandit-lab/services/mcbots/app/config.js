@@ -30,6 +30,11 @@ function loadConfig(env = process.env) {
   if (bad.length) throw new Error(`bot names must match ${NAME_RE}: ${bad.join(', ')}`);
   if (new Set(names).size !== names.length) throw new Error('duplicate bot name');
   const allowed = list(env.ALLOWED_TS_LOGINS);
+  // Where Tailscale Serve's requests come from (the Docker gateway of the published port). When set, the
+  // Tailscale identity header counts only from these addresses: anything else in the container's network
+  // namespace (the worker) could send it itself (Codex R2-1).
+  const trustedProxies = list(env.TRUSTED_PROXIES);
+  if (trustedProxies.some((a) => !/^[\d.]+$|^[\da-f:]+$/i.test(a))) throw new Error('TRUSTED_PROXIES must be IP addresses');
   // "x1,z1,x2,z2;..." boxes where bots never dig or place (player bases).
   const protectedAreas = (env.PROTECTED_AREAS || '').split(';').map((b) => b.trim()).filter(Boolean).map((b) => {
     const n = b.split(',').map(Number);
@@ -83,6 +88,7 @@ function loadConfig(env = process.env) {
     host,
     port: Number(env.DASHBOARD_PORT || 8095),
     allowed,
+    trustedProxies,
     protectedAreas,
     supplyChest,
     keeperQuotas,
