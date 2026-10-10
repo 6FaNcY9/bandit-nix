@@ -56,7 +56,7 @@ applyPlaces();
 // Long jobs survive a restart (deploys restart the container): every 5 s the
 // running and queued shift/guard/mine/chop jobs go to STATE_DIR/jobs.json and
 // are queued again at start; a mine/chop keeps only what is left of its count.
-const KEEP = new Set(['shift', 'guard', 'mine', 'chop']);
+const KEEP = new Set(['shift', 'guard', 'mine', 'chop', 'build']); // a resumed build skips what is already placed
 const jobsFile = process.env.STATE_DIR ? path.join(process.env.STATE_DIR, 'jobs.json') : null;
 const keptJobs = () => {
   const out = {};

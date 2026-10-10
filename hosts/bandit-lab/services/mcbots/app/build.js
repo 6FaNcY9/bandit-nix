@@ -15,6 +15,12 @@ const NAME_RE = /^[a-z_]{1,48}$/;
 const REFUSED = /chest|barrel|shulker|furnace|hopper|dispenser|dropper|door|gate|bed$|sign|banner|(^|_)sand$|gravel|concrete_powder|anvil|water|lava|torch|lantern|stairs|slab|wall$|fence|pane|rail|button|lever|pressure_plate|redstone|piston|observer|repeater|comparator|scaffolding|carpet|^air$/;
 const REPLACEABLE = new Set(['air', 'cave_air', 'short_grass', 'tall_grass', 'grass', 'fern', 'large_fern',
   'dandelion', 'poppy', 'snow', 'dead_bush']);
+// Plants a build may break to free a target cell (an explicit list: torches and redstone wire
+// also have hardness 0 and no collision box, and they are a player's, MC-3 review 2026-10-10).
+const PLANTS = new Set(['short_grass', 'tall_grass', 'grass', 'fern', 'large_fern', 'dead_bush', 'bush',
+  'short_dry_grass', 'tall_dry_grass', 'dandelion', 'poppy', 'blue_orchid', 'allium', 'azure_bluet',
+  'red_tulip', 'orange_tulip', 'white_tulip', 'pink_tulip', 'oxeye_daisy', 'cornflower', 'lily_of_the_valley',
+  'wildflowers', 'pink_petals', 'leaf_litter', 'firefly_bush', 'sunflower', 'lilac', 'rose_bush', 'peony']);
 // Faces to place against, preferred first: the block below, then the sides, then above.
 const FACES = [[0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0]];
 
@@ -79,9 +85,10 @@ function step(plan, nameAt, skip = new Set(), soft = () => false) {
   return stuck.length ? {stuck: stuck[0]} : {wait: open};
 }
 
-// Remove mode: the placed blocks of the blueprint, top layer first.
-function removeStep(plan, nameAt, skip = new Set()) {
-  const left = [...plan.blocks].reverse().filter((b) => nameAt(b.x, b.y, b.z) === b.block);
+// Remove mode: blocks this build placed (`placed`, keys "x,y,z"), top layer first. A matching
+// block that was there before the build is never in `placed`, so it stays.
+function removeStep(plan, nameAt, skip = new Set(), placed = new Set()) {
+  const left = [...plan.blocks].reverse().filter((b) => placed.has(keyOf(b)) && nameAt(b.x, b.y, b.z) === b.block);
   if (!left.length) return {done: true};
   const next = left.find((b) => !skip.has(keyOf(b)));
   return next ? {next} : {wait: left.length};
@@ -110,9 +117,19 @@ function countHave(items) {
   return have;
 }
 
-const WAIT_MS = 60000; // blocks held by other bots: give up when nothing frees for this long
+const WAIT_MS = 60000; // no progress (blocks held by other bots, unreachable) for this long: give up
+const DIG_TRIES = 3; // remove mode: a block that will not come out is given up after this many digs
 
-function makeBuild({goNear, guard, sleep, goals, digAt, withdraw}) {
+// What builds placed, per dimension + blueprint (absolute blocks): a Set of "x,y,z". Shared by
+// the bots of this process; lost when the process restarts (then remove refuses).
+const RECORDS = new Map();
+const recordOf = (dim, plan) => {
+  const k = `${dim}|${JSON.stringify(plan.blocks)}`;
+  if (!RECORDS.has(k)) RECORDS.set(k, new Set());
+  return RECORDS.get(k);
+};
+
+function makeBuild({goNear, guard, sleep, goals, digAt, withdraw, waitMs = WAIT_MS}) {
   return async function build(r, job) {
     const {bot} = r;
     const plan = validate(job.args, r.protectedAreas);
@@ -125,21 +142,23 @@ function makeBuild({goNear, guard, sleep, goals, digAt, withdraw}) {
     // The pathfinder must neither dig through nor scaffold into the build.
     const veto = (blk) => (insideAreas([box], blk.position.x, blk.position.z) ? 100 : 0);
     const mv = bot.pathfinder.movements;
-    mv.exclusionAreasBreak.push(veto);
-    mv.exclusionAreasPlace.push(veto);
-    // Nor spend the build's material on scaffolding (it ate 6 cobblestone on one walk, 2026-10-10).
     const scaffold = mv.scafoldingBlocks; // sic: mineflayer-pathfinder 2.4.5 spells it so
-    const wanted = new Set(plan.blocks.map((b) => bot.registry.itemsByName[b.block]?.id));
-    mv.scafoldingBlocks = scaffold.filter((id) => !wanted.has(id));
-    // Flowers, grass and the like break instantly and are cleared, not refused.
-    const soft = (n) => {
-      const d = bot.registry.blocksByName[n];
-      return !!d && d.boundingBox === 'empty' && d.hardness === 0 && !/water|lava|fire/.test(n);
-    };
+    const soft = (n) => PLANTS.has(n); // flowers and grass are cleared, anything else is refused
+    const placed = recordOf(dim, plan);
+    if (plan.remove && !placed.size) throw new Error('no record of this build being placed (only blocks a build placed are removed; records are lost when the bot process restarts)');
     const skip = new Map(); // key -> until
+    const digFails = new Map(); // key -> failed digs (remove mode)
     const total = plan.blocks.length;
-    let waitingSince = 0;
+    let lastProgress = Date.now();
+    const stalled = (what) => {
+      if (Date.now() - lastProgress > waitMs) throw new Error(`no progress for ${Math.round(waitMs / 1000)} s: ${what}`);
+    };
     try {
+      mv.exclusionAreasBreak.push(veto);
+      mv.exclusionAreasPlace.push(veto);
+      // Nor spend the build's material on scaffolding (it ate 6 cobblestone on one walk, 2026-10-10).
+      const wanted = new Set(plan.blocks.map((b) => bot.registry.itemsByName[b.block]?.id));
+      mv.scafoldingBlocks = scaffold.filter((id) => !wanted.has(id));
       if (!plan.remove) {
         const need = materials(plan, nameAt);
         const missing = shortfall(need, countHave(bot.inventory.items()));
@@ -165,59 +184,80 @@ function makeBuild({goNear, guard, sleep, goals, digAt, withdraw}) {
         guard(job);
         const now = Date.now();
         for (const [k, until] of skip) if (until < now) skip.delete(k);
-        const s = (plan.remove ? removeStep : step)(plan, nameAt, new Set(skip.keys()), soft);
-        const left = plan.remove ? (s.done ? 0 : plan.blocks.filter((b) => nameAt(b.x, b.y, b.z) === b.block).length) : Object.values(materials(plan, nameAt)).reduce((a, c) => a + c, 0);
+        const s = plan.remove ? removeStep(plan, nameAt, new Set(skip.keys()), placed) : step(plan, nameAt, new Set(skip.keys()), soft);
+        const left = plan.remove ? (s.done ? 0 : plan.blocks.filter((b) => placed.has(keyOf(b)) && nameAt(b.x, b.y, b.z) === b.block).length) : Object.values(materials(plan, nameAt)).reduce((a, c) => a + c, 0);
         job.t.total = total;
         job.t.done = total - left;
         job.progress = `${plan.remove ? 'removed' : 'placed'} ${total - left}/${total}`;
         if (s.done) return;
         if (s.stuck) throw new Error(s.stuck);
         if (s.wait) {
-          waitingSince ||= now;
-          if (now - waitingSince > WAIT_MS) throw new Error(`${s.wait} blocks left that this bot cannot place or reach`);
+          stalled(`${s.wait} blocks left that this bot cannot place or reach`);
           job.t.doing = 'waiting for blocks other bots hold';
           await sleep(1000);
           continue;
         }
-        waitingSince = 0;
         const b = s.next;
         const k = ckey(b);
         if (r.world && !(await r.world.claim(r.name, k))) {
           r.conflict?.();
           skip.set(keyOf(b), now + 5000);
+          stalled(`${b.block} at ${b.x} ${b.y} ${b.z} is held by another bot`);
           continue;
         }
         try {
           if (plan.remove) {
-            await digAt(r, job, new Vec3(b.x, b.y, b.z));
+            guard(job);
+            if (await digAt(r, job, new Vec3(b.x, b.y, b.z))) {
+              placed.delete(keyOf(b));
+              lastProgress = Date.now();
+              continue;
+            }
+            // Not dug (no answer, or gone): skip it for a while, give up after DIG_TRIES.
+            const n = (digFails.get(keyOf(b)) || 0) + 1;
+            digFails.set(keyOf(b), n);
+            if (n >= DIG_TRIES && nameAt(b.x, b.y, b.z) === b.block) throw new Error(`could not dig ${b.block} at ${b.x} ${b.y} ${b.z} (${n} tries)`);
+            skip.set(keyOf(b), Date.now() + 30000);
             continue;
           }
           const at = new Vec3(b.x, b.y, b.z);
-          if (s.clear) await digAt(r, job, at); // GoalPlaceBlock wants the cell empty
+          if (s.clear) {
+            guard(job);
+            await digAt(r, job, at); // GoalPlaceBlock wants the cell empty
+          }
           await goNear(r, job, b.x, b.y, b.z, 3, {goal: new goals.GoalPlaceBlock(at, bot.world, {range: 4}), doing: `walking to place ${b.block} at ${b.x} ${b.y} ${b.z}`});
+          guard(job);
           const item = bot.inventory.items().find((i) => i.name === b.block);
           if (!item) throw new Error(`ran out of ${b.block}`);
           job.t.doing = `placing ${b.block} at ${b.x} ${b.y} ${b.z}`;
           await bot.equip(item, 'hand');
+          guard(job); // a Stop during the walk or the equip must not place anything
+          if (nameAt(b.x, b.y, b.z) === b.block) continue; // someone placed it meanwhile
           const [dx, dy, dz] = s.face;
           const against = bot.blockAt(at.offset(dx, dy, dz));
           await bot.placeBlock(against, new Vec3(-dx, -dy, -dz)).catch(() => {}); // 26.x may not echo the update in time
           for (let i = 0; i < 20 && nameAt(b.x, b.y, b.z) !== b.block; i++) await sleep(100);
-          if (nameAt(b.x, b.y, b.z) !== b.block) skip.set(keyOf(b), Date.now() + 30000); // try the others, then again
+          if (nameAt(b.x, b.y, b.z) === b.block) {
+            placed.add(keyOf(b));
+            lastProgress = Date.now();
+          } else skip.set(keyOf(b), Date.now() + 30000); // try the others, then again
         } catch (e) {
           guard(job);
           if (!/could not reach/.test(e.message)) throw e;
           skip.set(keyOf(b), Date.now() + 30000);
+          stalled(`could not reach ${b.x} ${b.y} ${b.z}`);
         } finally {
           r.world?.release(r.name, k);
         }
       }
     } finally {
-      mv.exclusionAreasBreak.splice(mv.exclusionAreasBreak.indexOf(veto), 1);
-      mv.exclusionAreasPlace.splice(mv.exclusionAreasPlace.indexOf(veto), 1);
+      for (const list of [mv.exclusionAreasBreak, mv.exclusionAreasPlace]) {
+        const i = list.indexOf(veto);
+        if (i >= 0) list.splice(i, 1);
+      }
       mv.scafoldingBlocks = scaffold;
     }
   };
 }
 
-module.exports = {validate, step, removeStep, materials, shortfall, formatShortfall, countHave, makeBuild, MAX_BLOCKS};
+module.exports = {validate, step, removeStep, materials, shortfall, formatShortfall, countHave, makeBuild, MAX_BLOCKS, PLANTS, RECORDS};

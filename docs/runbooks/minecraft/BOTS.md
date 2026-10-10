@@ -377,10 +377,16 @@ curl -X POST http://127.0.0.1:8095/api/job -H 'Content-Type: application/json' \
   {"origin":{"x":-121,"y":77,"z":9},"blocks":[{"x":0,"y":0,"z":0,"block":"cobblestone"}]}}'
 ```
 
-Add `"remove": true` to dig the same blueprint back out. Rules found live:
-flowers and grass in a target cell are broken first (anything else there is
-"in the way" and fails the job); the pathfinder may not dig, place or spend the
-blueprint's own blocks as scaffolding inside the build's box while the job runs.
+Add `"remove": true` to dig the same blueprint back out. It removes **only blocks a build
+placed** (a record per dimension and blueprint, kept in the bot process's memory): a matching
+block that was there before stays, and without a record (after a restart) remove is refused.
+Rules: plants from a fixed list (grass, flowers) in a target cell are broken first; anything
+else there, a torch or redstone too, is "in the way" and fails the job. The pathfinder may not
+dig, place or spend the blueprint's own blocks as scaffolding inside the build's box while the
+job runs. A Stop is checked after every walk and equip, right before a block is placed or dug.
+The job fails after 60 s without progress (held or unreachable blocks), a block that will not
+come out is given up after 3 digs, and build jobs survive a restart (placed blocks are skipped).
+These rules come from Codex's MC-3 review (2026-10-10).
 
 - **Blueprint**: JSON `{"origin": {"x","y","z"}, "blocks": [{"x","y","z","block"}]}`
   with x, y, z relative to the origin, `block` a plain block name (no states, no

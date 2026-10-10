@@ -75,14 +75,19 @@ assert.throws(() => loadConfig({BOT_NAMES: 'bot1', PROTECTED_AREAS: '1,2,3'}));
   assert.deepStrictEqual(B.step(plan, nameAt, new Set(), (n) => n === 'wildflowers').clear, true);
   assert.match(B.step(plan, nameAt).stuck, /wildflowers is in the way/);
   world.set('100,65,100', 'cobblestone');
-  // Remove: top layer first, nothing left at the end.
+  // Remove: only blocks the build placed, top layer first; a block that was there before stays.
   const rm = B.validate({...bp, remove: true});
-  assert.strictEqual(B.removeStep(rm, nameAt).next.y, 65);
-  for (let k = 0; !(s = B.removeStep(rm, nameAt)).done; k++) {
+  const placedKeys = new Set(rm.blocks.map((q) => `${q.x},${q.y},${q.z}`).filter((k) => k !== '100,64,100'));
+  assert.strictEqual(B.removeStep(rm, nameAt, new Set(), placedKeys).next.y, 65);
+  assert.ok(B.removeStep(rm, nameAt).done, 'no record: nothing is removed');
+  for (let k = 0; !(s = B.removeStep(rm, nameAt, new Set(), placedKeys)).done; k++) {
     assert.ok(k < 18);
     world.delete(`${s.next.x},${s.next.y},${s.next.z}`);
   }
-  assert.ok([...world.keys()].length === 0);
+  assert.deepStrictEqual([...world.keys()], ['100,64,100'], 'the pre-existing block stays');
+  // Plants are an explicit list: a player's torch or redstone wire is never cleared.
+  for (const n of ['wildflowers', 'short_grass', 'poppy']) assert.ok(B.PLANTS.has(n), n);
+  for (const n of ['torch', 'redstone_wire', 'rail', 'lever', 'tripwire']) assert.ok(!B.PLANTS.has(n), n);
 }
 
 // ---- shared world / combat logic ----
@@ -1141,7 +1146,7 @@ require('./crafting');
   // remove mode never withdraws (the blocks are in the world, nothing to carry)
   f = fake([]);
   f.r.bot.blockAt = (p) => ({name: p.y === 64 && p.x < 3 && p.z < 3 ? 'cobblestone' : p.y < 64 ? 'stone' : 'air', position: p});
-  await assert.rejects(run(f.r, give(() => {}), bpArgs(true), 1), /passed-check/);
+  await assert.rejects(run(f.r, give(() => {}), bpArgs(true), 1), /passed-check|no record/); // no record of placing it (MC-3): refused even earlier
   assert.deepStrictEqual(calls, [], 'no withdraw in remove mode');
   // a stop between items ends the build before the next withdraw
   calls.length = 0;
@@ -1150,5 +1155,53 @@ require('./crafting');
   f.r.bot.registry.itemsByName.dirt = {id: 2};
   await assert.rejects(run(f.r, async (r, j, item, n) => { calls.push([item, n]); f.items.push({name: item, count: n}); }, two, 1), /passed-check/);
   assert.strictEqual(calls.length, 1, 'a stop during the withdrawals prevents the next one');
+  // build orchestration with a fake bot (MC-3): Stop, provenance, failed digs, no-progress deadline
+  {
+    const B = require('./build');
+    const fakeRun = ({preset = [], equipStops = false, digOk = true, claimOk = true} = {}) => {
+      const blocks = new Map(preset.map((k) => [k, 'cobblestone']));
+      const name = (v) => blocks.get(`${v.x},${v.y},${v.z}`) ?? (v.y <= 63 ? 'stone' : 'air');
+      const job = {t: {}, cancelled: false};
+      const log = {placed: 0};
+      const mv = {exclusionAreasBreak: [], exclusionAreasPlace: [], scafoldingBlocks: [1, 2]};
+      const bot = {game: {dimension: 'overworld'}, pathfinder: {movements: mv}, world: {},
+        registry: {itemsByName: {cobblestone: {id: 1}}},
+        inventory: {items: () => [{name: 'cobblestone', count: 64, type: 1}]},
+        blockAt: (v) => ({name: name(v), position: v}),
+        equip: async () => { if (equipStops) job.cancelled = true; },
+        placeBlock: async (against, face) => { log.placed++; const t = against.position.plus(face); blocks.set(`${t.x},${t.y},${t.z}`, 'cobblestone'); }};
+      const r = {bot, protectedAreas: [], name: 'b', world: claimOk ? null : {claim: async () => false, release() {}}, conflict() {}};
+      const guard = (j) => { if (j.cancelled) throw new Error('stopped'); };
+      const build = B.makeBuild({goNear: async () => {}, guard, sleep: async () => new Promise((res) => setTimeout(res, 5)), goals: {GoalPlaceBlock: class {}}, withdraw: async () => {},
+        digAt: async (rr, jj, p) => { if (!digOk) return false; blocks.delete(`${p.x},${p.y},${p.z}`); return true; }, waitMs: 50});
+      return {build, r, job, blocks, log, mv};
+    };
+    const pad = (o, extra = {}) => ({origin: o, blocks: [0, 1, 2].map((x) => ({x, y: 0, z: 0, block: 'cobblestone'})), ...extra});
+    let f = fakeRun({equipStops: true}); // a Stop during the equip places nothing; pathfinder settings come back
+    f.job.args = pad({x: 500, y: 64, z: 500});
+    await assert.rejects(f.build(f.r, f.job), /stopped/);
+    assert.strictEqual(f.log.placed, 0, 'nothing placed after Stop');
+    assert.deepStrictEqual([f.mv.exclusionAreasBreak.length, f.mv.exclusionAreasPlace.length, f.mv.scafoldingBlocks], [0, 0, [1, 2]], 'settings restored');
+    f = fakeRun({preset: ['600,64,600']}); // build next to a pre-existing block, then remove: only ours come out
+    f.job.args = pad({x: 600, y: 64, z: 600});
+    await f.build(f.r, f.job);
+    assert.strictEqual(f.log.placed, 2);
+    f.job.args = pad({x: 600, y: 64, z: 600}, {remove: true});
+    await f.build(f.r, f.job);
+    assert.deepStrictEqual([...f.blocks.keys()], ['600,64,600'], 'the pre-existing block stays');
+    f = fakeRun(); // remove without a record is refused
+    f.job.args = pad({x: 700, y: 64, z: 700}, {remove: true});
+    await assert.rejects(f.build(f.r, f.job), /no record/);
+    const g = fakeRun({digOk: false}); // a dig that never works ends with an error
+    g.job.args = pad({x: 800, y: 64, z: 800});
+    await g.build(g.r, g.job);
+    g.job.args = pad({x: 800, y: 64, z: 800}, {remove: true});
+    await assert.rejects(g.build(g.r, g.job), /could not dig|no progress/);
+    const h = fakeRun({claimOk: false}); // claims refused past the deadline: fail, not wait forever
+    h.job.args = pad({x: 900, y: 64, z: 900});
+    const t0 = Date.now();
+    await assert.rejects(h.build(h.r, h.job), /no progress/);
+    assert.ok(Date.now() - t0 < 2000);
+  }
   console.log('ok');
 })();
