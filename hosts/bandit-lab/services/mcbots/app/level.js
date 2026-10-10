@@ -165,18 +165,25 @@ function makeLevel({goNear, waitCalm, guard, sleep, digAt, upkeep, NATURAL, stai
     return status;
   }
 
-  // Walk down (or up) the shaft's own staircase, 16 layers at a time: a walk straight to a spot far
-  // below would dig a stair of its own beside the shaft.
+  // Walk down (or up) the shaft's own staircase, 8 layers at a time.
   async function toLevel(r, job, y) {
     const {x1, z1, x2, z2, top} = job.args;
     const ring = stairRing(x1, z1, x2, z2);
     await walk(r, job, (x1 + x2) >> 1, Math.floor(r.bot.entity.position.y), z1 - 2, 4, {doing: 'walking to the shaft'});
-    for (let leg = 0; leg < 12; leg++) {
-      const cur = Math.floor(r.bot.entity.position.y);
-      if (cur === y) return;
-      const layer = cur > y ? Math.max(y - 1, cur - 17) : Math.min(y - 1, cur + 15); // the layer whose step the bot stands on
-      const s = ring[(((top - layer) % ring.length) + ring.length) % ring.length];
-      await walk(r, job, s.x, layer + 1, s.z, 1, {doing: `going down the shaft to y ${y} (now y ${cur})`});
+    // The way down is the stair only: left free, the pathfinder digs a shorter staircase of its own through the rock
+    // beside the shaft (live: a bot ended in a zombie cave that way) - nothing may be dug by a walk here.
+    const saved = r.digOnly;
+    r.digOnly = /$^/;
+    try {
+      for (let leg = 0; leg < 24; leg++) {
+        const cur = Math.floor(r.bot.entity.position.y);
+        if (cur === y) return;
+        const layer = cur > y ? Math.max(y - 1, cur - 9) : Math.min(y - 1, cur + 7); // the layer whose step the bot stands on, 8 layers per leg
+        const s = ring[(((top - layer) % ring.length) + ring.length) % ring.length];
+        await walk(r, job, s.x, layer + 1, s.z, 1, {doing: `going down the shaft to y ${y} (now y ${cur})`});
+      }
+    } finally {
+      r.digOnly = saved;
     }
   }
 

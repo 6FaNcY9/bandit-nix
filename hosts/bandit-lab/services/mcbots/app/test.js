@@ -1424,17 +1424,17 @@ require('./crafting');
       };
       return {blockAt, dug, digAt};
     };
-    const run = async (w, {hub, areas = [], onDig, reserved, name = 'bot11', walkTo = async () => {}} = {}) => {
+    const run = async (w, {hub, areas = [], onDig, reserved, name = 'bot11', walkTo = async () => {}, startY = 10, args = {}} = {}) => {
       const infos = [];
       const {level} = L.makeLevel({
-        goNear: async (r, job, x, y, z) => walkTo(x, y, z),
+        goNear: async (r, job, x, y, z) => walkTo(x, y, z, r),
         waitCalm: async () => {},
         guard: (job) => { if (job.cancelled) throw new Cancelled('stopped'); },
         sleep: async () => {},
         digAt: w.digAt, upkeep: async () => {}, NATURAL, stairRing, at: (c) => `${c.x} ${c.y} ${c.z}`,
       });
-      const job = {t: {}, cancelled: false, type: 'level', args: {x1: 0, z1: 0, x2: 2, z2: 2, top: 80, y: 10, length: 4, branch: 2}, onDig};
-      const r = {name, bot: {blockAt: w.blockAt, game: {dimension: 'overworld'}, entity: {position: new Vec3(1.5, 10, 1.5)}}, world: hub, protectedAreas: areas, reserved, emit: (k, t) => infos.push(t)};
+      const job = {t: {}, cancelled: false, type: 'level', args: {x1: 0, z1: 0, x2: 2, z2: 2, top: 80, y: 10, length: 4, branch: 2, ...args}, onDig};
+      const r = {name, bot: {blockAt: w.blockAt, game: {dimension: 'overworld'}, entity: {position: new Vec3(1.5, startY, 1.5)}}, world: hub, protectedAreas: areas, reserved, emit: (k, t) => infos.push(t)};
       await level(r, job);
       return {job, infos};
     };
@@ -1473,6 +1473,12 @@ require('./crafting');
     w = world();
     await run(w, {hub: {claim: async (n, k) => k !== 'overworld:5,10,1', release: () => {}}});
     assert.ok(!air(w, 5, 10, 1) && air(w, -1, 10, 1), 'a block that stays busy is left, the rest is dug');
+    // from the surface the way down is the stair, 8 layers per leg, and no walk may dig on it
+    const legs = [];
+    w = world();
+    await run(w, {walkTo: async (x, y, z, r) => { legs.push([y, String(r.digOnly)]); if (r.digOnly) r.bot.entity.position.y = y; }, startY: 30, args: {y: 10}});
+    assert.deepStrictEqual(legs.filter((l) => l[1] === '/$^/').map((l) => l[0]), [22, 14, 10], JSON.stringify(legs));
+    assert.ok(legs.filter((l) => l[1] !== '/$^/').every((l) => l[1] === 'undefined') && air(w, -1, 10, 1), 'only the way down is dig-free; the tunnels are dug afterwards');
     // a tunnel mouth that cannot be reached is tried on every pass (4 walks each), then left and reported
     let walks = 0;
     w = world();
