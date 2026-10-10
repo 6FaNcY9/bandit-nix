@@ -265,6 +265,10 @@ function trackError(a, text) {
   Object.assign(a, {lastErrType: m[1], lastErrReason: reason});
 }
 
+// A foreman's workers: WORKERS_<name> (each agent its own crew, e.g. a lead and a builder), else WORKERS.
+// Agents are never workers.
+const workersOf = (env, name, agents) => new Set((env[`WORKERS_${name}`] ?? env.WORKERS ?? '').split(',').map((w) => w.trim()).filter((w) => /^\w+$/.test(w) && !agents.has(w)));
+
 // Online workers with nothing to do: the foreman is woken for them (at most every 30 s). A worker that
 // logs in after the foreman's first round sends no event, so it waited for the 10-minute check-in (lab).
 // A worker whose last two orders failed for the same reason (stuck without a pickaxe underground) does
@@ -630,8 +634,7 @@ async function main() {
     const [name, goal = ''] = s.split('=');
     agents.set(name.trim(), new Agent(name.trim(), goal.trim(), null));
   }
-  const workers = new Set((process.env.WORKERS || '').split(',').map((w) => w.trim()).filter((w) => /^\w+$/.test(w) && !agents.has(w)));
-  for (const a of agents.values()) a.workers = workers;
+  for (const a of agents.values()) a.workers = workersOf(process.env, a.name, agents);
   // The dashboard may still be starting (the lab restarts mcbots and this service together): wait.
   let lastEventId;
   for (;;) {
@@ -701,4 +704,4 @@ if (require.main === module) main().catch((e) => {
   process.exit(1);
 });
 
-module.exports = {decide, Agent, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished};
+module.exports = {decide, Agent, workersOf, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished};

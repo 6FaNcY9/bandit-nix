@@ -2,7 +2,7 @@
 // node tools/mcagents/agent.test.js — the Mindcraft command translator.
 const assert = require('node:assert');
 process.env.LOG ||= require('node:path').join(require('node:os').tmpdir(), `mcagents-test-${process.pid}.jsonl`); // decide() logs every model call
-const {decide, Agent, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished} = require('./agent');
+const {decide, Agent, workersOf, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished} = require('./agent');
 
 assert.deepStrictEqual(parseCommand('Sure! !collectBlocks("oak_log", 10)'), {name: 'collectBlocks', args: ['oak_log', 10]});
 assert.deepStrictEqual(parseCommand("Bye! !endConversation('john')"), {name: 'endConversation', args: ['john']});
@@ -178,6 +178,13 @@ assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}
   fm.wake = false;
   onEvent(agents, {bot: 'bot10', kind: 'alert', text: 'night falls'});
   assert.ok(fm.wake && fm.history.at(-1).content === 'ALERT: night falls', 'an alert goes to every foreman');
+}
+{ // each agent its own crew; agents are never workers
+  const ag = new Map([['bot1', 1], ['bot2', 1]]);
+  const env = {WORKERS: 'bot3,bot4', WORKERS_bot2: 'bot3, bot1'};
+  assert.deepStrictEqual([...workersOf(env, 'bot1', ag)], ['bot3', 'bot4']);
+  assert.deepStrictEqual([...workersOf(env, 'bot2', ag)], ['bot3']);
+  assert.deepStrictEqual([...workersOf({}, 'bot1', ag)], []);
 }
 // decide() against a fake dashboard and model (global fetch): MC-4 regressions.
 (async () => {

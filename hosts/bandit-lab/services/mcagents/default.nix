@@ -10,16 +10,22 @@
   ...
 }: let
   cfg = config.bandit-lab.mcagents;
-  # Lead mode: one Andy-4.2 brain (bot1) plans and hands out shifts with
-  # !assign; the workers are scripted and stick to their order. On the lab
-  # four independent agents drifted off their goals (2026-10-10).
-  goals = {
-    # The base: an underground storage room under the base-v1 spot, which sits on
-    # ground a block scan found flat (2026-10-10: 7x7 at ground Y 64, 9 blocks from
-    # the base chest); the owner asked for it underground, for chests and beds.
-    bot1 = "You lead the crew. Keep the base chest stocked with logs, cobblestone, coal, raw_iron and raw_gold: give every idle worker a shift with !assign so each resource has someone on it, and give a new order to a worker that finishes, fails or dies. Then build our underground storage room under the base: dig it out with !digRoom(-272, 58, -219, 7, 7, 4) (yourself, or give it to a worker with !assign), then place chests in a row along its north wall with !placeBlockAt for x -271 to -267, y 58, z -219. Later the crew will put their beds there. Do not mine yourself.";
+  # Two Andy-4.2 brains, each with its own scripted crew (lead mode, H4):
+  # bot1 keeps the base chest stocked, bot2 builds; they talk with
+  # !startConversation. One lead with four independent goals drifted, and one
+  # lead with every task did not get to the building (2026-10-10).
+  agents = {
+    bot1 = {
+      goal = "You lead the gathering crew. Keep the base chest at -271 66 -214 stocked with logs, cobblestone, coal, raw_iron and raw_gold: give every idle worker a shift with !assign so each resource has someone on it, and give a new order to a worker that finishes, fails or dies. bot2 is our builder: if the base needs something built, tell bot2 with !startConversation. Do not mine yourself.";
+      workers = "bot4,bot16,bot17,bot18";
+    };
+    # The storage room goes under the base-v1 hut (-272 65 -219, on ground a block
+    # scan found flat); the owner asked for it underground, for chests and beds.
+    bot2 = {
+      goal = "You are the builder. Build our underground storage room under the base: dig it out with !digRoom(-272, 58, -219, 7, 7, 4) (give the digging to your worker with !assign, or do it yourself), then place chests in a row along its north wall with !placeBlockAt for x -271 to -267, y 58, z -219. Leave the base chest at -271 66 -214 alone. When the room is done, tell bot1 with !startConversation.";
+      workers = "bot3";
+    };
   };
-  workers = "bot2,bot3,bot4,bot16,bot17,bot18";
 in {
   options.bandit-lab.mcagents.enable = lib.mkEnableOption "the Andy-4.2 lead agent and its workers" // {default = true;};
 
@@ -29,16 +35,17 @@ in {
       after = ["docker-mcbots.service" "ollama-andy.service"];
       wants = ["docker-mcbots.service" "ollama-andy.service"];
       wantedBy = ["multi-user.target"];
-      environment = {
-        API = "http://127.0.0.1:8095";
-        OLLAMA_URL = "http://127.0.0.1:11434";
-        BLUEPRINTS = "${../mcbots/blueprints}";
-        AGENTS = lib.concatStringsSep ";" (lib.mapAttrsToList (bot: goal: "${bot}=${goal}") goals);
-        # Every model call (prompt + reply) for a later LoRA fine-tune; agent.js
-        # rotates it at 50 MB. The journal gets one line per reply.
-        LOG = "/var/lib/mcagents/decisions.jsonl";
-        WORKERS = workers;
-      };
+      environment =
+        lib.mapAttrs' (bot: a: lib.nameValuePair "WORKERS_${bot}" a.workers) agents
+        // {
+          API = "http://127.0.0.1:8095";
+          OLLAMA_URL = "http://127.0.0.1:11434";
+          BLUEPRINTS = "${../mcbots/blueprints}";
+          AGENTS = lib.concatStringsSep ";" (lib.mapAttrsToList (bot: a: "${bot}=${a.goal}") agents);
+          # Every model call (prompt + reply) for a later LoRA fine-tune; agent.js
+          # rotates it at 50 MB. The journal gets one line per reply.
+          LOG = "/var/lib/mcagents/decisions.jsonl";
+        };
       serviceConfig = {
         ExecStart = "${pkgs.nodejs}/bin/node ${../../../../tools/mcagents}/agent.js";
         LoadCredential = "dashboard-token:/var/lib/mcbots/agent-token";
