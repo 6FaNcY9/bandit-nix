@@ -17,7 +17,7 @@ const TRIES = 2; // a cell is given up after this many failed attempts
 const SKIP_MS = 20000;
 const ROOF = 40; // rock this far above makes an opening a cave opening
 const REACH = 4.2; // eye to the face placed against
-const MATERIALS = ['cobblestone', 'cobbled_deepslate', 'dirt'];
+const MATERIALS = ['stone_bricks', 'cobblestone', 'cobbled_deepslate', 'dirt'];
 const FLUID = /^(water|lava|bubble_column)$/;
 const AIR = /^(air|cave_air|void_air)$/;
 const NEIGHBOURS = [[0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0]]; // below first: the steadiest hold
@@ -168,7 +168,7 @@ function makeSeal({goNear, guard, sleep, goals, withdraw, skipMs = SKIP_MS}) {
           const k = `${dim}:${key(c)}`;
           if (r.world && !(await r.world.claim(r.name, k))) { wait.set(key(c), now + 5000); continue; }
           try {
-            if (!material() && !(await fetchBlocks(r, job, open.length))) throw Object.assign(new Error('out of wall blocks (cobblestone, cobbled_deepslate or dirt) and the supply chest has none'), {fatal: true});
+            if (!material() && !(await fetchBlocks(r, job, open.length))) throw Object.assign(new Error('out of wall blocks (stone_bricks, cobblestone, cobbled_deepslate or dirt) and the supply chest has none'), {fatal: true});
             await goNear(r, job, stand.x, stand.y, stand.z, 0, {goal: new goals.GoalBlock(stand.x, stand.y, stand.z), doing: `walking to wall ${c.x} ${c.y} ${c.z}`});
             guard(job);
             if (kindAt(c.x, c.y, c.z) !== 'air') continue; // changed meanwhile
@@ -209,14 +209,17 @@ function makeSeal({goNear, guard, sleep, goals, withdraw, skipMs = SKIP_MS}) {
     }
   };
 
-  // Cobblestone from the supply chest: enough for the openings left, one fetch of at most 128.
+  // Stone bricks (else cobblestone) from the supply chest: enough for the openings left, one fetch of at most 128.
   async function fetchBlocks(r, job, need) {
     if (!r.supplyChest) return false;
-    try {
-      await withdraw(r, job, 'cobblestone', Math.max(1, Math.min(need, 128)));
-    } catch (e) {
-      guard(job);
-      if (!/^no .+ in the chest$/.test(e.message)) throw e;
+    for (const item of ['stone_bricks', 'cobblestone']) { // bricks first; the chest may have only cobblestone
+      try {
+        await withdraw(r, job, item, Math.max(1, Math.min(need, 128)));
+        break;
+      } catch (e) {
+        guard(job);
+        if (!/^no .+ in the chest$/.test(e.message)) throw e;
+      }
     }
     return r.bot.inventory.items().some((i) => MATERIALS.includes(i.name));
   }

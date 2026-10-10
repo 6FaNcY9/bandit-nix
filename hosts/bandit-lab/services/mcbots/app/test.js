@@ -1984,6 +1984,25 @@ require('./crafting');
   for (const n of ['oak_log', 'oak_planks', 'stick', 'cobblestone', 'coal', 'torch', 'raw_iron', 'iron_ingot', 'iron_pickaxe', 'oak_sapling', 'white_wool', 'red_bed', 'crafting_table', 'furnace', 'chest', 'scaffolding']) assert.strictEqual(storeFor(n, food), 'base', n);
   assert.strictEqual(storeFor('bread', food), 'base');
   for (const n of ['granite', 'dirt', 'sand', 'azure_bluet', 'leaf_litter', 'rotten_flesh', 'string', 'bone', 'egg', 'arrow', 'oak_pressure_plate', 'smooth_basalt']) assert.strictEqual(storeFor(n, food), 'room', n);
+  { // surplus above the keeper quota goes to the hall, not the base chest (2026-10-10: 569 cobblestone left no room for torches)
+    const {overCap} = require('./storage');
+    const full = {cobblestone: 569, oak_log: 400, birch_log: 109, oak_sapling: 200, birch_sapling: 110, torch: 0, coal: 31};
+    const over = (n) => overCap(n, full);
+    for (const n of ['cobblestone', 'spruce_log', 'jungle_sapling']) assert.strictEqual(storeFor(n, food, over), 'room', n);
+    for (const n of ['torch', 'coal', 'stone_bricks', 'oak_planks', 'bread']) assert.strictEqual(storeFor(n, food, over), 'base', n);
+    assert.strictEqual(storeFor('stone_bricks', food), 'base');
+    assert.ok(overCap('charcoal', {coal: 32}) && !overCap('charcoal', {coal: 31}), 'charcoal counts as coal');
+    assert.ok(overCap('cobblestone', {cobblestone: 192}, -64) && !overCap('cobblestone', {cobblestone: 191}, -64), 'carry-out stops at the quota');
+    assert.ok(!overCap('granite', {granite: 9999}), 'no quota: the base/room split decides');
+  }
+  { // the Keeper can make stone bricks from the chest's cobblestone
+    const {PLANS} = require('./keeper');
+    const c = {x: 1, y: 2, z: 3};
+    const ok = PLANS.stone_bricks(16, c, {cobblestone: 24, coal: 2, oak_log: 1});
+    assert.deepStrictEqual(ok.map((j) => j[0]), ['withdraw', 'withdraw', 'withdraw', 'smelt', 'craft', 'deposit']);
+    assert.deepStrictEqual([ok[3][1].item, ok[3][1].count, ok[4][1].item, ok[5][1].only], ['cobblestone', 16, 'stone_bricks', 'stone_bricks']);
+    assert.match(PLANS.stone_bricks(16, c, {cobblestone: 23, coal: 2, oak_log: 1}).blocked, /24 cobblestone/);
+  }
   const {BASE} = require('./plan-config');
   assert.strictEqual(BASE.roomChests.length, 8);
   console.log('ok');
@@ -4047,7 +4066,10 @@ require('./crafting');
   assert.ok(f.log.placed[0].startsWith('cobbled_deepslate'), 'cobblestone, then cobbled deepslate, then dirt');
   f = fake({items: [], supplyChest: {x: 50, y: 0, z: 50}});
   await f.seal(f.r, f.job);
-  assert.deepStrictEqual(f.log.withdraw[0], ['cobblestone', 3], 'fetches what the openings need');
+  assert.deepStrictEqual(f.log.withdraw[0], ['stone_bricks', 3], 'fetches what the openings need, bricks first');
+  f = fake({items: [['cobblestone', 9], ['stone_bricks', 9]]});
+  await f.seal(f.r, f.job);
+  assert.ok(f.log.placed.length && f.log.placed.every((p) => p.startsWith('stone_bricks')), 'stone bricks before cobblestone');
   f = fake({items: []});
   await assert.rejects(f.seal(f.r, f.job), /out of wall blocks/);
   assert.deepStrictEqual(f.mv.scafoldingBlocks, [1, 2], 'restored after a failure too');
@@ -4273,3 +4295,21 @@ require('./crafting');
     assert.doesNotThrow(() => VALIDATE.level(boxJob('level', box(-58, -57), {length: 32, branch: 8})[1]));
   }
 })();
+{ // pillars: the steps a bot climbed to a log come down again, only its own and only if unchanged (2026-10-10)
+  const P = require('./pillars');
+  const feet = {x: 10.5, y: 66, z: 20.5};
+  assert.ok(P.isPillarStep({x: 0, y: 1, z: 0}, {x: 10, y: 65, z: 20}, feet), 'up from the block under the bot');
+  assert.ok(!P.isPillarStep({x: 1, y: 0, z: 0}, {x: 9, y: 66, z: 20}, feet), 'a wall or bridge is no pillar');
+  assert.ok(!P.isPillarStep({x: 0, y: 1, z: 0}, {x: 12, y: 65, z: 20}, feet), 'a block beside the bot is no pillar');
+  const world = new Map([['10,66,20', 'cobblestone'], ['10,67,20', 'cobblestone'], ['10,68,20', 'dirt'], ['30,66,20', 'cobblestone'], ['10,69,20', 'cobblestone']]);
+  const cells = new Map();
+  for (const k of world.keys()) { const [x, y, z] = k.split(',').map(Number); P.record(cells, x, y, z, k === '10,68,20' ? 'cobblestone' : world.get(k)); }
+  world.set('10,69,20', 'oak_planks'); // a player swapped it
+  const blockAt = (x, y, z) => (world.has(`${x},${y},${z}`) ? {name: world.get(`${x},${y},${z}`)} : null);
+  const due = (o) => P.due(cells, {blockAt, ...o}).map((c) => `${c.x},${c.y},${c.z}`);
+  assert.deepStrictEqual(due({target: {x: 11, z: 20}}), ['30,66,20'], 'the ones near the next log stay');
+  assert.strictEqual(cells.size, 3, 'a changed block is forgotten, not dug (10,68 was dirt, 10,69 is planks)');
+  assert.deepStrictEqual(due({}), ['10,67,20', '10,66,20', '30,66,20'].sort((a, b) => b.split(',')[1] - a.split(',')[1]), 'tallest first');
+  assert.deepStrictEqual(due({protectedAt: (x) => x === 10}), ['30,66,20'], 'never in a protected area');
+  assert.strictEqual(cells.size, 1);
+}

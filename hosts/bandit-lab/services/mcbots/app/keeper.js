@@ -42,6 +42,14 @@ const PLANS = {
     return [['withdraw', {item: 'coal', count: coal, ...c}], ['withdraw', {item: 'logs', count: Math.ceil(n / 32), ...c}], ['craft', {item: 'torch', count: n}], ['deposit', {...c, only: 'torch'}]];
   },
 };
+// Stone bricks, the bots' building stone (seal, shaft steps, fluid plugs): smelt cobblestone to stone, craft 4 stone
+// into 4 bricks. The chest gives the cobblestone (plus 8 for a furnace), coal for the fuel and a log for a table.
+PLANS.stone_bricks = (n, c, stock) => {
+  const need = [['cobblestone', n + 8], ['coal', Math.ceil(n / 8)], ['logs', 1]];
+  const short = need.find(([what, k]) => have(stock, what) < k);
+  if (short) return {blocked: `needs ${short[1]} ${short[0]} in the chest first`};
+  return [...need.map(([what, k]) => ['withdraw', {item: what, count: k, ...c}]), ['smelt', {item: 'cobblestone', count: n}], ['craft', {item: 'stone_bricks', count: n}], ['deposit', {...c, only: 'stone_bricks'}]];
+};
 // Spare pickaxes, so rearm finds one when a bot's breaks (4x "no pickaxe left" on the lab, 2026-10-10).
 // A stone pickaxe is 3 cobblestone + 2 sticks; the logs make the sticks and one crafting table.
 PLANS.stone_pickaxe = (n, c, stock) => {

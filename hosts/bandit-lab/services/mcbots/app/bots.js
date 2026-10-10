@@ -226,6 +226,7 @@ class BotRunner {
     this.host = host;
     this.protectedAreas = protectedAreas;
     this.supplyChest = supplyChest;
+    this.pillars = new Map(); // blocks placed to climb to logs (pillars.js), dug back down by unpillar()
     // VeloAuth account password, derived per bot from a shared seed.
     this.password = loginSeed ? require('node:crypto').createHash('sha256').update(`${loginSeed}:${name}`).digest('hex').slice(0, 32) : null;
     this.port = port;
@@ -621,6 +622,8 @@ function unwedge(bot) {
 
 // Blocks the pathfinder may place under itself to climb out of a shaft (the default
 // list is only dirt, cobblestone, netherrack); the first one a bot carries is used.
+const pillars = require('./pillars');
+const PILLAR_JOBS = new Set(['chop', 'shift', 'treefarm']); // jobs whose pillars are dug back down
 const PILLAR_BLOCKS = ['cobblestone', 'cobbled_deepslate', 'dirt', 'netherrack', 'andesite', 'diorite', 'granite', 'tuff', 'stone', 'deepslate'];
 
 function safeMovements(bot, areas, runner = null) {
@@ -765,7 +768,7 @@ function unsafeDig(bot, pos) {
 // Plug water and lava next to a target with rubble (an idea from the Jarvis plugin):
 // each fluid neighbour gets a cobblestone (or other junk block) placed against the
 // target's face towards it. true when every neighbour got filled.
-const FILLER = ['cobblestone', 'cobbled_deepslate', 'dirt', 'netherrack', 'andesite', 'diorite', 'granite', 'tuff', 'stone'];
+const FILLER = ['stone_bricks', 'cobblestone', 'cobbled_deepslate', 'dirt', 'netherrack', 'andesite', 'diorite', 'granite', 'tuff', 'stone'];
 // A permitted target does not authorise changes to its neighbours: a fluid block
 // inside a protected area is never filled (the target is then left unmined), and
 // a stop is honoured between the asynchronous steps.
@@ -880,7 +883,14 @@ function guardDigs(runner, bot) {
   const nativePlace = withLook('Placing', placeBlock, placeRefusal);
   bot.placeBlock = (ref, face, ...rest) => {
     const why = placeRefusal(ref, face);
-    return why ? Promise.reject(new Error(why)) : nativePlace(ref, face, ...rest);
+    if (why) return Promise.reject(new Error(why));
+    // A step straight up from the bot's own column while it chops is a pillar to a log: remember it (pillars.js).
+    const p = ref.position.plus(face), held = bot.heldItem?.name;
+    const climb = PILLAR_JOBS.has(runner.current?.type) && PILLAR_BLOCKS.includes(held) && pillars.isPillarStep(face, ref.position, bot.entity.position);
+    return nativePlace(ref, face, ...rest).then((out) => {
+      if (climb) pillars.record(runner.pillars, p.x, p.y, p.z, held);
+      return out;
+    });
   };
 }
 
@@ -962,6 +972,24 @@ async function digAt(r, job, pos, expect = null) {
   }
   if (/_log$/.test(block.name)) await replant(r, pos, block.name).catch(() => {});
   return true;
+}
+
+// Dig back down the pillars this job climbed (only cells it placed, still the same block, outside protected
+// areas). `target` ({x, z}: the next log) keeps the pillars beside it. One try each, tallest first, from the
+// ground at reach; a taller one may need a new step, which the next call removes.
+async function unpillar(r, job, target = null) {
+  if (!r.pillars?.size) return;
+  const cells = pillars.due(r.pillars, {blockAt: (x, y, z) => r.bot.blockAt(new Vec3(x, y, z)), protectedAt: (x, z) => insideAreas(r.protectedAreas, x, z), target});
+  for (const c of cells) {
+    guard(job);
+    r.pillars.delete(pillars.key(c.x, c.y, c.z));
+    try {
+      await digAt(r, job, new Vec3(c.x, c.y, c.z), (n) => n === c.name);
+    } catch (e) {
+      guard(job);
+      r.emit('info', `pillar at ${c.x} ${c.y} ${c.z} left standing: ${e.message.slice(0, 60)}`);
+    }
+  }
 }
 
 // Where a log came off dirt or grass, plant the matching sapling again (the
@@ -1064,7 +1092,7 @@ const canHarvest = (bot, id) => {
 };
 // A child job: shares cancellation with `job`, has its own counters and arguments.
 // A shaft's stair step must hold: gravel or sand would fall once the layer below is dug, and air,
-// water or lava is no step. Replace it with cobblestone while the block under it still stands.
+// water or lava is no step. Replace it with stone bricks (else cobblestone) while the block under it still stands.
 const LOOSE = /^(air|cave_air|gravel|sand|red_sand|water|lava)$/;
 async function fixStep(r, job, x, y, z) {
   const Vec3 = require('vec3').Vec3;
@@ -1072,7 +1100,7 @@ async function fixStep(r, job, x, y, z) {
   if (!b || !LOOSE.test(b.name)) return;
   try {
     if (/sand|gravel/.test(b.name)) await digAt(r, job, b.position, (n) => n === b.name);
-    await JOBS.place(r, child(job, {type: 'place', args: {item: 'cobblestone', x, y, z}}));
+    await JOBS.place(r, child(job, {type: 'place', args: {item: r.bot.inventory.items().some((i) => i.name === 'stone_bricks') ? 'stone_bricks' : 'cobblestone', x, y, z}}));
   } catch (e) {
     guard(job);
     r.emit('info', `stair step at ${x} ${y} ${z} not fixed: ${e.message.slice(0, 80)}`);
@@ -1471,6 +1499,7 @@ async function collect(r, job, matching, count, what) {
       throw new Error(`no free ${what} within ${range} blocks (collected ${got}/${count}${explored ? `, searched ${explored} more spots` : ''})`);
     }
     try {
+      if (wood) await unpillar(r, job, pos);
       await waitSafe(r, job, pos.x, pos.z);
       if (!(await digAt(r, job, pos))) {
         r.skip.set(key, Date.now() + 300000); // not dug by us: do not count it, try another block
@@ -1501,6 +1530,7 @@ async function collect(r, job, matching, count, what) {
     job.progress = `${got}/${count}`;
     if (!job.t.open) Object.assign(job.t, {done: got, total: count});
   }
+  if (wood) await unpillar(r, job);
 }
 
 // " 12/32" for jobs that count their blocks, else "".
@@ -1596,7 +1626,7 @@ const seal = sealJob.makeSeal({goNear, guard, sleep, goals, withdraw: buildWithd
 const {level} = levelJob.makeLevel({goNear, waitCalm, guard, sleep, digAt, upkeep, NATURAL, stairRing, at});
 
 const {treefarm} = treeFarmJob.makeTreeFarm({
-  goNear, guard, sleep, digAt, waitCalm, at,
+  goNear, guard, sleep, digAt, waitCalm, at, unpillar,
   deposit: (r, job) => JOBS.deposit(r, child(job, {type: 'deposit', args: {...r.supplyChest, only: 'logs'}})),
   withdraw: (r, job, item, count) => JOBS.withdraw(r, child(job, {type: 'withdraw', args: {item, count, ...r.supplyChest}})),
 });
@@ -1709,7 +1739,10 @@ const JOBS = {
   mine: (r, job) => collect(r, job, [job.args.block], job.args.count, job.args.block),
 
   chop: (r, job) =>
-    collect(r, job, Object.keys(r.bot.registry.blocksByName).filter((n) => n.endsWith('_log')), job.args.count, 'logs'),
+    collect(r, job, Object.keys(r.bot.registry.blocksByName).filter((n) => n.endsWith('_log')), job.args.count, 'logs').catch(async (e) => {
+      await unpillar(r, job).catch(() => {}); // a failed job leaves no pillars either (a Stop cancels this too)
+      throw e;
+    }),
 
   async deposit(r, job) {
     const {bot} = r;
@@ -1766,13 +1799,24 @@ const JOBS = {
           noteStock(r, job, chest);
           return;
         }
-      } else await fill(chest, junk().filter((it) => storage.storeFor(it.name, isFood) === 'base'));
-      // One-off tidy-up: carry up to 9 stacks of junk already in the base chest to the rooms too.
+      } else {
+        // The base chest takes an item only up to its quota (storage.js CAPS); the open chest is the stock, so it is current.
+        const stock = {};
+        for (const it of chest.containerItems()) stock[it.name] = (stock[it.name] || 0) + it.count;
+        await fill(chest, junk().filter((it) => {
+          if (storage.storeFor(it.name, isFood, (n) => storage.overCap(n, stock)) !== 'base') return false;
+          stock[it.name] = (stock[it.name] || 0) + it.count;
+          return true;
+        }));
+      }
+      // One-off tidy-up: carry up to 9 stacks of junk, and of surplus above the quota, already in the base chest to the hall too.
       let carried = 0;
+      const held = {};
+      for (const it of chest.containerItems()) held[it.name] = (held[it.name] || 0) + it.count;
       for (const it of chest.containerItems()) {
-        if (carried >= 9 || storage.storeFor(it.name, isFood) !== 'room') continue;
+        if (carried >= 9 || (storage.storeFor(it.name, isFood) !== 'room' && !storage.overCap(it.name, held, -it.count))) continue;
         guard(job);
-        try { await chest.withdraw(it.type, it.metadata, it.count); carried++; } catch { break; } // inventory full
+        try { await chest.withdraw(it.type, it.metadata, it.count); carried++; held[it.name] -= it.count; } catch { break; } // inventory full
       }
       noteStock(r, job, chest);
       chest.close();
@@ -2101,7 +2145,9 @@ const JOBS = {
   // the ground. Cells that are blocked, unsupported or protected are left out.
   async rim(r, job) {
     const {bot} = r;
-    const {x1, z1, x2, z2, top, item} = job.args;
+    const {x1, z1, x2, z2, top} = job.args;
+    // The default wall is stone brick when the bot carries bricks (or the walls), else cobblestone.
+    const item = job.args.item === 'cobblestone_wall' && bot.inventory?.items().some((i) => i.name === 'stone_bricks' || i.name === 'stone_brick_wall') ? 'stone_brick_wall' : job.args.item;
     const Vec3 = require('vec3').Vec3;
     await goNear(r, job, (x1 + x2) >> 1, Math.floor(bot.entity.position.y), z1 - 2, 3, {doing: 'walking to the shaft'});
     const ground = (x, z) => {
