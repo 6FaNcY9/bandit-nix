@@ -2,7 +2,7 @@
 // node tools/mcagents/agent.test.js — the Mindcraft command translator.
 const assert = require('node:assert');
 process.env.LOG ||= require('node:path').join(require('node:os').tmpdir(), `mcagents-test-${process.pid}.jsonl`); // decide() logs every model call
-const {decide, Agent, parseCommand, translate, commandDocs, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText} = require('./agent');
+const {decide, Agent, idleWorkers, parseCommand, translate, commandDocs, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText} = require('./agent');
 
 assert.deepStrictEqual(parseCommand('Sure! !collectBlocks("oak_log", 10)'), {name: 'collectBlocks', args: ['oak_log', 10]});
 assert.deepStrictEqual(parseCommand("Bye! !endConversation('john')"), {name: 'endConversation', args: ['john']});
@@ -94,6 +94,9 @@ assert.strictEqual(workersText(W, st), 'YOUR WORKERS (use !assign)\n- bot12: idl
 assert.ok(commandDocs([], ['bot12']).includes('!assign:') && !commandDocs().includes('!assign'), 'assign is offered only with workers');
 console.log('ok');
 
+assert.deepStrictEqual(idleWorkers(new Set(['bot2', 'bot16', 'bot17', 'bot18']), {bots: [
+  {name: 'bot2', online: true, job: {type: 'shift'}, queue: []}, {name: 'bot16', online: true, job: null, queue: []},
+  {name: 'bot17', online: false, job: null, queue: []}, {name: 'bot18', online: true, dead: true, job: null, queue: []}, {name: 'bot1', online: true, job: null, queue: []}]}), ['bot16']);
 // decide() against a fake dashboard and model (global fetch): MC-4 regressions.
 (async () => {
   const realFetch = globalThis.fetch;

@@ -231,6 +231,10 @@ function assignJob(cmd, workers, state, places = {}) {
   return {worker: name, job: t.job, replace: isRoutine(bot.job)};
 }
 
+// Online workers with nothing to do: the foreman is woken for them (at most every 30 s). A worker that
+// logs in after the foreman's first round sends no event, so it waited for the 10-minute check-in (lab).
+const idleWorkers = (workers, state) => state.bots.filter((b) => workers.has(b.name) && b.online && !b.dead && !b.job && !b.queue?.length).map((b) => b.name);
+
 function workersText(workers, state) {
   const lines = [...workers].map((w) => state.bots.find((b) => b.name === w)).filter((b) => b?.online).map((b) => `- ${b.name}: ${b.job ? b.job.label : 'idle'}`);
   return lines.length ? `YOUR WORKERS (use !assign)\n${lines.join('\n')}\n` : '';
@@ -492,6 +496,10 @@ async function main() {
       for (const agent of agents.values()) {
         if (busy.has(agent.name)) continue;
         const bot = state.bots.find((b) => b.name === agent.name);
+        if (agent.workers.size && now - agent.lastDecisionAt > 30000 && idleWorkers(agent.workers, state).length) {
+          agent.wake = true;
+          agent.wakeAt ||= now;
+        }
         const why = promptReason(agent, bot, now);
         if (why) ready.push([agent, why, bot]);
       }
@@ -522,4 +530,4 @@ if (require.main === module) main().catch((e) => {
   process.exit(1);
 });
 
-module.exports = {decide, Agent, parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText};
+module.exports = {decide, Agent, idleWorkers, parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText};
