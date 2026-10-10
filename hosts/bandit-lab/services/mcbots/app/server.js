@@ -90,6 +90,7 @@ function applyPlaces() {
 }
 applyPlaces();
 // The plan (R7): available only with PLAN_ENABLE; whether it is switched on, and what it has done, is kept in plan.json.
+const SOLVER_SKIPPABLE = new Set(planConfig.OBJECTIVES.filter((o) => o.onBlocked === 'skip' && !planConfig.OBJECTIVES.some((x) => x.needs.includes(o.id))).map((o) => o.id));
 const plan = cfg.planEnable ? new Plan({runners, world, keeper, places, events, objectives: planConfig.OBJECTIVES, roster: cfg.planRoster, chest: planConfig.BASE.chest, file: process.env.STATE_DIR ? path.join(process.env.STATE_DIR, 'plan.json') : null, log}) : null;
 
 // Long jobs survive a restart (deploys restart the container): every 5 s the
@@ -290,7 +291,10 @@ const server = http.createServer(async (req, res) => {
     if (!agent) return json(403, {error: 'forbidden'});
     if (!sameOrigin(req) || !String(req.headers['content-type']).startsWith('application/json')) return json(403, {error: 'bad origin'});
     try {
-      const r = agentauth.solverAction(await readJson(req), {agentBots: cfg.agentBots, roster: cfg.planRoster || [], blocked: plan ? [...new Set([...plan.blocked.keys(), ...plan.parked])] : [], limiter: solverLimiter});
+      // Only an optional objective may be skipped by the solver: one the plan itself would skip when blocked and
+      // that nothing later needs. It skipped the shaft (the main project) over missing torches (2026-10-11).
+      const blocked = plan ? [...new Set([...plan.blocked.keys(), ...plan.parked])].filter((id) => SOLVER_SKIPPABLE.has(id)) : [];
+      const r = agentauth.solverAction(await readJson(req), {agentBots: cfg.agentBots, roster: cfg.planRoster || [], blocked, limiter: solverLimiter});
       if (r.error) return json(403, {error: r.error});
       if (r.skip) plan.skip(r.skip);
       events.add(r.bot, r.kind, r.text);
