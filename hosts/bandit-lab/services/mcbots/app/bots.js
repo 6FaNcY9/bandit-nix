@@ -70,6 +70,7 @@ const keptOf = (r) => [r.current, ...(r.queue || [])].filter((j) => j && !j.canc
 });
 
 // Normalise and validate job arguments (throws on bad input).
+const BUILT_RE = /^(torch|wall_torch|soul_torch|lantern|soul_lantern|light|chest|trapped_chest|barrel|crafting_table|furnace|blast_furnace|smoker|ladder|scaffolding|glass|glass_pane|stone_bricks|.*_bed|.*_door|.*_trapdoor|.*_sign|.*_slab|.*_stairs|.*_fence|.*_fence_gate|.*rail|lever|.*_button|.*_pressure_plate|hopper|bell)$/;
 const VALIDATE = {
   goto: xyz,
   follow: player,
@@ -78,6 +79,9 @@ const VALIDATE = {
   guard: (a) => ({...(a.player ? player(a) : xyz(a)), radius: num(a.radius ?? 16, 4, 48, 'radius')}),
   mine: (a) => {
     if (!/^[a-z_]{1,48}$/.test(a.block || '')) throw new Error('block must be a block name like iron_ore');
+    // Placed blocks are never "collected": an agent's !collectBlocks("torch") dug the base and shaft
+    // torches and let mobs spawn (2026-10-10). Craft them, or take them from a chest.
+    if (BUILT_RE.test(a.block)) throw new Error(`${a.block} is a placed block, not something to mine: craft it or take it from a chest`);
     return {block: a.block, count: num(a.count ?? 1, 1, 2048, 'count')};
   },
   chop: (a) => ({count: num(a.count ?? 1, 1, 2048, 'count')}),
