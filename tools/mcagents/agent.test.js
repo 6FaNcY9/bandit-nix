@@ -111,6 +111,20 @@ assert.ok(asg('!assign("bot12")').refuse);
 assert.deepStrictEqual(asg('!assign("bot12", "!putInChest(\\"cobblestone\\", 5)")').job, ['deposit', {x: 5, y: 64, z: 5, only: 'cobblestone'}]);
 assert.strictEqual(workersText(W, st), 'YOUR WORKERS (use !assign)\n- bot12: idle\n- bot13: shift logs\n');
 assert.ok(commandDocs([], ['bot12']).includes('!assign:') && !commandDocs().includes('!assign'), 'assign is offered only with workers');
+{ // project jobs (shaft, excavate, build) are kept: no !assign over a running one, no idle wake-up, clear in workersText
+  const shaft = {type: 'shaft', label: 'shaft -291 -222 -280 -211', progress: 'shaft -291 -222: down to y 40'};
+  const ps = {bots: [{name: 'bot17', online: true, job: shaft, queue: []}, {name: 'bot18', online: true, job: {type: 'build', label: 'build 22 blocks', progress: 'placed 3/22'}, queue: []}, {name: 'bot12', online: true, job: null, queue: []}]};
+  const pw = new Set(['bot12', 'bot17', 'bot18']);
+  const pa = (t) => assignJob(parseCommand(t), pw, ps);
+  assert.deepStrictEqual(pa('!assign("bot17", "!collectBlocks(\\"stone\\", 8)")'), {refuse: 'bot17 is digging the shaft (down to y 40); pick an idle worker.'});
+  assert.match(pa('!assign("bot18", "!collectBlocks(\\"stone\\", 8)")').refuse, /^bot18 is building \(placed 3\/22\); pick an idle worker\.$/);
+  assert.ok(pa('!assign("bot12", "!collectBlocks(\\"stone\\", 8)")').job, 'an idle worker is fine');
+  ps.bots[0].job = null; // finished or failed: the job is gone
+  assert.ok(pa('!assign("bot17", "!collectBlocks(\\"stone\\", 8)")').job);
+  ps.bots[0].job = shaft;
+  assert.deepStrictEqual(idleWorkers(pw, ps), ['bot12'], 'workers on a project are not idle');
+  assert.strictEqual(workersText(pw, ps), 'YOUR WORKERS (use !assign)\n- bot12: idle\n- bot17: shaft -291 -222, down to y 40 (project, keep)\n- bot18: build 22 blocks, placed 3/22 (project, keep)\n');
+}
 console.log('ok');
 
 assert.deepStrictEqual(idleWorkers(new Set(['bot2', 'bot16', 'bot17', 'bot18']), {bots: [
@@ -169,9 +183,9 @@ assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}
   noteWorker('bot2', 'failed: shift stone 1 2 3 - no pickaxe: could not reach 4 5 6');
   fm.last.set('bot2', 'failed: shift stone 1 2 3 - no pickaxe: could not reach 4 5 6');
   assert.match(baseStatusText(fm, state), /^BASE STATUS\nYOUR WORKERS \(use !assign\)\n- bot2: idle \(last: failed: shift stone.*\) STUCK.*\nBASE: chest \(lowest first\) coal 12, cobblestone/);
-  assert.match(assignJob(parseCommand('!assign("bot2", "!startShift(\\"logs\\")")'), new Set(['bot2']), {...state, supplyChest: {x: 1, y: 2, z: 3}}).refuse, /bot2 is resting after two identical failures \(no pickaxe: could not reach #.*\)\. Give the work to another worker/, 'a stuck worker gets no order');
+  assert.match(assignJob(parseCommand('!assign("bot2", "!collectBlocks(\\"stone\\", 8)")'), new Set(['bot2']), {...state, supplyChest: {x: 1, y: 2, z: 3}}).refuse, /bot2 is resting after two identical failures \(no pickaxe: could not reach #.*\)\. Give the work to another worker/, 'a stuck worker gets no order');
   noteWorker('bot2', 'finished: shift stone (3 s)');
-  assert.ok(assignJob(parseCommand('!assign("bot2", "!startShift(\\"logs\\")")'), new Set(['bot2']), {...state, supplyChest: {x: 1, y: 2, z: 3}}).job, 'after a success it can be assigned again');
+  assert.ok(assignJob(parseCommand('!assign("bot2", "!collectBlocks(\\"stone\\", 8)")'), new Set(['bot2']), {...state, supplyChest: {x: 1, y: 2, z: 3}}).job, 'after a success it can be assigned again');
 }
 { // events: a worker's deposit reaches its foreman as one short line, without waking it
   const fm = new Agent('bot1', 'lead', null);
@@ -352,6 +366,23 @@ assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}
       noteFinished(fm, 'failed: excavate 5 60 5 6 60 6 - blocks left');
       await go('!assign("bot3", "!digRoom(5, 60, 5, 2, 2, 1)")');
       assert.strictEqual(jobs.length, 3, 'a failed room is eligible');
+    }
+    { // the gathering lead never digs a shaft or room itself; the builder (another goal) may
+      const dig = async (goal, reply) => {
+        const agent = new Agent('bot1', goal, null);
+        agent.workers = new Set(['bot2']);
+        const jobs = [];
+        globalThis.fetch = async (url) => ({ok: true, status: 200, json: async () => (url.endsWith('/api/chat') ? {message: {content: reply}} : (url.endsWith('/api/job') && jobs.push(url), {}))});
+        const state = {bots: [{name: 'bot1', online: true, pos: [0, 64, 0], inventory: [], queue: [], job: null}], places: []};
+        await decide(agent, new Map([['bot1', agent]]), async () => state, {take: () => true});
+        return {jobs, said: agent.history.at(-1).content};
+      };
+      for (const r of ['!digShaft(0, 0, 9, 9)', '!digRoom(0, 60, 0, 2, 2, 1)']) {
+        const lead = await dig('Gather logs and stone for the base', r);
+        assert.strictEqual(lead.jobs.length, 0, r);
+        assert.strictEqual(lead.said, 'Refused: you lead, you do not dig. Give it to a worker with !assign.');
+        assert.strictEqual((await dig('Build the base', r)).jobs.length, 1, 'the builder may dig');
+      }
     }
     { // two agents answering each other end the exchange instead of spending the budget (R3-3)
       const a = new Agent('bot1', 'lead', null), b = new Agent('bot2', 'lead', null);

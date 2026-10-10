@@ -108,6 +108,11 @@ const BASE_DOC = ['Get the state of the base: each worker with its job and last 
 // A foreman (an agent with workers) gets few commands: the workers do the gathering, crafting and smelting.
 const FOREMAN = new Set(['assign', 'baseStatus', 'buildBlueprint', 'digRoom', 'digShaft', 'huntAnimals', 'placeBed', 'placeBlockAt', 'viewChest', 'stats', 'inventory', 'goToCoordinates', 'stop', 'startConversation']);
 const GATHERING = new Set(['collectBlocks', 'collectBlock', 'startShift']);
+// Project jobs run until done; the owner decides who works on them (lab 2026-10-10: the lead pulled a worker off the shaft).
+const PROJECTS = {shaft: 'digging the shaft', excavate: 'digging a room', build: 'building'};
+const isProject = (job) => !!job && Object.hasOwn(PROJECTS, job.type);
+// The lead is the foreman whose goal is gathering (the builder bot2 has workers too, but may dig). ponytail: keyword test on the goal text, a !goal that avoids these words slips through.
+const leadsGathering = (a) => a.workers.size > 0 && /gather|collect|mine|chop|\blogs?\b|wood|cobble|coal|iron/i.test(a.goal);
 
 function commandDocs(blueprints = [], workers = []) {
   let docs = '\n*COMMAND DOCS\n You can use the following commands to perform actions and get information about the world. \n    Use the commands with the syntax: !commandName or !commandName("arg1", 1.2, ...) if the command takes arguments.\n\n    Do not use codeblocks. Use double quotes for strings. Only use one command in each response, trailing commands and comments will be ignored.\n';
@@ -269,6 +274,7 @@ function assignJob(cmd, workers, state, places = {}) {
   const bot = state.bots.find((b) => b.name === name);
   if (!bot?.online || bot.dead) return {refuse: `${name} is not available right now.`};
   if (resting(name)) return {refuse: `${name} is resting after two identical failures (${stuckWorkers.get(name).reason}). Give the work to another worker.`};
+  if (isProject(bot.job)) return {refuse: `${name} is ${PROJECTS[bot.job.type]}${bot.job.progress ? ` (${bot.job.progress.replace(/^[^:]*: /, '')})` : ''}; pick an idle worker.`};
   const inner = parseCommand(text);
   if (!inner) return {refuse: 'The second argument must be a command, for example "!collectBlocks(\\"cobblestone\\", 32)".'};
   const t = translate(inner, {pos: bot.pos, supplyChest: state.supplyChest, places});
@@ -316,7 +322,9 @@ const idleWorkers = (workers, state, now = Date.now()) => state.bots.filter((b) 
 function workersText(workers, state, last = new Map()) {
   const lines = [...workers].map((w) => state.bots.find((b) => b.name === w)).filter((b) => b?.online).map((b) => {
     const l = last.get(b.name);
-    return `- ${b.name}: ${b.job ? b.job.label : 'idle'}${l ? ` (last: ${l.slice(0, 100)})` : ''}${resting(b.name) ? ' STUCK: failed twice the same way, give it a different job later' : ''}`;
+    const p = b.job?.progress || '';
+    const job = !isProject(b.job) ? b.job?.label : `${p.includes(': ') ? p.replace(': ', ', ') : [b.job.label, p].filter(Boolean).join(', ')} (project, keep)`;
+    return `- ${b.name}: ${job || 'idle'}${l ? ` (last: ${l.slice(0, 100)})` : ''}${resting(b.name) ? ' STUCK: failed twice the same way, give it a different job later' : ''}`;
   });
   return lines.length ? `YOUR WORKERS (use !assign)\n${lines.join('\n')}\n` : '';
 }
@@ -596,6 +604,10 @@ async function decide(agent, agents, getState, budget) {
         }
         t.job = ['build', {origin: {x: a[1], y: a[2], z: a[3]}, blocks: bp.blocks}];
       }
+    }
+    if (['shaft', 'excavate'].includes(t.job[0]) && leadsGathering(agent)) {
+      agent.push('system', 'Refused: you lead, you do not dig. Give it to a worker with !assign.');
+      continue;
     }
     if (same !== agent.lastCommand) agent.failures = 0;
     // Andy-4.2 ignored the repeat hint and sent one failing command eight times (live 2026-10-10).
