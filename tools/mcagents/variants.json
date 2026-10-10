@@ -1,0 +1,4 @@
+[
+  {"name": "baseline"},
+  {"name": "one-command", "system_append": "\n\nAnswer with exactly one command and no other text."}
+]

@@ -88,5 +88,56 @@ in {
         MemoryMax = "512M";
       };
     };
+    # Idle replay (owner, 2026-10-10): while a gaming PC's llama-server answers /health
+    # (nobody is gaming), replay logged decisions against it and record the scores in
+    # /var/lib/mcagents/replays. Never touches Ollama; loopback and ntfy only.
+    systemd.services.mcagents-idle-replay = lib.mkIf (inferenceNames != []) {
+      description = "Replay logged Minecraft agent decisions on idle gaming PCs";
+      environment = {
+        ANDY_URLS = lib.concatStringsSep "," inferenceUrls;
+        ANDY_BACKEND_NAMES = lib.concatStringsSep "," inferenceNames;
+        LOG = "/var/lib/mcagents/decisions.jsonl";
+        REPLAYS = "/var/lib/mcagents/replays";
+        VARIANTS = "${../../../../tools/mcagents/variants.json}";
+        NTFY_URL = "http://127.0.0.1:2586/mcbots";
+      };
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${pkgs.nodejs}/bin/node ${../../../../tools/mcagents}/idle-replay.js";
+        LoadCredential = "ntfy:/var/lib/mcbots/ntfy/publisher.env";
+        # Same dynamic user as mcagents.service, so the state directory is shared.
+        DynamicUser = true;
+        User = "mcagents";
+        StateDirectory = "mcagents";
+        Nice = 19;
+        IOSchedulingClass = "idle";
+        CPUSchedulingPolicy = "idle";
+        TimeoutStartSec = "1h";
+        NoNewPrivileges = true;
+        CapabilityBoundingSet = "";
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        PrivateTmp = true;
+        PrivateDevices = true;
+        ProtectKernelTunables = true;
+        ProtectKernelModules = true;
+        ProtectControlGroups = true;
+        LockPersonality = true;
+        RestrictNamespaces = true;
+        RestrictAddressFamilies = ["AF_INET" "AF_INET6"];
+        IPAddressAllow = ["localhost"];
+        IPAddressDeny = "any";
+        SystemCallFilter = "@system-service";
+        MemoryMax = "512M";
+      };
+    };
+    systemd.timers.mcagents-idle-replay = lib.mkIf (inferenceNames != []) {
+      wantedBy = ["timers.target"];
+      timerConfig = {
+        OnBootSec = "20min";
+        OnUnitActiveSec = "2h";
+        RandomizedDelaySec = "10min";
+      };
+    };
   };
 }

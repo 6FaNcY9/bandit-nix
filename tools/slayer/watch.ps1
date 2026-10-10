@@ -101,15 +101,30 @@ function Busy {
     if ($usage -ge 20) { return "non-llama GPU $usage%" }
     return $null
 }
-$script:modelCheck = $null
-function ModelVerified {
-    $item = Get-Item $model -ErrorAction SilentlyContinue
+$script:modelChecks = @{}
+function ModelVerified([string]$path = $model, [string]$sha256 = $modelSha256) {
+    $item = Get-Item $path -ErrorAction SilentlyContinue
     if (-not $item -or $item.PSIsContainer) { return $false }
     $stamp = "$($item.Length):$($item.LastWriteTimeUtc.Ticks)"
-    if ($script:modelCheck -and $script:modelCheck.Stamp -eq $stamp) { return $script:modelCheck.Verified }
-    $verified = (Get-FileHash $model -Algorithm SHA256).Hash.ToLowerInvariant() -eq $modelSha256
-    $script:modelCheck = @{ Stamp = $stamp; Verified = $verified }
+    $check = $script:modelChecks[$path]
+    if ($check -and $check.Stamp -eq $stamp) { return $check.Verified }
+    $verified = (Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant() -eq $sha256.ToLowerInvariant()
+    $script:modelChecks[$path] = @{ Stamp = $stamp; Verified = $verified }
     return $verified
+}
+# Optional candidate model (C:\bandit-ai\candidate.json {file, sha256, alias}): served instead of
+# andy.gguf only while its file in models\ exists and matches the hash. Delete the json to go back.
+function Serving {
+    try {
+        if (Test-Path "$base\candidate.json") {
+            $c = Get-Content "$base\candidate.json" -Raw | ConvertFrom-Json
+            if ($c.file -match '^[A-Za-z0-9_.-]+\.gguf$' -and $c.sha256 -match '^[0-9a-fA-F]{64}$' -and $c.alias -match '^[A-Za-z0-9_.-]+$' -and (ModelVerified "$base\models\$($c.file)" $c.sha256)) {
+                return @{ Path = "$base\models\$($c.file)"; Alias = $c.alias }
+            }
+        }
+    } catch { }
+    if (ModelVerified) { return @{ Path = $model; Alias = 'andy-4.2-baseline' } }
+    return $null
 }
 
 try {
@@ -131,11 +146,11 @@ try {
                         Write-Log "left listener PID $($listener.OwningProcess): not ours to stop ($reason)"
                     }
                 }
-            } elseif (-not $listeners.Count -and -not $servers.Count -and (ModelVerified)) {
+            } elseif (-not $listeners.Count -and -not $servers.Count -and ($serving = Serving)) {
                 # Verification can take seconds; a game may have started during hashing.
                 if (Busy) { throw 'Game appeared during model verification; launch deferred' }
                 $env:LLAMA_ARG_CHAT_TEMPLATE_KWARGS = '{"enable_thinking":false}'
-                $arguments = "--model $base\models\andy.gguf --alias andy-4.2-baseline --host 127.0.0.1 --port $port --jinja --ctx-size 8192 --parallel 1 --n-gpu-layers $layers --temp 0.6 --top-k 20 --top-p 0.95 --min-p 0 --repeat-penalty 1.0"
+                $arguments = "--model $($serving.Path) --alias $($serving.Alias) --host 127.0.0.1 --port $port --jinja --ctx-size 8192 --parallel 1 --n-gpu-layers $layers --temp 0.6 --top-k 20 --top-p 0.95 --min-p 0 --repeat-penalty 1.0"
                 $server = Start-Process "$base\llama\llama-server.exe" -ArgumentList $arguments -WorkingDirectory "$base\llama" -WindowStyle Hidden -PassThru -RedirectStandardOutput "$runtime\watch-$port.out.log" -RedirectStandardError "$runtime\watch-$port.err.log"
                 # Creation time prevents a stale PID file from authorizing a reused PID.
                 $started = Get-CimInstance Win32_Process -Filter "ProcessId=$($server.Id)"

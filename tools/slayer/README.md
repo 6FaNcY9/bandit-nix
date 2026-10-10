@@ -112,6 +112,27 @@ server. Run with `powershell -NoProfile -ExecutionPolicy Bypass -File <test>` in
 an idle session; the live test requires port 28083 to be free and cleans up its
 own listener and child.
 
+## Candidate model
+
+The watcher serves `C:\bandit-ai\models\andy.gguf` by default. To try another model on
+the same port and with the same safety rules, stage it and describe it in
+`C:\bandit-ai\candidate.json`:
+
+```powershell
+# 1. Download at low priority (as the installer does for andy), into the models folder:
+Start-BitsTransfer -Source '<https url>' -Destination C:\bandit-ai\models\candidate.gguf -Priority Low
+# 2. Hash it and write the descriptor:
+$h = (Get-FileHash C:\bandit-ai\models\candidate.gguf -Algorithm SHA256).Hash.ToLowerInvariant()
+@{ file = 'candidate.gguf'; sha256 = $h; alias = 'my-candidate' } | ConvertTo-Json | Set-Content C:\bandit-ai\candidate.json
+```
+
+The watcher uses the candidate only while `candidate.json` is valid, the file exists
+in `models\` and its SHA-256 matches (hash cached per file size/time like andy's);
+otherwise it serves `andy.gguf`. The server reports `alias` as its model name, which
+the idle replay (`tools/mcagents/idle-replay.js`) records. A running server is not
+swapped: the change takes effect the next time the watcher starts it (after a game).
+Go back: delete `C:\bandit-ai\candidate.json`.
+
 ## Lab integration
 
 The existing `bandit-lab.slayerTunnel.enable = true;` remains compatible, with

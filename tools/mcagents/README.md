@@ -118,6 +118,14 @@ node tools/mcagents/replay.js compare ollama-11.jsonl openai-11.jsonl
 node tools/mcagents/replay.test.js
 ```
 
+Idle replay (`idle-replay.js`, timer `mcagents-idle-replay` every 2 h): for each gaming-PC
+backend whose `/health` is 200 (nobody gaming) it replays up to 100 logged decisions (outcome-labelled
+good/bad first, newest first) per prompt variant in `variants.json` (`baseline` = prompt as logged).
+It re-checks `/health` before every request and stops that PC on the first failure, keeping partial
+results; it refuses Ollama (11434) and non-loopback URLs. Results: `/var/lib/mcagents/replays/<UTC>-<pc>.json`
+plus one line per run in `summary.jsonl` (valid-command rate, agreement with logged `good`,
+disagreement with `bad`, mean/p95 ms), and a short ntfy message. Test: `node tools/mcagents/idle-replay.test.js`.
+
 Export de-duplicates sanitized message arrays, strips credential fields/redacts common
 credential patterns, and skips `/api/decision` bodies (only truncated `bot`/`text`, no
 prompt). IDs are prompt SHA-256 hashes; `episode_id` falls back to the agent name.
