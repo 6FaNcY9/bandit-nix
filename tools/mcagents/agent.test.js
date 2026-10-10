@@ -316,15 +316,14 @@ assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}
       assert.ok(!jobs.some((u) => u.endsWith('/api/job')));
       assert.match(agent.history.at(-1).content, /build jobs failed 2 times/);
     }
-    { // a foreman never gathers itself
+    { // a foreman may gather itself (2026-10-10: the owner wants bot1 working, not standing around)
       const agent = new Agent('bot1', 'lead', null);
       agent.workers = new Set(['bot2']);
       const jobs = [];
       globalThis.fetch = async (url, opt = {}) => ({ok: true, status: 200, json: async () => (url.endsWith('/api/chat') ? {message: {content: '!collectBlocks("stone", 32)'}} : (jobs.push(url), {}))});
       const state = {bots: [{name: 'bot1', online: true, pos: [0, 64, 0], inventory: [], queue: [], job: null}], places: []};
       await decide(agent, new Map([['bot1', agent]]), async () => state, {take: () => true});
-      assert.ok(!jobs.some((u) => u.endsWith('/api/job')));
-      assert.match(agent.history.at(-1).content, /you lead.*!assign\("worker", "!collectBlocks\(\\"stone\\", 32\)"\)/);
+      assert.ok(jobs.some((u) => u.endsWith('/api/job')), 'its own collect job is sent');
     }
     { // a foreman gets a one-line refusal for a command it does not have, and !baseStatus answers from known facts
       const fm = new Agent('bot1', 'lead', null);
@@ -336,10 +335,10 @@ assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}
       const once = async (r) => { reply = r; fm.history = []; await decide(fm, new Map([['bot1', fm]]), async () => state, {take: () => true}); return fm.history.filter((m) => m.role === 'system').map((m) => m.content); };
       for (const r of ['!entities', '!goal("x")', '!rememberHere("a")', '!afkHere', '!craftRecipe("stick", 1)', '!help']) {
         const [first] = await once(r);
-        assert.match(first, /^Refused: !\w+ is not one of your commands\. Yours: !assign.*!startConversation\.$/, r);
+        assert.match(first, /^Refused: !\w+ is not one of your commands\. Yours: !assign.*!startConversation, !collectBlocks, !collectBlock, !startShift\.$/, r);
         assert.ok(!first.includes('\n'), 'one line');
       }
-      assert.match((await once('!startShift("stone")'))[0], /you lead.*!assign\("worker", "!startShift\(\\"stone\\"\)"\)/);
+      assert.doesNotMatch((await once('!startShift("stone")'))[0] || '', /not one of your commands/, 'a foreman may start its own shift');
       assert.ok(!jobs.some((u) => u.endsWith('/api/job')), 'nothing was sent for a refused command');
       const [status] = await once('!baseStatus');
       assert.match(status, /^BASE STATUS\nYOUR WORKERS \(use !assign\)\n- bot2: shift logs\nBASE: chest \(lowest first\) coal 2 \(counted 3 min ago\)\./);

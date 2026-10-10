@@ -566,10 +566,9 @@ async function decide(agent, agents, getState, budget) {
     if (TOKEN) http('POST', `${API}/api/decision`, {bot: agent.name, text: reply.slice(0, 200) || '(nothing to do)', backend: answer.backend}).catch(() => {}); // the dashboard's "Agent decisions"
     if (!cmd) return; // just talk
     const same = reply.match(COMMAND_RE)[0];
-    if (agent.workers.size && !FOREMAN.has(cmd.name)) {
-      agent.push('system', GATHERING.has(cmd.name)
-        ? `Refused: you lead, you do not gather yourself. Give it to a worker: !assign("worker", "${same.replace(/"/g, '\\"')}"). Your workers: ${[...agent.workers].join(', ')}.`
-        : `Refused: !${cmd.name} is not one of your commands. Yours: ${[...FOREMAN].map((c) => `!${c}`).join(', ')}.`);
+    // A foreman may gather too (the owner, 2026-10-10: bot1 stood around); idle workers still wake it every 30 s.
+    if (agent.workers.size && !FOREMAN.has(cmd.name) && !GATHERING.has(cmd.name)) {
+      agent.push('system', `Refused: !${cmd.name} is not one of your commands. Yours: ${[...FOREMAN, ...GATHERING].map((c) => `!${c}`).join(', ')}.`);
       continue;
     }
     if (agent.workers.size && cmd.name === 'baseStatus') {

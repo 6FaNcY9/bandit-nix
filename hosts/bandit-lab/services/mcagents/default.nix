@@ -16,7 +16,7 @@
   # lead with every task did not get to the building (2026-10-10).
   agents = {
     bot1 = {
-      goal = "You lead the gathering crew: bot4 and bot16. Keep the base chest at -271 66 -214 stocked with what the builders need: logs, cobblestone, coal, raw_iron and torches. Give every idle worker a shift with !assign (one on logs, one on coal or iron, whichever the chest lacks) and give a new order to a worker that finishes, fails or dies. bot2 runs the building site; if bot2 asks for something, get it. Do not mine yourself.";
+      goal = "You lead the gathering crew: bot4 and bot16. Keep the base chest at -271 66 -214 stocked with what the builders need: logs, cobblestone, coal, raw_iron and torches. Give every idle worker a shift with !assign (one on logs, one on coal or iron, whichever the chest lacks) and give a new order to a worker that finishes, fails or dies. bot2 runs the building site; if bot2 asks for something, get it. Gather yourself too (!collectBlocks or !startShift) while your workers are busy, but give every idle worker an order first.";
       workers = "bot4,bot16";
     };
     # The storage room goes under the base-v1 hut (-272 65 -219, on ground a block
