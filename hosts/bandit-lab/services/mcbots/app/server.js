@@ -208,7 +208,13 @@ const server = http.createServer(async (req, res) => {
   const vm = req.method === 'GET' && /^\/api\/view\/(\w{1,16})\.png$/.exec(url.pathname);
   if (vm) {
     const r = runners.get(vm[1]);
-    if (!r || r instanceof RemoteRunner || !r.bot?.entity || !r.online) return send(404, 'text/plain', 'no view (offline or remote worker)');
+    if (r instanceof RemoteRunner) {
+      r.wantView(); // the worker answers within a second or two; meanwhile its last frame
+      if (!r.viewFrame) return send(404, 'text/plain', 'no view yet (asked the worker)');
+      res.writeHead(200, {'Content-Type': 'image/png', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'});
+      return res.end(r.viewFrame.body);
+    }
+    if (!r || !r.bot?.entity || !r.online) return send(404, 'text/plain', 'no view (offline)');
     // One frame per bot, shared by all viewers, at most every 1 s or 4x its render time
     // (counted from the end of the render), and never more than 150 ms of rendering.
     const now = Date.now();

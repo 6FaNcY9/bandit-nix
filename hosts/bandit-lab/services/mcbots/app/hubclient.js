@@ -8,6 +8,7 @@ const {WorldModel} = require('./world');
 const {BotRunner, keptOf} = require('./bots');
 const {Settings} = require('./settings');
 const {PROTOCOL} = require('./hub');
+const {botView} = require('./view');
 
 const CLAIM_TIMEOUT_MS = 3000;
 const REPORT_MS = 1000;
@@ -230,6 +231,17 @@ class HubClient {
         return this.world.applyShared(m);
       case 'settings':
         return this.setSettings(m.bot, m.settings);
+      case 'view_req': {
+        const r = this.runners.find((x) => x.name === m.bot);
+        if (!r?.online || !r.bot?.entity) return;
+        try {
+          const png = botView(r.bot, {w: 256, h: 144, deadline: Date.now() + 150});
+          this.send({t: 'view', bot: r.name, png: Buffer.from(png).toString('base64')});
+        } catch (e) {
+          this.log(r.name, `view failed: ${e.message}`);
+        }
+        return;
+      }
       case 'job': {
         const r = this.runners.find((x) => x.name === m.bot);
         if (!r) return;

@@ -106,6 +106,13 @@ function cleanDebug(d) {
 }
 
 // A remote bot, shaped like a BotRunner for server.js and the dashboard.
+// A worker's view frame: base64 PNG, at most 160 KB, PNG signature checked (the dashboard serves it).
+function cleanPng(b64) {
+  if (typeof b64 !== 'string' || b64.length > 220000 || !/^[A-Za-z0-9+/=]+$/.test(b64)) return null;
+  const buf = Buffer.from(b64, 'base64');
+  return buf.length > 8 && buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) ? buf : null;
+}
+
 class RemoteRunner {
   constructor(name, now = Date.now) {
     this.name = name;
@@ -163,6 +170,14 @@ class RemoteRunner {
   }
 
   // Same contract as BotRunner.enqueue: validate here, run on the worker.
+  // The in-game view of a worker's bot: the dashboard asks, the worker renders and sends a PNG back
+  // (at most one request per 2 s; the newest frame is served meanwhile).
+  wantView() {
+    if (!this.conn || this.now() - (this.viewAsked || 0) < 2000) return;
+    this.viewAsked = this.now();
+    this.conn.ws.send(JSON.stringify({t: 'view_req', bot: this.name}));
+  }
+
   enqueue(type, args = {}, {replace = false} = {}) {
     if (!this.conn) throw new Error(`${this.name} is offline (its worker is not connected)`);
     if (type === 'stop' || replace === true) this.kept = []; // the next status frame is up to a second away
@@ -312,6 +327,12 @@ class Hub {
       case 'ping':
         conn.ws.send(JSON.stringify({t: 'pong'}));
         return;
+      case 'view': {
+        const r = this.owned(conn, m.bot);
+        const png = cleanPng(m.png);
+        if (r && png) r.viewFrame = {t: this.now(), body: png};
+        return;
+      }
       default:
         // Unknown types are ignored so a newer worker can talk to an older hub.
     }
@@ -471,4 +492,4 @@ function createWorkerServer(hub) {
   return server;
 }
 
-module.exports = {Hub, RemoteRunner, createWorkerServer, cleanSnapshot, cleanDebug, PROTOCOL, KEY_RE, FORGET_MS};
+module.exports = {Hub, RemoteRunner, createWorkerServer, cleanSnapshot, cleanDebug, PROTOCOL, KEY_RE, FORGET_MS, cleanPng};

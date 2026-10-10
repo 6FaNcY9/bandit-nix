@@ -264,6 +264,15 @@ assert.deepStrictEqual(VALIDATE.craft({item: 'stone_pickaxe', count: '2'}), {ite
 assert.throws(() => VALIDATE.craft({item: 'Stone Pickaxe'}));
 assert.deepStrictEqual(VALIDATE.shift({block: 'logs', x: 1, y: 2, z: 3}), {block: 'logs', x: 1, y: 2, z: 3});
 require('./crafting');
+// hub.js cleanPng: a worker's view frame must be a real, small PNG.
+{
+  const {cleanPng} = require('./hub');
+  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(20)]);
+  assert.ok(cleanPng(png.toString('base64')));
+  assert.strictEqual(cleanPng(Buffer.from('<html>evil').toString('base64')), null, 'not a PNG');
+  assert.strictEqual(cleanPng('x'.repeat(230000)), null, 'too big');
+  assert.strictEqual(cleanPng({}), null);
+}
 // alerts.js: chest gone/back once each, night/morning on change, mobs at most every 2 minutes.
 {
   const {Alerts, MOB_EVERY_MS} = require('./alerts');
