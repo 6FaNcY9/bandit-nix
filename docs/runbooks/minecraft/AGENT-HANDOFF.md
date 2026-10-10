@@ -1,8 +1,8 @@
 # Minecraft bot collaboration
 
 Accepted by Claude and the owner, 2026-10-10. Codex works on
-`codex/review-restore-hardening`, based on
-`e705dd73a25d03527b3bd87560e79c9d20669219`. This agreement does not grant
+`codex/review-shipped-2026-10-10`, based on freshly fetched `origin/main`
+`4f2d51b36d726109eb65ea48764ddc5de2dc464c`. This agreement does not grant
 Codex deployment authority.
 
 ## Ownership
@@ -74,6 +74,176 @@ Do not rely on branch names or an old report as the current task state.
 6. Record the integrated ID. Verify runtime separately after an authorized
    deployment; source review and a successful build do not prove activation.
 
+## Shipped-change review, 2026-10-10
+
+Owner: Codex, review only. Exact base: `4f2d51b36d726109eb65ea48764ddc5de2dc464c`.
+Scope: MC-3 `261d6f1`, MC-4 `d2d4161`, VeloAuth `825b053`, CX-6 replacement
+`4f2d51b`, H4 `5079d92`, H6 `b9040c4`, their callers and pinned dependencies.
+Only this document changes. No push, activation, restart or live bot command.
+Earlier Codex work is already integrated as `1f759a0`, `595ac85`, `7ca290c`
+and `8d2c1d1`; `0166a2a` is superseded, not an integration candidate.
+
+What this change does: the shipped fixes recheck build digs, acknowledge Stop
+before silencing an agent, budget query rounds, stop wrong-password reconnects,
+add worker assignment and chest clearing, cache path planning, and provision
+Ollama through Docker. The following findings concern this exact main revision.
+Paths beginning `app/` mean `hosts/bandit-lab/services/mcbots/app/`.
+
+### Must fix
+
+1. **P1 — the root importer follows paths writable by the container**
+   (`hosts/bandit-lab/services/ollama/default.nix:20`, `53-57`). The container
+   can write `/srv/ollama/import`; the host root oneshot then follows symlinks
+   there. Fixture reproduction: plant `import/Modelfile` as a symlink to a
+   scratch file outside the model directory, run the shipped shell control
+   flow, and that file is overwritten with the Modelfile. A compromised
+   inference container can target host files on the next import/retry, without
+   possessing the Docker socket. `0700 root root` excludes ordinary host users,
+   but not the container's root; neither no-new-privileges flag prevents writes
+   by an already-root process. Stage downloads and Modelfile in a private host
+   directory outside the writable mount, then copy into the container or expose
+   staging read-only. Do not rely on a racy symlink check. Regression: hostile
+   links for the import directory, GGUF and Modelfile never change an external
+   host file; hash failures never invoke `ollama create`.
+
+2. **P1 — H6 caches the fluid check used to permit a pathfinder dig**
+   (`app/pathcache.js:12-27`, `app/bots.js:508`). With the pinned pathfinder
+   2.4.5 `Movements`, cache air beside stone, replace that air with water at
+   +50 ms, and `safeToBreak(stone)` still returns true; at +101 ms it returns
+   false. A block-update path reset does not invalidate this separate cache.
+   The pathfinder executes its own digs, outside `digAt`, and reads the target
+   without repeating the fluid safety check. Thus stale planning can admit a
+   dig that releases water/lava. Invalidate on world/chunk updates before a
+   replacement search, and preserve fresh safety checks at mutation time.
+   Regression: air-to-water/lava/gravel beside/above a pending dig is observed
+   inside the 100 ms window; air-to-solid and support removal invalidate place
+   planning too. Cached block objects never reach MC-3's direct block reads,
+   but cached `safe`, `physical` and `replaceable` values also affect route and
+   scaffold plans. Live fluid release was not performed.
+
+3. **P1 — H4 continues clearing a double chest after Stop**
+   (`app/bots.js:761-768`). Source-loaded VM reproduction: both actual halves
+   have stone covers; set `job.cancelled` as the first awaited dig completes. The
+   function digs both covers and opens the chest. This adds a second mutation
+   after Stop and bypasses MC-3's guarded helper. Use guarded `digAt` with a
+   scaffold predicate for each cover, preserving area checks; guard before
+   opening. Regression: Stop during the first cover's walk/equip/dig yields no
+   second dig/open, and a cover swapped for a chest/torch stays untouched.
+
+### Should fix
+
+4. **P2 — H4 treats an adjacent single chest as a double-chest half**
+   (`app/bots.js:760`). Matching name and facing does not establish a pair;
+   adjacent single chests can face the same way. VM reproduction: open an
+   uncovered single chest beside a same-facing single chest under stone; the
+   neighbour's stone is dug unnecessarily. Select only the true partner from
+   `type` (`left`/`right`) and facing; `single` has no partner. Regression: two
+   same-facing singles leave the neighbour's cover untouched; real pairs clear
+   the obstructing half in all four orientations; barrels remain unaffected.
+
+5. **P2 — MC-4 budgets reservations before state fetching, not call starts**
+   (`tools/mcagents/agent.js:311-315`, `main()` first-call reservation). Normal
+   query rounds now consume budget, closing the original five-for-one case.
+   However, `getState()` runs after reserving each token. VM fake-clock case:
+   cap one call/minute, reserve the first token, let the first state fetch take
+   60,001 ms, return `!stats`; two model calls start at the same timestamp
+   because the first reservation has expired. The dashboard timeout permits
+   this delay. Acquire the inference token after state fetching, immediately
+   before every `think`; keep readiness scheduling distinct from inference
+   accounting. Regression: delayed state fetches across four agents plus
+   query/refusal/job-error rounds never exceed the cap by actual model-start
+   timestamps, and waiting preserves inbox/events. MC-4 finding 2 remains open
+   for this narrower case.
+
+### Acceptance and remaining boundaries
+
+- **MC-3: closed for its two follow-up P1s at `261d6f1`.** Reran the original
+  source-loaded equip-Stop and claim-time flower-to-torch cases with assertions
+  inverted to require zero digs. Expanded to torch/chest swaps during claim,
+  walk and equip in both plant clearing and recorded removal (12 build cases),
+  plus direct walk/equip cancellation. Replacements survived, claims released,
+  and build movement vetoes/scaffolding restored. Each retry re-enters the
+  post-equip guard/predicate. The ordinary `place` job also guards after equip.
+  This closes the stated build cases, not every pathfinder/chest mutation path.
+- **MC-4: finding 1 closed; finding 2 partially fixed; finding 3 remains H5.**
+  Same-agent VM runs for both AFK/endGoal retained goal/wake after HTTP failure
+  or simulated timeout and changed AFK/goal only after a later acknowledged
+  Stop. Four agents issuing refusal/query rounds consumed per-call tokens and
+  waited when exhausted under normal state-fetch latency. Ore/deepslate-ore
+  refusals and raw-iron smelting passed. Agree with deferring chest scope to H5's
+  server-side token policy: the agent translator uses the supply chest, but MCP
+  and a compromised machine principal still need negative chest authorization
+  tests. Do not close finding 3 or authorize unattended agents on that basis.
+- **VeloAuth `825b053`: accepted at the source/fake-lifecycle level.** Loading
+  the actual runner with fake Mineflayer confirmed an incorrect-password message
+  sets `stopped`, cancels work, clears the reconnect timer, quits, and cannot
+  reconnect via `start`, `connect` or the end handler. A fresh runner, as a
+  process restart constructs, connects, accepts successful login and schedules
+  normal reconnects. Restart resets this process latch; the operator still must
+  correct the registered password/name, and an existing proxy IP ban is not
+  cleared by restarting mcbots. Shared-IP unblocking was not tested live.
+- **H4 foreman: translator/assignment tests passed.** Worker allowlist,
+  unavailable/dead workers, nested/code/query/blueprint refusals, routine
+  replacement, ordinary-job queuing and supply-chest translation were traced.
+  Worker completion wakes the last assigning foreman. Assignment tracking is
+  process-local and all configured foremen share the worker set; H5 must scope
+  worker authority as well as the foreman's own bot. No live worker round trip.
+- **CX-6: replacement rationale accepted; native acceptance is historical.**
+  The evaluated container uses the exact digest, loopback port, CDI GPU option,
+  writable `/srv/ollama` mount and no-new-privileges. There is no runtime GGUF
+  store dependency or nixpkgs CUDA Ollama build in this module. Digest pinning
+  fixes image bytes; it does not establish provenance or freedom from defects.
+  Trust remains in Ollama's publisher, the selected image and GPU driver/CDI
+  stack. No privileged mode or Docker socket mount is configured. Root/Docker
+  daemon compromise is outside the machine-token boundary; finding 1 concerns
+  crossing from container compromise into host writes. Ollama has no local-user
+  authentication: loopback restricts remote exposure, not local model mutation
+  or GPU use. Model SHA256 authenticates the downloaded fixture/bytes, not all
+  future contents of the writable model store; an existing `andy-4.2:` name
+  skips verification and parameter reconciliation.
+- **CX-6 failures/retry:** the generated unit has no `Restart` policy. Readiness
+  polling is bounded; download/hash/create failures fail the oneshot without a
+  success state. Fixtures confirmed hash/download failure prevents create,
+  create failure leaves the GGUF, and explicit rerun redownloads and succeeds.
+  The one-hour timeout bounds a stalled import; a successful import removes the
+  staging GGUF. Curl retries downloads, not Docker readiness/create indefinitely.
+  A failed first boot therefore needs operator retry after fixing the cause:
+  `systemctl restart ollama-andy.service` and check its status/logs and
+  `docker exec ollama ollama list`. These are handoff commands, not executed
+  operations. Keep this recovery step in the replacement's operator procedure;
+  booting or restarting Docker alone is not evidence of successful provisioning.
+
+Sources for upstream semantics: [Ollama Docker usage](https://docs.ollama.com/docker)
+and [Docker image digests and container execution](https://docs.docker.com/engine/containers/run/).
+These establish upstream conventions, not the contents/version of the pinned
+image; its advertised `0.34.2` label and GPU execution were not verified live.
+
+Checks run:
+
+- `rtk git fetch origin`; fresh branch from its tip; reviewed named commit
+  diffs, current callers and pinned pathfinder's planning/execution paths.
+- `rtk nix build .#mcbots --no-link --print-out-paths --no-update-lock-file`
+  passed, returning `/nix/store/kicilg6z01b564q5zw8h2dwkl6v60r19-mcbots-0.1.0`
+  (existing test-enabled store result). Ran its installed `test.js` separately.
+- `rtk proxy node tools/mcagents/agent.test.js` and
+  `rtk proxy node tools/mcbots-mcp/server.test.js` passed. The bot/MCP suites
+  needed escalation after sandbox `listen EPERM` on their fake loopback APIs.
+- `rtk proxy node /tmp/shipped-review.js` passed all asserted acceptance and
+  regression cases above; actual source was loaded in VMs with fake world,
+  clock, dashboard/model and connection lifecycle. Cache test used pinned
+  pathfinder 2.4.5 with Prismarine blocks; no game server or inference request.
+- `rtk proxy python /tmp/ollama-review.py` passed: shipped shell control flow,
+  scratch mount/victim, small model bytes/hash and fake curl/Docker. No host
+  `/srv` writes or real Docker operations. Reproduction descriptions above are
+  the durable acceptance criteria; these temporary harnesses are not repo tests.
+- Evaluated `ollama-andy.serviceConfig` and OCI `containers.ollama` at the
+  reviewed base; `rtk git diff --check` passed for this documentation change.
+
+Verdict: fix findings 1-3 before claiming container isolation or universal Stop
+and mutation safety; retain 4-5 as regression fixes. No bot or Nix edits.
+Not checked: full flake/lab toplevel build (docs-only patch), activation, actual
+image pull/provenance, GPU/model inference, proxy ban expiry or live world effects.
+
 ## Task states
 
 ### MC-1: authoritative stopping
@@ -91,11 +261,13 @@ Integration is reported by the owner; no live validation by Codex.
 
 ### MC-3: build job review
 
-State: reopened after verification of `e1065d2082290e81f6b91b8ab3d42ae90e070377`.
+State: closed for implementation after re-verifying `261d6f1` at the review
+base above. The earlier reopening record below is historical.
 Claude fixed both follow-up P1s in `fix(mcbots): recheck a block before every dig` (2026-10-10):
 `digAt` takes an expected-block predicate (build removal: the recorded block; plant clearing:
 the plant list; default: the block first seen) and rechecks it plus Stop after every walk and
-equip, retries included; the `place` job guards after its equip. Awaiting Codex re-verification.
+equip, retries included; the `place` job guards after its equip. Codex re-verification
+passed for both follow-up P1s; see the shipped-change review above.
 Follow-up reviewed at `50cf46ae8b5f26f6651f0d53acd3ab6a7b1746bd` (2026-10-10).
 The six original findings below remain as historical regression requirements.
 
@@ -206,7 +378,9 @@ No bot source edited, no live server operations, no full runtime certification.
 
 ### MC-4: MCP and agent security review
 
-State: reviewed / changes requested; findings 1-2 fixed by Claude in `fix(mcagents): stop before going quiet; budget every model call`, 3 moved into H5 (server-side token scope; the agent itself only uses the supply chest), 2026-10-10. Owner: Codex (review);
+State: finding 1 closed after re-verification of `d2d4161`; finding 2 remains
+open for delayed state fetching (shipped-review finding 5 above); finding 3
+remains H5 server-side chest token scope, 2026-10-10. Owner: Codex (review);
 Claude owns `tools/mcagents/**` and bot implementation fixes.
 Base: `50cf46ae8b5f26f6651f0d53acd3ab6a7b1746bd`, including H1 `0b4808b`,
 H2 `b6f07e7`, H3 `cc99163`. Assumed workload: four agents, one trusted local
@@ -352,7 +526,9 @@ change, so no new build gate for this design-only commit.
 
 ### CX-6: native lab Ollama
 
-State: implemented / source-build acceptance passed, 2026-10-10.
+State: superseded by container replacement `4f2d51b`; reviewed with a P1 host
+importer finding above. Native implementation/build record below is historical,
+not acceptance of the replacement, 2026-10-10.
 Unsigned implementation: `0166a2abd9c15c609bf9b8cf1d7e33d6d09e3dd6`.
 Owner: Codex; base `50cf46ae8b5f26f6651f0d53acd3ab6a7b1746bd`.
 Scope: `hosts/bandit-lab/services/ollama/{default.nix,Modelfile,README.md}`,
