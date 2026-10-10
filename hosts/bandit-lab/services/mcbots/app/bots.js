@@ -20,6 +20,8 @@ const treeFarmJob = require('./treefarm');
 const homebedJob = require('./homebed');
 const levelJob = require('./level');
 const tidyJob = require('./tidy');
+const storage = require('./storage');
+const planConfig = require('./plan-config');
 const gearJob = require('./gear');
 const sealJob = require('./seal');
 
@@ -1630,29 +1632,79 @@ const JOBS = {
     const {x, y, z} = job.args;
     await goNear(r, job, x, y, z, 3, {doing: `walking to ${place(r, job.args)} to deposit`});
     job.t.doing = `depositing at ${place(r, job.args)}`;
-    const block = bot.blockAt(new (require('vec3').Vec3)(x, y, z));
+    const Vec3 = require('vec3').Vec3;
+    const block = bot.blockAt(new Vec3(x, y, z));
     if (!block || !/chest|barrel/.test(block.name)) throw new Error(`no chest at ${x} ${y} ${z} (found ${block?.name})`);
-    const chest = await openChest(r, job, block);
-    try {
-      let moved = 0;
-      const byName = {};
-      const only = job.args.only && itemMatcher(job.args.only);
-      for (const it of bot.inventory.items()) {
+    const only = job.args.only && itemMatcher(job.args.only);
+    const isFood = (n) => !!bot.registry.foodsByName[n];
+    const eligible = () => bot.inventory.items().filter((it) => (only ? only(it.name) : !(TOOL_RE.test(it.name) || KEEP_RE.test(it.name) || isFood(it.name))));
+    let moved = 0;
+    const byName = {};
+    // Put items into the open chest; returns the ones that did not fit (the caller decides what a full chest means).
+    const fill = async (chest, items) => {
+      const rest = [];
+      for (const it of items) {
         guard(job);
-        if (only ? !only(it.name) : TOOL_RE.test(it.name) || KEEP_RE.test(it.name) || bot.registry.foodsByName[it.name]) continue;
         try {
           await chest.deposit(it.type, it.metadata, it.count);
           moved += it.count;
           byName[it.name] = (byName[it.name] || 0) + it.count;
           job.progress = `${moved} items`;
         } catch (e) {
-          throw new Error(`chest full or deposit failed after ${moved} items: ${e.message}`);
+          rest.push(it);
+          job.lastFull = e.message;
         }
       }
-      if (moved) r.emit('deposit', `deposited ${depositList(byName)} at ${place(r, job.args)}`);
+      return rest;
+    };
+    const fullError = () => new Error(`chest full or deposit failed after ${moved} items: ${job.lastFull}`);
+    // Storage roles: at the base chest, junk goes to the storage-room chests (see storage.js).
+    const rooms = !only && storage.sameXYZ(job.args, planConfig.BASE.chest)
+      ? planConfig.BASE.roomChests.filter((c) => bot.blockAt(new Vec3(c.x, c.y, c.z))?.name === 'chest') : [];
+    let chest = await openChest(r, job, block);
+    try {
+      if (!rooms.length) {
+        if ((await fill(chest, eligible())).length) throw fullError();
+        if (moved) r.emit('deposit', `deposited ${depositList(byName)} at ${place(r, job.args)}`);
+        noteStock(r, job, chest);
+        return;
+      }
+      await fill(chest, eligible().filter((it) => storage.storeFor(it.name, isFood) === 'base'));
+      // One-off tidy-up: carry up to 9 stacks of junk already in the base chest to the rooms too.
+      let carried = 0;
+      for (const it of chest.containerItems()) {
+        if (carried >= 9 || storage.storeFor(it.name, isFood) !== 'room') continue;
+        guard(job);
+        try { await chest.withdraw(it.type, it.metadata, it.count); carried++; } catch { break; } // inventory full
+      }
       noteStock(r, job, chest);
-    } finally {
       chest.close();
+      chest = null;
+      for (const c of rooms) {
+        const left = eligible();
+        if (!left.length) break;
+        try {
+          await goNear(r, job, c.x, c.y, c.z, 3, {doing: `walking to the storage room chest at ${at(c)}`});
+          chest = await openChest(r, job, bot.blockAt(new Vec3(c.x, c.y, c.z)));
+          await fill(chest, left);
+        } catch (e) {
+          guard(job); // a Stop is not "this chest is out of reach"
+          job.lastFull = e.message;
+        } finally {
+          chest?.close();
+          chest = null;
+        }
+      }
+      if (eligible().length) { // the rooms are full or unreachable: the base chest takes the rest
+        await goNear(r, job, x, y, z, 3, {doing: `walking back to ${place(r, job.args)} to deposit`});
+        chest = await openChest(r, job, bot.blockAt(new Vec3(x, y, z)));
+        const rest = await fill(chest, eligible());
+        noteStock(r, job, chest);
+        if (rest.length) throw fullError();
+      }
+      if (moved) r.emit('deposit', `deposited ${depositList(byName)} (junk to the storage room)`);
+    } finally {
+      chest?.close();
     }
   },
 

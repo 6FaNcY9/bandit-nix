@@ -15,7 +15,8 @@ const BASE = {
   shaft: {x1: -291, z1: -222, x2: -276, z2: -207},
   farm: {x1: -262, z1: -238, x2: -248, z2: -224},
   room: {x1: -272, y1: 58, z1: -219, x2: -266, y2: 60, z2: -213}, // under the base box; floor y 57
-  roomChests: [{x: -272, y: 58, z: -219}, {x: -270, y: 58, z: -219}],
+  // the wall of single chests on the room's south side (live 2026-10-10): x -272..-266, y 58 and 59, nearest the door first
+  roomChests: [58, 59].flatMap((y) => [-272, -271, -270, -269, -268, -267, -266].map((x) => ({x, y, z: -219}))),
 };
 const C = BASE.chest;
 const SHAFT_BOTTOM = -54;
@@ -41,8 +42,8 @@ const OBJECTIVES = [
     roles: [{count: 1, jobs: [
       ['excavate', BASE.room],
       ['withdraw', {item: 'logs', count: 4, ...C}],
-      ['craft', {item: 'chest', count: BASE.roomChests.length}],
-      ...BASE.roomChests.map((c) => ['place', {item: 'chest', ...c}]),
+      ['craft', {item: 'chest', count: 2}], // the wall is built by hand; the plan only seeds the first two
+      ...BASE.roomChests.slice(0, 2).map((c) => ['place', {item: 'chest', ...c}]),
     ]}],
     done: (ctx) => BASE.roomChests.every((c) => ctx.blockAt?.(c.x, c.y, c.z) === 'chest')},
   {id: 'tree-farm', label: 'start the tree farm', needs: ['stock-basics'], onBlocked: 'skip',

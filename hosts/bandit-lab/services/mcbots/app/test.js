@@ -1924,6 +1924,13 @@ require('./crafting');
     await assert.rejects(run(w, {onDig: (job) => { if (w.dug.length === 3) job.cancelled = true; }}), Cancelled);
     assert.strictEqual(w.dug.length, 3, 'nothing is dug after the Stop');
   }
+    const {storeFor} = require('./storage');
+  const food = (n) => n === 'bread';
+  for (const n of ['oak_log', 'oak_planks', 'stick', 'cobblestone', 'coal', 'torch', 'raw_iron', 'iron_ingot', 'iron_pickaxe', 'oak_sapling', 'white_wool', 'red_bed', 'crafting_table', 'furnace', 'chest', 'scaffolding']) assert.strictEqual(storeFor(n, food), 'base', n);
+  assert.strictEqual(storeFor('bread', food), 'base');
+  for (const n of ['granite', 'dirt', 'sand', 'azure_bluet', 'leaf_litter', 'rotten_flesh', 'string', 'bone', 'egg', 'arrow', 'oak_pressure_plate', 'smooth_basalt']) assert.strictEqual(storeFor(n, food), 'room', n);
+  const {BASE} = require('./plan-config');
+  assert.strictEqual(BASE.roomChests.length, 14);
   console.log('ok');
 })();
 
