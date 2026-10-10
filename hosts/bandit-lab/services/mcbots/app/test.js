@@ -2535,6 +2535,15 @@ require('./crafting');
       const cell = new Map(Object.entries(blocks));
       const it = (name, count = 1) => ({name, count, type: name.length});
       const bot = {
+    // foodAnimal: cows, then pigs; chickens only when the meat can be cooked
+    const mob = (id, name, x) => ({id, name, position: new Vec3(x, 64, 0)});
+    const fo = {x: 0, y: 64, z: 0, radius: 24, areas: [], done: new Set(), me: new Vec3(0, 64, 0)};
+    assert.strictEqual(H.foodAnimal([mob(1, 'pig', 3), mob(2, 'cow', 9), mob(3, 'chicken', 1)], fo, true), 'cow');
+    assert.strictEqual(H.foodAnimal([mob(1, 'pig', 3), mob(3, 'chicken', 1)], fo, true), 'pig');
+    assert.strictEqual(H.foodAnimal([mob(3, 'chicken', 1)], fo, true), 'chicken');
+    assert.strictEqual(H.foodAnimal([mob(3, 'chicken', 1)], fo, false), undefined, 'raw chicken is not food');
+    assert.strictEqual(H.foodAnimal([mob(2, 'cow', 40)], fo, false), undefined, 'out of range');
+    assert.deepStrictEqual([H.MEAT.cow, H.MEAT.pig, H.MEAT.chicken], ['beef', 'porkchop', 'chicken']);
         entities, inventory: {items: () => inv}, heldItem: null, game: {dimension: 'overworld'}, time: {timeOfDay: night ? 14000 : 1000}, isSleeping: false,
         entity: {position: new Vec3(0, 64, 0), onGround: true},
         pathfinder: {goto: async () => {}, setGoal() {}, stop() {}, isMoving: () => true},

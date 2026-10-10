@@ -1161,6 +1161,8 @@ async function upkeep(r, job, ids) {
     if (bot.inventory.emptySlotCount() < 2) {
       const chest = chestOf(r, job);
       if (!chest) throw new Error('inventory is full and there is no supply chest to deposit into');
+      // The chest had none: hunt for it. Same 10-minute timer, so at most one hunt per bot per 10 minutes.
+      if (!bot.inventory.items().some((i) => edible(bot, i))) await huntFood(r, job);
       await JOBS.deposit(r, child(job, {type: 'deposit', args: chest}));
       if (bot.inventory.emptySlotCount() < 2) throw new Error('inventory still full after depositing (chest full?)');
     }
@@ -1175,6 +1177,25 @@ async function upkeep(r, job, ids) {
 async function replacePickaxe(r, job) {
   const {bot} = r;
   job.t.doing = 'replacing the pickaxe';
+// Hungry and the supply chest has no food: hunt two cows or pigs (chickens too when there is fuel to cook
+// them) within 24 blocks, then cook the meat if there is fuel, else it is eaten raw (beef, porkchop).
+async function huntFood(r, job) {
+  const {bot} = r;
+  const p = bot.entity.position.floored();
+  const fuel = (meat, n) => !!craftingLib.fuelFor(bot, meat, n);
+  const animal = huntJob.foodAnimal(Object.values(bot.entities), {x: p.x, y: p.y, z: p.z, radius: 24, areas: r.protectedAreas, done: new Set(), me: bot.entity.position}, fuel('beef', 2));
+  if (!animal) return r.emit('info', 'hungry: no cow, pig or cookable chicken within 24 blocks to hunt');
+  r.emit('info', `hungry: hunting ${animal}s for food`);
+  try {
+    await hunt(r, child(job, {type: 'hunt', args: {animal, count: 2, x: p.x, y: p.y, z: p.z, radius: 24}}));
+  } catch (e) {
+    guard(job);
+    r.emit('info', `food hunt: ${e.message.slice(0, 100)}`); // fewer than two found is still food
+  }
+  const meat = huntJob.MEAT[animal], n = Math.min(craftingLib.count(bot, meat), 6);
+  if (n && fuel(meat, n)) await crafting.smelt(r, child(job, {type: 'smelt'}), meat, n).catch((e) => { guard(job); r.emit('info', `could not cook the ${meat}: ${e.message.slice(0, 80)}`); });
+}
+
   r.emit('info', 'no pickaxe left: making a new one');
   const has = () => bot.inventory.items().some((i) => i.name.endsWith('_pickaxe'));
   let why = '';

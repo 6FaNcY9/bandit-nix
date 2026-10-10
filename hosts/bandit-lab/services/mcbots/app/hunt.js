@@ -27,6 +27,12 @@ function huntTargets(entities, {animal, x, y, z, radius, areas, done, me}) {
 }
 const huntTarget = (entities, o) => huntTargets(entities, o)[0];
 
+// The animal to hunt for food around `o` (as huntTargets): cows and pigs; chickens only when the meat can be
+// cooked, because a raw chicken is never eaten. undefined when none is in range.
+const foodAnimal = (entities, o, canCook) => ['cow', 'pig', ...(canCook ? ['chicken'] : [])].find((animal) => huntTarget(entities, {...o, animal}));
+// What the animal drops that feeds the bot.
+const MEAT = {cow: 'beef', pig: 'porkchop', chicken: 'chicken'};
+
 // A bed at x,y,z (the foot); the head lies one block towards `facing`. The bot stands behind the
 // foot looking along `facing` (the server turns the bed the way the player looks).
 function bedCells({x, y, z}, facing) {
@@ -211,4 +217,4 @@ function makeHunt({goNear, guard, sleep, goals, waitCalm, crafting, at}) {
   return {hunt, bed};
 }
 
-module.exports = {ANIMALS, FACING, huntTarget, huntTargets, bedCells, bedCheck, standable, woolColour, makeHunt};
+module.exports = {ANIMALS, FACING, MEAT, foodAnimal, huntTarget, huntTargets, bedCells, bedCheck, standable, woolColour, makeHunt};
