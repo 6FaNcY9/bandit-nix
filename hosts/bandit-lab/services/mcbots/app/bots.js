@@ -17,6 +17,7 @@ const buildJob = require('./build');
 const huntJob = require('./hunt');
 const gravesJob = require('./graves');
 const treeFarmJob = require('./treefarm');
+const wheatFarmJob = require('./wheatfarm');
 const homebedJob = require('./homebed');
 const levelJob = require('./level');
 const tidyJob = require('./tidy');
@@ -36,9 +37,9 @@ const NATURAL = /^(stone|deepslate|dirt|grass_block|coarse_dirt|rooted_dirt|podz
 const KEEP_RE = /^(stick|[a-z_]+_planks|coal|charcoal|torch|crafting_table|furnace)$/;
 const FOOD_BELOW = 14; // fetch food from the supply chest when hungry and carrying none
 const FOOD_RETRY_MS = 600000; // an empty chest is not worth a walk every minute
-const RESUMABLE = new Set(['mine', 'chop', 'shift', 'goto', 'deposit', 'follow', 'come', 'guard', 'build', 'excavate', 'shaft', 'level', 'seal', 'hunt', 'bed', 'homebed', 'treefarm', 'tidy']);
+const RESUMABLE = new Set(['mine', 'chop', 'shift', 'goto', 'deposit', 'follow', 'come', 'guard', 'build', 'excavate', 'shaft', 'level', 'seal', 'hunt', 'bed', 'homebed', 'treefarm', 'wheatfarm', 'tidy']);
 // Long jobs that survive a restart (see keptOf, saved by server.js, reported by workers).
-const KEEP = new Set(['shift', 'guard', 'mine', 'chop', 'build', 'excavate', 'shaft', 'level', 'seal', 'hunt', 'homebed', 'treefarm']); // a resumed build/excavate skips what is done
+const KEEP = new Set(['shift', 'guard', 'mine', 'chop', 'build', 'excavate', 'shaft', 'level', 'seal', 'hunt', 'homebed', 'treefarm', 'wheatfarm']); // a resumed build/excavate skips what is done
 const MAX_INTERRUPTIONS = 3; // deaths/disconnects of one job before it is given up
 const TOOL_RE = /_(pickaxe|axe|shovel|hoe|sword)$|^(shears|bow|crossbow|fishing_rod|shield|trident|flint_and_steel|elytra)$/;
 
@@ -174,6 +175,8 @@ const VALIDATE = {
   },
   // Plant and chop trees in an area of at most 24 x 24 until stopped; logs go to the supply chest.
   treefarm: treeFarmJob.farmBox,
+  // Keep a wheat field of at most 9 x 9 going until stopped: harvest, till, plant, bake bread, hand it in at the base chest.
+  wheatfarm: wheatFarmJob.farmBox,
   say: (a) => {
     const text = String(a.text ?? '').trim();
     if (!text || text.length > 200) throw new Error('text must be 1..200 characters');
@@ -443,8 +446,8 @@ class BotRunner {
     if (!this.online && this.queue[0].resume) return; // resumed jobs wait for the reconnect
     const job = (this.current = this.queue.shift());
     job.status = 'running';
-    this.digOnly = ['excavate', 'shaft', 'level', 'treefarm'].includes(job.type) ? NATURAL : null; // the walk to the room may dig natural ground only (Codex R3-1); a farm walk never digs logs or leaves (R5-2)
-    this.digBox = job.type === 'treefarm' ? job.args : null; // ... and only inside the farm box
+    this.digOnly = ['excavate', 'shaft', 'level', 'treefarm', 'wheatfarm'].includes(job.type) ? NATURAL : null; // the walk to the room may dig natural ground only (Codex R3-1); a farm walk never digs logs or leaves (R5-2)
+    this.digBox = ['treefarm', 'wheatfarm'].includes(job.type) ? job.args : null; // ... and only inside the farm box
     job.startedAt = Date.now();
     job.progress = '';
     job.t = {doing: '', done: 0, total: 0, open: false}; // live detail; sub-jobs share it through the prototype
@@ -1561,8 +1564,17 @@ const {treefarm} = treeFarmJob.makeTreeFarm({
   withdraw: (r, job, item, count) => JOBS.withdraw(r, child(job, {type: 'withdraw', args: {item, count, ...r.supplyChest}})),
 });
 
+const {wheatfarm} = wheatFarmJob.makeWheatFarm({
+  goNear, guard, sleep, digAt, waitCalm, at, crafting,
+  base: planConfig.BASE.chest,
+  craftTable: (r) => !!craftingLib.nearBlock(r.bot, 'crafting_table'),
+  // `only` is needed: a plain deposit keeps food. Bread and wheat go to the base chest, where the plan reads them.
+  deposit: (r, job, only) => JOBS.deposit(r, child(job, {type: 'deposit', args: {...planConfig.BASE.chest, only}})),
+});
+
 const JOBS = {
   tidy,
+  wheatfarm,
   grave,
   treefarm,
   homebed,

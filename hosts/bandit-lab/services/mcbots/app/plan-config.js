@@ -14,6 +14,8 @@ const BASE = {
   chest: {x: -271, y: 66, z: -214}, // the base chest: every withdraw/deposit of the plan uses it, not SUPPLY_CHEST
   shaft: {x1: -291, z1: -222, x2: -276, z2: -207},
   farm: {x1: -262, z1: -238, x2: -248, z2: -224},
+  // TODO(owner): confirm terrain (placeholder; the owner checks the ground and places the water)
+  wheat: {x1: -262, z1: -250, x2: -254, z2: -242},
   room: {x1: -272, y1: 58, z1: -219, x2: -266, y2: 60, z2: -213}, // under the base box; floor y 57
   // the wall of single chests on the room's south side (live 2026-10-10): x -272..-266, y 58 and 59, nearest the door first
   // The chest wall: 8 double chests (x -272..-265, y 58 and 59, z -219); one cell each, a double opens from either half.
@@ -50,6 +52,9 @@ const OBJECTIVES = [
   {id: 'tree-farm', label: 'start the tree farm', needs: ['stock-basics'], onBlocked: 'skip',
     roles: [{count: 1, jobs: [['treefarm', BASE.farm]]}],
     done: (ctx) => running(ctx, 'treefarm', 120)}, // the job never ends: planting for two minutes counts
+  {id: 'wheat-farm', label: 'start the wheat farm', needs: ['stock-basics'], onBlocked: 'skip',
+    roles: [{count: 1, jobs: [['wheatfarm', BASE.wheat]]}],
+    done: (ctx) => running(ctx, 'wheatfarm', 120)}, // never ends either
   {id: 'iron-quota', label: 'raw iron for a full kit in the chest', needs: ['shaft-to-ore'], onBlocked: 'park',
     keeper: [['raw_iron', 32]]},
   {id: 'iron-tools', label: 'smelt and craft an iron pickaxe, sword and armour', needs: ['iron-quota', 'stock-basics'], onBlocked: 'skip',
