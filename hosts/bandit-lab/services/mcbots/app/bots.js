@@ -1341,11 +1341,27 @@ const JOBS = {
           const offer = best(box.containerItems(), re);
           if (offer && (!have || tier(offer.name) > tier(have.name))) await box.withdraw(offer.type, offer.metadata, 1);
         }
+        // A spare pickaxe and 2 logs (table + sticks for a stone pickaxe): a pickaxe that breaks deep
+        // underground otherwise strands the bot - no wood there, and the way up by hand is "No path"
+        // (bot2 and bot3, 2026-10-10).
+        const count = (re) => bot.inventory.items().filter((i) => re.test(i.name)).reduce((n, i) => n + i.count, 0);
+        const spare = best(box.containerItems(), /_pickaxe$/);
+        if (spare && count(/_pickaxe$/) < 2) await box.withdraw(spare.type, spare.metadata, 1);
+        const log = box.containerItems().find((i) => /_log$/.test(i.name));
+        if (log && count(/_log$/) < 2) await box.withdraw(log.type, log.metadata, Math.min(2 - count(/_log$/), log.count));
         const food = box.containerItems().filter((i) => isFood(i.name)).sort((a, b) => (b.name === 'golden_carrot') - (a.name === 'golden_carrot'))[0];
         if (food && foodCount() < 32) await box.withdraw(food.type, food.metadata, Math.min(32 - foodCount(), food.count));
       } finally {
         box.close();
       }
+    }
+    // Logs would go back into the chest with the next deposit; planks are kept (KEEP_RE). Only the
+    // two spare logs: a woodcutter's load stays logs.
+    const carried = bot.inventory.items().filter((i) => /_log$/.test(i.name));
+    for (const log of carried.reduce((n, i) => n + i.count, 0) <= 2 ? carried : []) {
+      const planks = bot.registry.itemsByName[log.name.replace(/_log$/, '_planks')];
+      const recipe = planks && bot.recipesFor(planks.id, null, 1, null)[0];
+      if (recipe) await bot.craft(recipe, log.count, null).catch(() => {});
     }
     for (const [re, slot] of [[/_helmet$/, 'head'], [/_chestplate$/, 'torso'], [/_leggings$/, 'legs'], [/_boots$/, 'feet']]) {
       const it = best(bot.inventory.items(), re);
