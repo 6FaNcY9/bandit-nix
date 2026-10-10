@@ -23,10 +23,12 @@ public static class BanditWindow {
     [DllImport("kernel32.dll")] public static extern uint WTSGetActiveConsoleSessionId();
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern IntPtr GetShellWindow();
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out Rect r);
     [DllImport("user32.dll")] public static extern IntPtr MonitorFromWindow(IntPtr h, uint flags);
     [StructLayout(LayoutKind.Sequential)] public struct Monitor { public int Size; public Rect Bounds, Work; public uint Flags; }
     [DllImport("user32.dll")] public static extern bool GetMonitorInfo(IntPtr h, ref Monitor m);
+    public static uint ForegroundPid() { uint pid; GetWindowThreadProcessId(GetForegroundWindow(), out pid); return pid; }
     public static bool Fullscreen() {
         var h = GetForegroundWindow();
         if (h == IntPtr.Zero || h == GetShellWindow()) return false;
@@ -49,13 +51,21 @@ function Servers {
 }
 function Busy {
     if (-not $TestPort -and [BanditWindow]::WTSGetActiveConsoleSessionId() -ne (Get-Process -Id $PID).SessionId) { return 'another console session (or no console)' }
-    if ([BanditWindow]::Fullscreen()) { return 'fullscreen window' }
-    # Conservatively yield to launchers as well as their installed games.
+    # Light games never count as games and do not trigger the fullscreen rule while focused.
+    $light = @('isaac-ng.exe', 'isaac.exe')
+    if (Test-Path "$base\light-games.txt") {
+        $light += @(Get-Content "$base\light-games.txt" | ForEach-Object { $_.Trim() } | Where-Object { $_ -and -not $_.StartsWith('#') })
+    }
+    $foreground = Get-CimInstance Win32_Process -Filter "ProcessId=$([BanditWindow]::ForegroundPid())"
+    $lightForeground = $null -ne $foreground -and $light -contains $foreground.Name
+    if (-not $lightForeground -and [BanditWindow]::Fullscreen()) { return 'fullscreen window' }
     $games = @(Get-CimInstance Win32_Process | Where-Object {
-        $_.Name -match '^(steam|EpicGamesLauncher|Battle\.net|RiotClientServices|Minecraft|javaw|RobloxPlayerBeta|FortniteClient-Win64-Shipping|VALORANT-Win64-Shipping|cs2|GTA5|RocketLeague)\.exe$' -or
-        $_.ExecutablePath -match '\\(steamapps\\common|Epic Games|Riot Games)\\'
+        $_.Name -notin $light -and (
+            $_.Name -match '^(Minecraft|javaw|RobloxPlayerBeta|FortniteClient-Win64-Shipping|VALORANT-Win64-Shipping|cs2|GTA5|RocketLeague)\.exe$' -or
+            $_.ExecutablePath -match '\\(steamapps\\common|Epic Games|Riot Games)\\'
+        )
     })
-    if ($games.Count) { return "game/launcher $($games[0].Name)" }
+    if ($games.Count) { return "game $($games[0].Name)" }
     if ($null -ne $GpuPercent) { $usage = $GpuPercent }
     else {
         $llama = @(Get-CimInstance Win32_Process -Filter "Name='llama-server.exe'" | ForEach-Object ProcessId)

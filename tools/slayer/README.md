@@ -1,11 +1,16 @@
 # Slayer idle inference
 
 `watch.ps1` lives at `C:\bandit-ai\watch.ps1`. Every 15 seconds it yields to
-any foreground fullscreen window, the listed game/launcher processes, or >=20%
-GPU engine use from processes other than llama-server. GPU/window probe errors
-also stop inference. A different active console session also pauses inference,
-so another Windows user cannot game alongside yassi's watcher. Closing the launcher permits inference again. Extend the
-process list for games installed outside Steam/Epic/Riot paths. The existing
+any foreground fullscreen window, the listed game processes, or >=20% GPU engine
+use from processes other than llama-server. GPU/window probe errors also stop
+inference. A different active console session also pauses inference, so another
+Windows user cannot game alongside yassi's watcher. Idle launchers (Steam, Epic,
+Battle.net, Riot) do not stop inference; their installed games do, by name or
+`steamapps\common`/`Epic Games`/`Riot Games` path. Extend the process list for
+games installed outside those paths.
+Light games listed one per line in `C:\bandit-ai\light-games.txt` (`#` lines and
+blank lines ignored) never count as games and skip the fullscreen rule while
+focused; `isaac-ng.exe` and `isaac.exe` are built in. The existing
 Andy flags and loopback port 8081 are preserved; only matching bandit-ai server
 PIDs are stopped. Logs rotate `watch.log` at 5 MiB to `watch.log.1`.
 
