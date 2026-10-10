@@ -23,7 +23,9 @@ const API = process.env.API || 'http://127.0.0.1:8097';
 const LOG = process.env.LOG ?? path.join(process.cwd(), 'mcagents.jsonl'); // LOG= (empty) logs no model calls
 // Dashboard bearer for the lab's agent service (H5): AGENT_TOKEN_FILE, or the systemd credential.
 const TOKEN_FILE = process.env.AGENT_TOKEN_FILE || (process.env.CREDENTIALS_DIRECTORY ? path.join(process.env.CREDENTIALS_DIRECTORY, 'dashboard-token') : '');
-const TOKEN = TOKEN_FILE ? fs.readFileSync(TOKEN_FILE, 'utf8').trim() : '';
+// Read only when present: idle-replay.js imports this module and has no dashboard credential;
+// main() still refuses to run the agents without it.
+const TOKEN = TOKEN_FILE && fs.existsSync(TOKEN_FILE) ? fs.readFileSync(TOKEN_FILE, 'utf8').trim() : '';
 const assigner = new Map(); // worker -> the agent that gave it its last order
 const BLUEPRINTS = process.env.BLUEPRINTS || path.join(__dirname, '../../hosts/bandit-lab/services/mcbots/blueprints');
 // Off by default: with 4 agents on one GPU, reasoning took 20-30 s per decision (live 2026-10-10)
@@ -904,6 +906,7 @@ function onEvent(agents, e) {
 }
 
 async function main() {
+  if (TOKEN_FILE && !TOKEN) throw new Error(`no dashboard token in ${TOKEN_FILE}`);
   const spec = (process.env.AGENTS || '').split(';').map((s) => s.trim()).filter(Boolean);
   if (!spec.length) throw new Error('AGENTS must be "bot11=goal;bot12=goal"');
   const agents = new Map();

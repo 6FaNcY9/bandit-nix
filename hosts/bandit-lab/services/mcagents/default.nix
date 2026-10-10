@@ -134,8 +134,9 @@ in {
     systemd.timers.mcagents-idle-replay = lib.mkIf (inferenceNames != []) {
       wantedBy = ["timers.target"];
       timerConfig = {
-        OnBootSec = "20min";
-        OnUnitActiveSec = "2h";
+        # A calendar time, not OnBootSec: a timer whose boot delay has long passed fires the
+        # moment a deploy starts it, and a failed run then rolls the whole deploy back (2026-10-10).
+        OnCalendar = "*-*-* 00/2:15:00";
         RandomizedDelaySec = "10min";
       };
     };
