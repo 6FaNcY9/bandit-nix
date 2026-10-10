@@ -87,3 +87,37 @@ already covers this port. Slayer being busy/offline falls back to lab Ollama.
 Limit: fullscreen detection is conservative (fullscreen apps also pause inference)
 and background/borderless games rely on the process/path list and GPU counters.
 No live game session or real high-GPU-load session was exercised.
+||||||| parent of 5e7a8c9 (feat(mcbots): slayer card shows what the gaming PC does)
+
+## slayer (owner's gaming PC)
+
+`slayerpc` runs llama-server (llama.cpp, Andy-4.2) for the Minecraft agents when no game is
+running; the lab reaches it at `http://127.0.0.1:18081` through a systemd tunnel. The
+dashboard's "slayer" card (`docs/runbooks/minecraft/BOTS.md`, "Slayer card") shows what it does.
+
+## Status file for the GPU line
+
+llama-server cannot serve files, so the watcher (`C:\bandit-ai\watch.ps1`) writes
+`C:\bandit-ai\status.json` every 60 s:
+
+```json
+{"state": "serving", "gpu": {"util": 31, "vramUsedMB": 9000, "vramTotalMB": 16376, "tempC": 64}}
+```
+
+- `state`: `serving` (llama-server is up), `paused-game` (a game runs, llama-server stopped) or `offline`.
+- `gpu`: from `nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits`.
+  Integers (percent, MB, MB, degrees C). Omit `gpu` when nvidia-smi fails.
+- Write it atomically (temp file, then rename) and keep it under 4 KB. A UTF-8 BOM is fine.
+- Games win: the file keeps being written while llama-server is stopped, so the card says
+  `paused-game` instead of `offline`.
+
+The lab reads it with `SLAYER_STATUS_CMD` (a JSON array, run without a shell every 60 s):
+
+```
+SLAYER_URL=http://127.0.0.1:18081
+SLAYER_STATUS_CMD=["ssh","slayer","type","C:\\bandit-ai\\status.json"]
+```
+
+Output that is not JSON, longer than 4 KB, or has a wrong key/value is ignored; a status older
+than 3 minutes is ignored, so a dead watcher or tunnel shows `offline`.
+Start llama-server with `--metrics` so the card can show tok/s.

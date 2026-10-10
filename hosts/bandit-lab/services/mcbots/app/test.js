@@ -2603,5 +2603,66 @@ require('./crafting');
       JOBS.deposit = realDeposit;
     }
   }
+  { // slayer (gaming PC) card: metrics parsing, status validation, backend counts, offline shape
+    const {Slayer, parseMetrics, parseStatus, countBackends, parseCmd} = require('./slayer');
+    const {EventLog} = require('./events');
+    const prom = '# HELP llamacpp:prompt_tokens_seconds x\n# TYPE llamacpp:prompt_tokens_seconds gauge\nllamacpp:prompt_tokens_seconds 812.5\nllamacpp:predicted_tokens_seconds 41.25\nllamacpp:requests_processing{slot="0"} 1\nllamacpp:n_decode_total 99\nllamacpp:requests_deferred 0\nllamacpp:bogus nan\n';
+    assert.deepStrictEqual(parseMetrics(prom), {promptPerSec: 812.5, predictedPerSec: 41.25, processing: 1, decodeTotal: 99});
+    assert.deepStrictEqual(parseMetrics('garbage\nllamacpp:predicted_tokens_seconds NaN\nllamacpp:requests_processing -3\n<html>'), {promptPerSec: null, predictedPerSec: null, processing: null, decodeTotal: null});
+    const gpu = {util: 31.6, vramUsedMB: 9000, vramTotalMB: 16376, tempC: 64};
+    assert.deepStrictEqual(parseStatus(`\uFEFF${JSON.stringify({state: 'paused-game', gpu, extra: 'x'})}`), {state: 'paused-game', gpu: {...gpu, util: 32}});
+    assert.deepStrictEqual(parseStatus('{}'), {state: null, gpu: null});
+    for (const bad of ['not json', '[1]', 'null', JSON.stringify({state: 'on fire'}), JSON.stringify({gpu: {util: 1}}), JSON.stringify({gpu: {...gpu, tempC: '64'}}), JSON.stringify({gpu: {...gpu, util: 1e9}}), JSON.stringify({pad: 'x'.repeat(4100)}), 5, undefined]) assert.ok(parseStatus(bad).error, String(bad).slice(0, 30));
+    assert.deepStrictEqual(parseCmd(''), []);
+    assert.deepStrictEqual(parseCmd('["ssh","slayer","type","C:\\\\bandit-ai\\\\status.json"]'), ['ssh', 'slayer', 'type', 'C:\\bandit-ai\\status.json']);
+    for (const bad of ['ssh slayer', '[]', '["a",""]', '[1]', '{"a":1}']) assert.throws(() => parseCmd(bad), /JSON array/, bad);
+    assert.strictEqual(loadConfig({BOT_NAMES: 'bot1'}).slayerUrl, '');
+    assert.strictEqual(loadConfig({BOT_NAMES: 'bot1', SLAYER_URL: 'http://127.0.0.1:18081/'}).slayerUrl, 'http://127.0.0.1:18081');
+    assert.throws(() => loadConfig({BOT_NAMES: 'bot1', SLAYER_URL: 'file:///etc/passwd'}), /SLAYER_URL/);
+    // decisions per backend, last 24 h; no backend field = the lab's model
+    let now = 1e12;
+    const decs = new EventLog({now: () => now});
+    decs.add('bot1', 'info', 'old'); // 25 h ago
+    now += 25 * 3600000;
+    decs.add('bot1', 'info', 'no field');
+    decs.add('bot1', 'info', 'lab').backend = 'lab';
+    decs.add('bot1', 'info', 'pc').backend = 'slayer';
+    decs.add('bot1', 'info', 'pc2').backend = 'slayer';
+    assert.deepStrictEqual(countBackends(decs.items, now), {lab: 2, slayer: 2});
+    // offline: the tunnel refuses, no PC; the answer keeps its shape
+    const mk = (fetchFn, run) => new Slayer({url: 'http://127.0.0.1:18081', cmd: ['ssh', 'slayer', 'type', 'x'], decisions: decs, fetchFn, run, now: () => now});
+    const off = mk(async () => { throw new Error('ECONNREFUSED'); });
+    await off.poll();
+    assert.deepStrictEqual(off.view(), {enabled: true, online: false, busy: false, tokensPerSec: null, promptPerSec: null, requestsToday: 2, decisions: {lab: 2, slayer: 2}, gpu: null, state: 'offline', t: now});
+    assert.strictEqual(new Slayer({url: '', decisions: decs}).view().enabled, false);
+    // serving + busy, GPU from the status command; paused-game while the PC is off but says so
+    const res = (body, ok = true) => ({ok, text: async () => body});
+    const pc = {'/health': res('{"status":"ok"}'), '/slots': res('[{"id":0,"is_processing":true}]'), '/metrics': res(prom), '/status.json': res('', false)};
+    const on = mk(async (u) => pc[new URL(u).pathname], (cmd, args, opt, cb) => { on.ran = [cmd, args, opt.timeout, opt.maxBuffer]; cb(null, JSON.stringify({state: 'serving', gpu})); });
+    await on.poll();
+    await on.pollStatusCmd();
+    assert.deepStrictEqual(on.ran, ['ssh', ['slayer', 'type', 'x'], 5000, 4096]);
+    assert.deepStrictEqual([on.view().state, on.view().busy, on.view().tokensPerSec, on.view().promptPerSec, on.view().gpu], ['serving', true, 41.25, 812.5, {...gpu, util: 32}]);
+    pc['/slots'] = res('not json'); // /slots broken: requests_processing still says busy
+    await on.poll();
+    assert.strictEqual(on.view().busy, true);
+    pc['/metrics'] = res('', false);
+    await on.poll();
+    assert.deepStrictEqual([on.view().busy, on.view().tokensPerSec], [false, null]);
+    pc['/health'] = res('{"error":"Loading model"}', false); // 503 while loading is not serving
+    await on.poll();
+    on.run = (c, a, o, cb) => cb(null, JSON.stringify({state: 'paused-game'}));
+    await on.pollStatusCmd();
+    assert.strictEqual(on.view().state, 'paused-game');
+    assert.strictEqual(on.view().gpu, null);
+    now += 200000; // the status file went stale (the tunnel or the watcher died)
+    assert.strictEqual(on.view().state, 'offline');
+    on.run = (c, a, o, cb) => cb(null, 'x'.repeat(5000)); // too long / bad output / error: kept as it was
+    const before = on.status;
+    await on.pollStatusCmd();
+    on.run = (c, a, o, cb) => cb(new Error('timeout'));
+    await on.pollStatusCmd();
+    assert.strictEqual(on.status, before);
+  }
   console.log('ok');
 })();

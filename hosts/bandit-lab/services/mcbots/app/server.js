@@ -16,6 +16,7 @@ const {Alerts} = require('./alerts');
 const {Settings} = require('./settings');
 const {Places} = require('./places');
 const agentauth = require('./agentauth');
+const {Slayer} = require('./slayer');
 
 const cfg = loadConfig();
 const log = (who, msg) => console.log(`${new Date().toISOString()} [${who}] ${msg}`);
@@ -24,6 +25,7 @@ const events = new EventLog();
 // What the LLM agents said and chose (POST /api/decision from the agent service), kept apart so
 // they never push job events out of the 200-entry event log.
 const decisions = new EventLog();
+const slayer = new Slayer({url: cfg.slayerUrl, cmd: cfg.slayerStatusCmd, decisions});
 const agentStatuses = new Map(); // agent -> its last POST /api/agentstatus (goal, workers, role, t)
 const stopBlueMap = startBlueMap(world, cfg.bluemapUrl, log);
 const runners = new Map(cfg.names.map((n) => [n, new BotRunner(n, {host: cfg.mcHost, port: cfg.mcPort, log, world, protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest, loginSeed: cfg.loginSeed, hostLabel: cfg.hostLabel, onEvent: (b, k, t) => events.add(b, k, t)})]));
@@ -194,12 +196,14 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/state') return json(200, state());
   if (req.method === 'GET' && url.pathname === '/api/events') return json(200, {lastId: events.lastId, events: events.since(Number(url.searchParams.get('since')) || 0)});
   if (req.method === 'GET' && url.pathname === '/api/decisions') return json(200, {lastId: decisions.lastId, events: decisions.since(Number(url.searchParams.get('since')) || 0)});
+  if (req.method === 'GET' && url.pathname === '/api/slayer') return json(200, slayer.view());
   if (req.method === 'POST' && url.pathname === '/api/decision') {
     if (!agent) return json(403, {error: 'forbidden'}); // only the agent service reports decisions
     try {
-      const {bot, text} = await readJson(req);
+      const {bot, text, backend = 'lab'} = await readJson(req);
       if (!cfg.agentBots.includes(bot) || typeof text !== 'string') throw new Error('bot must be an agent bot, text a string');
-      decisions.add(bot, 'info', text.replace(/\s+/g, ' ').trim());
+      if (backend !== 'lab' && backend !== 'slayer') throw new Error('backend must be lab or slayer');
+      decisions.add(bot, 'info', text.replace(/\s+/g, ' ').trim()).backend = backend;
       return json(200, {ok: true});
     } catch (e) {
       return json(400, {error: e.message});
@@ -395,6 +399,7 @@ const alertTick = setInterval(() => {
   }
 }, 5000);
 
+slayer.start();
 server.listen(cfg.port, cfg.host, () => {
   log('dashboard', `listening on ${cfg.host}:${cfg.port} (${cfg.allowed.length ? `tailscale logins: ${cfg.allowed.join(',')}` : 'local only'})`);
   for (const r of runners.values()) r.start();
@@ -409,6 +414,7 @@ function shutdown() {
   clearInterval(tick);
   clearInterval(keeperTick);
   clearInterval(alertTick);
+  slayer.stop();
   stopBlueMap();
   hub?.close();
   for (const r of runners.values()) r.shutdown();

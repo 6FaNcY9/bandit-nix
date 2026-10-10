@@ -152,6 +152,23 @@ is the agent and gives its workers (bot2-bot4, and bot16-bot18 from the
 hand the same bots its own jobs. Stop the brain without touching running jobs:
 `sudo systemctl stop mcagents`.
 
+### Slayer card (gaming PC) and `GET /api/slayer`
+
+When the owner's PC serves the agents' model (llama-server on `slayerpc:8081`, reached on the
+lab as `http://127.0.0.1:18081` through the lab tunnel), the dashboard shows a "slayer" card:
+state (`serving`, `paused-game` while a game runs, `offline`), busy/idle, tok/s, requests today,
+decisions lab vs slayer (last 24 h) and, when known, GPU use. Off by default: the card stays
+hidden until the service has `SLAYER_URL` (for example `http://127.0.0.1:18081`; the container
+must be able to reach it, so wire it together with the tunnel). The server polls every 10 s
+with 2 s timeouts: `/health`, `/slots`, `/metrics` (llama-server needs `--metrics`; tok/s is
+llama.cpp's average since start) and `/status.json` (not served by llama-server, so normally
+absent). GPU numbers come from the optional `SLAYER_STATUS_CMD`, a JSON array run every 60 s
+without a shell (5 s timeout, 4 KB output, JSON-validated), e.g.
+`["ssh","slayer","type","C:\\bandit-ai\\status.json"]`; unset by default. See `tools/slayer/README.md`
+for the file the PC writes. "Requests today" and the per-backend counts come from the decisions
+log (`POST /api/decision` takes an optional `"backend": "lab"|"slayer"`, missing = lab), so a
+busy day counts only the newest 200 decisions.
+
 ### Events and `GET /api/events`
 
 The Events panel lists the last 200 events (job started / finished / failed /

@@ -55,6 +55,8 @@
   .ag .wk { display:flex; gap:8px; align-items:center; border-top:1px solid var(--bd); padding:4px 0; }
   .ag .wk img { width:80px; margin:0; flex:none; } .ag .wk div { min-width:0; word-break:break-word; }
   .ag .dec { font:12px/1.5 ui-monospace,monospace; word-break:break-word; }
+  #slayerbody { display:flex; flex-wrap:wrap; gap:4px 16px; align-items:center; }
+  #slayerbody .st { font-weight:600; } #slayerbody .st.serving { color:var(--ok); } #slayerbody .st.paused-game { color:var(--warn); } #slayerbody .st.offline { color:var(--bad); }
   .view img { width:100%; height:auto; image-rendering:pixelated; border-radius:6px; background:#000; display:block; margin-top:6px; }
 </style>
 </head>
@@ -82,6 +84,7 @@
 <div class="bar" id="allbar"><h3>Give the same job to several bots</h3><div id="allcomposer"></div></div>
 <div class="bar"><h3>Events <select id="evbot"></select></h3><div id="events"></div></div>
 <div class="bar"><h3>Agents <span class="mut">(LLM brains: goal, own view, workers, last decisions)</span></h3><div id="agents"></div></div>
+<div class="bar" id="slayer" hidden><h3>slayer <span class="mut">(gaming PC: llama-server for the agents; games always win)</span></h3><div id="slayerbody"></div></div>
 <div class="bar"><h3>Agent decisions <span class="mut">(what the LLM said and chose, newest first)</span></h3><div id="decisions"></div></div>
 <details id="dbg" class="bar"><summary>Advanced: debug (last 30 s per bot: server pull-backs, job step, last error)</summary>
   <div class="row"><button id="dbgcopy" type="button">Copy /api/debug JSON</button><span id="dbgmsg" class="mut"></span></div>
@@ -607,6 +610,23 @@ async function pollAgents() {
 }
 setInterval(pollAgents, 5000);
 pollAgents();
+// ---- slayer (gaming PC): GET /api/slayer every 10 s; the card stays hidden while SLAYER_URL is unset ----
+async function pollSlayer() {
+  try {
+    const s = await (await fetch('/api/slayer', { cache: 'no-store' })).json();
+    $('slayer').hidden = !s.enabled;
+    if (!s.enabled) return;
+    const part = (t, cls) => el('span', cls || '', t);
+    const g = s.gpu;
+    $('slayerbody').replaceChildren(
+      part(s.state, 'st ' + s.state),
+      ...(s.online ? [part(s.busy ? 'busy' : 'idle'), part(s.tokensPerSec == null ? 'tok/s ?' : `${s.tokensPerSec.toFixed(1)} tok/s`), part(`${s.requestsToday} requests today`)] : []),
+      part(`decisions 24 h: lab ${s.decisions.lab} / slayer ${s.decisions.slayer}`, 'mut'),
+      ...(g ? [part(`GPU ${g.util}%, VRAM ${g.vramUsedMB}/${g.vramTotalMB} MB, ${g.tempC} C`, 'mut')] : []));
+  } catch {}
+}
+setInterval(pollSlayer, 10000);
+pollSlayer();
 const tickViews = (workers) => { if (document.hidden) return; for (const c of agentCards.values()) { if (workers) { for (const r of c.wk.values()) if (onScreen(r.img)) r.img.src = viewSrc(r.img.alt.replace(' view', '')); } else if (onScreen(c.img)) c.img.src = viewSrc(c.img.alt.replace(' in-game view', '')); } };
 setInterval(() => { tickViews(false); renderAgents(); }, 3000);
 setInterval(() => tickViews(true), 5000);

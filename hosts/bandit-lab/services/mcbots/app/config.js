@@ -85,6 +85,10 @@ function loadConfig(env = process.env) {
   // Worker bots (other processes, via the hub) are not in BOT_NAMES, so only the name is checked.
   const strangers = agentBots.filter((b) => !NAME_RE.test(b));
   if (strangers.length) throw new Error(`AGENT_BOTS must be bot names: ${strangers.join(', ')}`);
+  // The gaming PC's llama-server through the lab tunnel (slayer.js); unset = no card.
+  const slayerUrl = (env.SLAYER_URL || '').replace(/\/+$/, '');
+  if (slayerUrl && !/^http:\/\/[\w.-]+(:\d+)?$/.test(slayerUrl)) throw new Error('SLAYER_URL must be http://host:port');
+  const slayerStatusCmd = require('./slayer').parseCmd(env.SLAYER_STATUS_CMD);
   const host = env.DASHBOARD_HOST || '127.0.0.1';
   if (!allowed.length && host !== '127.0.0.1') {
     throw new Error('DASHBOARD_HOST other than 127.0.0.1 requires ALLOWED_TS_LOGINS');
@@ -107,6 +111,8 @@ function loadConfig(env = process.env) {
     hubWorkers,
     agentToken,
     agentBots,
+    slayerUrl,
+    slayerStatusCmd,
     workerPort,
     workerHost: env.WORKER_HOST || '127.0.0.1',
     hostLabel: (env.HOST_LABEL || require('node:os').hostname()).slice(0, 40),
