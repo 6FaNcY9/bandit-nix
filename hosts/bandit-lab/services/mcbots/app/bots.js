@@ -638,11 +638,16 @@ function digWhy(bot, block, pos) {
   return `held ${bot.heldItem?.name || 'nothing'}, onGround ${e.onGround}, inWater ${!!e.isInWater}, effects ${effects}, dist ${e.position.distanceTo(pos.offset(0.5, 0.5, 0.5)).toFixed(1)}, est ${Math.round(t)} ms`;
 }
 
-// true only when this bot dug the block; false when it was gone already or the dig got no answer.
-async function digAt(r, job, pos) {
+// true only when this bot dug the block; false when it was gone already, changed, or the dig got
+// no answer. expect(name) says which block may be dug (default: the one there now); it is checked
+// again after every walk and equip, so a block swapped meanwhile (a player's torch) stays.
+async function digAt(r, job, pos, expect = null) {
   const {bot} = r;
   let block = bot.blockAt(pos);
   if (!block || block.name.endsWith('air')) return false;
+  const first = block.name;
+  const want = expect || ((n) => n === first);
+  if (!want(block.name)) return false;
   const tools = block.harvestTools ? Object.keys(block.harvestTools).map(Number) : null;
   if (tools && !bot.inventory.items().some((i) => tools.includes(i.type))) {
     throw new Error(`needs a tool that can harvest ${block.name} (for stone and ore: a pickaxe)`);
@@ -650,7 +655,7 @@ async function digAt(r, job, pos) {
   await goNear(r, job, pos.x, pos.y, pos.z, 4, {goal: new goals.GoalLookAtBlock(pos, bot.world, {reach: 4}), doing: `walking to ${block.name} near ${at(pos)}${tally(job)}`});
   guard(job);
   block = bot.blockAt(pos);
-  if (!block || block.name.endsWith('air')) return false;
+  if (!block || block.name.endsWith('air') || !want(block.name)) return false;
   let danger = unsafeDig(bot, pos);
   if (danger && / next to it$/.test(danger) && (await sealFluids(r, job, pos))) danger = unsafeDig(bot, pos);
   if (danger) throw new Error(`unsafe: ${danger}`);
@@ -661,6 +666,9 @@ async function digAt(r, job, pos) {
   const attempt = async () => {
     for (let tries = 0; ; tries++) {
       await bot.tool.equipForBlock(block, {}).catch(() => {});
+      guard(job); // a Stop during the equip must not dig
+      block = bot.blockAt(pos);
+      if (!block || block.name.endsWith('air') || !want(block.name)) return null;
       let digTimer;
       try {
         return await Promise.race([bot.dig(block, true).then(() => false), new Promise((res) => (digTimer = setTimeout(() => res(true), 25000)))]);
@@ -670,8 +678,6 @@ async function digAt(r, job, pos) {
           guard(job);
           await sleep(250);
         }
-        block = bot.blockAt(pos);
-        if (!block || block.name.endsWith('air')) return null;
       } finally {
         clearTimeout(digTimer);
       }
@@ -1395,6 +1401,7 @@ const JOBS = {
     if (here && here.boundingBox !== 'empty') throw new Error(`${here.name} is in the way at ${x} ${y} ${z}`);
     job.t.doing = `placing ${item} at ${x} ${y} ${z}`;
     await bot.equip(bot.inventory.items().find((i) => i.name === item), 'hand');
+    guard(job); // a Stop during the equip must not place anything
     await bot.placeBlock(below, new Vec3(0, 1, 0)).catch(() => {}); // 26.x may not echo the update in time
     for (let i = 0; i < 20 && bot.blockAt(at)?.name !== item; i++) await sleep(100);
     if (bot.blockAt(at)?.name !== item) throw new Error(`placing ${item} did not take`);
@@ -1406,4 +1413,4 @@ const JOBS = {
   },
 };
 
-module.exports = {BotRunner, NAME_RE, VALIDATE, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood};
+module.exports = {BotRunner, NAME_RE, VALIDATE, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt};

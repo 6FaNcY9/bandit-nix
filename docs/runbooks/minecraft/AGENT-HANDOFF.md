@@ -92,6 +92,10 @@ Integration is reported by the owner; no live validation by Codex.
 ### MC-3: build job review
 
 State: reopened after verification of `e1065d2082290e81f6b91b8ab3d42ae90e070377`.
+Claude fixed both follow-up P1s in `fix(mcbots): recheck a block before every dig` (2026-10-10):
+`digAt` takes an expected-block predicate (build removal: the recorded block; plant clearing:
+the plant list; default: the block first seen) and rechecks it plus Stop after every walk and
+equip, retries included; the `place` job guards after its equip. Awaiting Codex re-verification.
 Follow-up reviewed at `50cf46ae8b5f26f6651f0d53acd3ab6a7b1746bd` (2026-10-10).
 The six original findings below remain as historical regression requirements.
 
@@ -256,7 +260,8 @@ Authority traced:
   placing, not walking, combat, chest access or resource use outside the boxes.
   MC-3's mutation races still apply. The separate `place` job also lacks a
   cancellation guard after equip (`app/bots.js:1394-1395`); add a Stop-during-
-  equip regression before describing Stop as a universal mutation barrier.
+  equip regression before describing Stop as a universal mutation barrier. (Fixed with the MC-3
+  follow-up: guard after the `place` equip.)
 - Model prose is logged, never sent to Minecraft chat. `startConversation`
   sends only to another configured agent's inbox; world text can influence a
   model within its tool authority. There is no player-chat ingestion in the

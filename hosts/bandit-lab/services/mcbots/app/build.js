@@ -208,7 +208,7 @@ function makeBuild({goNear, guard, sleep, goals, digAt, withdraw, waitMs = WAIT_
         try {
           if (plan.remove) {
             guard(job);
-            if (await digAt(r, job, new Vec3(b.x, b.y, b.z))) {
+            if (await digAt(r, job, new Vec3(b.x, b.y, b.z), (n) => n === b.block)) {
               placed.delete(keyOf(b));
               lastProgress = Date.now();
               continue;
@@ -223,7 +223,7 @@ function makeBuild({goNear, guard, sleep, goals, digAt, withdraw, waitMs = WAIT_
           const at = new Vec3(b.x, b.y, b.z);
           if (s.clear) {
             guard(job);
-            await digAt(r, job, at); // GoalPlaceBlock wants the cell empty
+            await digAt(r, job, at, soft); // GoalPlaceBlock wants the cell empty; only a plant is cleared
           }
           await goNear(r, job, b.x, b.y, b.z, 3, {goal: new goals.GoalPlaceBlock(at, bot.world, {range: 4}), doing: `walking to place ${b.block} at ${b.x} ${b.y} ${b.z}`});
           guard(job);

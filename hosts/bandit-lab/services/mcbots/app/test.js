@@ -1175,7 +1175,7 @@ require('./crafting');
       const blocks = new Map(preset.map((k) => [k, 'cobblestone']));
       const name = (v) => blocks.get(`${v.x},${v.y},${v.z}`) ?? (v.y <= 63 ? 'stone' : 'air');
       const job = {t: {}, cancelled: false};
-      const log = {placed: 0};
+      const log = {placed: 0, expects: []};
       const mv = {exclusionAreasBreak: [], exclusionAreasPlace: [], scafoldingBlocks: [1, 2]};
       const bot = {game: {dimension: 'overworld'}, pathfinder: {movements: mv}, world: {},
         registry: {itemsByName: {cobblestone: {id: 1}}},
@@ -1186,7 +1186,7 @@ require('./crafting');
       const r = {bot, protectedAreas: [], name: 'b', world: claimOk ? null : {claim: async () => false, release() {}}, conflict() {}};
       const guard = (j) => { if (j.cancelled) throw new Error('stopped'); };
       const build = B.makeBuild({goNear: async () => {}, guard, sleep: async () => new Promise((res) => setTimeout(res, 5)), goals: {GoalPlaceBlock: class {}}, withdraw: async () => {},
-        digAt: async (rr, jj, p) => { if (!digOk) return false; blocks.delete(`${p.x},${p.y},${p.z}`); return true; }, waitMs: 50});
+        digAt: async (rr, jj, p, expect) => { log.expects.push(expect); if (!digOk) return false; blocks.delete(`${p.x},${p.y},${p.z}`); return true; }, waitMs: 50});
       return {build, r, job, blocks, log, mv};
     };
     const pad = (o, extra = {}) => ({origin: o, blocks: [0, 1, 2].map((x) => ({x, y: 0, z: 0, block: 'cobblestone'})), ...extra});
@@ -1202,6 +1202,7 @@ require('./crafting');
     f.job.args = pad({x: 600, y: 64, z: 600}, {remove: true});
     await f.build(f.r, f.job);
     assert.deepStrictEqual([...f.blocks.keys()], ['600,64,600'], 'the pre-existing block stays');
+    assert.ok(f.log.expects.length && f.log.expects.every((e) => e && e('cobblestone') && !e('torch')), 'removal digs only the recorded block type');
     f = fakeRun(); // remove without a record is refused
     f.job.args = pad({x: 700, y: 64, z: 700}, {remove: true});
     await assert.rejects(f.build(f.r, f.job), /no record/);
@@ -1215,6 +1216,41 @@ require('./crafting');
     const t0 = Date.now();
     await assert.rejects(h.build(h.r, h.job), /no progress/);
     assert.ok(Date.now() - t0 < 2000);
+  }
+  { // digAt rechecks the block after every walk and equip: a Stop or a swapped block means no dig
+    const {digAt, Cancelled} = require('./bots');
+    const {Vec3} = require('vec3');
+    const pos = new Vec3(5, 64, 5);
+    const run = ({onEquip = () => {}, onWalk = () => {}, expect} = {}) => {
+      const blocks = new Map([['5,64,5', 'blue_orchid']]);
+      const job = {t: {}, cancelled: false};
+      let digs = 0;
+      const bot = {
+        blockAt: (p) => (blocks.get(`${p.x},${p.y},${p.z}`) ? {name: blocks.get(`${p.x},${p.y},${p.z}`), position: p, getProperties: () => ({})} : null),
+        entity: {position: new Vec3(3, 64, 3), onGround: true}, game: {dimension: 'overworld'}, entities: {}, inventory: {items: () => []},
+        pathfinder: {goto: async () => onWalk(blocks, job), stop() {}, setGoal() {}},
+        tool: {equipForBlock: async () => onEquip(blocks, job)},
+        dig: async () => { digs++; blocks.delete('5,64,5'); },
+        stopDigging() {},
+      };
+      const r = {bot, world: {hostilesNear: () => []}, emit() {}};
+      return {go: () => digAt(r, job, pos, expect), digs: () => digs};
+    };
+    let x = run({onEquip: (_, job) => (job.cancelled = true)});
+    await assert.rejects(x.go(), Cancelled);
+    assert.strictEqual(x.digs(), 0);
+    const plant = (n) => n === 'blue_orchid';
+    for (const at of ['onEquip', 'onWalk']) {
+      x = run({expect: plant, [at]: (blocks) => blocks.set('5,64,5', 'torch')});
+      assert.strictEqual(await x.go(), false, at);
+      assert.strictEqual(x.digs(), 0, at);
+    }
+    x = run({onWalk: (blocks) => blocks.set('5,64,5', 'chest')}); // default expect: the block seen first
+    assert.strictEqual(await x.go(), false);
+    assert.strictEqual(x.digs(), 0);
+    x = run({expect: plant});
+    assert.strictEqual(await x.go(), true);
+    assert.strictEqual(x.digs(), 1);
   }
   console.log('ok');
 })();
