@@ -21,7 +21,7 @@ const agentEndpoint = (method, path) => (method === 'GET' && (path === '/api/sta
 function agentStatus({agent, goal, workers, role}, {agentBots}) {
   if (!agentBots.includes(agent)) return {error: 'agent must be an agent bot'};
   if (typeof goal !== 'string' || (role !== undefined && typeof role !== 'string')) return {error: 'goal and role must be strings'};
-  if (!Array.isArray(workers) || workers.length > 12 || !workers.every((w) => typeof w === 'string' && /^[A-Za-z0-9_]{1,16}$/.test(w))) return {error: 'workers must be at most 12 bot names'};
+  if (!Array.isArray(workers) || workers.length > 12 || !workers.every((w) => agentBots.includes(w))) return {error: 'workers must be at most 12 agent bot names'}; // a fixed domain: free names would grow the dashboard's per-worker rows (Codex R4-6)
   return {agent, goal: goal.slice(0, 500), workers, role: (role || '').slice(0, 40)};
 }
 

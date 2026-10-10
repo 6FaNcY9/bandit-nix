@@ -23,9 +23,20 @@ for (const bad of ['bot', 'bot100', 'Bot1', 'steve', 'bot1,x']) assert.throws(()
   assert.strictEqual(A.bearerMatches(`Bearer ${tok}`, null), false, 'no agent token configured: every bearer fails');
   assert.ok(A.agentEndpoint('GET', '/api/state') && A.agentEndpoint('GET', '/api/events') && A.agentEndpoint('POST', '/api/job') && A.agentEndpoint('POST', '/api/decision'));
   assert.ok(A.agentEndpoint('POST', '/api/agentstatus') && !A.agentEndpoint('GET', '/api/agents') && !A.agentEndpoint('POST', '/api/agents'), 'only the agent posts its status');
-  const sp = {agentBots: ['bot1']};
+  const sp = {agentBots: ['bot1', 'bot2']};
   assert.deepStrictEqual(A.agentStatus({agent: 'bot1', goal: 'g'.repeat(600), workers: ['bot2'], role: 'lead'}, sp), {agent: 'bot1', goal: 'g'.repeat(500), workers: ['bot2'], role: 'lead'});
-  for (const bad of [{agent: 'bot9', goal: '', workers: []}, {agent: 'bot1', goal: 1, workers: []}, {agent: 'bot1', goal: '', workers: 'bot2'}, {agent: 'bot1', goal: '', workers: ['a b']}, {agent: 'bot1', goal: '', workers: Array(13).fill('w')}]) assert.ok(A.agentStatus(bad, sp).error, JSON.stringify(bad));
+  for (const bad of [{agent: 'bot9', goal: '', workers: []}, {agent: 'bot1', goal: 1, workers: []}, {agent: 'bot1', goal: '', workers: 'bot2'}, {agent: 'bot1', goal: '', workers: ['a b']}, {agent: 'bot1', goal: '', workers: Array(13).fill('w')}, {agent: 'bot1', goal: '', workers: ['bot999']}]) assert.ok(A.agentStatus(bad, sp).error, JSON.stringify(bad));
+  { // the dashboard keeps one row per worker of the current crew, not one per name ever seen (Codex R4-6)
+    const html = require('node:fs').readFileSync(require('node:path').join(__dirname, 'public/index.html'), 'utf8');
+    const body = html.slice(html.indexOf('function renderAgents() {'), html.indexOf('async function pollAgents'));
+    const stub = () => ({append() {}, replaceChildren() {}, getBoundingClientRect: () => ({}), set textContent(v) {}});
+    const cards = new Map();
+    const render = new Function('agentCards', 'agentList', '$', 'el', 'last', 'decs', `${body}; return renderAgents;`);
+    const list = [{agent: 'bot1', workers: ['bot2'], goal: '', t: 0}];
+    const run = render(cards, list, stub, stub, {bots: []}, []);
+    for (const w of ['bot2', 'bot3', 'bot4']) { list[0].workers = [w]; run(); }
+    assert.deepStrictEqual([...cards.get('bot1').wk.keys()], ['bot4']);
+  }
   assert.ok(!A.agentEndpoint('GET', '/api/decisions'), 'reading decisions is for humans');
   for (const [m, u] of [['POST', '/api/settings'], ['POST', '/api/keeper'], ['POST', '/api/places'], ['GET', '/api/debug'], ['GET', '/'], ['GET', '/api/view']]) assert.ok(!A.agentEndpoint(m, u), u);
   const pol = {agentBots: ['bot1', 'bot2'], supplyChest: {x: 1, y: 2, z: 3}};

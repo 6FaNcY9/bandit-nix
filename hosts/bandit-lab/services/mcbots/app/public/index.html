@@ -591,6 +591,7 @@ function renderAgents() {
     if (!c) { c = { root: el('div', 'card ag'), head: el('h2'), goal: el('div', 'mut'), img: el('img'), crew: el('div'), decs: el('div', 'dec'), wk: new Map() }; c.img.alt = a.agent + ' in-game view'; c.root.append(c.head, c.goal, c.img, c.crew, c.decs); agentCards.set(a.agent, c); root.append(c.root); }
     c.head.textContent = `${a.agent} ${a.role || ''}`;
     c.goal.textContent = `goal: ${a.goal || '(none)'} (updated ${new Date(a.t).toLocaleTimeString()})`;
+    for (const w of c.wk.keys()) if (!a.workers.includes(w)) c.wk.delete(w); // rows of workers no longer in the crew
     c.crew.replaceChildren(...a.workers.map((w) => {
       let r = c.wk.get(w);
       if (!r) { r = { row: el('div', 'wk'), img: el('img'), txt: el('div') }; r.img.alt = w + ' view'; r.img.loading = 'lazy'; r.row.append(r.img, r.txt); c.wk.set(w, r); }
