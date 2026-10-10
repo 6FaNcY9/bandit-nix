@@ -93,7 +93,14 @@ function makeCrafting({goNear, guard}) {
 
   const isPlanks = (n) => n.endsWith('_planks');
   const isLog = (n) => /_(log|stem)$/.test(n);
-  const planksHeld = (bot) => bot.inventory.items().filter((i) => isPlanks(i.name)).reduce((n, i) => n + i.count, 0);
+  const planksTotal = (bot) => bot.inventory.items().filter((i) => isPlanks(i.name)).reduce((n, i) => n + i.count, 0);
+  // Recipes take planks of one wood (mineflayer lists a variant per wood), so
+  // 1 oak + 1 spruce plank do not make sticks: count the biggest single kind.
+  const planksHeld = (bot) => {
+    const by = {};
+    for (const i of bot.inventory.items()) if (isPlanks(i.name)) by[i.name] = (by[i.name] || 0) + i.count;
+    return Math.max(0, ...Object.values(by));
+  };
 
   // Turn logs (any wood) into planks until `want` planks are held.
   async function ensurePlanks(r, job, want) {
@@ -105,9 +112,9 @@ function makeCrafting({goNear, guard}) {
       const plank = bot.registry.itemsByName[log.name.replace(/^stripped_/, '').replace(/_(log|stem)$/, '_planks')];
       const recipe = plank && bot.recipesFor(plank.id, null, 1, null)[0];
       if (!recipe) throw new Error(`cannot turn ${log.name} into planks`);
-      const before = planksHeld(bot);
-      await holding(r, () => bot.craft(recipe, Math.min(log.count, Math.ceil((want - before) / 4)), null));
-      if (!(await arrived(() => planksHeld(bot) > before))) throw new Error(`turning ${log.name} into planks did not take`);
+      const before = planksTotal(bot);
+      await holding(r, () => bot.craft(recipe, Math.min(log.count, Math.ceil((want - planksHeld(bot)) / 4)), null));
+      if (!(await arrived(() => planksTotal(bot) > before))) throw new Error(`turning ${log.name} into planks did not take`);
     }
   }
 

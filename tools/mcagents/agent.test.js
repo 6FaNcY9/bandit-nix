@@ -31,6 +31,12 @@ assert.deepStrictEqual(tr('!smeltItem("raw_iron", 3)'), {job: ['smelt', {item: '
 assert.ok(tr('!newAction("build a house")').refuse, 'code writing is refused');
 assert.ok(tr('!attackPlayer("steve")').refuse, 'unknown commands are refused');
 assert.ok(translate(parseCommand('!putInChest("dirt", 1)'), {pos: null, supplyChest: null}).refuse);
+// Names Andy used on the lab that the bots did not know (2026-10-10).
+assert.strictEqual(tr('!startShift("raw_logs")').job[1].block, 'logs');
+assert.strictEqual(tr('!collectBlocks("raw_logs", 8)').job[0], 'chop');
+assert.strictEqual(tr('!startShift("raw_coal")').job[1].block, 'coal_ore');
+assert.strictEqual(tr('!craftRecipe("pickaxe", 1)').job[1].item, 'stone_pickaxe');
+assert.strictEqual(tr('!craftRecipe("iron_pickaxe", 1)').job[1].item, 'iron_pickaxe');
 assert.strictEqual(tr('!inventory').query, 'inventory');
 assert.strictEqual(tr('!buildBlueprint("test-pad-3x3", 1, 64, 2)').local, 'buildBlueprint');
 assert.ok(commandDocs(['test-pad-3x3']).includes('!collectBlocks: Collect the nearest blocks'));

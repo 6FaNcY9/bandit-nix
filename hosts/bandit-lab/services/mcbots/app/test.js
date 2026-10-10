@@ -286,14 +286,14 @@ require('./crafting');
   al.check({chestBlock: 'air', timeOfDay: 6000, hostiles: []}, chest);
   al.check({chestBlock: 'air', timeOfDay: 6000, hostiles: []}, chest);
   assert.deepStrictEqual(ev.items.map((e) => [e.kind, e.text]), [['alert', 'the supply chest at 1 2 3 is gone (air there now)']]);
-  al.check({chestBlock: null, timeOfDay: 14000, hostiles: [{name: 'creeper'}, {name: 'creeper'}, {name: 'zombie'}]}, chest);
+  al.check({chestBlock: null, timeOfDay: 14000, hostiles: [{type: 'creeper'}, {type: 'creeper'}, {type: 'zombie'}]}, chest);
   assert.match(ev.items.at(-2).text, /night falls/);
   assert.match(ev.items.at(-1).text, /creeper x2, zombie x1/);
   t += 1000;
-  al.check({chestBlock: 'chest', timeOfDay: 14000, hostiles: [{name: 'creeper'}]}, chest);
+  al.check({chestBlock: 'chest', timeOfDay: 14000, hostiles: [{type: 'creeper'}]}, chest);
   assert.match(ev.items.at(-1).text, /is back/, 'no second mob alert within 2 minutes');
   t += MOB_EVERY_MS;
-  al.check({chestBlock: 'chest', timeOfDay: 23500, hostiles: [{name: 'creeper'}]}, chest);
+  al.check({chestBlock: 'chest', timeOfDay: 23500, hostiles: [{type: 'creeper'}]}, chest);
   assert.deepStrictEqual(ev.items.slice(-2).map((e) => e.text.split(':')[0]), ['morning', 'hostile mobs near the base']);
 }
 // pathcache.js: one Block per position inside the window, a fresh one after it.

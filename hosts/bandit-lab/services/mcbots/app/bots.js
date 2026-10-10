@@ -716,7 +716,9 @@ async function digAt(r, job, pos, expect = null) {
   if (!want(block.name)) return false;
   const tools = block.harvestTools ? Object.keys(block.harvestTools).map(Number) : null;
   if (tools && !bot.inventory.items().some((i) => tools.includes(i.type))) {
-    throw new Error(`needs a tool that can harvest ${block.name} (for stone and ore: a pickaxe)`);
+    // Name the tools: "a pickaxe" sent a stone-pickaxe bot back to gold ore (lab, 2026-10-10).
+    const names = tools.map((t) => bot.registry.items[t]?.name).filter(Boolean).sort();
+    throw new Error(`needs a tool that can harvest ${block.name}: ${names.join(', ') || 'a pickaxe'}`);
   }
   await goNear(r, job, pos.x, pos.y, pos.z, 4, {goal: new goals.GoalLookAtBlock(pos, bot.world, {reach: 4}), doing: `walking to ${block.name} near ${at(pos)}${tally(job)}`});
   guard(job);

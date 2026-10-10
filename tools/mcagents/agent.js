@@ -164,6 +164,10 @@ const LOG_TYPES = /_log$|^logs?$|^wood$/;
 // What the model says for an ore -> the block ("coal" made a lab shift fail: unknown block, 2026-10-10).
 const ORES = new Set(['coal', 'iron', 'gold', 'copper', 'diamond', 'emerald', 'lapis', 'redstone']);
 const blockOf = (t) => (t === 'cobblestone' ? 'stone' : ORES.has(t.replace(/^raw_/, '')) ? `${t.replace(/^raw_/, '')}_ore` : t);
+// "raw_logs", "minecraft:oak_log", "raw_coal" -> what the bots know (live 2026-10-10: "unknown block: raw_logs").
+const clean = (v) => String(v ?? '').replace(/^minecraft:/, '').replace(/^raw_(?=logs?$|wood$)/, '');
+// "pickaxe" alone failed as an unknown item; stone tools need only cobblestone and sticks.
+const itemOf = (v) => { const t = clean(v); return /^(pickaxe|axe|sword|shovel|hoe)$/.test(t) ? `stone_${t}` : t; };
 const ORE_DROPS = {coal_ore: 'coal', iron_ore: 'raw_iron', gold_ore: 'raw_gold', copper_ore: 'raw_copper', diamond_ore: 'diamond', emerald_ore: 'emerald', lapis_ore: 'lapis_lazuli', redstone_ore: 'redstone', nether_quartz_ore: 'quartz', nether_gold_ore: 'gold_nugget'};
 
 // Mindcraft command -> {job: [type, args]} | {query: name} | {local: name} | {refuse: why}.
@@ -180,13 +184,13 @@ function translate(cmd, ctx) {
     case 'followPlayer': return {job: ['follow', {player: String(a[0] ?? '')}]};
     case 'goToCoordinates': return {job: ['goto', {x: a[0], y: a[1], z: a[2]}]};
     case 'collectBlocks': case 'collectBlock': {
-      const type = String(a[0] ?? '').replace(/^minecraft:/, '');
+      const type = clean(a[0]);
       if (LOG_TYPES.test(type)) return {job: ['chop', {count: n(a[1], 1)}]};
       return {job: ['mine', {block: blockOf(type), count: n(a[1], 1)}]};
     }
     case 'startShift': {
       if (!chest) return {refuse: 'There is no base chest yet.'};
-      const type = String(a[0] ?? '').replace(/^minecraft:/, '');
+      const type = clean(a[0]);
       if (!type) return {refuse: 'Say what to collect, for example !startShift("logs").'};
       return {job: ['shift', {block: LOG_TYPES.test(type) ? 'logs' : blockOf(type), ...chest}]};
     }
@@ -204,7 +208,7 @@ function translate(cmd, ctx) {
     case 'viewChest':
       if (!chest) return {refuse: 'There is no base chest yet.'};
       return {job: ['stock', {...chest}]};
-    case 'craftRecipe': case 'craftItem': return {job: ['craft', {item: String(a[0] ?? ''), count: Math.min(n(a[1], 1), 64)}]};
+    case 'craftRecipe': case 'craftItem': return {job: ['craft', {item: itemOf(a[0]), count: Math.min(n(a[1], 1), 64)}]};
     case 'smeltItem': {
       // Andy-4.2 kept "smelting" the coal_ore it had just mined (live 2026-10-10): say what the ore gave.
       const item = String(a[0] ?? '').replace(/^minecraft:/, '');

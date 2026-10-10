@@ -10,7 +10,7 @@ class Alerts {
     Object.assign(this, {events, now, chestGone: false, night: null, mobAt: -Infinity});
   }
 
-  // view: {chestBlock: block name at the supply chest or null when unknown, timeOfDay, hostiles: [{name}]}
+  // view: {chestBlock: block name at the supply chest or null when unknown, timeOfDay, hostiles: [{type}] as world.js stores mobs}
   check(view, chest) {
     const add = (text) => this.events.add('base', 'alert', text);
     if (chest && view.chestBlock) {
@@ -27,7 +27,7 @@ class Alerts {
     const mobs = view.hostiles || [];
     if (mobs.length && this.now() - this.mobAt >= MOB_EVERY_MS) {
       const count = {};
-      for (const m of mobs) count[m.name] = (count[m.name] || 0) + 1;
+      for (const m of mobs) count[m.type] = (count[m.type] || 0) + 1;
       add(`hostile mobs near the base: ${Object.entries(count).map(([n, c]) => `${n} x${c}`).join(', ')}`);
       this.mobAt = this.now();
     }
