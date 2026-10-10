@@ -69,7 +69,7 @@ function solverAction({action, bot, text, objective}, {agentBots, roster = [], b
   if (!['note', 'escalate', 'skip'].includes(action)) return {error: 'solver action must be note, escalate or skip'};
   if (typeof text !== 'string' || !text.trim()) return {error: 'solver: text required'};
   if (action !== 'skip' && !roster.includes(bot) && !agentBots.includes(bot) && bot !== 'base') return {error: `solver: ${bot} is not a roster bot`};
-  const line = `solver: ${text.replace(/\s+/g, ' ').trim()}`;
+  const line = `solver: ${text.replace(/\s+/g, ' ').trim().slice(0, 200)}`; // model text: one short line on the phone
   if (action === 'note') {
     const refused = limiter?.take(`${bot}:note`, {gapMs: 0, perHour: 60});
     return refused ? {error: refused} : {kind: 'info', bot, text: line};
