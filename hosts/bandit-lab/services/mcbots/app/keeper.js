@@ -40,6 +40,14 @@ const PLANS = {
     return [['withdraw', {item: 'coal', count: coal, ...c}], ['withdraw', {item: 'logs', count: Math.ceil(n / 32), ...c}], ['craft', {item: 'torch', count: n}], ['deposit', {...c, only: 'torch'}]];
   },
 };
+// Spare pickaxes, so rearm finds one when a bot's breaks (4x "no pickaxe left" on the lab, 2026-10-10).
+// A stone pickaxe is 3 cobblestone + 2 sticks; the logs make the sticks and one crafting table.
+PLANS.stone_pickaxe = (n, c, stock) => {
+  const logs = Math.ceil(n / 2) + 1;
+  if (have(stock, 'cobblestone') < 3 * n) return {blocked: `needs ${3 * n} cobblestone in the chest first`};
+  if (have(stock, 'logs') < logs) return {blocked: `needs ${logs} logs in the chest (for the sticks and a table)`};
+  return [['withdraw', {item: 'cobblestone', count: 3 * n, ...c}], ['withdraw', {item: 'logs', count: logs, ...c}], ['craft', {item: 'stone_pickaxe', count: n}], ['deposit', {...c, only: 'stone_pickaxe'}]];
+};
 const WORKSITE = new Set(['chop', 'mine']); // jobs that start with a walk to the work site, when one is set
 
 class Keeper {

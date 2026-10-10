@@ -1206,9 +1206,15 @@ require('./crafting');
   assert.deepStrictEqual(PLANS.torch(16, chest, {coal: 4, birch_log: 1}).map((j) => j[0]), ['withdraw', 'withdraw', 'craft', 'deposit']);
   assert.match(PLANS.torch(16, chest, {coal: 3, oak_log: 1}).blocked, /4 coal/);
   assert.match(PLANS.torch(16, chest, {coal: 4}).blocked, /log/);
+  // spare pickaxes: cobblestone and logs from the chest, crafted, put back
+  assert.deepStrictEqual(PLANS.stone_pickaxe(3, chest, {cobblestone: 9, oak_log: 3}).map((j) => [j[0], j[1].item, j[1].count]), [['withdraw', 'cobblestone', 9], ['withdraw', 'logs', 3], ['craft', 'stone_pickaxe', 3], ['deposit', undefined, undefined]]);
+  assert.strictEqual(PLANS.stone_pickaxe(3, chest, {cobblestone: 9, oak_log: 3})[3][1].only, 'stone_pickaxe');
+  assert.match(PLANS.stone_pickaxe(3, chest, {cobblestone: 8, oak_log: 3}).blocked, /9 cobblestone/);
+  assert.match(PLANS.stone_pickaxe(3, chest, {cobblestone: 9, oak_log: 2}).blocked, /3 logs/);
+  assert.strictEqual(PLANS.stone_pickaxe(1, chest, {cobblestone: 3, birch_log: 2}).length, 4);
   // chain arguments pass the real validators (the bots would refuse them otherwise)
   const {VALIDATE: V} = require('./bots');
-  for (const [type, args] of [...PLANS.logs(40, chest), ...PLANS.cobblestone(64, chest), ...PLANS.coal(8, chest), ...PLANS.torch(16, chest, {coal: 9, oak_log: 3}), ['stock', chest], ['goto', chest]]) assert.doesNotThrow(() => V[type](args), type);
+  for (const [type, args] of [...PLANS.logs(40, chest), ...PLANS.cobblestone(64, chest), ...PLANS.coal(8, chest), ...PLANS.torch(16, chest, {coal: 9, oak_log: 3}), ...PLANS.stone_pickaxe(3, chest, {cobblestone: 9, oak_log: 3}), ['stock', chest], ['goto', chest]]) assert.doesNotThrow(() => V[type](args), type);
   assert.throws(() => V.deposit({...chest, only: 'Bad Name'}));
   assert.deepStrictEqual(V.deposit(chest), chest); // plain deposits are unchanged
 }
