@@ -225,8 +225,9 @@ function blueprintNames() {
   }
 }
 
+// Origin only for the dashboard (its cross-site guard); Ollama refuses foreign origins with 403.
 async function http(method, url, body) {
-  const res = await fetch(url, {method, headers: body ? {'Content-Type': 'application/json', Origin: API} : {}, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(180000)});
+  const res = await fetch(url, {method, headers: body ? {'Content-Type': 'application/json', ...(url.startsWith(API) ? {Origin: API} : {})} : {}, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(180000)});
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
