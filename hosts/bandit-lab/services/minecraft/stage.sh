@@ -124,9 +124,16 @@ seed_jar() {
 mkdir -p "$plugins"
 
 # --- Nix-owned: panel and map -------------------------------------------------
-rm -f "$plugins"/VoxelDash-*.jar "$plugins"/BlueMap-*.jar "$plugins"/voxeldash-*.jar "$plugins"/bluemap-*.jar
+rm -f "$plugins"/VoxelDash-*.jar "$plugins"/BlueMap-*.jar "$plugins"/voxeldash-*.jar "$plugins"/bluemap-*.jar "$plugins"/ImageFrame-*.jar
 install -m 0644 "$STAGE_VOXELDASH" "$plugins/VoxelDash-$STAGE_VOXELDASH_VERSION.jar"
 install -m 0644 "$STAGE_BLUEMAP" "$plugins/BlueMap-$STAGE_BLUEMAP_VERSION.jar"
+install -m 0644 "$STAGE_IMAGEFRAME" "$plugins/ImageFrame-$STAGE_IMAGEFRAME_VERSION.jar"
+
+# ImageFrame: URL allowlist on and upload server off; written only when no config exists.
+install -d "${own[@]}" -m 0750 "$plugins/ImageFrame"
+if [ ! -e "$plugins/ImageFrame/config.yml" ]; then
+  install "${own[@]}" -m 0644 "$STAGE_IMAGEFRAME_CONFIG" "$plugins/ImageFrame/config.yml"
+fi
 
 # BlueMap downloads Mojang's client jar for textures only after its operator
 # accepts that download; metrics stay off. Written only when no config exists.

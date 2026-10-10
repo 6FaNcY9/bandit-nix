@@ -23,6 +23,14 @@
     hash = "sha256-TPtKmWMTLVvgqdsDGiipjp35Le7TfrsHVtOn3Ychq5g=";
   };
 
+  # ImageFrame (LOOHP, open source): players put linked images (imgur/Discord only) on maps in
+  # item frames. Nix-owned like BlueMap; its config is installed once (imageframe-config.yml).
+  imageFrameVersion = "2026.1.5.0";
+  imageFrame = pkgs.fetchurl {
+    url = "https://cdn.modrinth.com/data/lJFOpcEj/versions/dKkWOwRr/ImageFrame-${imageFrameVersion}.jar";
+    hash = "sha512-6e5c6laZRnZ8ElOXVQx8pbvL4NUEgyryFuydjeqZ9TL0r4Dg6aF+6RfH/XjBApK6O75hRXlH8Z0+32i79fL0qA==";
+  };
+
   # Plugins seeded once (first activation of the one-time seed) and then owned
   # by the panel: pinned from Hangar / Modrinth / GitHub with exact hashes.
   # ViaVersion lets newer clients join; ViaBackwards (requires ViaVersion)
@@ -208,6 +216,9 @@ in {
           STAGE_BLUEMAP = blueMap;
           STAGE_BLUEMAP_VERSION = blueMapVersion;
           STAGE_BLUEMAP_CORE = ./bluemap-core.conf;
+          STAGE_IMAGEFRAME = imageFrame;
+          STAGE_IMAGEFRAME_VERSION = imageFrameVersion;
+          STAGE_IMAGEFRAME_CONFIG = ./imageframe-config.yml;
           STAGE_PANELS = ./commandpanels;
           STAGE_PATCHES = velocityPatch;
           STAGE_SEED = pkgs.linkFarm "minecraft-seed-plugins" seedPlugins;
