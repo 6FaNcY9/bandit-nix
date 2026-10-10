@@ -2363,6 +2363,22 @@ require('./crafting');
     await assert.rejects(JOBS.hunt(f.r, job), Cancelled);
     assert.strictEqual(f.hits[1], 1, 'no second blow after the Stop');
 
+    // an animal named or walked into a protected area during the equip, the wait or the look is not hit or sheared (Codex R4-1)
+    for (const [how, swap] of [['equip', 'equip'], ['look', 'lookAt']]) {
+      for (const [what, change] of [
+        ['named', (e) => { e.metadata = [0, 0, {text: 'Dolly'}]; }],
+        ['moved into the protected area', (e) => { e.position = new Vec3(2, 64, 0); }],
+      ]) {
+        for (const shear of [false, true]) {
+          f = fake({sheeps: [{id: 1, position: new Vec3(1, 64, 0)}], inv: shear ? [{name: 'shears', count: 1, type: 7}] : [{name: 'iron_sword', count: 1, type: 99}], areas: [[1.5, -5, 5, 5]]});
+          const hold = f.bot[swap];
+          f.bot[swap] = async (...a) => { change(f.entities[1]); return hold(...a); };
+          await assert.rejects(JOBS.hunt(f.r, hunt({args: {animal: 'sheep', count: 1, x: 0, y: 64, z: 0, radius: 20}})), /0 of 1 sheep hunted/);
+          assert.ok(!f.hits[1] && !f.events.some((ev) => ev.startsWith('shear')), `${what} during the ${how}${shear ? ' (shears)' : ''}`);
+        }
+      }
+    }
+
     // bed: protected and blocked cells are refused, a bed lying there is only clicked, a new one is placed then clicked
     const floor = (z) => ({[`5,59,${z}`]: {name: 'stone', boundingBox: 'block'}, [`5,60,${z}`]: {name: 'air', boundingBox: 'empty'}, [`5,61,${z}`]: {name: 'air', boundingBox: 'empty'}});
     const field = () => ({...floor(3), ...floor(4), ...floor(5), ...floor(6)});
@@ -2390,6 +2406,18 @@ require('./crafting');
     await JOBS.bed(f.r, bedJob());
     assert.deepStrictEqual(f.events, ['click red_bed']);
     assert.ok(f.infos.some((m) => /could not sleep \(there are monsters nearby\)/.test(m)));
+    // a Stop while walking to a bed that lies there, or while sleep fails, clicks nothing (Codex R4-2)
+    const lying = () => ({...field(), '5,60,5': {name: 'red_bed'}, '5,60,6': {name: 'red_bed'}});
+    f = fake({blocks: lying()});
+    const arriving = bedJob();
+    f.bot.pathfinder.goto = async () => { arriving.cancelled = true; };
+    await assert.rejects(JOBS.bed(f.r, arriving), Cancelled);
+    assert.deepStrictEqual(f.events, [], 'no click after a Stop on arrival');
+    f = fake({blocks: lying(), night: true});
+    const sleeping = bedJob();
+    f.bot.sleep = async () => { sleeping.cancelled = true; throw new Error('there are monsters nearby'); };
+    await assert.rejects(JOBS.bed(f.r, sleeping), Cancelled);
+    assert.deepStrictEqual(f.events, [], 'no fallback click after a Stop');
     f = fake({blocks: field(), inv: [{name: 'red_bed', count: 1, type: 5}]}); // a Stop during the equip places nothing
     const stopped = bedJob();
     f.bot.equip = async () => { stopped.cancelled = true; };

@@ -72,18 +72,23 @@ function makeHunt({goNear, guard, sleep, goals, waitCalm, crafting, at}) {
     const {bot} = r;
     const end = Date.now() + 30000;
     const weapon = shears || bot.inventory.items().filter((i) => weaponScore(i.name)).sort((a, b) => weaponScore(b.name) - weaponScore(a.name))[0];
+    // The live animal may have been named, moved into a protected area or gone since it was picked, and
+    // every await below lets that happen: check again before any blow or shearing (Codex R4-1).
+    const off = () => named(e) || baby(e) || insideAreas(r.protectedAreas, Math.floor(e.position.x), Math.floor(e.position.z));
     let following = false, epoch = r.combat.epoch, lastHit = 0;
     const wool = held(bot, /_wool$/);
     try {
       for (;;) {
         guard(job);
         if (e.isValid === false || !bot.entities[e.id]) return shears ? 'lost' : 'done';
-        if (Date.now() > end || insideAreas(r.protectedAreas, Math.floor(e.position.x), Math.floor(e.position.z))) return 'lost';
+        if (Date.now() > end || off()) return 'lost';
         await waitCalm(r, job);
+        if (off()) return 'lost';
         if (epoch !== r.combat.epoch) { epoch = r.combat.epoch; following = false; } // combat replaced our goal
         if (weapon && bot.heldItem?.type !== weapon.type && !r.inventoryBusy) {
           await bot.equip(weapon, 'hand').catch(() => {});
           guard(job);
+          if (off()) return 'lost';
         }
         if (e.position.distanceTo(bot.entity.position) > 3) {
           if (!following || !bot.pathfinder.isMoving()) { bot.pathfinder.setGoal(new goals.GoalFollow(e, 2), true); following = true; }
@@ -93,6 +98,7 @@ function makeHunt({goNear, guard, sleep, goals, waitCalm, crafting, at}) {
         if (following) { bot.pathfinder.setGoal(null); following = false; }
         await bot.lookAt(e.position.offset(0, e.height * 0.8, 0), true).catch(() => {});
         guard(job);
+        if (off()) return 'lost';
         if (shears) {
           await bot.activateEntity(e);
           guard(job);
@@ -177,13 +183,14 @@ function makeHunt({goNear, guard, sleep, goals, waitCalm, crafting, at}) {
     // Right-click it: that sets the spawn point (day or night); at night sleep in it for a moment.
     const bedBlock = bot.blockAt(new Vec3(x, y, z));
     await goNear(r, job, x, y, z, 2, {doing: `walking to the bed at ${at(cells.foot)}`});
+    guard(job); // a Stop on arrival must not click (Codex R4-2)
     let confirmed = false;
     const onMessage = (m) => { if (/respawn point set/i.test(m)) confirmed = true; };
     bot.on('messagestr', onMessage);
     try {
       const night = bot.time?.timeOfDay >= 12541 && bot.time.timeOfDay <= 23458; // mineflayer's own limits for sleeping
       // sleep() refuses before it clicks (monsters near, too far); the click alone sets the spawn point.
-      if (night) await bot.sleep(bedBlock).catch(async (e) => { r.emit('info', `could not sleep (${e.message}); clicking the bed`); await bot.activateBlock(bedBlock).catch(() => {}); });
+      if (night) await bot.sleep(bedBlock).catch(async (e) => { guard(job); r.emit('info', `could not sleep (${e.message}); clicking the bed`); await bot.activateBlock(bedBlock).catch(() => {}); });
       else await bot.activateBlock(bedBlock);
       guard(job);
       await sleep(1200);
