@@ -206,7 +206,7 @@ No bot source edited, no live server operations, no full runtime certification.
 
 ### MC-4: MCP and agent security review
 
-State: reviewed / changes requested, 2026-10-10. Owner: Codex (review);
+State: reviewed / changes requested; findings 1-2 fixed by Claude in `fix(mcagents): stop before going quiet; budget every model call`, 3 moved into H5 (server-side token scope; the agent itself only uses the supply chest), 2026-10-10. Owner: Codex (review);
 Claude owns `tools/mcagents/**` and bot implementation fixes.
 Base: `50cf46ae8b5f26f6651f0d53acd3ab6a7b1746bd`, including H1 `0b4808b`,
 H2 `b6f07e7`, H3 `cc99163`. Assumed workload: four agents, one trusted local

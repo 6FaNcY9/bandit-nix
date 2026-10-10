@@ -27,7 +27,7 @@ const THINK = process.env.THINK === '1';
 const TICK_MS = 3000;
 // The brain thinks rarely: only on an event, a message, or this check-in while a routine runs / the bot idles.
 const CHECKIN_MS = Number(process.env.CHECKIN_MS) || 600000;
-const MAX_DECISIONS_PER_MIN = Number(process.env.MAX_DECISIONS_PER_MIN) || 12; // all agents together
+const MAX_DECISIONS_PER_MIN = Number(process.env.MAX_DECISIONS_PER_MIN) || 12; // model calls per minute, all agents together
 const STATS_MS = Number(process.env.STATS_MS) || 600000;
 const MAX_QUERIES = 4; // query rounds (!stats, !inventory ...) before the model must act
 const HISTORY = 24; // messages kept per agent
@@ -79,7 +79,7 @@ const DOCS = {
   collectBlocks: ['Collect the nearest blocks of a given type.', {type: ['string', 'The block type to collect.'], num: ['number', 'The number of blocks to collect.']}],
   startShift: ['Start a work shift: endlessly collect a block type (or logs) and put it in the base chest whenever the inventory fills. It never ends by itself; end it with !stop.', {type: ['string', 'The block type to collect, or logs.']}],
   guardHere: ['Stand guard where you are: fight every hostile within the radius. It never ends by itself; end it with !stop.', {radius: ['number', 'How far from here to guard (4-48).']}],
-  afkHere: ['Stop and wait here until another bot or player writes to you. Use it when there is nothing left to do.', {}],
+  afkHere: ['Stop and wait here until another bot writes to you. Use it when there is nothing left to do.', {}],
   putInChest: ['Put the given item in the base chest.', {item_name: ['string', 'The name of the item to put in the chest.'], num: ['number', 'The number of items to put in the chest.']}],
   takeFromChest: ['Take the given items from the base chest.', {item_name: ['string', 'The name of the item to take.'], num: ['number', 'The number of items to take.']}],
   viewChest: ['View the items/counts of the base chest.', {}],
@@ -109,7 +109,8 @@ function commandDocs(blueprints = [], workers = []) {
   return docs + '*\n';
 }
 
-// Global cap on decisions per minute (sliding window). Agents over the cap simply wait for a later tick.
+// Global cap on model calls per minute (sliding window): a decision takes one, each further query
+// round inside it another (MC-4: one decision could make five calls). Agents over the cap wait.
 class Budget {
   constructor(perMin) {
     Object.assign(this, {perMin, stamps: []});
@@ -141,6 +142,7 @@ const ROUTINES = new Set(['shift', 'guard', 'follow']);
 const isRoutine = (job) => !!job && ROUTINES.has(job.type);
 
 const LOG_TYPES = /_log$|^logs?$|^wood$/;
+const ORE_DROPS = {coal_ore: 'coal', iron_ore: 'raw_iron', gold_ore: 'raw_gold', copper_ore: 'raw_copper', diamond_ore: 'diamond', emerald_ore: 'emerald', lapis_ore: 'lapis_lazuli', redstone_ore: 'redstone', nether_quartz_ore: 'quartz', nether_gold_ore: 'gold_nugget'};
 
 // Mindcraft command -> {job: [type, args]} | {query: name} | {local: name} | {refuse: why}.
 // `ctx` = {pos, supplyChest, places}.
@@ -181,7 +183,13 @@ function translate(cmd, ctx) {
       if (!chest) return {refuse: 'There is no base chest yet.'};
       return {job: ['stock', {...chest}]};
     case 'craftRecipe': case 'craftItem': return {job: ['craft', {item: String(a[0] ?? ''), count: Math.min(n(a[1], 1), 64)}]};
-    case 'smeltItem': return {job: ['smelt', {item: String(a[0] ?? ''), count: Math.min(n(a[1], 1), 64)}]};
+    case 'smeltItem': {
+      // Andy-4.2 kept "smelting" the coal_ore it had just mined (live 2026-10-10): say what the ore gave.
+      const item = String(a[0] ?? '').replace(/^minecraft:/, '');
+      const drop = ORE_DROPS[item.replace(/^deepslate_/, '')];
+      if (drop) return {refuse: `Mining ${item} gives ${drop}; ore blocks are never smelted.${drop.startsWith('raw_') ? ` Smelt ${drop} instead.` : ''}`};
+      return {job: ['smelt', {item, count: Math.min(n(a[1], 1), 64)}]};
+    }
     case 'placeHere':
       if (!ctx.pos) return {refuse: 'Position unknown.'};
       return {job: ['place', {item: String(a[0] ?? ''), x: ctx.pos[0], y: ctx.pos[1], z: ctx.pos[2]}]};
@@ -297,8 +305,10 @@ async function sendJob(name, type, args, replace = false) {
 }
 
 // One decision: let the model talk until it starts an action (or gives up after MAX_QUERIES).
-async function decide(agent, agents, getState) {
+// The caller took the budget for the first model call; every later round waits for its own.
+async function decide(agent, agents, getState, budget) {
   for (let round = 0; round <= MAX_QUERIES; round++) {
+    while (round > 0 && !budget.take()) await new Promise((r) => setTimeout(r, 1000));
     const state = await getState();
     const bot = state.bots.find((b) => b.name === agent.name);
     if (!bot?.online) return;
@@ -354,18 +364,23 @@ async function decide(agent, agents, getState) {
         agent.push('system', `Assigned to ${as.worker}: ${as.job[0]} ${JSON.stringify(as.job[1])}. It reports back when done.`);
         return;
       }
-      if (t.local === 'afkHere') {
-        agent.afk = true; // no more prompts until a message comes
-        await sendJob(agent.name, 'stop', {}).catch(() => {});
+      if (t.local === 'afkHere' || t.local === 'endGoal') {
+        // Go quiet only once the bot has really stopped (MC-4): a failed Stop would leave a shift
+        // running with nobody watching. Instead the brain is asked again.
+        try {
+          await sendJob(agent.name, 'stop', {});
+        } catch (e) {
+          agent.push('system', `Code output: Stop failed (${e.message}); your current action is still running. Try again.`);
+          agent.wake = true;
+          agent.wakeAt ||= Date.now();
+          return;
+        }
+        if (t.local === 'afkHere') agent.afk = true; // no more prompts until a message comes
+        else agent.goal = '';
         return;
       }
       if (t.local === 'goal') {
         agent.goal = String(a[0] ?? '');
-        return;
-      }
-      if (t.local === 'endGoal') {
-        agent.goal = '';
-        await sendJob(agent.name, 'stop', {}).catch(() => {});
         return;
       }
       if (t.local === 'buildBlueprint') {
@@ -407,7 +422,7 @@ async function main() {
   const busy = new Set();
   const budget = new Budget(MAX_DECISIONS_PER_MIN);
   const t0 = Date.now();
-  console.log(`agents: ${[...agents.keys()].join(', ')} model ${MODEL} via ${OLLAMA_URL}, bots via ${API}, log ${LOG}; check-in ${CHECKIN_MS / 1000} s, cap ${MAX_DECISIONS_PER_MIN} decisions/min`);
+  console.log(`agents: ${[...agents.keys()].join(', ')} model ${MODEL} via ${OLLAMA_URL}, bots via ${API}, log ${LOG}; check-in ${CHECKIN_MS / 1000} s, cap ${MAX_DECISIONS_PER_MIN} model calls/min`);
   setInterval(() => {
     const h = (Date.now() - t0) / 3600000;
     for (const a of agents.values()) console.log(`stats [${a.name}] ${a.decisions} decisions in ${(h * 60).toFixed(0)} min (${(a.decisions / h).toFixed(1)}/h), model time ${(a.modelMs / 1000).toFixed(0)} s (${((a.modelMs / 3600000 / h) * 100).toFixed(1)} % of the time)`);
@@ -461,7 +476,7 @@ async function main() {
         agent.decisions++;
         busy.add(agent.name);
         // One model call at a time per agent; agents run side by side (Ollama queues them).
-        decide(agent, agents, getState).catch((e) => console.error(`[${agent.name}] ${e.message}`)).finally(() => busy.delete(agent.name));
+        decide(agent, agents, getState, budget).catch((e) => console.error(`[${agent.name}] ${e.message}`)).finally(() => busy.delete(agent.name));
       }
     } catch (e) {
       console.error(`tick: ${e.message}`);
@@ -475,4 +490,4 @@ if (require.main === module) main().catch((e) => {
   process.exit(1);
 });
 
-module.exports = {parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText};
+module.exports = {decide, Agent, parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText};

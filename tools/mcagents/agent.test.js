@@ -1,7 +1,8 @@
 'use strict';
 // node tools/mcagents/agent.test.js — the Mindcraft command translator.
 const assert = require('node:assert');
-const {parseCommand, translate, commandDocs, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText} = require('./agent');
+process.env.LOG ||= require('node:path').join(require('node:os').tmpdir(), `mcagents-test-${process.pid}.jsonl`); // decide() logs every model call
+const {decide, Agent, parseCommand, translate, commandDocs, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText} = require('./agent');
 
 assert.deepStrictEqual(parseCommand('Sure! !collectBlocks("oak_log", 10)'), {name: 'collectBlocks', args: ['oak_log', 10]});
 assert.deepStrictEqual(parseCommand("Bye! !endConversation('john')"), {name: 'endConversation', args: ['john']});
@@ -18,6 +19,9 @@ assert.deepStrictEqual(tr('!takeFromChest("coal", 3)'), {job: ['withdraw', {x: 5
 assert.deepStrictEqual(tr('!goToRememberedPlace("base")'), {job: ['goto', {x: 9, y: 70, z: 9}]});
 assert.deepStrictEqual(tr('!craftRecipe("stick", 4)'), {job: ['craft', {item: 'stick', count: 4}]});
 assert.deepStrictEqual(tr('!stop'), {job: ['stop', {}]});
+assert.match(tr('!smeltItem("coal_ore", 5)').refuse, /gives coal/);
+assert.match(tr('!smeltItem("deepslate_iron_ore", 2)').refuse, /Smelt raw_iron instead/);
+assert.deepStrictEqual(tr('!smeltItem("raw_iron", 3)'), {job: ['smelt', {item: 'raw_iron', count: 3}]});
 assert.ok(tr('!newAction("build a house")').refuse, 'code writing is refused');
 assert.ok(tr('!attackPlayer("steve")').refuse, 'unknown commands are refused');
 assert.ok(translate(parseCommand('!putInChest("dirt", 1)'), {pos: null, supplyChest: null}).refuse);
@@ -86,3 +90,43 @@ assert.deepStrictEqual(asg('!assign("bot12", "!putInChest(\\"cobblestone\\", 5)"
 assert.strictEqual(workersText(W, st), 'YOUR WORKERS (use !assign)\n- bot12: idle\n- bot13: shift logs\n');
 assert.ok(commandDocs([], ['bot12']).includes('!assign:') && !commandDocs().includes('!assign'), 'assign is offered only with workers');
 console.log('ok');
+
+// decide() against a fake dashboard and model (global fetch): MC-4 regressions.
+(async () => {
+  const realFetch = globalThis.fetch;
+  const run = async ({replies, jobOk = true, budget = {take: () => true}}) => {
+    const calls = {model: 0, jobs: []};
+    globalThis.fetch = async (url, opt = {}) => {
+      const body = opt.body ? JSON.parse(opt.body) : null;
+      const reply = (code, obj) => ({ok: code < 400, status: code, json: async () => obj});
+      if (url.endsWith('/api/chat')) return reply(200, {message: {content: replies[Math.min(calls.model++, replies.length - 1)]}});
+      if (url.endsWith('/api/job')) {
+        calls.jobs.push(body.type);
+        return jobOk ? reply(200, {}) : reply(500, {error: 'dashboard down'});
+      }
+      return reply(404, {});
+    };
+    const agent = new Agent('bot1', 'mine coal', null);
+    Object.assign(agent, {wake: false});
+    const state = {bots: [{name: 'bot1', online: true, pos: [0, 64, 0], inventory: [], queue: [], job: {type: 'shift', label: 'shift coal_ore'}}], places: []};
+    await decide(agent, new Map([['bot1', agent]]), async () => state, budget);
+    return {agent, calls};
+  };
+  try {
+    for (const cmd of ['!afkHere', '!endGoal']) {
+      let {agent, calls} = await run({replies: [cmd], jobOk: false}); // Stop failed: stay awake, keep the goal
+      assert.deepStrictEqual(calls.jobs, ['stop'], cmd);
+      assert.ok(!agent.afk && agent.goal === 'mine coal' && agent.wake, `${cmd}: a failed Stop must not silence the agent`);
+      assert.match(agent.history.at(-1).content, /Stop failed/);
+      ({agent} = await run({replies: [cmd]})); // acknowledged Stop: now quiet
+      assert.ok(cmd === '!afkHere' ? agent.afk : agent.goal === '', cmd);
+    }
+    let takes = 0; // queries only: every model call after the first takes budget
+    const {calls} = await run({replies: ['!stats'], budget: {take: () => (takes++, true)}});
+    assert.strictEqual(calls.model, 5);
+    assert.strictEqual(takes, calls.model - 1, 'one budget token per extra model call');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  console.log('ok decide');
+})();

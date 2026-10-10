@@ -20,7 +20,7 @@ API=http://127.0.0.1:8097 AGENTS='bot11=Collect 16 cobblestone and put it in the
 ```
 
 Routines: `!startShift(type)` (logs or a block, into the base chest), `!guardHere(radius)` and
-`!afkHere` (stop, no more prompts until a message comes). A running `shift`, `guard` or `follow`
+`!afkHere` (stop, no more prompts until another agent writes; player chat does not wake it). A running `shift`, `guard` or `follow`
 never ends by itself; the agent loop only prompts a bot that has no job (or got a message), so a
 routine is never re-prompted. End one with `!stop`.
 
@@ -28,7 +28,7 @@ When the brain is asked (H2): only (1) after a job result (finished, failed, gav
 (2) after a death or respawn, (3) when a message arrived, and (4) every `CHECKIN_MS` (default 10
 min) while a routine runs or the bot idles. A bot that is busy with a plain job is not
 interrupted, and `!afkHere` silences it until a message. All agents together make at most
-`MAX_DECISIONS_PER_MIN` (default 12) decisions per minute; the rest wait for a later tick, longest
+`MAX_DECISIONS_PER_MIN` (default 12) model calls per minute (each query round of a decision counts); the rest wait for a later tick, longest
 waiting first. The agent prints `stats [botN] ... decisions (x/h), model time ...` every
 `STATS_MS` (default 10 min).
 
