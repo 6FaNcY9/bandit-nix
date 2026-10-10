@@ -33,6 +33,7 @@ in
   assert lib.assertMsg (lab.services.resolved.settings.Resolve.LLMNR == "false" && lab.services.resolved.settings.Resolve.MulticastDNS == "false") "LLMNR and mDNS must stay off on the server";
     pkgs.runCommand "lab-surface" {nativeBuildInputs = [pkgs.gnugrep pkgs.yq-go];} ''
       yq -e '.services.grafana.security_opt | any_c(. == "no-new-privileges:true")' ${../hosts/bandit-lab/services/monitoring/compose.yml} >/dev/null
+      yq -e '.services."blackbox-exporter".security_opt | any_c(. == "no-new-privileges:true")' ${../hosts/bandit-lab/services/monitoring/compose.yml} >/dev/null
       # Compose projects must not publish a bare host:container port either.
       for f in ${../hosts/bandit-lab/services/mrija-archive/compose.yml} ${../hosts/bandit-lab/services/monitoring/compose.yml}; do
         if grep -nE '^[[:space:]]*-[[:space:]]*"?(0\.0\.0\.0:|\[::\]:)?[0-9]{1,5}:[0-9]{1,5}' "$f"; then

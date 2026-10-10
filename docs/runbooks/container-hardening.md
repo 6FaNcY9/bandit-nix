@@ -50,6 +50,7 @@ supervised-maintenance procedure in `bandit-lab-updates.md`.
 | aiia-ghost | `no-new-privileges` | HTTP `http://127.0.0.1:2368/` inside its network namespace; expect a successful storefront response (follow redirects), then check `https://aiia.at/` through the normal route. |
 | aiia-redis | `no-new-privileges` | `sudo docker exec aiia-redis redis-cli ping` must return `PONG`; check Ghost still serves requests. |
 | grafana | `no-new-privileges` | HTTP `http://127.0.0.1:3000/api/health` inside its network namespace; require HTTP 200 and `database: ok`, then load a dashboard through its normal route. |
+| blackbox-exporter | `no-new-privileges` | HTTP `http://127.0.0.1:9115/metrics` inside its network namespace, then `/probe?module=http_origin&target=http://grafana:3000/api/health`; require `probe_success 1`. |
 
 For an HTTP probe from the host, use the container's network namespace so no
 port needs publishing (owner only; substitute the row's container and URL):
