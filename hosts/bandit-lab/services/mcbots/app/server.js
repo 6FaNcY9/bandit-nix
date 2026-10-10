@@ -228,13 +228,15 @@ const server = http.createServer(async (req, res) => {
   // bots (RemoteRunner) keep their chunks in the worker, and there is no RPC for them.
   if (req.method === 'GET' && url.pathname === '/api/voxels') {
     try {
-      const box = voxels.parseBox(Object.fromEntries(url.searchParams));
+      const surf = url.searchParams.get('mode') === 'surface';
+      const box = surf ? voxels.parseSurface(Object.fromEntries(url.searchParams)) : voxels.parseBox(Object.fromEntries(url.searchParams));
       const cx = (box.x1 + box.x2) / 2, cz = (box.z1 + box.z2) / 2;
       const near = [...runners.values()].filter((x) => !(x instanceof RemoteRunner) && x.online && x.bot?.entity && /overworld/.test(x.bot.game?.dimension || ''))
         .sort((a, b) => Math.hypot(a.bot.entity.position.x - cx, a.bot.entity.position.z - cz) - Math.hypot(b.bot.entity.position.x - cx, b.bot.entity.position.z - cz))[0];
       if (!near) return json(409, {error: 'no bot of the hub is online in the overworld to read blocks from (worker bots cannot be read)'});
       const {Vec3} = require('vec3'), p = new Vec3(0, 0, 0); // ponytail: synchronous, ~0.5 s for a full 600k box; chunk it if the event loop ever hurts
-      const out = voxels.collect(box, (x, y, z) => near.bot.blockAt(p.set(x, y, z), false)?.name ?? null);
+      const at = (x, y, z) => near.bot.blockAt(p.set(x, y, z), false)?.name ?? null;
+      const out = surf ? voxels.surface(box, at) : voxels.collect(box, at); // surface: <= 160 x 160 columns x ~60 reads, about a second
       return json(200, {box, bot: near.name, ...out});
     } catch (e) {
       return json(400, {error: e.message});

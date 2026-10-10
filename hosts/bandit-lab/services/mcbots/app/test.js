@@ -619,6 +619,13 @@ require('./crafting');
   // a fluid body shows only its surface; a block hidden by an unloaded neighbour is not "visible" through it
   const sea = V.collect({x1: 0, y1: 0, z1: 0, x2: 2, y2: 2, z2: 2}, (x, y) => (y < 2 ? 'water' : 'air'));
   assert.ok(sea.blocks.every((b) => b[1] === 1) && sea.blocks.length === 9);
+  // surroundings: the top visible block per column; plants skipped, water kept, unloaded columns skipped and counted
+  assert.deepStrictEqual(V.parseSurface({x1: '5', z1: 5, x2: 1, z2: 1}), {x1: 1, z1: 1, x2: 5, z2: 5});
+  assert.doesNotThrow(() => V.parseSurface({x1: 0, z1: 0, x2: 159, z2: 159}));
+  for (const bad of [{x1: 'a'}, {x1: 1.5}, {z2: ''}, {x2: 160}, {z2: 160}]) assert.throws(() => V.parseSurface({x1: 0, z1: 0, x2: 1, z2: 1, ...bad}), undefined, JSON.stringify(bad));
+  const sf = V.surface({x1: 0, z1: 0, x2: 3, z2: 0}, (x, y) => x === 3 ? null : x === 2 ? (y > 10 ? 'air' : 'water') : y > 20 ? 'air' : y === 20 ? 'short_grass' : y > 5 ? 'stone' : 'bedrock');
+  assert.deepStrictEqual(sf.cols.map((c) => [c[0], c[1], sf.names[c[3]]]), [[0, 19, 'stone'], [1, 19, 'stone'], [2, 10, 'water']]);
+  assert.strictEqual(sf.unloaded, 1);
 }
 (async () => {
   const {spawn} = require('node:child_process');

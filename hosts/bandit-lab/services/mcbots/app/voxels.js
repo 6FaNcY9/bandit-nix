@@ -51,4 +51,34 @@ function collect(box, nameAt) {
   return {names, blocks, unloaded};
 }
 
-module.exports = {MAX_SIDE, MAX_HIGH, MAX_CELLS, SEE, parseBox, collect};
+// Surroundings: one block per column (the first non-air, non-plant block from the top down; water counts, so a lake shows its
+// surface). Same query convention as parseBox, but x/z only and wider, since a column costs a few reads, not 200.
+const MAX_SURF = 160, SURF_TOP = 120, SURF_BOTTOM = -64;
+function parseSurface(q) {
+  const v = {};
+  for (const k of ['x1', 'z1', 'x2', 'z2']) {
+    const n = Number(q[k]);
+    if (q[k] === undefined || q[k] === null || q[k] === '' || !Number.isInteger(n) || Math.abs(n) > 3e7) throw new Error(`${k} must be a whole number`);
+    v[k] = n;
+  }
+  const box = {x1: Math.min(v.x1, v.x2), z1: Math.min(v.z1, v.z2), x2: Math.max(v.x1, v.x2), z2: Math.max(v.z1, v.z2)};
+  if (box.x2 - box.x1 + 1 > MAX_SURF || box.z2 - box.z1 + 1 > MAX_SURF) throw new Error(`surface too big: at most ${MAX_SURF} x ${MAX_SURF} columns`);
+  return box;
+}
+// Returns {names, cols: [[x,y,z,nameIndex]], unloaded} (`unloaded` counts columns whose chunk is missing; they are skipped).
+function surface(box, nameAt, top = SURF_TOP, bottom = SURF_BOTTOM) {
+  const names = [], index = new Map(), cols = [];
+  let unloaded = 0;
+  for (let x = box.x1; x <= box.x2; x++) for (let z = box.z1; z <= box.z2; z++) {
+    for (let y = top; y >= bottom; y--) {
+      const n = nameAt(x, y, z);
+      if (n === null || n === undefined) { unloaded++; break; }
+      if (NOT_DRAWN.test(n)) continue;
+      let i = index.get(n); if (i === undefined) { i = names.length; names.push(n); index.set(n, i); }
+      cols.push([x, y, z, i]); break;
+    }
+  }
+  return {names, cols, unloaded};
+}
+
+module.exports = {MAX_SIDE, MAX_HIGH, MAX_CELLS, MAX_SURF, SEE, parseBox, collect, parseSurface, surface};
