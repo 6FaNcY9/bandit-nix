@@ -742,12 +742,15 @@ const itemMatcher = (what) => (what === 'logs' ? (n) => n.endsWith('_log') : wha
 const SCAFFOLD = /^(dirt|grass_block|cobblestone|stone|netherrack)$/; // dirt turns into grass in the light
 async function openChest(r, job, block) {
   const {bot} = r;
-  const p = block.position.offset(0, 1, 0);
-  const above = bot.blockAt(p);
-  if (/chest/.test(block.name) && above && above.boundingBox === 'block') {
-    if (!SCAFFOLD.test(above.name) || insideAreas(r.protectedAreas, p.x, p.z)) throw new Error(`${block.name} at ${at(block.position)} is covered by ${above.name}`);
+  // A double chest stays shut when either half is covered.
+  const halves = [block, ...[[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dz]) => bot.blockAt(block.position.offset(dx, 0, dz))).filter((b) => b && b.name === block.name && b.getProperties?.().facing === block.getProperties?.().facing)];
+  for (const half of /chest/.test(block.name) ? halves : []) {
+    const p = half.position.offset(0, 1, 0);
+    const above = bot.blockAt(p);
+    if (!above || above.boundingBox !== 'block') continue;
+    if (!SCAFFOLD.test(above.name) || insideAreas(r.protectedAreas, p.x, p.z)) throw new Error(`${block.name} at ${at(half.position)} is covered by ${above.name}`);
     job.t.doing = `clearing ${above.name} off the chest`;
-    r.emit('info', `chest at ${at(block.position)} was covered by ${above.name}: digging it away`);
+    r.emit('info', `chest at ${at(half.position)} was covered by ${above.name}: digging it away`);
     await bot.dig(above, true);
   }
   return bot.openContainer(block);

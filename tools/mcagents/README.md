@@ -45,6 +45,17 @@ controlled by an agent and by the owner at the same time on purpose: to take ove
 remove it from `AGENTS` (or `!stop` it and give it no goal). A foreman gives scripted bots work
 with `!assign` (H4).
 
+Foreman (H4): `WORKERS=bot12,bot13,bot14` lists the scripted bots a brain may command (an agent in
+`AGENTS` is never a worker). `!assign("bot12", "!collectBlocks(\"cobblestone\", 32)")` translates the
+inner command like any other and sends it as that bot's job: only action commands (collect,
+startShift, putInChest, craft, goTo...), no queries, no nested `!assign`, no blueprints. A worker on a
+routine (shift, guard, follow) is replaced; a worker with a plain job gets the order queued. The
+foreman's prompt lists the workers and what they do, a worker's finished/failed/stopped result and
+deaths are fed back to the foreman that gave the order, and as long as another worker is idle the
+foreman is asked again at once (a shift never reports back). Live 2026-10-10 with the goal "fill the
+base chest with 32 cobblestone and 16 logs": it gave bot12 and bot14 a stone shift and bot13 a log
+shift within about a minute; after 13 min the shifts carried 778 + 351 cobblestone and 196 logs.
+
 Env: `MODEL` (default `andy-4.2`), `THINK=1` (reasoning on: about 20-30 s per decision with 4
 agents on one GPU instead of about 1 s), `LOG` (JSONL of every model call: prompt, thinking,
 reply; raw material for a later fine-tune), `BLUEPRINTS`.

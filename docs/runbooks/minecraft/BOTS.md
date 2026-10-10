@@ -104,6 +104,7 @@ granite, ore mined in 16 s.
 are saved to `STATE_DIR/jobs.json` (a mine/chop with what is left of its count) and queued again
 once each bot is back online after a restart or deploy (a bot away for more than 5 min starts
 empty). A shift whose bot is far from the chest (respawned at world spawn) walks back first.
+A **double chest** stays shut when either half is covered, so a bot checks both halves and digs away scaffold (dirt, stone, cobblestone) on top of the other half too (found live 2026-10-10: a covered second half gave `windowOpen did not fire` on every deposit).
 
 **Forests**: log jobs search 128 blocks and a log shift may work 128 blocks from its chest (64 for
 stone and ore); with nothing left the bot walks on to new ground. Where a log came off dirt or grass

@@ -19,6 +19,7 @@ const OLLAMA_URL = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
 const MODEL = process.env.MODEL || 'andy-4.2'; // Andy-4.2 (Mar 2026, Qwen3.5-9B), Andy 2.0 License
 const API = process.env.API || 'http://127.0.0.1:8097';
 const LOG = process.env.LOG || path.join(process.cwd(), 'mcagents.jsonl');
+const assigner = new Map(); // worker -> the agent that gave it its last order
 const BLUEPRINTS = process.env.BLUEPRINTS || path.join(__dirname, '../../hosts/bandit-lab/services/mcbots/blueprints');
 // Off by default: with 4 agents on one GPU, reasoning took 20-30 s per decision (live 2026-10-10)
 // and chose the same commands as the 0.6 s answers. THINK=1 turns it on.
@@ -36,8 +37,27 @@ const HISTORY = 24; // messages kept per agent
 const COMMAND_RE = /!(\w+)(?:\(([^)]*)\))?/;
 const ARG_RE = /-?\d+(?:\.\d+)?|true|false|"[^"]*"|'[^']*'/g;
 
+// !assign("bot2", "!collectBlocks(\"iron_ore\", 32)") carries a whole command, quotes and brackets
+// included, so it is cut by hand: the worker, then everything up to the line's last ")".
+function parseAssign(clean) {
+  const at = clean.indexOf('!assign(');
+  if (at < 0) return null;
+  const line = clean.slice(at + 8).split('\n')[0];
+  const w = line.match(/^\s*["']?(\w+)["']?\s*,\s*/);
+  const end = line.lastIndexOf(')');
+  if (!w || end < w[0].length) return null;
+  let inner = line.slice(w[0].length, end).trim();
+  if (/^["']/.test(inner)) {
+    inner = inner.slice(1);
+    if (/["']$/.test(inner)) inner = inner.slice(0, -1); // the closing quote of a quoted command
+  }
+  return {name: 'assign', args: [w[1], inner.replace(/\\"/g, '"').replace(/\\'/g, "'")]};
+}
+
 function parseCommand(text) {
   const clean = String(text).replace(/<think>[\s\S]*?<\/think>/g, '');
+  const assign = parseAssign(clean);
+  if (assign) return assign;
   const m = clean.match(COMMAND_RE);
   if (!m) return null;
   const args = (m[2] || '').match(ARG_RE) || [];
@@ -73,7 +93,9 @@ const DOCS = {
   endGoal: ['Call when you have accomplished your goal. It will stop self-prompting and the current action.', {}],
 };
 
-function commandDocs(blueprints = []) {
+const ASSIGN_DOC = ['Give one of your workers (a bot that cannot think) ONE command, for example !assign("bot12", "!collectBlocks(\\"cobblestone\\", 32)"). It reports back when done. Only action commands (collect, startShift, putInChest, craft, goTo...) work.', {bot_name: ['string', 'The worker to command.'], command: ['string', 'The command for the worker, in quotes.']}];
+
+function commandDocs(blueprints = [], workers = []) {
   let docs = '\n*COMMAND DOCS\n You can use the following commands to perform actions and get information about the world. \n    Use the commands with the syntax: !commandName or !commandName("arg1", 1.2, ...) if the command takes arguments.\n\n    Do not use codeblocks. Use double quotes for strings. Only use one command in each response, trailing commands and comments will be ignored.\n';
   for (const [name, [desc, params]] of Object.entries(DOCS)) {
     docs += `!${name}: ${desc}\n`;
@@ -82,6 +104,7 @@ function commandDocs(blueprints = []) {
       for (const [p, [type, d]] of Object.entries(params)) docs += `${p}: (${type}) ${d}\n`;
     }
   }
+  if (workers.length) docs += `!assign: ${ASSIGN_DOC[0]}\nParams:\nbot_name: (string) ${ASSIGN_DOC[1].bot_name[1]}\ncommand: (string) ${ASSIGN_DOC[1].command[1]}\nYour workers: ${workers.join(', ')}\n`;
   if (blueprints.length) docs += `Blueprints you can build: ${blueprints.join(', ')}\n`;
   return docs + '*\n';
 }
@@ -147,6 +170,7 @@ function translate(cmd, ctx) {
       if (!ctx.pos) return {refuse: 'Position unknown.'};
       return {job: ['guard', {x: ctx.pos[0], y: ctx.pos[1], z: ctx.pos[2], radius: Math.max(4, Math.min(n(a[0], 16), 48))}]};
     case 'afkHere': return {local: 'afkHere'};
+    case 'assign': return {local: 'assign'};
     case 'putInChest':
       if (!chest) return {refuse: 'There is no base chest yet.'};
       return {job: ['deposit', {...chest, only: String(a[0] ?? '')}]};
@@ -173,6 +197,27 @@ function translate(cmd, ctx) {
   }
 }
 
+// !assign(worker, command): the brain gives a scripted worker one job. Only bots in `workers` (never an
+// LLM agent) and only plain job commands (no queries, no !assign, no blueprints). -> {worker, job, replace} | {refuse}.
+function assignJob(cmd, workers, state, places = {}) {
+  const [name, text] = [String(cmd.args[0] ?? ''), String(cmd.args[1] ?? '')];
+  if (!workers.has(name)) return {refuse: `${name || 'That bot'} cannot be assigned. Your workers: ${[...workers].join(', ') || 'none'}.`};
+  const bot = state.bots.find((b) => b.name === name);
+  if (!bot?.online || bot.dead) return {refuse: `${name} is not available right now.`};
+  const inner = parseCommand(text);
+  if (!inner) return {refuse: 'The second argument must be a command, for example "!collectBlocks(\\"cobblestone\\", 32)".'};
+  const t = translate(inner, {pos: bot.pos, supplyChest: state.supplyChest, places});
+  if (t.refuse) return {refuse: t.refuse};
+  if (!t.job) return {refuse: `!${inner.name} cannot be assigned. Use an action command such as !collectBlocks or !startShift.`};
+  // A routine never ends, so a new order replaces it; a plain job finishes first and the order queues behind it.
+  return {worker: name, job: t.job, replace: isRoutine(bot.job)};
+}
+
+function workersText(workers, state) {
+  const lines = [...workers].map((w) => state.bots.find((b) => b.name === w)).filter((b) => b?.online).map((b) => `- ${b.name}: ${b.job ? b.job.label : 'idle'}`);
+  return lines.length ? `YOUR WORKERS (use !assign)\n${lines.join('\n')}\n` : '';
+}
+
 // ---- Mindcraft-style status texts ------------------------------------------------
 function statsText(bot, state) {
   const others = state.bots.filter((b) => b.name !== bot.name && b.online).map((b) => b.name);
@@ -197,12 +242,12 @@ function entitiesText(bot, state) {
 class Agent {
   constructor(name, goal, team) {
     Object.assign(this, {name, goal, team, history: [], inbox: [], places: {}, memory: '', lastCommand: '', failures: 0,
-      wake: true, wakeAt: 0, lastDecisionAt: 0, decisions: 0, modelMs: 0});
+      wake: true, wakeAt: 0, lastDecisionAt: 0, decisions: 0, modelMs: 0, workers: new Set()});
   }
 
   system(state, bot) {
     const self = this.goal ? `YOUR CURRENT ASSIGNED GOAL: "${this.goal}"` : '';
-    return `You are an AI Minecraft bot named ${this.name} that can converse with players, see, move, mine, build, and interact with the world by using commands.\n${self} Be a friendly, casual, effective, and efficient robot. Be very brief in your responses, don't apologize constantly, don't give instructions or make lists unless asked, and don't refuse requests. Don't pretend to act, use commands immediately when requested. Do NOT say this: 'Sure, I've stopped. *stops*', instead say this: 'Sure, I'll stop. !stop'. Respond only as ${this.name}, never output '(FROM OTHER BOT)' or pretend to be someone else. If you have nothing to say or do, respond with an just a tab '\t'. This is extremely important to me, take a deep breath and have fun :)\nSummarized memory:'${this.memory}'\n${statsText(bot, state)}\n${inventoryText(bot)}\n${commandDocs(blueprintNames())}\nConversation Begin:`;
+    return `You are an AI Minecraft bot named ${this.name} that can converse with players, see, move, mine, build, and interact with the world by using commands.\n${self} Be a friendly, casual, effective, and efficient robot. Be very brief in your responses, don't apologize constantly, don't give instructions or make lists unless asked, and don't refuse requests. Don't pretend to act, use commands immediately when requested. Do NOT say this: 'Sure, I've stopped. *stops*', instead say this: 'Sure, I'll stop. !stop'. Respond only as ${this.name}, never output '(FROM OTHER BOT)' or pretend to be someone else. If you have nothing to say or do, respond with an just a tab '\t'. This is extremely important to me, take a deep breath and have fun :)\nSummarized memory:'${this.memory}'\n${statsText(bot, state)}\n${inventoryText(bot)}\n${workersText(this.workers, state)}${commandDocs(blueprintNames(), [...this.workers])}\nConversation Begin:`;
   }
 
   push(role, content) {
@@ -247,8 +292,8 @@ async function think(agent, state, bot) {
   return text;
 }
 
-async function sendJob(name, type, args) {
-  return http('POST', `${API}/api/job`, {bots: [name], type, args, replace: false});
+async function sendJob(name, type, args, replace = false) {
+  return http('POST', `${API}/api/job`, {bots: [name], type, args, replace});
 }
 
 // One decision: let the model talk until it starts an action (or gives up after MAX_QUERIES).
@@ -270,7 +315,7 @@ async function decide(agent, agents, getState) {
     }
     if (t.query) {
       const q = {stats: () => statsText(bot, state), inventory: () => inventoryText(bot), entities: () => entitiesText(bot, state),
-        savedPlaces: () => `Saved place names: ${Object.keys(ctx.places).join(', ') || 'none'}`, help: () => commandDocs(blueprintNames())}[t.query];
+        savedPlaces: () => `Saved place names: ${Object.keys(ctx.places).join(', ') || 'none'}`, help: () => commandDocs(blueprintNames(), [...agent.workers])}[t.query];
       agent.push('system', q());
       continue;
     }
@@ -288,6 +333,27 @@ async function decide(agent, agents, getState) {
         return;
       }
       if (t.local === 'endConversation') return;
+      if (t.local === 'assign') {
+        const as = assignJob(cmd, agent.workers, state, ctx.places);
+        if (as.refuse) {
+          agent.push('system', as.refuse);
+          continue;
+        }
+        try {
+          await sendJob(as.worker, ...as.job, as.replace);
+        } catch (e) {
+          agent.push('system', `Code output: Assignment to ${as.worker} failed. ${e.message}`);
+          continue;
+        }
+        assigner.set(as.worker, agent.name);
+        // Idle workers left: ask again right away (a shift never reports back, so nothing else would wake the foreman).
+        if (state.bots.some((b) => b.name !== as.worker && agent.workers.has(b.name) && b.online && !b.dead && !b.job && !b.queue?.length && !assigner.has(b.name))) {
+          agent.wake = true;
+          agent.wakeAt ||= Date.now();
+        }
+        agent.push('system', `Assigned to ${as.worker}: ${as.job[0]} ${JSON.stringify(as.job[1])}. It reports back when done.`);
+        return;
+      }
       if (t.local === 'afkHere') {
         agent.afk = true; // no more prompts until a message comes
         await sendJob(agent.name, 'stop', {}).catch(() => {});
@@ -334,6 +400,8 @@ async function main() {
     const [name, goal = ''] = s.split('=');
     agents.set(name.trim(), new Agent(name.trim(), goal.trim(), null));
   }
+  const workers = new Set((process.env.WORKERS || '').split(',').map((w) => w.trim()).filter((w) => /^\w+$/.test(w) && !agents.has(w)));
+  for (const a of agents.values()) a.workers = workers;
   let lastEventId = (await http('GET', `${API}/api/events?since=0`)).lastId || 0;
   const getState = () => http('GET', `${API}/api/state`);
   const busy = new Set();
@@ -350,6 +418,12 @@ async function main() {
       const ev = await http('GET', `${API}/api/events?since=${lastEventId}`);
       lastEventId = ev.lastId;
       for (const e of ev.events) {
+        const boss = agents.get(assigner.get(e.bot));
+        if (boss && /^(finished|failed|gave up|stopped)/.test(e.text)) {
+          boss.push('system', `Worker ${e.bot}: ${e.text}`);
+          boss.wake = true;
+          boss.wakeAt ||= Date.now();
+        } else if (boss && (e.kind === 'death' || e.kind === 'respawn')) boss.push('system', `Worker ${e.bot}: ${e.text}`);
         const a = agents.get(e.bot);
         if (!a) continue;
         if (e.kind === 'death' || e.kind === 'respawn') {
@@ -401,4 +475,4 @@ if (require.main === module) main().catch((e) => {
   process.exit(1);
 });
 
-module.exports = {parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason};
+module.exports = {parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText};
