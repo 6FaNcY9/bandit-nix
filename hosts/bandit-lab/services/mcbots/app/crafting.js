@@ -31,6 +31,11 @@ async function arrived(test, ms = 3000) {
 
 const count = (bot, name) => bot.inventory.items().filter((i) => i.name === name).reduce((n, i) => n + i.count, 0);
 
+// Smelts per item of fuel: coal 8, logs/planks 1.5, stick 0.5.
+const burn = (f) => (/coal/.test(f) ? 8 : /log|planks/.test(f) ? 1.5 : 0.5);
+// The first fuel the bot has enough of for `n` smelts (not counting what it is about to smelt).
+const fuelFor = (bot, input, n) => FUELS.find((f) => count(bot, f) - (f === input ? n : 0) >= Math.ceil(n / burn(f)));
+
 function nearBlock(bot, name, maxDistance = 24) {
   const id = bot.registry.blocksByName[name]?.id;
   return id === undefined ? null : bot.findBlock({matching: id, maxDistance});
@@ -156,11 +161,8 @@ function makeCrafting({goNear, guard}) {
   async function smelt(r, job, input, n) {
     const {bot} = r;
     if (count(bot, input) < n) throw new Error(`need ${n} ${input}, have ${count(bot, input)}`);
-    // Burn time in items: coal 8, logs/planks 1.5, stick 0.5. Take the first
-    // fuel the bot has enough of (not counting what it is about to smelt).
-    const needOf = (f) => Math.ceil(n / (/coal/.test(f) ? 8 : /log|planks/.test(f) ? 1.5 : 0.5));
-    const spare = (f) => count(bot, f) - (f === input ? n : 0);
-    const fuel = FUELS.find((f) => spare(f) >= needOf(f));
+    const needOf = (f) => Math.ceil(n / burn(f));
+    const fuel = fuelFor(bot, input, n);
     if (!fuel) throw new Error(`not enough fuel to smelt ${n} (coal, charcoal, planks or logs)`);
     if (job.t) job.t.doing = `smelting ${n} ${input}`;
     const block = await station(r, job, 'furnace', 0);
@@ -204,4 +206,4 @@ function fixCraftTiming(bot) {
   });
 }
 
-module.exports = {makeCrafting, fixCraftTiming, FUELS, count};
+module.exports = {makeCrafting, fixCraftTiming, FUELS, count, fuelFor, nearBlock};

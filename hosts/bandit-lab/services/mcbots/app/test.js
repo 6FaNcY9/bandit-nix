@@ -62,6 +62,20 @@ assert.throws(() => loadConfig({BOT_NAMES: 'bot1', PROTECTED_AREAS: '1,2,3'}));
     assert.deepStrictEqual(before, {cobblestone: 4});
     assert.deepStrictEqual(B.shortfall(need, B.countHave([{name: 'cobblestone', count: 5 + before.cobblestone}])), {});
   }
+  {
+    // B4: what to gather, in which order
+    const rich = {furnace: true, wood: true, hasFuel: () => true};
+    assert.deepStrictEqual(B.gatherPlan({cobblestone: 9}, rich), {jobs: [['mine', {block: 'stone', count: 9}]], unknown: [], total: 9});
+    assert.deepStrictEqual(B.gatherPlan({dirt: 4}).jobs, [['mine', {block: 'dirt', count: 4}]]);
+    assert.deepStrictEqual(B.gatherPlan({stone: 9}, rich).jobs, [['mine', {block: 'stone', count: 9}], ['smelt', {item: 'cobblestone', count: 9}]], 'furnace and fuel at hand');
+    assert.deepStrictEqual(B.gatherPlan({stone: 9}, {furnace: false, wood: true, hasFuel: () => false}).jobs,
+      [['mine', {block: 'stone', count: 17}], ['mine', {block: 'coal_ore', count: 2}], ['smelt', {item: 'cobblestone', count: 9}]], '8 more stone for the furnace, coal for fuel');
+    assert.deepStrictEqual(B.gatherPlan({stone: 3}, {furnace: false, wood: false, hasFuel: () => true}).jobs.map((j) => j[0]), ['mine', 'chop', 'smelt'], 'a table needs a log');
+    assert.deepStrictEqual(B.gatherPlan({stone: 3}, {furnace: true, wood: false, hasFuel: () => true}).jobs.map((j) => j[0]), ['mine', 'smelt'], 'a furnace in reach needs no table');
+    assert.deepStrictEqual(B.gatherPlan({stone: 70}, rich).jobs.filter((j) => j[0] === 'smelt').map((j) => j[1].count), [64, 6], 'one furnace load at most');
+    assert.deepStrictEqual(B.gatherPlan({cobblestone: 5, stone: 4}, rich).jobs, [['mine', {block: 'stone', count: 9}], ['smelt', {item: 'cobblestone', count: 4}]], 'both mine stone: one job');
+    assert.deepStrictEqual(B.gatherPlan({cobblestone: 5, oak_planks: 2, glass: 1}, rich).unknown, ['2 oak_planks', '1 glass'], 'cannot gather yet');
+  }
   for (const [bad, re] of [
     [{...bp, blocks: [{x: 0, y: 0, z: 0, block: 'chest'}]}, /cannot be built/],
     [{...bp, blocks: [{x: 0, y: 0, z: 0, block: 'sand'}]}, /cannot be built/],
@@ -1209,6 +1223,47 @@ require('./crafting');
   f.r.bot.registry.itemsByName.dirt = {id: 2};
   await assert.rejects(run(f.r, async (r, j, item, n) => { calls.push([item, n]); f.items.push({name: item, count: n}); }, two, 1), /passed-check/);
   assert.strictEqual(calls.length, 1, 'a stop during the withdrawals prevents the next one');
+  // B4: what the chest lacks is gathered, once, in order; a stop ends it; the cap holds
+  {
+    const runs = [];
+    const gather = (f, after) => async (r, j, type, args) => {
+      runs.push([type, args.block || args.item, args.count]);
+      if (type === 'mine') f.items.push({name: 'cobblestone', count: args.count});
+      if (after) after(type, args);
+    };
+    // chest has 3, 6 are mined; the chest is asked first
+    calls.length = 0;
+    f = fake([]);
+    await assert.rejects(B.makeBuild({goNear: async () => {}, guard: () => { if (runs.length) throw new Error('passed-check'); }, sleep: async () => {}, goals: {}, digAt: async () => {},
+      withdraw: async (r, j, item, n) => { calls.push([item, n]); f.items.push({name: item, count: 3}); }, runJob: gather(f)})(f.r, {args: bpArgs(), t: {}}), /passed-check/);
+    assert.deepStrictEqual(calls, [['cobblestone', 9]]);
+    assert.deepStrictEqual(runs, [['mine', 'stone', 6]], 'only the rest is gathered');
+    // no chest at all: gathers the whole 9
+    runs.length = 0;
+    f = fake([], null);
+    await assert.rejects(B.makeBuild({goNear: async () => {}, guard: () => { if (runs.length) throw new Error('passed-check'); }, sleep: async () => {}, goals: {}, digAt: async () => {}, runJob: gather(f)})(f.r, {args: bpArgs(), t: {}}), /passed-check/);
+    assert.deepStrictEqual(runs, [['mine', 'stone', 9]]);
+    // something nobody can gather: refused before any job runs
+    runs.length = 0;
+    f = fake([]);
+    const planks = {origin: {x: 0, y: 64, z: 0}, blocks: [{x: 0, y: 0, z: 0, block: 'oak_planks'}, {x: 1, y: 0, z: 0, block: 'cobblestone'}]};
+    await assert.rejects(B.makeBuild({goNear: async () => {}, guard: () => {}, sleep: async () => {}, goals: {}, digAt: async () => {}, withdraw: async () => { throw new Error('no oak_planks in the chest'); }, runJob: gather(f)})(f.r, {args: planks, t: {}}), /cannot gather 1 oak_planks yet/);
+    assert.deepStrictEqual(runs, []);
+    // a stop between two gather jobs ends it
+    runs.length = 0;
+    f = fake([], null);
+    let ctxCalls = 0;
+    await assert.rejects(B.makeBuild({goNear: async () => {}, guard: () => { if (runs.length >= 1) throw new Error('stopped'); }, sleep: async () => {}, goals: {}, digAt: async () => {},
+      runJob: gather(f), gatherContext: () => { ctxCalls++; return {furnace: false, wood: true, hasFuel: () => true}; }})(f.r, {args: {...planks, blocks: [{x: 0, y: 0, z: 0, block: 'stone'}]}, t: {}}), /stopped/);
+    assert.strictEqual(runs.length, 1, 'the smelt after the mine never started');
+    assert.strictEqual(ctxCalls, 1);
+    // drops lost: a second round, then the 2x cap ends it (9 blocks: 9 + 9 gathered, a third round would pass 18)
+    runs.length = 0;
+    f = fake([], null);
+    await assert.rejects(B.makeBuild({goNear: async () => {}, guard: () => {}, sleep: async () => {}, goals: {}, digAt: async () => {}, runJob: async (r, j, type, args) => { runs.push([type, args.count]); }})(f.r, {args: bpArgs(), t: {}}),
+      /missing material: 9 cobblestone \(gathered 18, the limit is 18\)/);
+    assert.deepStrictEqual(runs, [['mine', 9], ['mine', 9]]);
+  }
   // build orchestration with a fake bot (MC-3): Stop, provenance, failed digs, no-progress deadline
   {
     const B = require('./build');

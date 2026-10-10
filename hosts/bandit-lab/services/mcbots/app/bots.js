@@ -1173,10 +1173,22 @@ async function chase(r, job, follow) {
   }
 }
 
-const crafting = require('./crafting').makeCrafting({goNear, guard});
+const craftingLib = require('./crafting');
+const crafting = craftingLib.makeCrafting({goNear, guard});
 // A build takes what it lacks from the supply chest (the withdraw job, with the chest's position).
 const buildWithdraw = (r, job, item, count) => JOBS.withdraw(r, child(job, {type: 'withdraw', args: {item, count, ...r.supplyChest}}));
-const build = buildJob.makeBuild({goNear, guard, sleep, goals, digAt, withdraw: buildWithdraw});
+// ... and gathers the rest itself (mine, chop, smelt jobs as children of the build).
+const buildRunJob = (r, job, type, args) => JOBS[type](r, child(job, {type, args}));
+const buildContext = (r) => {
+  const {bot} = r;
+  const held = (re) => bot.inventory.items().filter((i) => re.test(i.name)).reduce((n, i) => n + i.count, 0);
+  return {
+    furnace: !!craftingLib.nearBlock(bot, 'furnace'),
+    wood: held(/_log$/) >= 1 || held(/_planks$/) >= 4 || !!craftingLib.nearBlock(bot, 'crafting_table'),
+    hasFuel: (n) => !!craftingLib.fuelFor(bot, 'cobblestone', n),
+  };
+};
+const build = buildJob.makeBuild({goNear, guard, sleep, goals, digAt, withdraw: buildWithdraw, runJob: buildRunJob, gatherContext: buildContext});
 
 const JOBS = {
   goto: (r, job) => goNear(r, job, job.args.x, job.args.y, job.args.z, 1),

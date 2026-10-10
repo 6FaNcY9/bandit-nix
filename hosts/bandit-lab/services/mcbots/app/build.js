@@ -117,6 +117,44 @@ function countHave(items) {
   return have;
 }
 
+// What a bot can gather for itself: item -> (n, ctx) -> [[jobType, args]]. ctx (what the bot has
+// and what stands nearby): {furnace, wood, hasFuel(n)}. Logs and planks are left out on purpose:
+// `chop` takes any log type, so plank types would not match the blueprint.
+const GATHER = {
+  cobblestone: (n) => [['mine', {block: 'stone', count: n}]],
+  dirt: (n) => [['mine', {block: 'dirt', count: n}]],
+  // Stone is smelted cobblestone; the furnace (8 cobblestone, and a table from 1 log) and the
+  // fuel (coal from coal ore) are fetched only when the bot has neither.
+  stone: (n, ctx) => {
+    const jobs = [['mine', {block: 'stone', count: n + (ctx.furnace ? 0 : 8)}]];
+    if (!ctx.furnace && !ctx.wood) jobs.push(['chop', {count: 2}]);
+    if (!ctx.hasFuel?.(n)) jobs.push(['mine', {block: 'coal_ore', count: Math.ceil(n / 8)}]);
+    for (let left = n; left > 0; left -= 64) jobs.push(['smelt', {item: 'cobblestone', count: Math.min(left, 64)}]); // one furnace load
+    return jobs;
+  },
+};
+
+// {jobs: [[type, args]] in run order, unknown: ['2 oak_planks'], total: items asked for}.
+// Mining jobs for the same block are merged (cobblestone and stone both mine stone).
+function gatherPlan(missing, ctx = {}) {
+  const jobs = [];
+  const unknown = [];
+  let total = 0;
+  for (const [item, n] of Object.entries(missing)) {
+    if (!GATHER[item]) {
+      unknown.push(`${n} ${item}`);
+      continue;
+    }
+    total += n;
+    for (const [type, args] of GATHER[item](n, ctx)) {
+      const same = type === 'mine' && jobs.find((j) => j[0] === 'mine' && j[1].block === args.block);
+      if (same) same[1].count += args.count;
+      else jobs.push([type, {...args}]);
+    }
+  }
+  return {jobs, unknown, total};
+}
+
 const WAIT_MS = 60000; // no progress (blocks held by other bots, unreachable) for this long: give up
 const DIG_TRIES = 3; // remove mode: a block that will not come out is given up after this many digs
 
@@ -129,7 +167,7 @@ const recordOf = (dim, plan) => {
   return RECORDS.get(k);
 };
 
-function makeBuild({goNear, guard, sleep, goals, digAt, withdraw, waitMs = WAIT_MS}) {
+function makeBuild({goNear, guard, sleep, goals, digAt, withdraw, runJob, gatherContext = () => ({}), waitMs = WAIT_MS}) {
   return async function build(r, job) {
     const {bot} = r;
     const plan = validate(job.args, r.protectedAreas);
@@ -157,15 +195,18 @@ function makeBuild({goNear, guard, sleep, goals, digAt, withdraw, waitMs = WAIT_
       mv.exclusionAreasBreak.push(veto);
       mv.exclusionAreasPlace.push(veto);
       // Nor spend the build's material on scaffolding (it ate 6 cobblestone on one walk, 2026-10-10).
-      const wanted = new Set(plan.blocks.map((b) => bot.registry.itemsByName[b.block]?.id));
+      const names = new Set(plan.blocks.map((b) => b.block));
+      if (names.has('stone')) names.add('cobblestone'); // stone is smelted from it
+      const wanted = new Set([...names].map((n) => bot.registry.itemsByName[n]?.id));
       mv.scafoldingBlocks = scaffold.filter((id) => !wanted.has(id));
       if (!plan.remove) {
         const need = materials(plan, nameAt);
-        const missing = shortfall(need, countHave(bot.inventory.items()));
-        if (Object.keys(missing).length) {
-          if (!r.supplyChest) throw new Error(`missing material: ${formatShortfall(missing).join(', ')}`);
+        const lack = () => shortfall(need, countHave(bot.inventory.items()));
+        let missing = lack();
+        const hasMissing = () => Object.keys(missing).length > 0;
+        if (hasMissing() && r.supplyChest) {
           // Take exactly what is missing from the supply chest, item by item; an item the
-          // chest does not hold is not an error yet, the recount below decides.
+          // chest does not hold is not an error yet, the recount decides.
           for (const [item, count] of Object.entries(missing)) {
             guard(job);
             try {
@@ -176,8 +217,28 @@ function makeBuild({goNear, guard, sleep, goals, digAt, withdraw, waitMs = WAIT_
             }
           }
           guard(job);
-          const left = shortfall(need, countHave(bot.inventory.items()));
-          if (Object.keys(left).length) throw new Error(`missing material: ${formatShortfall(left).join(', ')} (not in the supply chest either)`);
+          missing = lack();
+        }
+        // Then gather the rest. A second round happens only if something got lost on the way
+        // (scaffolding, a drop nobody picked up); never gather more than twice the blueprint's size.
+        let gathered = 0;
+        while (hasMissing()) {
+          const g = gatherPlan(missing, gatherContext(r));
+          if (g.unknown.length) throw new Error(`cannot gather ${g.unknown.join(', ')} yet`);
+          if (!runJob || gathered + g.total > 2 * total) {
+            const why = gathered ? ` (gathered ${gathered}, the limit is ${2 * total})` : r.supplyChest ? ' (not in the supply chest either)' : '';
+            throw new Error(`missing material: ${formatShortfall(missing).join(', ')}${why}`);
+          }
+          gathered += g.total;
+          for (const [type, args] of g.jobs) {
+            guard(job);
+            const what = `${type} ${args.block || args.item || ''} x${args.count}`.replace('  ', ' ');
+            job.t.doing = `gathering for the build: ${what}`;
+            r.emit?.('info', `build gathers: ${what}`);
+            await runJob(r, job, type, args);
+          }
+          guard(job);
+          missing = lack();
         }
       }
       for (;;) {
@@ -260,4 +321,4 @@ function makeBuild({goNear, guard, sleep, goals, digAt, withdraw, waitMs = WAIT_
   };
 }
 
-module.exports = {validate, step, removeStep, materials, shortfall, formatShortfall, countHave, makeBuild, MAX_BLOCKS, PLANTS, RECORDS};
+module.exports = {validate, step, removeStep, materials, shortfall, formatShortfall, countHave, gatherPlan, GATHER, makeBuild, MAX_BLOCKS, PLANTS, RECORDS};

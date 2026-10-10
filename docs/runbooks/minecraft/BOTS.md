@@ -367,9 +367,23 @@ supply chest either)` if anything is still short (without a supply chest the mes
 suffix). Live on the local stage (bot6, chest at -116 77 9, pad at -121 77 9): 9 cobblestone in
 the chest, bot6 carrying none, `build` finished in 3 s including the withdrawal, chest 9 -> 0,
 9/9 cells placed, 9 claims granted, 0 refused, no pull-back; `remove` took 40 s and gave all 9 back;
-a second build with chest and bot empty failed with the message above. Not yet: the builder
-cannot gather what is missing (B4), several bots on one build live (claims are shared, untested),
-a dashboard form (API only).
+a second build with chest and bot empty failed with the message above (before B4). Not yet:
+several bots on one build live (claims are shared, untested), a dashboard form (API only).
+
+**B4 (2026-10-10): the builder gathers what is still missing.** After the chest, `build` gathers
+the rest itself with child jobs (`GATHER` in `build.js`; the event `build gathers: mine stone x9`
+marks each one): `cobblestone` = mine stone, `dirt` = mine dirt, `stone` = mine stone, then
+`smelt cobblestone` (8 more stone for a furnace and a `chop` of 2 logs for its table when neither
+is in reach, `coal_ore` for fuel when the bot carries none; one smelt per 64). Anything else
+(logs, planks, glass, ...) fails before any job runs with `cannot gather 2 oak_planks yet`. The
+job recounts afterwards; if drops were lost it gathers again, but never more than 2x the blueprint's
+block count in total (`missing material: ... (gathered 18, the limit is 18)`). Building `stone` also
+keeps cobblestone out of the pathfinder's scaffolding. Never in `remove` mode. Live on the local
+stage (bot6, no supply chest, no cobblestone carried, pad at -121 77 9): `build` ran `mine stone
+x9` and placed 9/9 in 23 s, 18 claims (9 dug, 9 placed), 0 refused; `remove` took 36 s and gave 9
+cobblestone back. Not live-tested: the `stone` path (furnace, coal, smelt) and `dirt`; they are
+unit-tested as a plan only. Limits: the mine job picks stone anywhere within its leash, so a
+build over ground the bot also mines can lose supporting blocks; one bot gathers sequentially.
 
 ```bash
 # blueprint relative to the origin; same-origin JSON, as for any job
