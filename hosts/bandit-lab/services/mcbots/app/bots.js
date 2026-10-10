@@ -1576,9 +1576,11 @@ const JOBS = {
     let left = 0, dug = 0;
     job.t.total = total;
     for (let y = y2; y >= y1; y--) {
-      for (let x = x1; x <= x2; x++) {
-        for (let z = z1; z <= z2; z++) {
+      for (let i = x1; i <= x2; i++) {
+        for (let j = z1; j <= z2; j++) {
           guard(job);
+          // reverse: start at the opposite corner, so two bots on one shaft meet only in the middle
+          const [x, z] = job.args.reverse ? [x1 + x2 - i, z1 + z2 - j] : [i, j];
           if (job.args.keep && x === job.args.keep.x && z === job.args.keep.z) continue; // a shaft's stair step
           const pos = new Vec3(x, y, z);
           const b = bot.blockAt(pos);
@@ -1612,6 +1614,8 @@ const JOBS = {
   async shaft(r, job) {
     const {x1, z1, x2, z2, top, bottom} = job.args;
     const ring = stairRing(x1, z1, x2, z2);
+    // ponytail: two directions by the name's char-code parity (bot17/bot18 differ); a third bot shares one.
+    const reverse = [...r.name].reduce((n, c) => n + c.charCodeAt(0), 0) % 2 === 1;
     let skipped = 0;
     job.t.total = top - bottom + 1;
     for (let y = top; y >= bottom; y--) {
@@ -1619,7 +1623,7 @@ const JOBS = {
       for (let pass = 1; ; pass++) {
         guard(job);
         try {
-          await JOBS.excavate(r, child(job, {type: 'excavate', args: {x1, y1: y, z1, x2, y2: y, z2, keep}}));
+          await JOBS.excavate(r, child(job, {type: 'excavate', args: {x1, y1: y, z1, x2, y2: y, z2, keep, reverse}}));
           break;
         } catch (e) {
           guard(job);

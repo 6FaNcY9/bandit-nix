@@ -2097,9 +2097,17 @@ require('./crafting');
       stopDigging() {},
     };
     const job = {t: {}, cancelled: false, type: 'shaft', args: VALIDATE.shaft({x1: 0, z1: 0, x2: 2, z2: 2, top: 60, bottom: 58})};
-    await JOBS.shaft({bot, world: {hostilesNear: () => [], claim: async () => true, release() {}}, emit() {}, protectedAreas: [], supplyChest: null, combat: null}, job);
+    const dug = [];
+    const dig0 = bot.dig;
+    bot.dig = async (b) => { dug.push(`${b.position.x},${b.position.z}`); return dig0(b); };
+    await JOBS.shaft({name: 'bot18', bot, world: {hostilesNear: () => [], claim: async () => true, release() {}}, emit() {}, protectedAreas: [], supplyChest: null, combat: null}, job);
+    assert.strictEqual(dug[0], '0,1', 'bot18 starts at the first corner (its step 0,0 stays)');
     assert.deepStrictEqual([...blocks.keys()].sort(), ['0,60,0', '1,59,0', '2,58,0'], 'one step left per layer, each one further along');
     assert.deepStrictEqual([job.t.done, job.t.total], [3, 3]);
+    for (let y = 58; y <= 60; y++) for (let x = 0; x <= 2; x++) for (let z = 0; z <= 2; z++) blocks.set(`${x},${y},${z}`, 'stone');
+    dug.length = 0;
+    await JOBS.shaft({name: 'bot17', bot, world: {hostilesNear: () => [], claim: async () => true, release() {}}, emit() {}, protectedAreas: [], supplyChest: null, combat: null}, {...job, t: {}});
+    assert.strictEqual(dug[0], '2,2', 'bot17 starts at the opposite corner');
   }
   { // digAt rechecks the block after every walk and equip: a Stop or a swapped block means no dig
     const {digAt, Cancelled} = require('./bots');
