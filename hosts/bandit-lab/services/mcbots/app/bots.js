@@ -558,6 +558,10 @@ function unwedge(bot) {
   });
 }
 
+// Blocks the pathfinder may place under itself to climb out of a shaft (the default
+// list is only dirt, cobblestone, netherrack); the first one a bot carries is used.
+const PILLAR_BLOCKS = ['cobblestone', 'cobbled_deepslate', 'dirt', 'netherrack', 'andesite', 'diorite', 'granite', 'tuff', 'stone', 'deepslate'];
+
 function safeMovements(bot, areas, runner = null) {
   const mv = new Movements(bot);
   // Bots speak 26.1 to a 26.2 server through ViaBackwards; sprinting, parkour
@@ -565,7 +569,9 @@ function safeMovements(bot, areas, runner = null) {
   // the bot back (277 corrections in 15 s vs 0 without them, 2026-10-08).
   mv.allowSprinting = false;
   mv.allowParkour = false;
+  mv.allow1by1towers = true;
   mv.getMoveDiagonal = () => {};
+  mv.scafoldingBlocks = PILLAR_BLOCKS.map((n) => bot.registry.itemsByName[n]?.id).filter((id) => id !== undefined);
   const inside = (blk) => insideAreas(areas, blk.position.x, blk.position.z);
   const veto = (blk) => (inside(blk) ? 100 : 0);
   const held = (blk) => (runner?.reserved?.(blk.position.x, blk.position.y, blk.position.z) ? 100 : 0);
@@ -1066,10 +1072,13 @@ const JUNK = new Set(['cobblestone', 'cobbled_deepslate', 'dirt', 'gravel', 'gra
 const jobWants = (job, item) => [job.args?.block, job.args?.item].some((n) => n && (n === item || (item === 'cobblestone' && n === 'stone')));
 async function tossJunk(r, job) {
   const {bot} = r;
-  let keptCobble = false;
+  // one stack of pillar material is kept: cobblestone first, else the first scaffold block carried
+  const held = bot.inventory.items().map((i) => i.name);
+  const keep = PILLAR_BLOCKS.find((n) => held.includes(n));
+  let kept = false;
   for (const it of bot.inventory.items()) {
     if (!JUNK.has(it.name) || jobWants(job, it.name)) continue;
-    if (it.name === 'cobblestone' && !keptCobble) { keptCobble = true; continue; }
+    if (it.name === keep && !kept) { kept = true; continue; }
     await bot.tossStack(it).catch(() => {});
     guard(job);
   }
@@ -1854,4 +1863,4 @@ const JOBS = {
   },
 };
 
-module.exports = {explore, layerOrder, stairRing, BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest, guardDigs, safeMovements, NATURAL, partnerOf, depositList};
+module.exports = {explore, layerOrder, stairRing, BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest, guardDigs, safeMovements, tossJunk, NATURAL, partnerOf, depositList};

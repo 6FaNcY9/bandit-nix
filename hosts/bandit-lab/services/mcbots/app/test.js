@@ -2208,6 +2208,14 @@ require('./crafting');
     assert.deepStrictEqual(layerOrder(0, 0, 2, 2, 3).slice(0, 4), [[2, 2], [1, 2], [2, 1], [1, 1]], 'growing squares from the corner');
     assert.deepStrictEqual(layerOrder(0, 0, 1, 1, -1), [[0, 0], [0, 1], [1, 0], [1, 1]], 'rooms row by row');
   }
+  { // junk toss keeps one pillar stack (cobbled_deepslate here), so the bot can climb out of a deep shaft
+    const {tossJunk} = require('./bots');
+    const tossed = [];
+    const inv = [{name: 'cobbled_deepslate', count: 64}, {name: 'andesite', count: 64}];
+    const r = {bot: {inventory: {items: () => inv}, tossStack: async (it) => { tossed.push(it.name); }}};
+    await tossJunk(r, {args: {}, cancelled: false});
+    assert.deepStrictEqual(tossed, ['andesite'], 'keeps cobbled_deepslate, tosses andesite');
+  }
   { // the floor under the supply chest and a running shaft's stair steps are never dug, by a job or a walk (Codex R4-3, R4-4)
     const {JOBS, VALIDATE, BotRunner, guardDigs, safeMovements, NATURAL} = require('./bots');
     const {Movements} = require('mineflayer-pathfinder');
