@@ -14,6 +14,7 @@ const {Keeper} = require('./keeper');
 const {botView} = require('./view');
 const {Settings} = require('./settings');
 const {Places} = require('./places');
+const agentauth = require('./agentauth');
 
 const cfg = loadConfig();
 const log = (who, msg) => console.log(`${new Date().toISOString()} [${who}] ${msg}`);
@@ -118,6 +119,7 @@ const jobsTimer = jobsFile ? setInterval(() => {
   saveJobs();
 }, 2000) : null;
 const authorized = (req) => !cfg.allowed.length || cfg.allowed.includes(req.headers['tailscale-user-login']);
+const agentTokenHash = cfg.agentToken ? agentauth.hash(cfg.agentToken) : null;
 // Cross-site guard: browsers send Origin on POST/WS; it must match Host.
 const sameOrigin = (req) => {
   const o = req.headers.origin;
@@ -174,8 +176,12 @@ const server = http.createServer(async (req, res) => {
     res.end(body);
   };
   const json = (code, obj) => send(code, 'application/json', JSON.stringify(obj));
-  if (!authorized(req)) return json(403, {error: 'forbidden'});
   const url = new URL(req.url, 'http://x');
+  // A request with a bearer is the agent service (H5) and nothing else: a wrong token never falls
+  // back to the human path, and the token only reaches state, events and its own bots' jobs.
+  const agent = agentauth.bearerMatches(req.headers.authorization, agentTokenHash);
+  if (agent === false || (agent && !agentauth.agentEndpoint(req.method, url.pathname))) return json(403, {error: 'forbidden'});
+  if (!agent && !authorized(req)) return json(403, {error: 'forbidden'});
   if (req.method === 'GET' && url.pathname === '/') return send(200, 'text/html; charset=utf-8', page);
   if (req.method === 'GET' && url.pathname === '/api/state') return json(200, state());
   if (req.method === 'GET' && url.pathname === '/api/events') return json(200, {lastId: events.lastId, events: events.since(Number(url.searchParams.get('since')) || 0)});
@@ -266,6 +272,8 @@ const server = http.createServer(async (req, res) => {
     if (!sameOrigin(req) || !String(req.headers['content-type']).startsWith('application/json')) return json(403, {error: 'bad origin'});
     try {
       const {bots, type, args, replace} = await readJson(req);
+      const refused = agent && agentauth.agentJobRefusal({bots, type, args}, {agentBots: cfg.agentBots, supplyChest});
+      if (refused) return json(403, {error: refused});
       // "all" skips remote bots whose worker is away, so a Stop reaches every
       // bot that can still hear it; naming an offline bot is an error.
       const all = bots === 'all';

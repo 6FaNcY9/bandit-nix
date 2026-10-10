@@ -16,6 +16,7 @@
     ./services/minecraft
     ./services/mcbots
     ./services/ollama
+    ./services/mcagents
     ./power.nix
     ./services/aiia
     ./services/auto-rebuild

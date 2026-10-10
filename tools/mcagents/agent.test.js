@@ -98,6 +98,7 @@ console.log('ok');
     const calls = {model: 0, jobs: []};
     globalThis.fetch = async (url, opt = {}) => {
       const body = opt.body ? JSON.parse(opt.body) : null;
+      if (url.includes('/api/chat')) assert.ok(!opt.headers?.Origin && !opt.headers?.Authorization, 'Ollama gets neither Origin nor a bearer');
       const reply = (code, obj) => ({ok: code < 400, status: code, json: async () => obj});
       if (url.endsWith('/api/chat')) return reply(200, {message: {content: replies[Math.min(calls.model++, replies.length - 1)]}});
       if (url.endsWith('/api/job')) {

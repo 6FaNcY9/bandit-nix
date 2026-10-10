@@ -63,6 +63,14 @@ function loadConfig(env = process.env) {
   if (!!workerToken !== !!workerPort) throw new Error('WORKER_PORT and WORKER_TOKEN (or WORKER_TOKEN_FILE) must be set together');
   if (workerPort && (!Number.isInteger(workerPort) || workerPort === Number(env.DASHBOARD_PORT || 8095))) throw new Error('WORKER_PORT must be a port other than the dashboard port');
   if (workerToken && !/^[\w-]{32,128}$/.test(workerToken)) throw new Error('worker token must be 32..128 characters of [A-Za-z0-9_-]');
+  // Agent service bearer (H5): may only drive AGENT_BOTS (agentauth.js); no token, no machine access.
+  const agentToken = readToken(env.AGENT_TOKEN, env.AGENT_TOKEN_FILE);
+  const agentBots = list(env.AGENT_BOTS);
+  if (agentToken && !/^[\w-]{32,128}$/.test(agentToken)) throw new Error('agent token must be 32..128 characters of [A-Za-z0-9_-]');
+  if (agentToken && agentToken === workerToken) throw new Error('the agent token must differ from the worker token');
+  if (!!agentToken !== !!agentBots.length) throw new Error('AGENT_TOKEN (or AGENT_TOKEN_FILE) and AGENT_BOTS must be set together');
+  const strangers = agentBots.filter((b) => !names.includes(b));
+  if (strangers.length) throw new Error(`AGENT_BOTS must be among BOT_NAMES: ${strangers.join(', ')}`);
   const host = env.DASHBOARD_HOST || '127.0.0.1';
   if (!allowed.length && host !== '127.0.0.1') {
     throw new Error('DASHBOARD_HOST other than 127.0.0.1 requires ALLOWED_TS_LOGINS');
@@ -81,6 +89,8 @@ function loadConfig(env = process.env) {
     loginSeed,
     bluemapUrl: bluemapUrl.replace(/\/+$/, ''),
     workerToken,
+    agentToken,
+    agentBots,
     workerPort,
     workerHost: env.WORKER_HOST || '127.0.0.1',
     hostLabel: (env.HOST_LABEL || require('node:os').hostname()).slice(0, 40),
@@ -93,7 +103,7 @@ function readToken(inline, file) {
   try {
     return require('node:fs').readFileSync(file, 'utf8').trim();
   } catch (e) {
-    throw new Error(`cannot read worker token file ${file}: ${e.code || e.message}`);
+    throw new Error(`cannot read token file ${file}: ${e.code || e.message}`);
   }
 }
 

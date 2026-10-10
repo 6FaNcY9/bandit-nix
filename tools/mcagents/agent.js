@@ -18,7 +18,10 @@ const path = require('node:path');
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
 const MODEL = process.env.MODEL || 'andy-4.2'; // Andy-4.2 (Mar 2026, Qwen3.5-9B), Andy 2.0 License
 const API = process.env.API || 'http://127.0.0.1:8097';
-const LOG = process.env.LOG || path.join(process.cwd(), 'mcagents.jsonl');
+const LOG = process.env.LOG ?? path.join(process.cwd(), 'mcagents.jsonl'); // LOG= (empty) logs no model calls
+// Dashboard bearer for the lab's agent service (H5): AGENT_TOKEN_FILE, or the systemd credential.
+const TOKEN_FILE = process.env.AGENT_TOKEN_FILE || (process.env.CREDENTIALS_DIRECTORY ? path.join(process.env.CREDENTIALS_DIRECTORY, 'dashboard-token') : '');
+const TOKEN = TOKEN_FILE ? fs.readFileSync(TOKEN_FILE, 'utf8').trim() : '';
 const assigner = new Map(); // worker -> the agent that gave it its last order
 const BLUEPRINTS = process.env.BLUEPRINTS || path.join(__dirname, '../../hosts/bandit-lab/services/mcbots/blueprints');
 // Off by default: with 4 agents on one GPU, reasoning took 20-30 s per decision (live 2026-10-10)
@@ -278,9 +281,12 @@ function blueprintNames() {
   }
 }
 
-// Origin only for the dashboard (its cross-site guard); Ollama refuses foreign origins with 403.
+// Origin and the bearer only go to the dashboard (its cross-site guard and the agent token);
+// Ollama refuses foreign origins with 403 and must never see the token.
 async function http(method, url, body) {
-  const res = await fetch(url, {method, headers: body ? {'Content-Type': 'application/json', ...(url.startsWith(API) ? {Origin: API} : {})} : {}, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(180000)});
+  const dash = url.startsWith(`${API}/`);
+  const headers = {...(body ? {'Content-Type': 'application/json'} : {}), ...(dash && body ? {Origin: new URL(API).origin} : {}), ...(dash && TOKEN ? {Authorization: `Bearer ${TOKEN}`} : {})};
+  const res = await fetch(url, {method, headers, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(dash ? 20000 : 180000)});
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
@@ -296,7 +302,7 @@ async function think(agent, state, bot) {
   if (!out.message) throw new Error(`model: ${out.error || 'no answer'}`);
   agent.modelMs += Date.now() - t0;
   const text = String(out.message.content || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-  fs.appendFileSync(LOG, JSON.stringify({t: new Date().toISOString(), agent: agent.name, ms: Date.now() - t0, messages, thinking: out.message.thinking || '', reply: text}) + '\n');
+  if (LOG) fs.appendFileSync(LOG, JSON.stringify({t: new Date().toISOString(), agent: agent.name, ms: Date.now() - t0, messages, thinking: out.message.thinking || '', reply: text}) + '\n');
   return text;
 }
 
