@@ -340,13 +340,16 @@ function logCall(line) {
   fs.appendFileSync(LOG, line);
 }
 
+// The model card's sampling for Andy-4.2 (Ollama's own defaults differ: top_k 40, top_p 0.9, repeat_penalty 1.1).
+const SAMPLING = {num_ctx: 8192, temperature: 0.6, top_k: 20, top_p: 0.95, min_p: 0, repeat_penalty: 1.0};
+
 async function think(agent, state, bot) {
   const t0 = Date.now();
   // Qwen-based models (Andy-4.2) allow one system message, first; later "system" lines
   // (job results, self-prompts) go in as user turns marked SYSTEM, as Mindcraft does for such models.
   const messages = [{role: 'system', content: agent.system(state, bot)},
     ...agent.history.map((m) => (m.role === 'system' ? {role: 'user', content: `SYSTEM: ${m.content}`} : m))];
-  const out = await http('POST', `${OLLAMA_URL}/api/chat`, {model: MODEL, messages, stream: false, think: THINK, options: {num_ctx: 8192, temperature: 0.6}});
+  const out = await http('POST', `${OLLAMA_URL}/api/chat`, {model: MODEL, messages, stream: false, think: THINK, options: SAMPLING});
   if (!out.message) throw new Error(`model: ${out.error || 'no answer'}`);
   agent.modelMs += Date.now() - t0;
   const text = String(out.message.content || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim();
