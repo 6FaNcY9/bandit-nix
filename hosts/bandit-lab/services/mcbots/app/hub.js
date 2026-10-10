@@ -113,6 +113,18 @@ function cleanPng(b64) {
   return buf.length > 8 && buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) ? buf : null;
 }
 
+// A worker's scan (scan.js): the text, plus the data when it is small. Both are shown to an agent's model, so they are bounded.
+function cleanScan(m) {
+  const text = typeof m?.text === 'string' ? m.text.slice(0, 400) : null;
+  if (text === null) return null;
+  let data = null;
+  try {
+    const j = JSON.stringify(m.data);
+    if (j && j.length <= 4000) data = JSON.parse(j);
+  } catch {}
+  return {text, data};
+}
+
 class RemoteRunner {
   constructor(name, now = Date.now) {
     this.name = name;
@@ -176,6 +188,28 @@ class RemoteRunner {
     if (!this.conn || this.now() - (this.viewAsked || 0) < 2000) return;
     this.viewAsked = this.now();
     this.conn.ws.send(JSON.stringify({t: 'view_req', bot: this.name}));
+  }
+
+  // The surroundings of a worker's bot (scan.js): ask, wait up to 2 s for the answer; an answer is reused for 2 s.
+  askScan(waitMs = 2000) {
+    if (!this.conn) return Promise.resolve(null);
+    if (this.scanned && this.now() - this.scanned.t < 2000) return Promise.resolve(this.scanned.v);
+    return new Promise((resolve) => {
+      if (!this.scanWait) {
+        this.scanWait = [];
+        this.scanTimer = setTimeout(() => this.gotScan(null), waitMs);
+        this.conn.ws.send(JSON.stringify({t: 'scan_req', bot: this.name}));
+      }
+      this.scanWait.push(resolve);
+    });
+  }
+
+  gotScan(v) {
+    clearTimeout(this.scanTimer);
+    if (v) this.scanned = {t: this.now(), v};
+    const waiting = this.scanWait || [];
+    this.scanWait = null;
+    for (const f of waiting) f(v);
   }
 
   enqueue(type, args = {}, {replace = false} = {}) {
@@ -350,6 +384,12 @@ class Hub {
         if (r && png) r.viewFrame = {t: this.now(), body: png};
         return;
       }
+      case 'scan': {
+        const r = this.owned(conn, m.bot);
+        const v = cleanScan(m);
+        if (r && v) r.gotScan(v);
+        return;
+      }
       default:
         // Unknown types are ignored so a newer worker can talk to an older hub.
     }
@@ -512,4 +552,4 @@ function createWorkerServer(hub) {
   return server;
 }
 
-module.exports = {workerToken, Hub, RemoteRunner, createWorkerServer, cleanSnapshot, cleanDebug, PROTOCOL, KEY_RE, FORGET_MS, cleanPng};
+module.exports = {workerToken, Hub, RemoteRunner, createWorkerServer, cleanSnapshot, cleanDebug, PROTOCOL, KEY_RE, FORGET_MS, cleanPng, cleanScan};

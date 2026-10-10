@@ -12,6 +12,7 @@ const {Hub, RemoteRunner, createWorkerServer} = require('./hub');
 const {EventLog} = require('./events');
 const {Keeper} = require('./keeper');
 const {botView} = require('./view');
+const {scanAround} = require('./scan');
 const {Alerts} = require('./alerts');
 const {Settings} = require('./settings');
 const {Places} = require('./places');
@@ -242,6 +243,18 @@ const server = http.createServer(async (req, res) => {
     }
     res.writeHead(200, {'Content-Type': 'image/png', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'});
     return res.end(r.viewFrame.body);
+  }
+  const sm = req.method === 'GET' && /^\/api\/scan\/(\w{1,16})$/.exec(url.pathname);
+  if (sm) {
+    if (agent && !cfg.agentBots.includes(sm[1])) return json(403, {error: 'not an agent bot'}); // the agent token reaches its own bots only
+    const r = runners.get(sm[1]);
+    if (!r || !r.online) return json(404, {error: 'offline or unknown bot'});
+    try {
+      const scan = r instanceof RemoteRunner ? await r.askScan() : r.bot?.entity ? scanAround(r.bot) : null;
+      return scan ? json(200, scan) : json(503, {error: 'no scan (the worker did not answer)'});
+    } catch (e) {
+      return json(500, {error: e.message});
+    }
   }
   const tm = req.method === 'GET' && cfg.bluemapUrl && TILE_RE.exec(url.pathname);
   if (tm) {

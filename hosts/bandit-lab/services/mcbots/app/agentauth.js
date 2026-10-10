@@ -5,7 +5,7 @@
 const crypto = require('node:crypto');
 
 const hash = (s) => crypto.createHash('sha256').update(String(s)).digest();
-const AGENT_JOBS = new Set(['stop', 'come', 'follow', 'goto', 'mine', 'chop', 'shift', 'guard', 'deposit', 'withdraw', 'stock', 'craft', 'smelt', 'place', 'build', 'excavate', 'shaft', 'level', 'hunt', 'bed', 'homebed', 'grave', 'treefarm']);
+const AGENT_JOBS = new Set(['stop', 'come', 'follow', 'goto', 'mine', 'chop', 'shift', 'guard', 'deposit', 'withdraw', 'stock', 'craft', 'smelt', 'place', 'build', 'excavate', 'shaft', 'level', 'hunt', 'bed', 'homebed', 'grave', 'treefarm', 'tidy']);
 const CHEST_JOBS = new Set(['deposit', 'withdraw', 'stock', 'shift']);
 
 // null: no bearer sent (human path); true/false: a bearer was sent and does / does not match.
@@ -15,7 +15,7 @@ function bearerMatches(header, tokenHash) {
   return !!(m && tokenHash && crypto.timingSafeEqual(hash(m[1]), tokenHash));
 }
 
-const agentEndpoint = (method, path) => (method === 'GET' && (path === '/api/state' || path === '/api/events')) || (method === 'POST' && (path === '/api/job' || path === '/api/decision' || path === '/api/agentstatus'));
+const agentEndpoint = (method, path) => (method === 'GET' && (path === '/api/state' || path === '/api/events' || path.startsWith('/api/scan/'))) || (method === 'POST' && (path === '/api/job' || path === '/api/decision' || path === '/api/agentstatus'));
 
 // The agent's self-description for the dashboard's Agents section: a cleaned status, or {error}.
 function agentStatus({agent, goal, workers, role}, {agentBots}) {

@@ -61,8 +61,13 @@ the bot stands; sheep are sheared when it has shears) and `!placeBed(x, y, z, fa
 bed from 3 wool of one colour and 3 planks if it holds none, places it with the foot at x y z and the head
 towards `facing`, and clicks or sleeps in it so the spawn point is there). A foreman may assign both.
 
+What is around (mcbots `GET /api/scan/<bot>`, see BOTS.md "Scan"): the prompt has one `Around you (...)` line for the
+agent's own bot (300 characters at most), a foreman also one `around:` line (120 characters) under each worker,
+and `!nearbyBlocks` returns the scan. `!collectDrops(radius)` (the `tidy` job around where the bot stands, then a
+deposit) is for workers and lone agents; a foreman assigns it. A missing scan is just left out.
+
 A foreman sees a short command list: `!assign`, `!baseStatus`, `!buildBlueprint`, `!digRoom`,
-`!huntAnimals`, `!placeBed`, `!setHomeBed`, `!placeBlockAt`, `!viewChest`, `!stats`, `!inventory`, `!goToCoordinates`, `!stop`, `!startConversation`
+`!huntAnimals`, `!placeBed`, `!setHomeBed`, `!placeBlockAt`, `!viewChest`, `!nearbyBlocks`, `!stats`, `!inventory`, `!goToCoordinates`, `!stop`, `!startConversation`
 (anything else is refused with a one-line hint; workers and agents without workers keep the full set). Its
 prompt carries one `BASE:` line (the base chest as last counted, lowest first, from `/api/state`
 `world.stock`, and which builds and rooms it saw finish), each worker's last result (`STUCK` after two

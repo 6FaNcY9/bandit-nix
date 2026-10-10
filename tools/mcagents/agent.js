@@ -74,6 +74,7 @@ const DOCS = {
   stats: ['Get your bot\'s location, health, hunger, and time of day.', {}],
   inventory: ['Get your bot\'s inventory.', {}],
   entities: ['Get the nearby players and entities.', {}],
+  nearbyBlocks: ['Get a text map of what is around you (10 blocks): ores, lava and water, drops, head room and ways out, chests, beds, furnaces, dropped items and hostile mobs. Offsets are dx,dy,dz from you (+x east, +y up, +z south).', {}],
   savedPlaces: ['List all saved locations.', {}],
   stop: ['Force stop all actions and commands that are currently executing.', {}],
   goToPlayer: ['Go to the given player.', {player_name: ['string', 'The name of the player to go to.'], closeness: ['number', 'How close to get to the player.']}],
@@ -81,6 +82,7 @@ const DOCS = {
   goToCoordinates: ['Go to the given x, y, z location.', {x: ['number', 'The x coordinate.'], y: ['number', 'The y coordinate.'], z: ['number', 'The z coordinate.'], closeness: ['number', 'How close to get to the location.']}],
   rememberHere: ['Save the current location with a given name.', {name: ['string', 'The name to remember the location as.']}],
   goToRememberedPlace: ['Go to a saved location.', {name: ['string', 'The name of the location to go to.']}],
+  collectDrops: ['Pick up the dropped items lying around you (within the radius, never in protected areas) and put them into the base chest.', {radius: ['number', 'How far around you to look (2-32).']}],
   collectBlocks: ['Collect the nearest blocks of a given type.', {type: ['string', 'The block type to collect.'], num: ['number', 'The number of blocks to collect.']}],
   startShift: ['Start a work shift: endlessly collect a block type (or logs) and put it in the base chest whenever the inventory fills. It never ends by itself; end it with !stop.', {type: ['string', 'The block type to collect, or logs.']}],
   guardHere: ['Stand guard where you are: fight every hostile within the radius. It never ends by itself; end it with !stop.', {radius: ['number', 'How far from here to guard (4-48).']}],
@@ -107,12 +109,12 @@ const DOCS = {
   endGoal: ['Call when you have accomplished your goal. It will stop self-prompting and the current action.', {}],
 };
 
-const ASSIGN_DOC = ['Give one of your workers (a bot that cannot think) ONE command, for example !assign("bot12", "!collectBlocks(\\"cobblestone\\", 32)"). It reports back when done. Commands a worker understands: !startShift("coal") (keeps collecting into the base chest; one of logs, cobblestone, coal, raw_iron, raw_gold), !collectBlocks("iron_ore", 32), !putInChest("coal", 20), !craftRecipe("stick", 4), !smeltItem("raw_iron", 8), !huntAnimals("sheep", 6), !tendTreeFarm(x1, z1, x2, z2) (plants and chops trees for wood until !stop), !placeBed(x, y, z, "north"), !setHomeBed, !digRoom(...), !digShaft(...), !mineLevel(16), !goToCoordinates(...).', {bot_name: ['string', 'The worker to command.'], command: ['string', 'The command for the worker, in quotes.']}];
+const ASSIGN_DOC = ['Give one of your workers (a bot that cannot think) ONE command, for example !assign("bot12", "!collectBlocks(\\"cobblestone\\", 32)"). It reports back when done. Commands a worker understands: !startShift("coal") (keeps collecting into the base chest; one of logs, cobblestone, coal, raw_iron, raw_gold), !collectBlocks("iron_ore", 32), !putInChest("coal", 20), !collectDrops(16) (picks up dropped items nearby and brings them to the base chest), !craftRecipe("stick", 4), !smeltItem("raw_iron", 8), !huntAnimals("sheep", 6), !tendTreeFarm(x1, z1, x2, z2) (plants and chops trees for wood until !stop), !placeBed(x, y, z, "north"), !setHomeBed, !digRoom(...), !digShaft(...), !mineLevel(16), !goToCoordinates(...).', {bot_name: ['string', 'The worker to command.'], command: ['string', 'The command for the worker, in quotes.']}];
 
 const BASE_DOC = ['Get the state of the base: each worker with its job and last result, what the base chest held when last counted, and what is already built or dug.', {}];
 
 // A foreman (an agent with workers) gets few commands: the workers do the gathering, crafting and smelting.
-const FOREMAN = new Set(['assign', 'baseStatus', 'buildBlueprint', 'digRoom', 'digShaft', 'huntAnimals', 'placeBed', 'setHomeBed', 'placeBlockAt', 'viewChest', 'stats', 'inventory', 'goToCoordinates', 'stop', 'startConversation']);
+const FOREMAN = new Set(['assign', 'baseStatus', 'buildBlueprint', 'digRoom', 'digShaft', 'huntAnimals', 'placeBed', 'setHomeBed', 'placeBlockAt', 'viewChest', 'nearbyBlocks', 'stats', 'inventory', 'goToCoordinates', 'stop', 'startConversation']);
 const GATHERING = new Set(['collectBlocks', 'collectBlock', 'startShift']);
 // Project jobs run until done; the owner decides who works on them (lab 2026-10-10: the lead pulled a worker off the shaft).
 const PROJECTS = {shaft: 'digging the shaft', level: 'mining a level of the shaft', excavate: 'digging a room', build: 'building', grave: 'collecting its grave', homebed: 'setting its bed', treefarm: 'tending the tree farm', rim: 'walling the shaft'};
@@ -195,7 +197,7 @@ function translate(cmd, ctx) {
   const chest = ctx.supplyChest;
   const n = (v, d) => (Number.isFinite(v) && v > 0 ? Math.min(Math.round(v), 2048) : d);
   switch (cmd.name) {
-    case 'stats': case 'inventory': case 'entities': case 'savedPlaces': case 'help':
+    case 'stats': case 'inventory': case 'entities': case 'savedPlaces': case 'help': case 'nearbyBlocks':
       return {query: cmd.name};
     case 'stop': case 'stay': return {job: ['stop', {}]};
     case 'goToPlayer': return {job: ['come', {player: String(a[0] ?? '')}]};
@@ -226,6 +228,8 @@ function translate(cmd, ctx) {
     case 'viewChest':
       if (!chest) return {refuse: 'There is no base chest yet.'};
       return {job: ['stock', {...chest}]};
+    case 'collectDrops': // around where the bot stands; without a position the job falls back to the base chest
+      return {job: ['tidy', {...(ctx.pos ? {x: ctx.pos[0], y: ctx.pos[1], z: ctx.pos[2]} : {}), radius: Math.max(2, Math.min(n(a[0], 16), 32))}]};
     case 'craftRecipe': case 'craftItem': return {job: ['craft', {item: itemOf(a[0]), count: Math.min(n(a[1], 1), 64)}]};
     case 'smeltItem': {
       // Andy-4.2 kept "smelting" the coal_ore it had just mined (live 2026-10-10): say what the ore gave.
@@ -349,13 +353,26 @@ const resting = (name, now = Date.now()) => {
 };
 const idleWorkers = (workers, state, now = Date.now()) => state.bots.filter((b) => workers.has(b.name) && b.online && !b.dead && !b.job && !b.queue?.length && !resting(b.name, now)).map((b) => b.name);
 
+// The scan text of a bot (mcbots scan.js), or '' when the dashboard has none. A bounded line in the prompt:
+// SCAN_MAX for the agent's own, WORKER_SCAN_MAX for each worker (num_ctx is 8192 tokens).
+const SCAN_MAX = 300, WORKER_SCAN_MAX = 120;
+const clip = (text, n) => (text.length > n ? `${text.slice(0, n - 1)}…` : text);
+async function fetchScan(name) {
+  try {
+    return clip(String((await http('GET', `${API}/api/scan/${name}`)).text || ''), SCAN_MAX);
+  } catch {
+    return '';
+  }
+}
+
 // Each worker with its job, its last result and, after two identical failures, a "stuck" note.
-function workersText(workers, state, last = new Map()) {
+function workersText(workers, state, last = new Map(), scans = new Map()) {
   const lines = [...workers].map((w) => state.bots.find((b) => b.name === w)).filter((b) => b?.online).map((b) => {
     const l = last.get(b.name);
     const p = b.job?.progress || '';
     const job = !isProject(b.job) ? b.job?.label : `${p.includes(': ') ? p.replace(': ', ', ') : [b.job.label, p].filter(Boolean).join(', ')} (project, keep)`;
-    return `- ${b.name}: ${job || 'idle'}${l ? ` (last: ${l.slice(0, 100)})` : ''}${resting(b.name) ? ' STUCK: failed twice the same way, give it a different job later' : ''}`;
+    const around = scans.get(b.name) ? `\n${clip(`  around: ${scans.get(b.name)}`, WORKER_SCAN_MAX)}` : '';
+    return `- ${b.name}: ${job || 'idle'}${l ? ` (last: ${l.slice(0, 100)})` : ''}${resting(b.name) ? ' STUCK: failed twice the same way, give it a different job later' : ''}${around}`;
   });
   return lines.length ? `YOUR WORKERS (use !assign)\n${lines.join('\n')}\n` : '';
 }
@@ -371,7 +388,7 @@ function baseLine(agent, state) {
   return `BASE: chest ${chest}. Already done: ${done.length ? done.join('; ') : 'nothing built or dug yet'}.\n`;
 }
 
-const baseStatusText = (agent, state) => `BASE STATUS\n${workersText(agent.workers, state, agent.last)}${baseLine(agent, state)}`;
+const baseStatusText = (agent, state) => `BASE STATUS\n${workersText(agent.workers, state, agent.last, agent.workerScans)}${baseLine(agent, state)}`;
 
 // A job's identity in the dashboard's label ("build at 1 2 3 22 blocks false", "excavate 1 2 3 7 8 9") and a
 // short name for the foreman. Same key from what we sent and from the "finished" event.
@@ -443,7 +460,7 @@ class Agent {
   constructor(name, goal, team) {
     Object.assign(this, {name, goal, team, history: [], inbox: [], places: {}, memory: '', lastCommand: '', failures: 0,
       wake: true, wakeAt: 0, lastDecisionAt: 0, decisions: 0, modelMs: 0, workers: new Set(),
-      sent: new Map(), done: new Set(), last: new Map(), talk: new Map()}); // sent/done: build and dig jobs by key; last: a worker's last result
+      sent: new Map(), done: new Set(), last: new Map(), talk: new Map(), around: '', workerScans: new Map()}); // sent/done: build and dig jobs by key; last: a worker's last result
   }
 
   // Mindcraft's prompt has an example answer "Sure, I'll stop. !stop"; Andy-4.2 copied it whenever it was
@@ -451,7 +468,7 @@ class Agent {
   system(state, bot) {
     const self = this.goal ? `YOUR CURRENT ASSIGNED GOAL: "${this.goal}"` : '';
     const rules = this.workers.size ? FOREMAN_RULES : WORKER_RULES;
-    return `You are an AI Minecraft bot named ${this.name} that can converse with players, see, move, mine, build, and interact with the world by using commands.\n${self} ${rules} Be a friendly, casual, effective, and efficient robot. Be very brief in your responses, don't apologize constantly, don't give instructions or make lists unless asked, and don't refuse requests. Don't pretend to act, use commands immediately when requested. Respond only as ${this.name}, never output '(FROM OTHER BOT)' or pretend to be someone else. If you have nothing to say or do, respond with an just a tab '\t'. This is extremely important to me, take a deep breath and have fun :)\nSummarized memory:'${this.memory}'\n${statsText(bot, state)}\n${inventoryText(bot)}\n${this.workers.size ? baseLine(this, state) : ''}${workersText(this.workers, state, this.last)}${commandDocs(blueprintNames(), [...this.workers])}\nConversation Begin:`;
+    return `You are an AI Minecraft bot named ${this.name} that can converse with players, see, move, mine, build, and interact with the world by using commands.\n${self} ${rules} Be a friendly, casual, effective, and efficient robot. Be very brief in your responses, don't apologize constantly, don't give instructions or make lists unless asked, and don't refuse requests. Don't pretend to act, use commands immediately when requested. Respond only as ${this.name}, never output '(FROM OTHER BOT)' or pretend to be someone else. If you have nothing to say or do, respond with an just a tab '\t'. This is extremely important to me, take a deep breath and have fun :)\nSummarized memory:'${this.memory}'\n${statsText(bot, state)}\n${inventoryText(bot)}\n${this.around ? `Around you (dx,dy,dz from you; +x east, +z south): ${this.around}\n` : ''}${this.workers.size ? baseLine(this, state) : ''}${workersText(this.workers, state, this.last, this.workerScans)}${commandDocs(blueprintNames(), [...this.workers])}\nConversation Begin:`;
   }
 
   // "bot3 put 64 cobblestone into the base chest": only the last three stay in the history.
@@ -580,6 +597,8 @@ async function decide(agent, agents, getState, budget) {
     const state = await getState();
     const bot = state.bots.find((b) => b.name === agent.name);
     if (!bot?.online) return;
+    agent.around = await fetchScan(agent.name);
+    if (round === 0 && agent.workers.size) agent.workerScans = new Map(await Promise.all(state.bots.filter((b) => agent.workers.has(b.name) && b.online).map(async (b) => [b.name, await fetchScan(b.name)])));
     while (!budget.take()) await new Promise((r) => setTimeout(r, 1000));
     const answer = await think(agent, state, bot);
     const reply = answer.text;
@@ -606,6 +625,7 @@ async function decide(agent, agents, getState, budget) {
     }
     if (t.query) {
       const q = {stats: () => statsText(bot, state), inventory: () => inventoryText(bot), entities: () => entitiesText(bot, state),
+        nearbyBlocks: () => `NEARBY_BLOCKS (offsets dx,dy,dz from you: +x east, +y up, +z south; N is -z)\n${agent.around || 'No scan available right now.'}\n`,
         savedPlaces: () => `Saved place names: ${Object.keys(ctx.places).join(', ') || 'none'}`, help: () => commandDocs(blueprintNames(), [...agent.workers])}[t.query];
       agent.push('system', q());
       continue;
@@ -853,4 +873,4 @@ if (require.main === module) main().catch((e) => {
   process.exit(1);
 });
 
-module.exports = {SAMPLING, decide, Agent, workersOf, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished, alreadyDone, callModel, healthy};
+module.exports = {SCAN_MAX, WORKER_SCAN_MAX, fetchScan, SAMPLING, decide, Agent, workersOf, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished, alreadyDone, callModel, healthy};

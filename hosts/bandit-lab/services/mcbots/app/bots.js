@@ -19,6 +19,7 @@ const gravesJob = require('./graves');
 const treeFarmJob = require('./treefarm');
 const homebedJob = require('./homebed');
 const levelJob = require('./level');
+const tidyJob = require('./tidy');
 
 const NAME_RE = /^bot[0-9]{1,2}$/; // BotGate's pattern (Velocity plugin)
 const LOGIN_GAP_MS = 4500; // Velocity rate-limits logins
@@ -31,7 +32,7 @@ const NATURAL = /^(stone|deepslate|dirt|grass_block|coarse_dirt|rooted_dirt|podz
 const KEEP_RE = /^(stick|[a-z_]+_planks|coal|charcoal|torch|crafting_table|furnace)$/;
 const FOOD_BELOW = 14; // fetch food from the supply chest when hungry and carrying none
 const FOOD_RETRY_MS = 600000; // an empty chest is not worth a walk every minute
-const RESUMABLE = new Set(['mine', 'chop', 'shift', 'goto', 'deposit', 'follow', 'come', 'guard', 'build', 'excavate', 'shaft', 'level', 'hunt', 'bed', 'homebed', 'treefarm']);
+const RESUMABLE = new Set(['mine', 'chop', 'shift', 'goto', 'deposit', 'follow', 'come', 'guard', 'build', 'excavate', 'shaft', 'level', 'hunt', 'bed', 'homebed', 'treefarm', 'tidy']);
 // Long jobs that survive a restart (see keptOf, saved by server.js, reported by workers).
 const KEEP = new Set(['shift', 'guard', 'mine', 'chop', 'build', 'excavate', 'shaft', 'level', 'hunt', 'homebed', 'treefarm']); // a resumed build/excavate skips what is done
 const MAX_INTERRUPTIONS = 3; // deaths/disconnects of one job before it is given up
@@ -82,6 +83,8 @@ const VALIDATE = {
     return {...xyz(a), ...(a.only ? {only: a.only} : {})};
   },
   rearm: xyz,
+  // Collect the dropped items within `radius` of x,y,z (default: the supply chest) and deposit them there.
+  tidy: (a) => ({...(a.x !== undefined ? xyz(a) : {}), radius: num(a.radius ?? 16, 2, 32, 'radius')}),
   grave: xyz, // where the bot died; AxGraves keeps the loot in a grave there
   craft: (a) => {
     if (!/^[a-z_]{1,48}$/.test(a.item || '')) throw new Error('item must be an item name like stone_pickaxe');
@@ -1493,6 +1496,8 @@ const {hunt, bed} = huntJob.makeHunt({goNear, guard, sleep, goals, waitCalm, cra
 
 const {homebed} = homebedJob.makeHomebed({goNear, guard, sleep, goals, crafting, run: buildRunJob, at, digAt, NATURAL});
 
+const tidy = tidyJob.makeTidy({goNear, guard, sleep, waitCalm, at, deposit: (r, job) => JOBS.deposit(r, child(job, {type: 'deposit', args: r.supplyChest}))});
+
 const {level} = levelJob.makeLevel({goNear, waitCalm, guard, sleep, digAt, upkeep, NATURAL, stairRing, at});
 
 const {treefarm} = treeFarmJob.makeTreeFarm({
@@ -1502,6 +1507,7 @@ const {treefarm} = treeFarmJob.makeTreeFarm({
 });
 
 const JOBS = {
+  tidy,
   grave,
   treefarm,
   homebed,

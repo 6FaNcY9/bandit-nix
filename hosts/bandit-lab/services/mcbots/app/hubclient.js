@@ -9,6 +9,7 @@ const {BotRunner, keptOf} = require('./bots');
 const {Settings} = require('./settings');
 const {PROTOCOL} = require('./hub');
 const {botView} = require('./view');
+const {scanAround} = require('./scan');
 
 const CLAIM_TIMEOUT_MS = 3000;
 const REPORT_MS = 1000;
@@ -239,6 +240,16 @@ class HubClient {
           this.send({t: 'view', bot: r.name, png: Buffer.from(png).toString('base64')});
         } catch (e) {
           this.log(r.name, `view failed: ${e.message}`);
+        }
+        return;
+      }
+      case 'scan_req': {
+        const r = this.runners.find((x) => x.name === m.bot);
+        if (!r?.online || !r.bot?.entity) return;
+        try {
+          this.send({t: 'scan', bot: r.name, ...scanAround(r.bot)});
+        } catch (e) {
+          this.log(r.name, `scan failed: ${e.message}`);
         }
         return;
       }

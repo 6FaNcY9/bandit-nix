@@ -2,7 +2,7 @@
 // node tools/mcagents/agent.test.js — the Mindcraft command translator.
 const assert = require('node:assert');
 process.env.LOG ||= require('node:path').join(require('node:os').tmpdir(), `mcagents-test-${process.pid}.jsonl`); // decide() logs every model call
-const {decide, Agent, workersOf, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished, alreadyDone, callModel} = require('./agent');
+const {decide, Agent, workersOf, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished, alreadyDone, callModel, SCAN_MAX, WORKER_SCAN_MAX} = require('./agent');
 const {modelRequest, modelReply} = require('./model-protocol');
 
 { // agent.js and replay.js share one wire mapping for both model APIs
@@ -195,7 +195,7 @@ assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}
 { // a foreman's command docs list only its few commands; workers and lone agents keep the full set
   const docs = commandDocs([], ['bot2']);
   const listed = [...docs.matchAll(/^!(\w+):/gm)].map((m) => m[1]).sort();
-  assert.deepStrictEqual(listed, ['assign', 'baseStatus', 'buildBlueprint', 'digRoom', 'digShaft', 'goToCoordinates', 'huntAnimals', 'inventory', 'placeBed', 'placeBlockAt', 'setHomeBed', 'startConversation', 'stats', 'stop', 'viewChest']);
+  assert.deepStrictEqual(listed, ['assign', 'baseStatus', 'buildBlueprint', 'digRoom', 'digShaft', 'goToCoordinates', 'huntAnimals', 'inventory', 'nearbyBlocks', 'placeBed', 'placeBlockAt', 'setHomeBed', 'startConversation', 'stats', 'stop', 'viewChest']);
   assert.ok([...commandDocs().matchAll(/^!(\w+):/gm)].length > 20 && commandDocs().includes('!collectBlocks:'), 'no workers: the full set');
   assert.deepStrictEqual(tr('!collectBlocks("stone", 3)'), {job: ['mine', {block: 'stone', count: 3}]}, 'translate() is unchanged for workers');
 }
@@ -393,9 +393,9 @@ assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}
       assert.strictEqual(fm.sent.size, 1);
       onEvent(new Map([['bot1', fm]]), {bot: 'bot1', kind: 'done', text: `finished: build at 1 64 1 ${bp.blocks.length} blocks false (12 s)`});
       assert.deepStrictEqual([...fm.done], ['built test-pad-3x3 at 1 64 1']);
-      const sent = jobs.length;
+      const sent = jobs.filter((u) => u.endsWith('/api/job')).length;
       await go();
-      assert.strictEqual(jobs.length, sent, 'no second build job');
+      assert.strictEqual(jobs.filter((u) => u.endsWith('/api/job')).length, sent, 'no second build job');
       assert.match(fm.history.at(-1).content, /^Refused: already done \(built test-pad-3x3 at 1 64 1\)/);
     }
     { // a completed room is refused for a worker assignment too (R3-4); failed, stopped and other rooms stay eligible
@@ -535,5 +535,71 @@ assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}
   } finally {
     globalThis.fetch = realFetch;
   }
+  await scanTests();
   console.log('ok decide');
 })();
+
+// scan (mcbots scan.js): the agent's prompt line, the workers' lines, !nearbyBlocks and !collectDrops.
+// Runs from the decide block above: both replace global fetch, so they must not overlap.
+async function scanTests() {
+  const scanText = 'lava(2,-1,0) water(0,-1,3)x2; drop E6; mobs zombie 7m creeper 12m; up 3 exits E,S,W; items 2 near(3,0,0) oak_log; furnace(-2,0,-2) chest(4,0,0) red_bed(-3,0,3); ores coal(-1,-1,0) iron(3,-2,1)';
+  assert.deepStrictEqual(tr('!nearbyBlocks'), {query: 'nearbyBlocks'});
+  assert.deepStrictEqual(tr('!collectDrops(24)'), {job: ['tidy', {x: 1, y: 64, z: 2, radius: 24}]});
+  assert.deepStrictEqual(tr('!collectDrops').job[1].radius, 16, 'default radius');
+  assert.deepStrictEqual([tr('!collectDrops(500)').job[1].radius, tr('!collectDrops(1)').job[1].radius], [32, 2], 'clamped to 2..32');
+  assert.deepStrictEqual(translate(parseCommand('!collectDrops(8)'), {pos: null, supplyChest: {x: 5, y: 64, z: 5}}), {job: ['tidy', {radius: 8}]}, 'no position: the job centres on the base chest');
+  const crew = new Set(['bot12']);
+  const crewState = {bots: [{name: 'bot12', online: true, pos: [40, 70, -3], job: null, queue: []}], supplyChest: {x: 5, y: 64, z: 5}};
+  assert.deepStrictEqual(assignJob(parseCommand('!assign("bot12", "!collectDrops(20)")'), crew, crewState).job, ['tidy', {x: 40, y: 70, z: -3, radius: 20}], 'a worker tidies around itself');
+  assert.ok(commandDocs([], ['bot2']).includes('!nearbyBlocks:') && !commandDocs([], ['bot2']).includes('!collectDrops:'), 'a foreman scans, workers collect drops');
+  assert.ok(commandDocs().includes('!collectDrops:') && commandDocs([], ['bot2']).includes('!collectDrops(16)'), 'lone agents get the command, the assign doc names it');
+
+  // workersText: one short "around" line per worker, never more than WORKER_SCAN_MAX characters
+  const lines = workersText(new Set(['bot12', 'bot13']), {bots: [{name: 'bot12', online: true, job: null}, {name: 'bot13', online: true, job: null}]}, new Map(), new Map([['bot12', scanText], ['bot13', '']])).split('\n');
+  assert.deepStrictEqual(lines.slice(0, 3).map((l) => l.slice(0, 20)), ['YOUR WORKERS (use !a', '- bot12: idle', '  around: lava(2,-1,']);
+  assert.ok(lines[2].length === WORKER_SCAN_MAX && lines[2].endsWith('…'), `${lines[2].length}`);
+  assert.strictEqual(lines[3], '- bot13: idle', 'no scan, no line');
+
+  // decide(): the model sees "Around you" for the agent and one line per worker; the prompt stays small
+  {
+    const realFetch = globalThis.fetch;
+    const prompts = [];
+    const scans = {bot1: scanText.repeat(3), bot2: scanText, bot3: scanText};
+    globalThis.fetch = async (url, opt = {}) => {
+      const reply = (code, obj) => ({ok: code < 400, status: code, json: async () => obj});
+      const m = /\/api\/scan\/(\w+)$/.exec(url);
+      if (m) return scans[m[1]] ? reply(200, {text: scans[m[1]], data: {}}) : reply(404, {error: 'offline'});
+      if (url.endsWith('/api/chat')) {
+        const body = JSON.parse(opt.body);
+        prompts.push(body.messages);
+        return reply(200, {message: {content: prompts.length === 1 ? '!nearbyBlocks' : '!stop'}});
+      }
+      return reply(200, {ok: true});
+    };
+    try {
+      const agent = new Agent('bot1', 'gather wood', null);
+      agent.workers = new Set(['bot2', 'bot3', 'bot4']);
+      const mk = (name) => ({name, online: true, pos: [0, 64, 0], inventory: [], queue: [], job: null});
+      const state = {bots: ['bot1', 'bot2', 'bot3', 'bot4'].map(mk), places: [], supplyChest: {x: 5, y: 64, z: 5}};
+      await decide(agent, new Map([['bot1', agent]]), async () => state, {take: () => true});
+      const first = prompts[0][0].content;
+      assert.ok(first.includes(`Around you (dx,dy,dz from you; +x east, +z south): ${scanText.repeat(3).slice(0, SCAN_MAX - 1)}…\n`), 'own scan, capped at SCAN_MAX');
+      assert.strictEqual((first.match(/\n {2}around: /g) || []).length, 2, 'a line for each worker with a scan (bot4 has none)');
+      const second = prompts[1].map((m) => m.content).join('\n');
+      assert.ok(second.includes('NEARBY_BLOCKS (offsets dx,dy,dz from you') && second.includes('lava(2,-1,0)'), 'the query answers with the scan');
+      // size: with 12 workers each with a full scan, the scans add at most SCAN_MAX + 12 * WORKER_SCAN_MAX + legend characters
+      for (let i = 5; i < 15; i++) { agent.workers.add(`bot${i}`); state.bots.push(mk(`bot${i}`)); scans[`bot${i}`] = scanText; }
+      scans.bot4 = scanText;
+      agent.around = '';
+      const base = agent.system(state, state.bots[0]).length;
+      agent.around = 'x'.repeat(SCAN_MAX);
+      agent.workerScans = new Map([...agent.workers].map((w) => [w, scanText]));
+      const added = agent.system(state, state.bots[0]).length - base;
+      assert.ok(added <= SCAN_MAX + 12 * (WORKER_SCAN_MAX + 1) + 70, `scans add ${added} characters`);
+      assert.ok(agent.system(state, state.bots[0]).length < 3 * 8192 - 4096, `a foreman prompt of ${agent.system(state, state.bots[0]).length} characters leaves room in num_ctx 8192`);
+      console.log('ok scan');
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  }
+}
