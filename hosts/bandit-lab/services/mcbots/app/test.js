@@ -274,6 +274,12 @@ require('./crafting');
   assert.notStrictEqual(mv.getBlock({x: 1, y: 2, z: 3}, 0, 1, 0), a, 'expired');
   assert.strictEqual(calls, 3);
   assert.strictEqual(mv.getBlock(null, 0, 0, 0).n, 4, 'no position: not cached');
+  let ver = 0; // a block update inside the window: the next ask is fresh (air -> water must not be cached)
+  const mv2 = cacheGetBlock({getBlock: () => ({n: ++calls})}, () => t, () => ver);
+  const b = mv2.getBlock({x: 1, y: 2, z: 3}, 0, 0, 0);
+  assert.strictEqual(mv2.getBlock({x: 1, y: 2, z: 3}, 0, 0, 0), b);
+  ver++;
+  assert.notStrictEqual(mv2.getBlock({x: 1, y: 2, z: 3}, 0, 0, 0), b, 'block update empties the cache');
 }
 // Paper refuses a position whose box touches a block face exactly, so every
 // horizontal collision must end a hair short (physicsfix.js).
@@ -1312,6 +1318,33 @@ require('./crafting');
     const t0 = Date.now();
     await assert.rejects(h.build(h.r, h.job), /no progress/);
     assert.ok(Date.now() - t0 < 2000);
+  }
+  { // openChest: a Stop between two covers digs no more and opens nothing; a single chest has no partner
+    const {openChest, Cancelled} = require('./bots');
+    const {Vec3} = require('vec3');
+    const run = (types) => {
+      const blocks = new Map([['0,64,0', ['chest', types[0]]], ['1,64,0', ['chest', types[1]]], ['0,65,0', ['cobblestone']], ['1,65,0', ['cobblestone']]]);
+      const job = {t: {}, cancelled: false};
+      const log = {digs: 0, opened: 0};
+      const bot = {
+        blockAt: (p) => {
+          const b = blocks.get(`${p.x},${p.y},${p.z}`);
+          return b ? {name: b[0], position: p, boundingBox: 'block', getProperties: () => (b[1] ? {facing: 'north', type: b[1]} : {})} : null;
+        },
+        entity: {position: new Vec3(0, 64, 3), onGround: true}, game: {dimension: 'overworld'}, entities: {}, inventory: {items: () => [{type: 1, name: 'stone_pickaxe'}]},
+        pathfinder: {goto: async () => {}, stop() {}, setGoal() {}}, tool: {equipForBlock: async () => {}},
+        dig: async (blk) => { log.digs++; blocks.delete(`${blk.position.x},${blk.position.y},${blk.position.z}`); job.cancelled = true; },
+        openContainer: async () => { log.opened++; }, stopDigging() {},
+      };
+      const r = {bot, world: {hostilesNear: () => []}, emit() {}, protectedAreas: []};
+      return {go: () => openChest(r, job, bot.blockAt(new Vec3(0, 64, 0))), log};
+    };
+    let x = run(['left', 'right']);
+    await assert.rejects(x.go(), Cancelled);
+    assert.deepStrictEqual(x.log, {digs: 1, opened: 0}, 'Stop after the first cover');
+    x = run(['single', 'single']);
+    await assert.rejects(x.go(), Cancelled); // its own cover is dug (and the Stop then holds) ...
+    assert.strictEqual(x.log.digs, 1, '... but never the single neighbour\'s');
   }
   { // digAt rechecks the block after every walk and equip: a Stop or a swapped block means no dig
     const {digAt, Cancelled} = require('./bots');

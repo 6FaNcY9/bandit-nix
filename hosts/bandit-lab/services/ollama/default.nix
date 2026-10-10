@@ -17,7 +17,9 @@ in {
   virtualisation.oci-containers.containers.ollama = {
     image = "ollama/ollama@sha256:da6e0dc5651df159e45686fd663c4dbe1624a52c44d7280eeac1551d8f865532"; # 0.34.2
     ports = ["127.0.0.1:11434:11434"];
-    volumes = ["/srv/ollama:/root/.ollama"];
+    # The import staging directory is the host's and read-only here: the root
+    # import unit below must never follow links the container could plant.
+    volumes = ["/srv/ollama:/root/.ollama" "/var/lib/ollama-import:/import:ro"];
     environment = {
       OLLAMA_NUM_PARALLEL = "4";
       OLLAMA_KEEP_ALIVE = "30m";
@@ -25,7 +27,10 @@ in {
     extraOptions = ["--device=nvidia.com/gpu=all" "--security-opt=no-new-privileges"];
   };
 
-  systemd.tmpfiles.rules = ["d /srv/ollama 0700 root root -"];
+  systemd.tmpfiles.rules = [
+    "d /srv/ollama 0700 root root -"
+    "d /var/lib/ollama-import 0700 root root -"
+  ];
 
   systemd.services.docker-ollama = {
     after = ["nvidia-container-toolkit-cdi-generator.service"];
@@ -50,12 +55,12 @@ in {
       set -euo pipefail
       for _ in $(seq 60); do docker exec ollama ollama list >/dev/null 2>&1 && break; sleep 2; done
       if docker exec ollama ollama list | grep -q '^andy-4.2:'; then exit 0; fi
-      d=/srv/ollama/import
-      mkdir -p "$d"
+      d=/var/lib/ollama-import # host-only; the container sees it read-only as /import
+      rm -f "$d/andy.gguf" "$d/Modelfile"
       curl -fL --retry 3 -o "$d/andy.gguf" ${model.url}
       echo "${model.sha256}  $d/andy.gguf" | sha256sum -c
-      printf 'FROM /root/.ollama/import/andy.gguf\nPARAMETER temperature 0.6\nPARAMETER num_ctx 8192\n' > "$d/Modelfile"
-      docker exec ollama ollama create andy-4.2 -f /root/.ollama/import/Modelfile
+      printf 'FROM /import/andy.gguf\nPARAMETER temperature 0.6\nPARAMETER num_ctx 8192\n' > "$d/Modelfile"
+      docker exec ollama ollama create andy-4.2 -f /import/Modelfile
       rm -f "$d/andy.gguf" # Ollama copied it into its blob store
     '';
   };

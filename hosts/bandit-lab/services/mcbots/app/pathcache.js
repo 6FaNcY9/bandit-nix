@@ -2,19 +2,24 @@
 // The pathfinder asks for the same block dozens of times per search (every move type looks at the
 // same neighbours) and each ask builds a new Block (prismarine-block fromStateId, Biome, block entity):
 // 40 % of all CPU with four working bots (profile 2026-10-10). Within one window the answer is the
-// same object. The window is short so a changed block is seen by the next search tick.
+// same object. The window is short so a changed block is seen by the next search tick, and any block
+// update (version() changes) empties it at once: the pathfinder digs by itself and reads fluid safety from
+// here, so air that just became water must never come from the cache (Codex review, 2026-10-10).
 const WINDOW_MS = 100;
 
-function cacheGetBlock(mv, now = Date.now) {
+function cacheGetBlock(mv, now = Date.now, version = () => 0) {
   const orig = mv.getBlock.bind(mv);
   let cache = new Map();
   let since = 0;
+  let seen = version();
   mv.getBlock = (pos, dx, dy, dz) => {
     if (!pos) return orig(pos, dx, dy, dz);
     const t = now();
-    if (t - since > WINDOW_MS) {
+    const v = version();
+    if (t - since > WINDOW_MS || v !== seen) {
       cache = new Map();
       since = t;
+      seen = v;
     }
     // A number key (20 bits x, 20 bits z, 12 bits y): a template string per call cost as much as it saved.
     // A search is local, so coordinates a million blocks apart never share a window.

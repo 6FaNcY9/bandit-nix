@@ -144,10 +144,10 @@ console.log('ok');
       await decide(agent, new Map([['bot1', agent]]), async () => state, {take: () => true});
       assert.strictEqual(sent.replace, false, 'a plain job finishes first');
     }
-    let takes = 0; // queries only: every model call after the first takes budget
+    let takes = 0; // queries only: every model call takes budget
     const {calls} = await run({replies: ['!stats'], budget: {take: () => (takes++, true)}});
     assert.strictEqual(calls.model, 5);
-    assert.strictEqual(takes, calls.model - 1, 'one budget token per extra model call');
+    assert.strictEqual(takes, calls.model, 'one budget token per model call, the first included');
   } finally {
     globalThis.fetch = realFetch;
   }

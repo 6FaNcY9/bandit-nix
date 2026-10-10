@@ -505,7 +505,13 @@ function safeMovements(bot, areas) {
   const veto = (blk) => (inside(blk) ? 100 : 0);
   mv.exclusionAreasBreak = [veto];
   mv.exclusionAreasPlace = [veto];
-  return cacheGetBlock(mv);
+  // Every block change counts up, so the path cache never answers from before it.
+  if (bot.blockVersion === undefined) {
+    bot.blockVersion = 0;
+    bot.on('blockUpdate', () => bot.blockVersion++);
+    bot.on('chunkColumnLoad', () => bot.blockVersion++);
+  }
+  return cacheGetBlock(mv, Date.now, () => bot.blockVersion);
 }
 
 // ---- job implementations: (runner, job) => Promise; throw on failure ----
@@ -756,17 +762,25 @@ const itemMatcher = (what) => (what === 'logs' ? (n) => n.endsWith('_log') : wha
 const SCAFFOLD = /^(dirt|grass_block|cobblestone|stone|netherrack)$/; // dirt turns into grass in the light
 async function openChest(r, job, block) {
   const {bot} = r;
-  // A double chest stays shut when either half is covered.
-  const halves = [block, ...[[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dz]) => bot.blockAt(block.position.offset(dx, 0, dz))).filter((b) => b && b.name === block.name && b.getProperties?.().facing === block.getProperties?.().facing)];
-  for (const half of /chest/.test(block.name) ? halves : []) {
+  // A double chest stays shut when either half is covered. Its partner is the neighbour that faces the
+  // same way and has the other `type` (left/right); a single chest beside it is not one (Codex review).
+  const props = block.getProperties?.() || {};
+  const partner = props.type === 'left' || props.type === 'right' ? [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dz]) => bot.blockAt(block.position.offset(dx, 0, dz))).find((b) => {
+    const q = b?.name === block.name && b.getProperties?.();
+    return q && q.facing === props.facing && q.type !== 'single' && q.type !== props.type;
+  }) : null;
+  for (const half of /chest/.test(block.name) ? [block, partner].filter(Boolean) : []) {
+    guard(job); // a Stop between the covers digs nothing more
     const p = half.position.offset(0, 1, 0);
     const above = bot.blockAt(p);
     if (!above || above.boundingBox !== 'block') continue;
     if (!SCAFFOLD.test(above.name) || insideAreas(r.protectedAreas, p.x, p.z)) throw new Error(`${block.name} at ${at(half.position)} is covered by ${above.name}`);
     job.t.doing = `clearing ${above.name} off the chest`;
     r.emit('info', `chest at ${at(half.position)} was covered by ${above.name}: digging it away`);
-    await bot.dig(above, true);
+    const cover = above.name;
+    if (!(await digAt(r, job, p, (name) => name === cover))) throw new Error(`could not clear ${cover} off the chest at ${at(half.position)}`);
   }
+  guard(job);
   return bot.openContainer(block);
 }
 
@@ -1449,4 +1463,4 @@ const JOBS = {
   },
 };
 
-module.exports = {BotRunner, NAME_RE, VALIDATE, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt};
+module.exports = {BotRunner, NAME_RE, VALIDATE, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest};

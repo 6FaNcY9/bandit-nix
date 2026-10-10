@@ -120,10 +120,14 @@ class Budget {
   }
 
   take(now = Date.now()) {
-    this.stamps = this.stamps.filter((t) => now - t < 60000);
-    if (this.stamps.length >= this.perMin) return false;
+    if (!this.free(now)) return false;
     this.stamps.push(now);
     return true;
+  }
+
+  free(now = Date.now()) {
+    this.stamps = this.stamps.filter((t) => now - t < 60000);
+    return this.stamps.length < this.perMin;
   }
 }
 
@@ -311,13 +315,13 @@ async function sendJob(name, type, args, replace = false) {
 }
 
 // One decision: let the model talk until it starts an action (or gives up after MAX_QUERIES).
-// The caller took the budget for the first model call; every later round waits for its own.
+// Every model call takes its budget right before it starts, after the (possibly slow) state fetch.
 async function decide(agent, agents, getState, budget) {
   for (let round = 0; round <= MAX_QUERIES; round++) {
-    while (round > 0 && !budget.take()) await new Promise((r) => setTimeout(r, 1000));
     const state = await getState();
     const bot = state.bots.find((b) => b.name === agent.name);
     if (!bot?.online) return;
+    while (!budget.take()) await new Promise((r) => setTimeout(r, 1000));
     const reply = await think(agent, state, bot);
     agent.push('assistant', reply || '\t');
     const cmd = parseCommand(reply);
@@ -490,7 +494,7 @@ async function main() {
       }
       ready.sort((x, y) => (x[0].wakeAt || x[0].lastDecisionAt) - (y[0].wakeAt || y[0].lastDecisionAt)); // longest waiting first
       for (const [agent, why, bot] of ready) {
-        if (!budget.take(now)) break; // over the cap: the rest wait for a later tick
+        if (!budget.free(now)) break; // over the cap: the rest wait for a later tick (decide() takes the budget)
         if (why === 'message') {
           agent.afk = false;
           while (agent.inbox.length) agent.push('user', agent.inbox.shift());
