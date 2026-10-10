@@ -1659,10 +1659,13 @@ const JOBS = {
     job.t.total = top - bottom + 1;
     for (let y = top; y >= bottom; y--) {
       const keep = ring[(top - y) % ring.length];
+      let dugHere = false;
       for (let pass = 1; ; pass++) {
         guard(job);
+        const layer = child(job, {type: 'excavate', args: {x1, y1: y, z1, x2, y2: y, z2, keep, corner}});
         try {
-          await JOBS.excavate(r, child(job, {type: 'excavate', args: {x1, y1: y, z1, x2, y2: y, z2, keep, corner}}));
+          await JOBS.excavate(r, layer);
+          dugHere ||= !layer.noop;
           break;
         } catch (e) {
           guard(job);
@@ -1671,7 +1674,9 @@ const JOBS = {
           await sleep(2000);
         }
       }
-      await fixStep(r, job, keep.x, y, keep.z);
+      // Only a layer this bot dug ground from: above the surface every step is air (2026-10-10: bot3
+      // built a floating stair of cobblestone over the shaft).
+      if (dugHere) await fixStep(r, job, keep.x, y, keep.z);
       Object.assign(job.t, {total: top - bottom + 1, done: top - y + 1}); // excavate borrowed the counters
       job.progress = `shaft ${x1} ${z1}: down to y ${y}${skipped ? `, ${skipped} blocks left (unsafe or unreachable)` : ''}`;
     }

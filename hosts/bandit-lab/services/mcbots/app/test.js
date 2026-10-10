@@ -2117,6 +2117,15 @@ require('./crafting');
       assert.deepStrictEqual(fixed.map((a) => [a.item, a.x, a.y, a.z]), [['cobblestone', 1, 59, 0]]);
     }
     assert.deepStrictEqual([job.t.done, job.t.total], [3, 3]);
+    { // above the surface (an all-air layer) no step is "fixed": no floating stair
+      const {JOBS: J} = require('./bots');
+      const place0 = J.place, fixed = [];
+      J.place = async (r2, j) => { fixed.push(j.args); };
+      try {
+        await JOBS.shaft({name: 'bot18', bot: {...bot, blockAt: (p) => ({name: 'air', type: 0, position: p, boundingBox: 'empty'})}, world: {hostilesNear: () => [], claim: async () => true, release() {}}, emit() {}, protectedAreas: [], supplyChest: null, combat: null}, {...job, t: {}});
+      } finally { J.place = place0; }
+      assert.deepStrictEqual(fixed, []);
+    }
     for (let y = 58; y <= 60; y++) for (let x = 0; x <= 2; x++) for (let z = 0; z <= 2; z++) blocks.set(`${x},${y},${z}`, 'stone');
     dug.length = 0;
     await JOBS.shaft({name: 'bot17', bot, world: {hostilesNear: () => [], claim: async () => true, release() {}}, emit() {}, protectedAreas: [], supplyChest: null, combat: null}, {...job, t: {}});
