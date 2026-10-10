@@ -627,6 +627,16 @@ require('./crafting');
   assert.deepStrictEqual(sf.cols.map((c) => [c[0], c[1], sf.names[c[3]]]), [[0, 19, 'stone'], [1, 19, 'stone'], [2, 10, 'water']]);
   assert.strictEqual(sf.unloaded, 1);
 }
+(async () => { // the async drivers (what the server uses) give the same answers and really hand control back
+  const V = require('./voxels');
+  let turns = 0; const t = setInterval(() => turns++, 0);
+  const at = (x, y, z) => (y < 30 ? 'stone' : 'air');
+  const box = {x1: 0, z1: 0, x2: 59, z2: 59};
+  assert.deepStrictEqual(await V.surfaceAsync(box, at), V.surface(box, at));
+  const b3 = {x1: 0, y1: 0, z1: 0, x2: 39, y2: 39, z2: 39};
+  assert.deepStrictEqual(await V.collectAsync(b3, at), V.collect(b3, at));
+  clearInterval(t); assert.ok(turns > 0, 'the event loop got turns during the read');
+})().catch((e) => { console.error(e); process.exit(1); });
 (async () => {
   const {spawn} = require('node:child_process');
   const net = require('node:net');

@@ -7,6 +7,7 @@ const MAX_SIDE = 80, MAX_HIGH = 200, MAX_CELLS = 600000;
 const NOT_DRAWN = /^(air|cave_air|void_air|short_grass|tall_grass|grass|fern|large_fern|seagrass|tall_seagrass|kelp|kelp_plant|vine|cave_vines|cave_vines_plant|glow_lichen|dead_bush|sugar_cane|snow|cobweb|fire|torch|wall_torch|soul_torch|soul_wall_torch|redstone_torch|redstone_wall_torch|redstone_wire|ladder|rail|powered_rail|detector_rail|activator_rail|lever|[a-z_]*(_flower|_sapling|_carpet|_sign|_wall_sign|_button|_pressure_plate|_tulip|_orchid|_bluet|_mushroom)|dandelion|poppy|azure_bluet|cornflower|lily_of_the_valley|sweet_berry_bush|wheat|carrots|potatoes|beetroots)$/;
 const FLUID = /^(water|lava|bubble_column)$/;
 const SEE = (n) => NOT_DRAWN.test(n) || FLUID.test(n) || /(^|_)glass(_pane)?$|_leaves$|^(ice|barrier|light)$/.test(n);
+const YIELD_EVERY = 20000; // reads between turns of the event loop (the hub also runs bot physics)
 const DIRS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
 
 // Validate a box from query strings: whole numbers, ordered corners, bounded size. Returns the box or throws.
@@ -26,13 +27,14 @@ function parseBox(q) {
 
 // nameAt(x,y,z) -> block name, or null where the chunk is not loaded. Returns {names, blocks: [[x,y,z,nameIndex]], unloaded}
 // (`unloaded` counts cells). The box is read once with a one-block margin so edge blocks can see outwards.
-function collect(box, nameAt) {
+function* collectGen(box, nameAt) {
   const names = [], index = new Map(), idx = (n) => { let i = index.get(n); if (i === undefined) { i = names.length; names.push(n); index.set(n, i); } return i; };
   const [W, H, L] = [box.x2 - box.x1 + 3, box.y2 - box.y1 + 3, box.z2 - box.z1 + 3]; // margin of 1 on each side
   const cell = new Int32Array(W * H * L).fill(-1); // -1: unloaded
   const at = (x, y, z) => (x * H + y) * L + z;
-  let unloaded = 0;
+  let unloaded = 0, reads = 0;
   for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) for (let z = 0; z < L; z++) {
+    if (++reads % YIELD_EVERY === 0) yield;
     const n = nameAt(box.x1 - 1 + x, box.y1 - 1 + y, box.z1 - 1 + z);
     if (n === null || n === undefined) { if (x && y && z && x < W - 1 && y < H - 1 && z < L - 1) unloaded++; continue; }
     cell[at(x, y, z)] = idx(n);
@@ -66,11 +68,12 @@ function parseSurface(q) {
   return box;
 }
 // Returns {names, cols: [[x,y,z,nameIndex]], unloaded} (`unloaded` counts columns whose chunk is missing; they are skipped).
-function surface(box, nameAt, top = SURF_TOP, bottom = SURF_BOTTOM) {
+function* surfaceGen(box, nameAt, top = SURF_TOP, bottom = SURF_BOTTOM) {
   const names = [], index = new Map(), cols = [];
-  let unloaded = 0;
+  let unloaded = 0, reads = 0;
   for (let x = box.x1; x <= box.x2; x++) for (let z = box.z1; z <= box.z2; z++) {
     for (let y = top; y >= bottom; y--) {
+      if (++reads % YIELD_EVERY === 0) yield;
       const n = nameAt(x, y, z);
       if (n === null || n === undefined) { unloaded++; break; }
       if (NOT_DRAWN.test(n)) continue;
@@ -81,4 +84,9 @@ function surface(box, nameAt, top = SURF_TOP, bottom = SURF_BOTTOM) {
   return {names, cols, unloaded};
 }
 
-module.exports = {MAX_SIDE, MAX_HIGH, MAX_CELLS, MAX_SURF, SEE, parseBox, collect, parseSurface, surface};
+// Sync (tests, small jobs) and async (the server: yields to the event loop every YIELD_EVERY reads) drivers of the generators.
+const sync = (gen) => (...a) => { const g = gen(...a); for (;;) { const r = g.next(); if (r.done) return r.value; } };
+const async_ = (gen) => async (...a) => { const g = gen(...a); for (;;) { const r = g.next(); if (r.done) return r.value; await new Promise(setImmediate); } };
+const collect = sync(collectGen), surface = sync(surfaceGen), collectAsync = async_(collectGen), surfaceAsync = async_(surfaceGen);
+
+module.exports = {collectAsync, surfaceAsync, MAX_SIDE, MAX_HIGH, MAX_CELLS, MAX_SURF, SEE, parseBox, collect, parseSurface, surface};

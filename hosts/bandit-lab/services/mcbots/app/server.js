@@ -23,6 +23,7 @@ const {Projects, PROJECTS} = require('./projects');
 const {Crews} = require('./crews');
 const agentauth = require('./agentauth');
 const voxels = require('./voxels');
+let voxelBusy = false; // one /api/voxels read at a time
 const {Slayer} = require('./slayer');
 
 const cfg = loadConfig();
@@ -227,6 +228,8 @@ const server = http.createServer(async (req, res) => {
   // loaded. Human path only (not an agent endpoint). Only bots of this process are readable: a worker's
   // bots (RemoteRunner) keep their chunks in the worker, and there is no RPC for them.
   if (req.method === 'GET' && url.pathname === '/api/voxels') {
+    if (voxelBusy) return json(429, {error: 'another map read is running, try again in a moment'});
+    voxelBusy = true;
     try {
       const surf = url.searchParams.get('mode') === 'surface';
       const box = surf ? voxels.parseSurface(Object.fromEntries(url.searchParams)) : voxels.parseBox(Object.fromEntries(url.searchParams));
@@ -234,12 +237,14 @@ const server = http.createServer(async (req, res) => {
       const near = [...runners.values()].filter((x) => !(x instanceof RemoteRunner) && x.online && x.bot?.entity && /overworld/.test(x.bot.game?.dimension || ''))
         .sort((a, b) => Math.hypot(a.bot.entity.position.x - cx, a.bot.entity.position.z - cz) - Math.hypot(b.bot.entity.position.x - cx, b.bot.entity.position.z - cz))[0];
       if (!near) return json(409, {error: 'no bot of the hub is online in the overworld to read blocks from (worker bots cannot be read)'});
-      const {Vec3} = require('vec3'), p = new Vec3(0, 0, 0); // ponytail: synchronous, ~0.5 s for a full 600k box; chunk it if the event loop ever hurts
+      const {Vec3} = require('vec3'), p = new Vec3(0, 0, 0);
       const at = (x, y, z) => near.bot.blockAt(p.set(x, y, z), false)?.name ?? null;
-      const out = surf ? voxels.surface(box, at) : voxels.collect(box, at); // surface: <= 160 x 160 columns x ~60 reads, about a second
+      const out = await (surf ? voxels.surfaceAsync(box, at) : voxels.collectAsync(box, at)); // yields every 20k reads so bot physics keeps ticking
       return json(200, {box, bot: near.name, ...out});
     } catch (e) {
       return json(400, {error: e.message});
+    } finally {
+      voxelBusy = false;
     }
   }
   if (req.method === 'GET' && url.pathname === '/api/events') return json(200, {lastId: events.lastId, events: events.since(Number(url.searchParams.get('since')) || 0)});
