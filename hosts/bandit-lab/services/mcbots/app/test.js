@@ -1930,7 +1930,7 @@ require('./crafting');
   assert.strictEqual(storeFor('bread', food), 'base');
   for (const n of ['granite', 'dirt', 'sand', 'azure_bluet', 'leaf_litter', 'rotten_flesh', 'string', 'bone', 'egg', 'arrow', 'oak_pressure_plate', 'smooth_basalt']) assert.strictEqual(storeFor(n, food), 'room', n);
   const {BASE} = require('./plan-config');
-  assert.strictEqual(BASE.roomChests.length, 14);
+  assert.strictEqual(BASE.roomChests.length, 8);
   console.log('ok');
 })();
 

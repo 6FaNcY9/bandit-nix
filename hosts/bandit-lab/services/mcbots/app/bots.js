@@ -1728,27 +1728,36 @@ const JOBS = {
   async withdraw(r, job) {
     const {bot} = r;
     const {x, y, z, item, count} = job.args;
-    await goNear(r, job, x, y, z, 3, {doing: `walking to ${place(r, job.args)} to take ${item}`});
-    const block = bot.blockAt(new (require('vec3').Vec3)(x, y, z));
-    if (!block || !/chest|barrel/.test(block.name)) throw new Error(`no chest at ${x} ${y} ${z} (found ${block?.name})`);
-    job.t.doing = `taking ${item} from ${place(r, job.args)}`;
-    const chest = await openChest(r, job, block);
-    try {
-      let taken = 0;
-      const match = itemMatcher(item);
-      for (const it of chest.containerItems().filter((i) => match(i.name))) {
-        guard(job);
-        if (taken >= count) break;
-        const n = Math.min(count - taken, it.count);
-        await chest.withdraw(it.type, it.metadata, n);
-        taken += n;
-        job.progress = `${taken}/${count}`;
+    const Vec3 = require('vec3').Vec3;
+    // Storage roles: what the base chest lacks may have overflowed to the storage-room chests (storage.js).
+    const rooms = storage.sameXYZ(job.args, planConfig.BASE.chest) ? planConfig.BASE.roomChests : [];
+    const match = itemMatcher(item);
+    let taken = 0;
+    for (const c of [{x, y, z}, ...rooms]) {
+      if (taken >= count) break;
+      const room = rooms.includes(c);
+      const where = room ? `the storage room chest at ${at(c)}` : place(r, job.args);
+      if (room && bot.blockAt(new Vec3(c.x, c.y, c.z))?.name !== 'chest') continue;
+      await goNear(r, job, c.x, c.y, c.z, 3, {doing: `walking to ${where} to take ${item}`});
+      const block = bot.blockAt(new Vec3(c.x, c.y, c.z));
+      if (!block || !/chest|barrel/.test(block.name)) throw new Error(`no chest at ${c.x} ${c.y} ${c.z} (found ${block?.name})`);
+      job.t.doing = `taking ${item} from ${where}`;
+      const chest = await openChest(r, job, block);
+      try {
+        for (const it of chest.containerItems().filter((i) => match(i.name))) {
+          guard(job);
+          if (taken >= count) break;
+          const n = Math.min(count - taken, it.count);
+          await chest.withdraw(it.type, it.metadata, n);
+          taken += n;
+          job.progress = `${taken}/${count}`;
+        }
+        if (!room) noteStock(r, job, chest);
+      } finally {
+        chest.close();
       }
-      if (!taken) throw new Error(`no ${item} in the chest`);
-      noteStock(r, job, chest);
-    } finally {
-      chest.close();
     }
+    if (!taken) throw new Error(`no ${item} in the chest${rooms.length ? ' or the storage room' : ''}`);
   },
 
   // Visit every chest/barrel within 6 blocks of the supply point and take

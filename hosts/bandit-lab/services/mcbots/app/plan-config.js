@@ -16,7 +16,8 @@ const BASE = {
   farm: {x1: -262, z1: -238, x2: -248, z2: -224},
   room: {x1: -272, y1: 58, z1: -219, x2: -266, y2: 60, z2: -213}, // under the base box; floor y 57
   // the wall of single chests on the room's south side (live 2026-10-10): x -272..-266, y 58 and 59, nearest the door first
-  roomChests: [58, 59].flatMap((y) => [-272, -271, -270, -269, -268, -267, -266].map((x) => ({x, y, z: -219}))),
+  // The chest wall: 8 double chests (x -272..-265, y 58 and 59, z -219); one cell each, a double opens from either half.
+  roomChests: [58, 59].flatMap((y) => [-272, -270, -268, -266].map((x) => ({x, y, z: -219}))),
 };
 const C = BASE.chest;
 const SHAFT_BOTTOM = -54;
