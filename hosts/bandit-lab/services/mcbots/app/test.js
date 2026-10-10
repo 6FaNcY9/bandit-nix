@@ -3025,6 +3025,26 @@ require('./crafting');
     } finally {
       JOBS.deposit = realDeposit;
     }
+    { // a far bot walks to the area before it reads the entities
+      const {makeTidy} = require('./tidy');
+      const log = [], infos = [];
+      const ents = new Map([[1, drop(1, 2, 64, 1)]]);
+      const bot = {
+        get entities() { log.push('read'); return Object.fromEntries(ents); },
+        entity: {position: new Vec3(100, 64, 0)}, blockAt: () => null,
+        inventory: {items: () => [], emptySlotCount: () => 36},
+      };
+      const goNear = async (rr, j, gx, gy, gz) => {
+        log.push('goNear');
+        bot.entity.position = new Vec3(gx, gy, gz);
+        if (gx === 2) ents.delete(1);
+      };
+      const tidy = makeTidy({goNear, guard: () => {}, sleep: async () => { log.push('sleep'); }, waitCalm: async () => {}, deposit: async () => {}, at: (p) => `${p.x} ${p.y} ${p.z}`});
+      const r = {bot, supplyChest: null, protectedAreas: [], emit: (k, t) => infos.push(t)};
+      await tidy(r, {t: {}, cancelled: false, type: 'tidy', args: {x: 0, y: 64, z: 0, radius: 24}});
+      assert.deepStrictEqual(log.slice(0, 3), ['goNear', 'sleep', 'read'], log.join(','));
+      assert.strictEqual(infos.length, 1, infos.join('|'));
+    }
   }
   { // slayer (gaming PC) card: metrics parsing, status validation, backend counts, offline shape
     const {Slayer, parseMetrics, parseStatus, countBackends, parseCmd} = require('./slayer');

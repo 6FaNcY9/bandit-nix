@@ -34,6 +34,11 @@ function makeTidy({goNear, guard, sleep, waitCalm, deposit, at}) {
     const skip = new Set();
     const tries = new Map();
     const t0 = Date.now();
+    // Entities are only known near the bot: walk to the area first, then give them a moment to load.
+    if (Math.hypot(bot.entity.position.x - x, bot.entity.position.z - z) > radius / 2) {
+      await goNear(r, job, x, y, z, 2, {doing: `walking to the tidy area near ${at(spot)}`}).catch(() => guard(job));
+      await sleep(1000);
+    }
     let visits = 0, deposits = 0;
     while (visits < MAX_VISITS && Date.now() - t0 < MAX_MS) {
       guard(job);
