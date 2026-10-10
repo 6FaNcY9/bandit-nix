@@ -89,6 +89,7 @@ const DOCS = {
   craftRecipe: ['Craft the given recipe a given number of times.', {recipe_name: ['string', 'The name of the output item to craft.'], num: ['number', 'The number of items to craft.']}],
   smeltItem: ['Smelt the given item the given number of times.', {item_name: ['string', 'The name of the input item to smelt.'], num: ['number', 'The number of times to smelt the item.']}],
   placeHere: ['Place a given block in the current location. Do NOT use to build structures, only use for single blocks.', {type: ['string', 'The block type to place.']}],
+  digShaft: ['Dig a square shaft straight down to bedrock from corner x1, z1 to x2, z2 (at most 16 x 16), leaving stairs along its walls, so the crew reaches every level without digging everywhere. Natural ground only; it takes long, give it to workers.', {x1: ['number', 'The x of one corner.'], z1: ['number', 'The z of one corner.'], x2: ['number', 'The x of the opposite corner.'], z2: ['number', 'The z of the opposite corner.']}],
   digRoom: ['Dig out a room (natural ground only, placed blocks stay) from corner x, y, z: width along x, length along z, height up. At most 9 x 9 x 5. Use it for an underground base.', {x: ['number', 'The x coordinate of the corner.'], y: ['number', 'The floor y.'], z: ['number', 'The z coordinate of the corner.'], width: ['number', 'Blocks along x, 1-9.'], length: ['number', 'Blocks along z, 1-9.'], height: ['number', 'Blocks up, 1-5.']}],
   placeBlockAt: ['Place one block (for example a chest) at x, y, z; it needs a solid block below.', {type: ['string', 'The block type to place.'], x: ['number', 'The x coordinate.'], y: ['number', 'The y coordinate.'], z: ['number', 'The z coordinate.']}],
   huntAnimals: ['Hunt animals near where you stand and collect the drops (a sheep is sheared when you have shears). Use it for wool: a bed needs 3 wool of one colour.', {type: ['string', 'sheep, cow, pig or chicken.'], num: ['number', 'How many animals, 1-32.']}],
@@ -100,12 +101,12 @@ const DOCS = {
   endGoal: ['Call when you have accomplished your goal. It will stop self-prompting and the current action.', {}],
 };
 
-const ASSIGN_DOC = ['Give one of your workers (a bot that cannot think) ONE command, for example !assign("bot12", "!collectBlocks(\\"cobblestone\\", 32)"). It reports back when done. Commands a worker understands: !startShift("coal") (keeps collecting into the base chest; one of logs, cobblestone, coal, raw_iron, raw_gold), !collectBlocks("iron_ore", 32), !putInChest("coal", 20), !craftRecipe("stick", 4), !smeltItem("raw_iron", 8), !huntAnimals("sheep", 6), !placeBed(x, y, z, "north"), !digRoom(...), !goToCoordinates(...).', {bot_name: ['string', 'The worker to command.'], command: ['string', 'The command for the worker, in quotes.']}];
+const ASSIGN_DOC = ['Give one of your workers (a bot that cannot think) ONE command, for example !assign("bot12", "!collectBlocks(\\"cobblestone\\", 32)"). It reports back when done. Commands a worker understands: !startShift("coal") (keeps collecting into the base chest; one of logs, cobblestone, coal, raw_iron, raw_gold), !collectBlocks("iron_ore", 32), !putInChest("coal", 20), !craftRecipe("stick", 4), !smeltItem("raw_iron", 8), !huntAnimals("sheep", 6), !placeBed(x, y, z, "north"), !digRoom(...), !digShaft(...), !goToCoordinates(...).', {bot_name: ['string', 'The worker to command.'], command: ['string', 'The command for the worker, in quotes.']}];
 
 const BASE_DOC = ['Get the state of the base: each worker with its job and last result, what the base chest held when last counted, and what is already built or dug.', {}];
 
 // A foreman (an agent with workers) gets few commands: the workers do the gathering, crafting and smelting.
-const FOREMAN = new Set(['assign', 'baseStatus', 'buildBlueprint', 'digRoom', 'huntAnimals', 'placeBed', 'placeBlockAt', 'viewChest', 'stats', 'inventory', 'goToCoordinates', 'stop', 'startConversation']);
+const FOREMAN = new Set(['assign', 'baseStatus', 'buildBlueprint', 'digRoom', 'digShaft', 'huntAnimals', 'placeBed', 'placeBlockAt', 'viewChest', 'stats', 'inventory', 'goToCoordinates', 'stop', 'startConversation']);
 const GATHERING = new Set(['collectBlocks', 'collectBlock', 'startShift']);
 
 function commandDocs(blueprints = [], workers = []) {
@@ -217,6 +218,11 @@ function translate(cmd, ctx) {
       const drop = ORE_DROPS[item.replace(/^deepslate_/, '')];
       if (drop) return {refuse: `Mining ${item} gives ${drop}; ore blocks are never smelted.${drop.startsWith('raw_') ? ` Smelt ${drop} instead.` : ''}`};
       return {job: ['smelt', {item, count: Math.min(n(a[1], 1), 64)}]};
+    }
+    case 'digShaft': {
+      const [x1, z1, x2, z2] = a.slice(0, 4).map((v) => Math.round(Number(v)));
+      if (![x1, z1, x2, z2].every(Number.isFinite) || Math.abs(x2 - x1) > 15 || Math.abs(z2 - z1) > 15 || Math.abs(x2 - x1) < 2 || Math.abs(z2 - z1) < 2) return {refuse: 'Use !digShaft(x1, z1, x2, z2) with sides of 3-16 blocks.'};
+      return {job: ['shaft', {x1, z1, x2, z2}]};
     }
     case 'digRoom': {
       const [x, y, z] = a.slice(0, 3).map(Number);

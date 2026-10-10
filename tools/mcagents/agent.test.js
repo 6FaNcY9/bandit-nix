@@ -44,6 +44,8 @@ assert.strictEqual(tr('!startShift("raw_logs")').job[1].block, 'logs');
 assert.strictEqual(tr('!collectBlocks("raw_logs", 8)').job[0], 'chop');
 assert.strictEqual(tr('!startShift("raw_coal")').job[1].block, 'coal_ore');
 assert.strictEqual(tr('!craftRecipe("pickaxe", 1)').job[1].item, 'stone_pickaxe');
+assert.deepStrictEqual(tr('!digShaft(-291, -222, -276, -207)'), {job: ['shaft', {x1: -291, z1: -222, x2: -276, z2: -207}]});
+assert.ok(tr('!digShaft(0, 0, 20, 5)').refuse, 'at most 16 x 16');
 assert.strictEqual(tr('!craftRecipe("iron_pickaxe", 1)').job[1].item, 'iron_pickaxe');
 assert.strictEqual(tr('!inventory').query, 'inventory');
 assert.strictEqual(tr('!buildBlueprint("test-pad-3x3", 1, 64, 2)').local, 'buildBlueprint');
@@ -135,7 +137,7 @@ assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}
 { // a foreman's command docs list only its few commands; workers and lone agents keep the full set
   const docs = commandDocs([], ['bot2']);
   const listed = [...docs.matchAll(/^!(\w+):/gm)].map((m) => m[1]).sort();
-  assert.deepStrictEqual(listed, ['assign', 'baseStatus', 'buildBlueprint', 'digRoom', 'goToCoordinates', 'huntAnimals', 'inventory', 'placeBed', 'placeBlockAt', 'startConversation', 'stats', 'stop', 'viewChest']);
+  assert.deepStrictEqual(listed, ['assign', 'baseStatus', 'buildBlueprint', 'digRoom', 'digShaft', 'goToCoordinates', 'huntAnimals', 'inventory', 'placeBed', 'placeBlockAt', 'startConversation', 'stats', 'stop', 'viewChest']);
   assert.ok([...commandDocs().matchAll(/^!(\w+):/gm)].length > 20 && commandDocs().includes('!collectBlocks:'), 'no workers: the full set');
   assert.deepStrictEqual(tr('!collectBlocks("stone", 3)'), {job: ['mine', {block: 'stone', count: 3}]}, 'translate() is unchanged for workers');
 }

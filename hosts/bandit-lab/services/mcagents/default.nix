@@ -16,13 +16,13 @@
   # lead with every task did not get to the building (2026-10-10).
   agents = {
     bot1 = {
-      goal = "You lead the gathering crew. Keep the base chest at -271 66 -214 stocked with logs, cobblestone, coal, raw_iron and raw_gold: give every idle worker a shift with !assign so each resource has someone on it, and give a new order to a worker that finishes, fails or dies. bot2 is our builder: if the base needs something built, tell bot2 with !startConversation. Do not mine yourself.";
+      goal = "You lead the gathering crew. Keep the base chest at -271 66 -214 stocked with logs, cobblestone, coal, raw_iron and raw_gold: give every idle worker a shift with !assign so each resource has someone on it, and give a new order to a worker that finishes, fails or dies. Keep two workers on the mine shaft west of the base with !digShaft(-291, -222, -276, -207) until it is done: it reaches every level down to bedrock, so later mining starts from there. bot2 is our builder: if the base needs something built, tell bot2 with !startConversation. Do not mine yourself.";
       workers = "bot4,bot16,bot17,bot18";
     };
     # The storage room goes under the base-v1 hut (-272 65 -219, on ground a block
     # scan found flat); the owner asked for it underground, for chests and beds.
     bot2 = {
-      goal = "You are the builder. Build our underground storage room under the base: dig it out with !digRoom(-272, 58, -219, 7, 7, 4) (give the digging to your worker with !assign, or do it yourself), then place chests in a row along its north wall with !placeBlockAt for x -271 to -267, y 58, z -219. Leave the base chest at -271 66 -214 alone. When the room is done, tell bot1 with !startConversation.";
+      goal = "You are the builder. Build our underground storage room under the base: dig it out with !digRoom(-272, 58, -219, 7, 7, 4) (give the digging to your worker with !assign, or do it yourself), then place chests in a row along its north wall with !placeBlockAt for x -271 to -267, y 58, z -219. Leave the base chest at -271 66 -214 alone. When the room is done, tell bot1 with !startConversation. Then have your worker dig the mine shaft west of the base, 16 x 16 down to bedrock with stairs: !assign it !digShaft(-291, -222, -276, -207).";
       workers = "bot3";
     };
   };

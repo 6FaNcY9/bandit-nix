@@ -1866,6 +1866,31 @@ require('./crafting');
     assert.deepStrictEqual([...blocks.values()].sort(), ['chest', 'cobblestone'], 'placed blocks stay');
     await assert.rejects(JOBS.excavate({...r, protectedAreas: [[-5, -5, 5, 5]]}, {...job, t: {}}), /protected/);
   }
+  { // shaft: 1-high excavate layers top-down, one stair step per layer spiralling along the walls
+    const {JOBS, VALIDATE, stairRing} = require('./bots');
+    const {Vec3} = require('vec3');
+    assert.deepStrictEqual(VALIDATE.shaft({x1: 15, z1: 0, x2: 0, z2: 15}), {x1: 0, z1: 0, x2: 15, z2: 15, top: 80, bottom: -59});
+    assert.strictEqual(VALIDATE.shaft({x1: 0, z1: 0, x2: 3, z2: 3, top: 60, bottom: -64}).bottom, -59, 'never into bedrock');
+    assert.throws(() => VALIDATE.shaft({x1: 0, z1: 0, x2: 16, z2: 3}), /16 x 16/);
+    const ring = stairRing(0, 0, 15, 15);
+    assert.strictEqual(ring.length, 60);
+    for (let i = 0; i < ring.length; i++) { const a = ring[i], b = ring[(i + 1) % ring.length]; assert.strictEqual(Math.abs(a.x - b.x) + Math.abs(a.z - b.z), 1, 'each step is next to the one below'); }
+    const blocks = new Map();
+    for (let y = 58; y <= 60; y++) for (let x = 0; x <= 2; x++) for (let z = 0; z <= 2; z++) blocks.set(`${x},${y},${z}`, 'stone');
+    const bot = {
+      blockAt: (p) => (blocks.get(`${p.x},${p.y},${p.z}`) ? {name: 'stone', type: 1, position: p, boundingBox: 'block', getProperties: () => ({})} : null),
+      entity: {position: new Vec3(0, 61, 4), onGround: true}, game: {dimension: 'overworld'}, entities: {}, food: 20,
+      registry: {blocks: {}, foodsByName: {}},
+      inventory: {items: () => [{type: 2, name: 'stone_pickaxe'}], emptySlotCount: () => 30, slots: []}, getEquipmentDestSlot: () => 5,
+      pathfinder: {goto: async () => {}, stop() {}, setGoal() {}}, tool: {equipForBlock: async () => {}},
+      dig: async (b) => { blocks.delete(`${b.position.x},${b.position.y},${b.position.z}`); },
+      stopDigging() {},
+    };
+    const job = {t: {}, cancelled: false, type: 'shaft', args: VALIDATE.shaft({x1: 0, z1: 0, x2: 2, z2: 2, top: 60, bottom: 58})};
+    await JOBS.shaft({bot, world: {hostilesNear: () => [], claim: async () => true, release() {}}, emit() {}, protectedAreas: [], supplyChest: null, combat: null}, job);
+    assert.deepStrictEqual([...blocks.keys()].sort(), ['0,60,0', '1,59,0', '2,58,0'], 'one step left per layer, each one further along');
+    assert.deepStrictEqual([job.t.done, job.t.total], [3, 3]);
+  }
   { // digAt rechecks the block after every walk and equip: a Stop or a swapped block means no dig
     const {digAt, Cancelled} = require('./bots');
     const {Vec3} = require('vec3');

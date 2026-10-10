@@ -27,9 +27,9 @@ const NATURAL = /^(stone|deepslate|dirt|grass_block|coarse_dirt|rooted_dirt|podz
 const KEEP_RE = /^(stick|[a-z_]+_planks|coal|charcoal|torch|crafting_table|furnace)$/;
 const FOOD_BELOW = 14; // fetch food from the supply chest when hungry and carrying none
 const FOOD_RETRY_MS = 600000; // an empty chest is not worth a walk every minute
-const RESUMABLE = new Set(['mine', 'chop', 'shift', 'goto', 'deposit', 'follow', 'come', 'guard', 'build', 'excavate', 'hunt', 'bed']);
+const RESUMABLE = new Set(['mine', 'chop', 'shift', 'goto', 'deposit', 'follow', 'come', 'guard', 'build', 'excavate', 'shaft', 'hunt', 'bed']);
 // Long jobs that survive a restart (see keptOf, saved by server.js, reported by workers).
-const KEEP = new Set(['shift', 'guard', 'mine', 'chop', 'build', 'excavate', 'hunt']); // a resumed build/excavate skips what is done
+const KEEP = new Set(['shift', 'guard', 'mine', 'chop', 'build', 'excavate', 'shaft', 'hunt']); // a resumed build/excavate skips what is done
 const MAX_INTERRUPTIONS = 3; // deaths/disconnects of one job before it is given up
 const TOOL_RE = /_(pickaxe|axe|shovel|hoe|sword)$|^(shears|bow|crossbow|fishing_rod|shield|trident|flint_and_steel|elytra)$/;
 
@@ -106,6 +106,14 @@ const VALIDATE = {
     const p = xyz({x: a.x1, y: a.y1, z: a.z1}), q = xyz({x: a.x2, y: a.y2, z: a.z2});
     const box = {x1: Math.min(p.x, q.x), y1: Math.min(p.y, q.y), z1: Math.min(p.z, q.z), x2: Math.max(p.x, q.x), y2: Math.max(p.y, q.y), z2: Math.max(p.z, q.z)};
     if (box.x2 - box.x1 > 8 || box.z2 - box.z1 > 8 || box.y2 - box.y1 > 4) throw new Error('a room is at most 9 x 9 blocks and 5 high');
+    return box;
+  },
+  // A shaft down to bedrock: a square of up to 16 x 16 from y `top` (default 80) to `bottom`
+  // (default -59, the lowest layer without bedrock), with a staircase left along its walls.
+  shaft: (a) => {
+    const p = xyz({x: a.x1, y: a.top ?? 80, z: a.z1}), q = xyz({x: a.x2, y: a.bottom ?? -59, z: a.z2});
+    const box = {x1: Math.min(p.x, q.x), z1: Math.min(p.z, q.z), x2: Math.max(p.x, q.x), z2: Math.max(p.z, q.z), top: Math.max(p.y, q.y), bottom: Math.max(-59, Math.min(p.y, q.y))};
+    if (box.x2 - box.x1 > 15 || box.z2 - box.z1 > 15 || box.x2 - box.x1 < 2 || box.z2 - box.z1 < 2) throw new Error('a shaft is 3 x 3 to 16 x 16 blocks');
     return box;
   },
   // Blueprint {origin, blocks: [{x,y,z,block}], remove?}; protected areas are
@@ -870,6 +878,16 @@ const canHarvest = (bot, id) => {
   return !tools || bot.inventory.items().some((i) => tools[i.type]);
 };
 // A child job: shares cancellation with `job`, has its own counters and arguments.
+// The edge cells of a box in walking order; layer k of a shaft keeps cell k (mod the ring) as its step.
+function stairRing(x1, z1, x2, z2) {
+  const ring = [];
+  for (let x = x1; x < x2; x++) ring.push({x, z: z1});
+  for (let z = z1; z < z2; z++) ring.push({x: x2, z});
+  for (let x = x2; x > x1; x--) ring.push({x, z: z2});
+  for (let z = z2; z > z1; z--) ring.push({x: x1, z});
+  return ring;
+}
+
 const child = (job, extra = {}) => Object.assign(Object.create(job), {collected: 0, progress: '', ...extra});
 
 // Keep a long job going without the owner: replace a broken pickaxe, fetch food
@@ -1523,6 +1541,7 @@ const JOBS = {
       for (let x = x1; x <= x2; x++) {
         for (let z = z1; z <= z2; z++) {
           guard(job);
+          if (job.args.keep && x === job.args.keep.x && z === job.args.keep.z) continue; // a shaft's stair step
           const pos = new Vec3(x, y, z);
           const b = bot.blockAt(pos);
           if (!b || b.boundingBox === 'empty' || !NATURAL.test(b.name)) continue;
@@ -1547,6 +1566,33 @@ const JOBS = {
     }
     if (left) throw new Error(`${left} blocks of the room were not dug (held by another bot, unreachable or unsafe)`);
     job.noop = !dug; // nothing natural left to dig: the event says "already complete"
+  },
+
+  // Dig a shaft one layer at a time (the excavate loop on a 1-high box), leaving one block per layer
+  // along the walls so the steps spiral down. Blocks next to lava/water, held by another bot or
+  // unreachable are left; a layer is retried twice (another bot may still be digging it).
+  async shaft(r, job) {
+    const {x1, z1, x2, z2, top, bottom} = job.args;
+    const ring = stairRing(x1, z1, x2, z2);
+    let skipped = 0;
+    job.t.total = top - bottom + 1;
+    for (let y = top; y >= bottom; y--) {
+      const keep = ring[(top - y) % ring.length];
+      for (let pass = 1; ; pass++) {
+        guard(job);
+        try {
+          await JOBS.excavate(r, child(job, {type: 'excavate', args: {x1, y1: y, z1, x2, y2: y, z2, keep}}));
+          break;
+        } catch (e) {
+          guard(job);
+          if (!/were not dug/.test(e.message)) throw e;
+          if (pass === 3) { skipped += Number(e.message.split(' ')[0]) || 0; break; }
+          await sleep(2000);
+        }
+      }
+      Object.assign(job.t, {total: top - bottom + 1, done: top - y + 1}); // excavate borrowed the counters
+      job.progress = `shaft ${x1} ${z1}: down to y ${y}${skipped ? `, ${skipped} blocks left (unsafe or unreachable)` : ''}`;
+    }
   },
 
   craft: (r, job) => crafting.ensureItem(r, job, job.args.item, crafting.count(r.bot, job.args.item) + job.args.count),
@@ -1607,4 +1653,4 @@ const JOBS = {
   },
 };
 
-module.exports = {BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest, guardDigs, partnerOf, depositList};
+module.exports = {stairRing, BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest, guardDigs, partnerOf, depositList};
