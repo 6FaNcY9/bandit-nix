@@ -52,6 +52,7 @@ supervised-maintenance procedure in `bandit-lab-updates.md`.
 | grafana | `no-new-privileges` | HTTP `http://127.0.0.1:3000/api/health` inside its network namespace; require HTTP 200 and `database: ok`, then load a dashboard through its normal route. |
 | blackbox-exporter | `no-new-privileges` | HTTP `http://127.0.0.1:9115/metrics` inside its network namespace, then `/probe?module=http_origin&target=http://grafana:3000/api/health`; require `probe_success 1`. |
 | node-exporter | `no-new-privileges` | HTTP `http://127.0.0.1:9100/metrics` inside its network namespace; require `node_scrape_collector_success{collector="systemd"} 1` and `node_filesystem_size_bytes` series. |
+| vaultwarden (last) | `no-new-privileges` | HTTP `http://127.0.0.1:80/alive` inside its network namespace, then verify an existing account can sign in and sync through `https://vault.atmosphaere.at`. Use supervised maintenance. |
 
 For an HTTP probe from the host, use the container's network namespace so no
 port needs publishing (owner only; substitute the row's container and URL):

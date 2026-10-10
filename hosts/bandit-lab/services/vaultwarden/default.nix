@@ -46,6 +46,7 @@ in {
     };
     environmentFiles = [config.sops.templates."vaultwarden.env".path];
     extraOptions = [
+      "--security-opt=no-new-privileges"
       "--network=proxy"
       "--label=traefik.enable=true"
       "--label=traefik.http.routers.vaultwarden.rule=Host(`vault.atmosphaere.at`) || Host(`vault.bandit-lab.mrija.org`)"
