@@ -74,6 +74,235 @@ Do not rely on branch names or an old report as the current task state.
 6. Record the integrated ID. Verify runtime separately after an authorized
    deployment; source review and a successful build do not prove activation.
 
+## Second review round, 2026-10-10
+
+Claude, 2026-10-10: R2-1, R2-2 and R2-3 fixed in `5497099` (live): the Tailscale
+identity header counts only from `TRUSTED_PROXIES` (lab: the Docker gateways);
+verified on the lab - a forged header from the worker container to 127.0.0.1
+and 10.250.77.3 gets 403 and is logged, the owner's tailnet access gets 200.
+`bot.dig` itself refuses digs for a stopped job, in protected areas, of changed
+blocks and next to fluids (covers the pathfinder's own digs). rearm guards after
+every withdrawal and before crafting/equipping. R2-7 was already fixed in
+`f1afe9d`. R2-4, R2-5, R2-6 are assigned to Sonnet. Awaiting re-verification.
+
+State: reviewed / fixes required. Owner: Codex. Fresh branch:
+`review/minecraft-round-two`, after `git fetch origin`.
+Exact base: `c2cc96e59f37642d23c6c435d8febc424b6d680f`.
+The previous unsigned `ac35fa0` review is integrated as `cbb9969`;
+it is not another integration candidate. Scope: the five fixes in
+`4d9767e63aa2e3cbf6b98c3a57635a6045cb6e12`, lead mode `30c7296`,
+`c9d1044`, `9e64cbb`, `b7de84c`, newest `c2cc96e`, and rearm `c20335d`.
+Only this document changes; one unsigned commit, never push. No bot/Nix
+edits, server commands, restarts, deployment or live world mutations.
+
+What this change does: the foreman drives scripted workers in a second process,
+maps resource names to blocks, wakes for idle workers and refuses repeated
+failures or its own gathering jobs. Bots climb in height legs and carry spare
+tools and wood. Source/fixture results below do not establish live acceptance.
+`app/` below means `hosts/bandit-lab/services/mcbots/app/`.
+
+### Re-verification of the original five
+
+Both the exact `4d9767e` sources extracted into a scratch directory and this
+review base were exercised with source-loaded fixtures.
+
+| Original finding | Decision | Reproduction and regression acceptance |
+| --- | --- | --- |
+| 1, P1 root importer follows container-writable links | **Closed for this threat model.** | Staging is outside `/srv/ollama`, at root-only `/var/lib/ollama-import`, mounted `/import:ro`. Fake Docker/curl shell fixture leaves an external victim intact with hostile GGUF/Modelfile links; existing file links in staging are unlinked before writing. A bad hash never calls create. Container-root cannot plant the staging-directory link through its writable mount. Host-root/Docker compromise is outside this fix; actual read-only mount enforcement was not tested. |
+| 2, P1 stale pathfinder fluid cache | **Cache reproduction closed; safety finding reopened as R2-2.** | With pinned Movements, cache air next to stone, change it to water/lava and increment the block version without advancing time: `safeToBreak` becomes false immediately. `safeMovements` wires block/chunk-load events. This fixes the old +50 ms stale result, but not a dig already awaiting equip. |
+| 3, P1 double-chest clearing after Stop | **Closed for cover clearing.** | Source-loaded `openChest`/`digAt`: cancellation during walk/equip digs nothing; cancellation after the first cover dig performs no second dig/open. Existing suite also passes the Stop case. Keep cover swaps to chest/torch and cancellation before opening as regression gates. The independent pathfinder/rearm cancellation problems below remain open. |
+| 4, P2 adjacent chest treated as partner | **Single-chest case closed; partner selection reopened as R2-5.** | Existing single-chest Stop case passes; `type: single` takes no neighbour. A same-facing opposite-type chest on the wrong axis is still selected by the four-direction search. Left/right properties alone do not establish the actual partner. |
+| 5, P2 budget reserved before state fetch | **Closed.** | Fake clock, one call/minute, first state fetch delayed 60,001 ms, repeated `!stats`: all five model starts are at least 60,000 ms apart. No pre-reservation in main; every query/refusal/action-error round takes a token after state fetching. Extend the regression to concurrent agents and retain queued messages while waiting. |
+
+### Must fix
+
+1. **R2-1 — P1: the worker can forge human dashboard authority.**
+   `app/server.js:124`, `183-187`; `mcbots/default.nix:103-124`.
+   The shared namespace reaches dashboard `127.0.0.1:8095`. The actual
+   source-loaded authorization function accepts the caller-supplied
+   `Tailscale-User-Login: 6FaNcY9@github` with no bearer. A compromised worker
+   can GET state and POST `/api/job` with `{"bots":"all","type":"stop","args":{}}`;
+   omit Origin, or supply the matching Host/Origin. This takes the human route,
+   bypassing agent bot/job/chest limits and exposing human settings/keeper/place
+   mutation routes. It needs neither the agent token nor host/PID access.
+   Fix: require authenticated human provenance on the app connection, or move
+   the human dashboard behind a boundary the worker cannot connect to; a
+   shared-namespace loopback/source-IP check cannot distinguish these callers.
+   Regression: from worker-reachable sockets, no header and a forged allowed
+   header both fail; legitimate Tailscale access works; agent bearer remains
+   limited. Authentication must precede any multi-bot mutation. Fixture tested
+   the actual predicate, not an end-to-end live POST.
+
+2. **R2-2 — P1: an awaited pathfinder equip survives path reset/Stop.**
+   `app/bots.js:496-514`, `547-568`; pinned pathfinder 2.4.5
+   `index.js:123-140`, `482-517`.
+   Source-loaded pinned digging branch: plan a stone dig, hold `bot.equip`'s
+   promise, reset the path/stop the pending dig, then resolve equip: `bot.dig`
+   still starts once. `resetPath` calls `stopDigging` before that dig exists;
+   the promise continuation has no cancellation or fresh safety check.
+   Newly arrived fluid during equip can therefore be released even though the
+   new cache correctly rejects a replacement plan. The new GoalY ascent uses
+   this same executor, outside guarded `digAt`.
+   Fix: invalidate pending mutation continuations on path/goal reset and recheck
+   live block, fluid/falling/support and protection rules immediately before
+   mutation. Regression: Stop and water/lava/gravel arrival while equip is held
+   cause zero digs; protected targets stay untouched, including changed block
+   state. This fixture exercised the executor branch; no real fluid release.
+
+3. **R2-3 — P1: new rearm crafting continues after Stop.**
+   `app/bots.js:1383-1414`, added by `c20335d`.
+   Actual rearm method fixture: complete a log withdrawal while marking the job
+   cancelled; it closes the chest, then crafts planks and equips armour anyway.
+   There is no guard between the new awaits or before crafting. This is a new
+   inventory mutation after Stop; equipment awaits also predate the patch.
+   Fix: guard after each awaited inventory action and before starting another;
+   use the existing inventory-busy crafting discipline rather than racing combat
+   inventory clicks. Regression: Stop during spare/log withdraw or first craft
+   starts no later withdrawal/craft/equip, and always closes the window.
+
+### Should fix
+
+4. **R2-4 — P2: optional rearm supplies abort the equipment step.**
+   `app/bots.js:1386-1397`, `1400-1425`.
+   Full inventory with one pickaxe and carried armour, plus a chest spare
+   pickaxe: the new optional withdraw rejects and rearm never equips the armour.
+   A second bot consuming the last offered spare between `containerItems()` and
+   `withdraw()` produces the same failure. Both failures were asserted against
+   the actual method; `finally` does close the chest. The new logs/spare consume
+   slots before food; failed plank crafting is swallowed, so success does not
+   prove emergency planks exist.
+   Fix: make optional spare/wood acquisition tolerate capacity/offer changes
+   without skipping essential equip/food; keep cancellation distinct from those
+   errors and verify the craft result. Regression: full inventory, last spare
+   taken concurrently, log stack changed, full output inventory, and two bots
+   rearming together. Essential carried equipment is equipped, no lost/duplicate
+   stacks, windows close, and absent planks are reported. Also test 0/1/2 logs
+   convert and a woodcutter's >2 logs remain logs.
+
+5. **R2-5 — P2: opposite-type neighbours on the wrong axis are cleared.**
+   `app/bots.js:776-780`.
+   Source-loaded fixture: north-facing left chest, unrelated north-facing right
+   chest along Z with stone on top: opening the first clears that unrelated
+   cover. Two parallel pairs can also supply a wrong-axis match before the real
+   partner in the scan, especially east/west-facing pairs (X scanned first).
+   Fix: derive exactly one partner coordinate from facing and left/right, then
+   validate that block. Regression: all four facings, both halves, two adjacent
+   pairs, unloaded/missing partner, two singles and barrels. Only the actual
+   pair's covers may be cleared; wrong-axis covers remain untouched.
+
+6. **R2-6 — P2: a worker credential can evict another worker's bots.**
+   `app/hub.js:302-334`; `mcbots/default.nix:114`, `143-150`.
+   Scratch loopback test with the real Hub and two authenticated WebSockets:
+   first announces `bot5`, second announces `bot5`; first closes and ownership
+   moves to the second. The shared HUB_TOKEN permits all nonlocal bot names,
+   not just this container's bot16-18. A compromised lab worker can steal a
+   laptop worker's jobs and forge its status/observations. Local bot names are
+   refused. This is an existing shared-token trust limit, exposed to the new
+   worker process; AGENT_BOTS is not a worker registration policy.
+   Fix: bind worker credentials to allowed names before allowing replacement.
+   Regression: lab credential cannot announce/replace `bot5` or other foreign
+   names; same-principal reconnect of bot16-18 still succeeds; stale connections
+   cannot publish or complete jobs after replacement.
+
+7. **R2-7 — P2: newest agent test always rejects the intended command docs.**
+   `tools/mcagents/agent.test.js:100`, `agent.js:77`, `100-114`, `285`.
+   `node tools/mcagents/agent.test.js` fails with
+   `AssertionError [ERR_ASSERTION]: no example answer to copy`: it forbids any
+   `!stop`, but the generated prompt intentionally documents `!stop:`.
+   Fix the assertion to reject only the removed example sentence; preserve the
+   Stop command. A scratch copy with only that assertion narrowed passes the
+   remaining tests. Regression: example absent, Stop documentation present,
+   unmodified committed test suite passes. Prompt removal itself is correct;
+   its live effect on model replies was not reproduced here.
+
+### Lead-mode, agent and movement acceptance boundaries
+
+- **Namespace:** the worker reaches both app listeners, Velocity and the
+  `minecraft` network (including BlueMap/Paper listeners). It inherits network
+  reachability, not the mcbots filesystem, PID namespace, named state volume or
+  agent token. Its own environment contains HUB_TOKEN and BOT_PASSWORD_SEED.
+  The latter derives passwords for other bot names too; arbitrary known bot-name
+  login attempts are therefore within the compromised-worker threat. Paper's
+  Velocity forwarding secret remains a separate boundary. No host loopback
+  Ollama access is implied by container loopback. R2-1 defeats dashboard
+  credential separation without extracting any secret.
+- **Restart coupling:** `after` orders worker startup; `requires` ties it to
+  mcbots availability; `partOf` propagates explicit stop/restart. Restarting
+  mcbots disconnects both groups and loses process-local assignments/in-flight
+  work. `Restart=always` does not override a manual systemd stop. Do not infer
+  recovery of the dependent worker from recovery of mcbots after an unexpected
+  failure: test crash, explicit restart, manual stop/start and activation with
+  both containers' namespaces, online bots and jobs checked. These unit
+  declarations were traced, not exercised on the host.
+- **Shared IP:** BotGate accepts the name pattern plus admitted source, not
+  BOT_NAMES/WORKERS; it does not isolate bot16-18 from other bot names. VeloAuth
+  still performs offline registration/login. The pinned config sets 20
+  registrations/IP, five failed attempts and five-minute brute-force timeout;
+  pinned jar bytecode confirms both IP and username failure caches. One worker
+  can consume the shared registration quota or trigger an IP block affecting
+  every bot in this namespace. The wrong-password latch is process-local and
+  does not clear proxy state; container restart resets that latch. Regression:
+  independent names share quota/failed-attempt effects while laptop-source
+  clients remain separate; arbitrary unregistered bot name still needs VeloAuth
+  registration. No live ban or login attempts were made.
+- **Ore mapping (`c9d1044`):** coal/iron/gold/copper/diamond/emerald/lapis/redstone
+  and raw metal aliases map to their ore blocks; cobblestone maps to stone.
+  Translation fixtures and existing ore/deepslate/smelt tests passed. Existing
+  collector expands normal ores to deepslate variants. No live yield test.
+- **Idle wake (`9e64cbb`):** idle means online, alive, no job and no queued job.
+  `promptReason` still excludes AFK/no-goal/dead bots and plain running jobs;
+  busy prevents overlapping decisions for one agent. A quiet foreman with idle
+  workers wakes again after 30 s: up to two decisions/minute, each up to five
+  model calls. Repeated refusals/no useful assignment can therefore spend ten
+  calls/minute even without progress, but all share the twelve-call default
+  sliding cap. This is bounded polling, not an unbudgeted loop; add a scheduler
+  regression for persistently idle workers, AFK, active build, slow model and
+  multiple foremen. No additional P1 on the budget was found.
+- **Failure refusal / leadership (`b7de84c`):** equal job type/reason increments
+  streak; a finished/stopped event resets it. Existing and source-loaded tests
+  refuse different blueprints after two matching failures and refuse a
+  foreman's own mine/chop/shift; assignments remain possible. Refusal itself
+  has no recovery deadline, so an idle worker can keep waking a stuck foreman;
+  successful corrective work or Stop must reset the streak. Test successful
+  remediation, differing reasons, worker failures and routine replacement.
+- **GoalY ascent (`b7de84c`):** fake movement from Y29 toward Y65 yields climb
+  legs Y45/Y61 then final Y65; Stop before ascent starts no leg. Loop is capped
+  at eight climbs, then the final goal; each goLeg has a 90 s deadline and at
+  most four goto attempts. GoalY is exact height with unrestricted X/Z, so it
+  may wander horizontally or scaffold rather than dig stairs. No-progress
+  fixture terminates after eight climb calls plus final call. Ordinary protected
+  break/place vetoes and pinned flow/falling checks remain installed, but R2-2
+  prevents safety acceptance during equip. Regression: reachable staircase,
+  roof/bedrock/no scaffold, repeated falling, >128-level ascent, protected-area
+  escape, fluid/gravel beside/above a planned dig and Stop during equip. Real
+  route quality, falls and waterlogged/support hazards were not exercised.
+
+### Checks and handoff
+
+- `git fetch origin`; fresh branch from the recorded main tip; committed diffs,
+  callers, auth/config, Nix wiring and pinned pathfinder/VeloAuth inspected.
+- `NODE_PATH=<existing mcbots store dependencies> node
+  hosts/bandit-lab/services/mcbots/app/test.js`: passed after sandbox loopback
+  bind permission; initial sandbox run failed `listen EPERM`. Existing source
+  tests used pinned installed dependencies, not a new package build.
+- `node tools/mcagents/agent.test.js`: **failed R2-7**. Scratch copy narrowing
+  only the bad assertion: passed (`ok decide`); this does not pass the committed
+  test gate.
+- `node /tmp/mc-round2.js`, `python /tmp/mc-round2-import.py`: passed assertions
+  for the cases above, including reproductions of remaining bugs. Also run
+  against scratch sources from exact `4d9767e` (agent checks limited to budget
+  there; newer foreman/ascent behavior checked on this review base).
+- `/tmp/mc-round2-network.js`: actual auth predicate and real scratch Hub/WS
+  replacement assertions passed. VeloAuth default config and pinned jar
+  `BruteForceTracker` bytecode reviewed. Scratch scripts are diagnostic artifacts,
+  not repository tests or production changes.
+- `git diff --check`: required before the single documentation commit. No
+  Nix formatter/build/flake check: executable/configuration sources unchanged.
+
+Verdict: fix R2-1 through R2-3 before unattended lead operation, and retain
+R2-4 through R2-7 as concrete regression gates. No live model, inventory,
+terrain, Docker namespace/restart or proxy-login validation; no push.
+
 ## Shipped-change review, 2026-10-10
 
 Claude, 2026-10-10: all five findings fixed in `4d9767e` (live 07:37): import
