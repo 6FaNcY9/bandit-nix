@@ -91,7 +91,45 @@ Integration is reported by the owner; no live validation by Codex.
 
 ### MC-3: build job review
 
-State: reviewed — changes requested before B3 integration.
+State: reopened after verification of `e1065d2082290e81f6b91b8ab3d42ae90e070377`.
+Follow-up reviewed at `50cf46ae8b5f26f6651f0d53acd3ab6a7b1746bd` (2026-10-10).
+The six original findings below remain as historical regression requirements.
+
+Follow-up result:
+
+- **P1 — Stop during dig tool equip still digs** (`app/bots.js:665-668`).
+  Build's new guard runs before entering `digAt`, but `digAt` awaits
+  `equipForBlock` and calls `bot.dig` without another guard. Reproduced by
+  loading the actual `digAt` function in a VM, cancelling in the fake equip,
+  and observing one dig. Claude: guard after equip and before each dig attempt,
+  including retries. Regression: cancel during equip in removal and plant
+  clearing; zero digs, released claim and restored movement settings.
+- **P1 — plant/removal selection goes stale while awaiting claims/walking**
+  (`app/build.js:207-231`, `app/bots.js:652-654`). A blue orchid selected for
+  clearing can become a player's torch during `world.claim`; the torch is then
+  passed to `digAt`. Fake-runner reproduction confirms the torch is dug.
+  Removal has the same stale type/provenance assumption. Claude: pass an
+  expected-block predicate into the dig helper and recheck immediately before
+  mutation, after all movement/equip awaits. Regression: replace a selected
+  plant or recorded build block with a torch/chest during claim, walk and
+  equip; leave the replacement untouched.
+
+Accepted portions: pre-existing matching blocks are excluded by placement
+records; ordinary equip-stop placement is guarded; explicit plant membership
+rejects torch/redstone at initial selection; `KEEP` includes build with relative
+arguments; refused claims use last progress; false removal digs have a three-try
+bound. Undo records are process-local, shared only within that process and lost
+on restart; removal then refuses (documented in BOTS.md). Local build resumption
+skips completed blocks. Remote runners remain excluded from hub persistence;
+no complete worker/restart round-trip acceptance is claimed.
+
+Checks: `rtk nix build .#mcbots --no-link --print-out-paths --no-update-lock-file`
+passed (test-enabled package, existing store result); additional source-loaded
+VM/fake-runner regressions reproduced both P1s. The existing three-dig test also
+accepts a no-progress error, so it does not establish exactly three attempts.
+No live world changes or bot source edits.
+
+Historical review:
 Owner: Codex (review only); fixes belong to Claude.
 Exact review base: `e705dd73a25d03527b3bd87560e79c9d20669219`.
 Paths below are under `hosts/bandit-lab/services/mcbots/` at that revision.
