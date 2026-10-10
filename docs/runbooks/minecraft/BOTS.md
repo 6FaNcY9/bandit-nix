@@ -327,6 +327,7 @@ Each bot runs its queue one job at a time. Chat is never read as a command.
 | `bed` | x y z, facing | a bed with its foot at x y z and its head towards `facing` (north/south/east/west): both cells must be free with solid ground below and outside protected areas; crafts it from 3 wool of one colour and 3 planks when the bot holds none (`need 3 wool of one colour` otherwise: hunt first); a bed already lying there is not placed again; then clicks it (at night sleeps in it for a moment), which sets the spawn point; the event `spawn set at x y z` says so |
 | `homebed` | optional `slot` 0-13, or x y z (+ `facing`) | the bot's own bed in the storage rooms (`app/homebed.js`, agents: `!setHomeBed`). Slot = foot at z -213 (room 1, x -272..-266, y 58) or z -205 (room 2, slots 7-13), head towards north; without `slot` the crew order bot1 bot2 bot3 bot4 bot16 bot17 bot18 gives slots 0-6. Walks there, refuses protected cells, only clicks when a bed already lies there. Otherwise gets 3 wool of one colour (supply chest first; else `hunt` sheep here, then at 8 stops on a ring 70/140 blocks around the chest), planks (a log from the chest, else `chop`), crafts the bed, stands in the head cell facing north, places it and hands the click to `bed` (spawn set). |
 | `grave` | x y z | walks to where a bot died, finds AxGraves' grave entity within 3 blocks, sneaks, right-clicks it (only the owner can), checks the inventory grew, puts on better armour, then deposits everything except tools, food and `KEEP_RE` into the supply chest; event `grave at x y z: N items back`; refused inside protected areas; fails `gave nothing` when it is not the bot's grave or already taken |
+| `level` | x1 z1 x2 z2 (the shaft's box), y, optional top, length, branch | mining at one height of a shaft: see "Mining levels" |
 | `say` | text | up to 200 characters; text starting with `/` is rejected |
 | `stop` | | clears the queue and stops walking/digging |
 
@@ -363,6 +364,31 @@ agent token policy). The grave is two packet entities at the death block: an `ar
 itself (interact-at, then interact, `sneaking: true`). Live on the stage (bot11 578 items, bot13 432 items,
 2026-10-10): kill -> respawn -> re-arm -> grave -> deposit, about 45 s with the walk from spawn, the click itself
 under 1 s.
+
+### Mining levels (`level` job)
+
+`app/level.js`. At height `y` (the tunnels' feet level; the bot stands on the shaft's stair step of layer `y - 1`; `y` must lie
+between the shaft's bottom + 1 and top - 1) the bot digs a 2-high tunnel straight out of the middle of each of the shaft's four
+walls (`length` blocks, default 32, 4-64) and, every 3rd block, a 1 x 2 branch to both sides (`branch` blocks, default 8,
+0-16): two blocks of rock stay between neighbours, so every ore of the layer shows. Every ore that touches a dug block is
+mined, with its vein (up to 24 blocks, within 8 of the dug block). A tunnel needs about 770 columns at the defaults.
+Arguments are the shaft job's (`x1 z1 x2 z2`, `top` default 80) plus `y`, so the same box serves `shaft`, `rim` and `level`.
+
+- Several bots on one level: each bot starts on another arm (the name decides, `armOrder`), works the other arms afterwards, and
+  every block is claimed through the shared table (`claims`), so none is dug twice. A block held by another bot makes the arm
+  wait for the next pass (3 passes, 3 s apart); the event says which tunnel was left, run the level again for it.
+- Rules like `excavate`: natural ground only (a chest, torch or cobblestone ends the arm there), never protected areas or
+  the supply chest's floor, no digging next to a fluid (`guardDigs`; a fluid neighbour is plugged when possible, else that tunnel
+  ends), gravel that falls into the tunnel is dug again. `upkeep` places torches, wears armour, replaces the pickaxe and
+  deposits into the supply chest when the inventory fills. A Stop, a death or a restart resumes it (`KEEP`/`RESUMABLE`); cells
+  already dug cost nothing.
+- The walk down uses the shaft's own stair, 16 layers per leg, and waits for a fight to end (a creeper backing the bot off
+  changes the pathfinder's goal, so the walk is repeated up to 4 times).
+- Agent command `!mineLevel(y)` (uses the lab shaft box, `SHAFT=x1,z1,x2,z2` overrides in `tools/mcagents`); a foreman only assigns it.
+- Live (2026-10-10, local stage, bot11/bot12 against the lab world, shaft -291 -222 -276 -207): y 40, length 6, branch 4: 88
+  columns in 704 s, 9 ores (a copper vein: 32 raw copper), all four tunnels; y 36 with two bots: see the commit message.
+  Level heights worth queueing: y 16 (iron peak, plus coal and copper), y -54 (diamonds, redstone; lava lakes start at -55, so
+  expect plugged fluids), optionally y -16 (gold) and y 0 (lapis).
 
 ## Long runs
 

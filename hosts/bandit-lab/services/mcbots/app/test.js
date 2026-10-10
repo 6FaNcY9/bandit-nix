@@ -1377,6 +1377,113 @@ require('./crafting');
   assert.deepStrictEqual(gq.current?.args || gq.queue[0]?.args, {x: 1, y: 64, z: -3, radius: 16});
   assert.throws(() => gq.enqueue('guard', {player: 'Steve', radius: 99}), /radius/);
   assert.throws(() => gq.enqueue('guard', {player: 'bad name!'}), /player/);
+  { // level: tunnels and branches off the shaft walls (pure geometry, validation, then the job against a fake world)
+    const L = require('./level');
+    const {VALIDATE, Cancelled, stairRing, NATURAL} = require('./bots');
+    const {Vec3} = require('vec3');
+    const shaft = {x1: -291, z1: -222, x2: -276, z2: -207};
+    // 16 wide: the middle is z -215 (x -284); the west tunnel leaves the wall at x -291 one block outside it
+    const plan = L.armPlan(shaft, 0, 32, 8);
+    assert.deepStrictEqual([plan.main[0], plan.main.at(-1), plan.main.length], [{x: -292, z: -215}, {x: -323, z: -215}, 32]);
+    assert.strictEqual(plan.branches.length, 20, '10 branch points, 2 sides');
+    assert.deepStrictEqual(plan.branches.map((b) => b.k).slice(0, 3), [30, 30, 27], 'farthest first');
+    const near = plan.branches.filter((b) => b.k === 3).map((b) => b.cells);
+    assert.deepStrictEqual(near.map((c) => [c[0], c.at(-1)]), [[{x: -294, z: -214}, {x: -294, z: -207}], [{x: -294, z: -216}, {x: -294, z: -223}]]);
+    assert.ok(plan.branches.every((b) => b.cells.length === 8));
+    const [east, north, south] = [1, 2, 3].map((d) => L.armPlan(shaft, d, 32, 8));
+    assert.deepStrictEqual([east.main[0], north.main[0], south.main[0]], [{x: -275, z: -215}, {x: -284, z: -223}, {x: -284, z: -206}]);
+    assert.deepStrictEqual(L.armPlan(shaft, 0, 8, 0).branches, [], 'branch 0: no branches');
+    assert.deepStrictEqual(L.armPlan(shaft, 0, 5, 3).branches.map((b) => b.k), [3, 3]);
+    assert.strictEqual(new Set(['bot11', 'bot12', 'bot13', 'bot14'].map((n) => L.armOrder(n)[0])).size, 4, 'four bots start on four different arms');
+    assert.deepStrictEqual(L.armOrder('bot11').slice().sort(), [0, 1, 2, 3]);
+    // validation: the shaft's box, y inside its depth, defaults 32 / 8
+    assert.deepStrictEqual(VALIDATE.level({...shaft, y: 16}), {...shaft, top: 80, y: 16, length: 32, branch: 8});
+    assert.strictEqual(VALIDATE.level({...shaft, y: -58, length: 64, branch: 16}).length, 64);
+    for (const bad of [{y: -59}, {y: 80}, {y: 'x'}, {y: 16, length: 3}, {y: 16, length: 65}, {y: 16, branch: 17}, {y: 16, x2: -290}]) assert.throws(() => VALIDATE.level({...shaft, ...bad}), /y must|length must|branch must|shaft is/, JSON.stringify(bad));
+
+    // the job: a 3 x 3 shaft at 0..2, tunnels of 4, branches of 2, at y 10, in a world of stone
+    const AIR = {name: 'air', boundingBox: 'empty', type: 0};
+    const world = (over = {}) => {
+      const cells = new Map(Object.entries(over));
+      const key = (p) => `${p.x},${p.y},${p.z}`;
+      const blockAt = (p) => {
+        const c = cells.get(key(p));
+        if (c) return {position: p, type: 1, ...c};
+        if (Math.abs(p.x) > 30 || Math.abs(p.z) > 30) return null;
+        return p.x >= 0 && p.x <= 2 && p.z >= 0 && p.z <= 2 ? {position: p, ...AIR} : {position: p, name: 'stone', boundingBox: 'block', type: 1};
+      };
+      const dug = [];
+      const digAt = async (r, job, p, want) => {
+        const b = blockAt(p);
+        if (b.boundingBox === 'empty' || !want(b.name)) return false;
+        dug.push(key(p));
+        cells.set(key(p), AIR);
+        if (blockAt(p.offset(0, 1, 0)).name === 'gravel') { cells.set(key(p), {name: 'gravel', boundingBox: 'block', type: 2}); cells.set(key(p.offset(0, 1, 0)), AIR); } // falls into the hole
+        job.onDig?.(job);
+        return true;
+      };
+      return {blockAt, dug, digAt};
+    };
+    const run = async (w, {hub, areas = [], onDig, reserved, name = 'bot11', walkTo = async () => {}} = {}) => {
+      const infos = [];
+      const {level} = L.makeLevel({
+        goNear: async (r, job, x, y, z) => walkTo(x, y, z),
+        waitCalm: async () => {},
+        guard: (job) => { if (job.cancelled) throw new Cancelled('stopped'); },
+        sleep: async () => {},
+        digAt: w.digAt, upkeep: async () => {}, NATURAL, stairRing, at: (c) => `${c.x} ${c.y} ${c.z}`,
+      });
+      const job = {t: {}, cancelled: false, type: 'level', args: {x1: 0, z1: 0, x2: 2, z2: 2, top: 80, y: 10, length: 4, branch: 2}, onDig};
+      const r = {name, bot: {blockAt: w.blockAt, game: {dimension: 'overworld'}, entity: {position: new Vec3(1.5, 10, 1.5)}}, world: hub, protectedAreas: areas, reserved, emit: (k, t) => infos.push(t)};
+      await level(r, job);
+      return {job, infos};
+    };
+    const air = (w, x, y, z) => w.blockAt(new Vec3(x, y, z)).boundingBox === 'empty';
+
+    // four tunnels (4 columns) + branches (2 sides x 2 cells) = 8 columns of 2 blocks each; the ore and its vein too
+    let w = world({'-2,10,2': {name: 'iron_ore'}, '-2,10,3': {name: 'iron_ore'}, '-2,9,2': {name: 'cobblestone'}, '5,10,-9': {name: 'diamond_ore'}});
+    let out = await run(w);
+    assert.strictEqual(out.job.ores, 2, 'the ore next to the tunnel and its vein; the far one stays');
+    assert.strictEqual(w.dug.length, 4 * 8 * 2 + 2, w.dug.length);
+    for (const [x, z] of [[-1, 1], [-4, 1], [1, -4], [1, 5], [5, 1], [-3, 3], [-3, -1], [3, 5]]) assert.ok(air(w, x, 10, z) && air(w, x, 11, z), `${x},${z}`);
+    assert.ok(!air(w, 5, 10, -9) && !air(w, -2, 9, 2) && !air(w, -1, 12, 1), 'the far ore, the floor and the ceiling stay');
+    assert.ok(out.infos.some((m) => /level y 10 finished: 2 ores$/.test(m)), out.infos.join('|'));
+    assert.strictEqual(out.job.t.total, 32, 'columns of the plan: 4 arms x 8');
+    // protected ground ends the arm there; its branches are not started; the other arms are dug
+    w = world();
+    out = await run(w, {areas: [[-10, -10, -3, 10]]});
+    assert.ok(air(w, -2, 10, 1) && !air(w, -3, 10, 1) && !air(w, -4, 10, 1) && !air(w, -3, 10, 2), 'west stops before x -3, no branch');
+    assert.ok(air(w, 5, 10, 1) && air(w, 1, 10, -4) && air(w, 1, 10, 5), 'the other arms are dug');
+    assert.ok(out.infos.some((m) => /the west tunnel\(s\) ended early/.test(m)), out.infos.join('|'));
+    // a block that must stay (a chest), a fluid and a reserved cell each end their arm
+    w = world({'-2,10,1': {name: 'chest', boundingBox: 'block'}, '1,11,-2': {name: 'water', boundingBox: 'empty'}});
+    out = await run(w, {reserved: (x, y, z) => x === 5 && y === 10 && z === 1});
+    assert.ok(air(w, -1, 10, 1) && !air(w, -3, 10, 1) && w.blockAt(new Vec3(-2, 10, 1)).name === 'chest', 'the chest stays, the tunnel ends');
+    assert.ok(air(w, 1, 10, -1) && !air(w, 1, 10, -3), 'water ends the north tunnel');
+    assert.ok(air(w, 4, 10, 1) && !air(w, 5, 10, 1), 'a reserved cell ends the east tunnel');
+    // gravel above falls into the hole: it is dug again
+    w = world({'-1,12,1': {name: 'gravel', boundingBox: 'block'}});
+    await run(w);
+    assert.ok(air(w, -1, 10, 1) && air(w, -1, 11, 1), 'the fallen gravel was dug too');
+    // another bot holds a block: that arm waits for the next pass and is dug then (3 passes at most)
+    let denied = 0;
+    w = world();
+    await run(w, {hub: {claim: async (n, k) => !(k === 'overworld:5,10,1' && denied++ < 2), release: () => {}}});
+    assert.ok(air(w, 5, 10, 1) && air(w, 6, 11, 1) && denied === 3, `busy block retried, dug on pass 3 (asked ${denied})`);
+    w = world();
+    await run(w, {hub: {claim: async (n, k) => k !== 'overworld:5,10,1', release: () => {}}});
+    assert.ok(!air(w, 5, 10, 1) && air(w, -1, 10, 1), 'a block that stays busy is left, the rest is dug');
+    // a tunnel mouth that cannot be reached is tried on every pass (4 walks each), then left and reported
+    let walks = 0;
+    w = world();
+    out = await run(w, {walkTo: async (x) => { if (x < 0) { walks++; throw new Error('could not reach: The goal was changed'); } }});
+    assert.ok(!air(w, -1, 10, 1) && air(w, 1, 10, -4) && air(w, 5, 10, 1) && walks === 12, `west left (${walks} walks)`);
+    assert.ok(out.infos.some((m) => /the west tunnel\(s\) were left/.test(m)), out.infos.join('|'));
+    // a Stop ends it between blocks
+    w = world();
+    await assert.rejects(run(w, {onDig: (job) => { if (w.dug.length === 3) job.cancelled = true; }}), Cancelled);
+    assert.strictEqual(w.dug.length, 3, 'nothing is dug after the Stop');
+  }
   console.log('ok');
 })();
 

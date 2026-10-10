@@ -17,6 +17,7 @@ const buildJob = require('./build');
 const huntJob = require('./hunt');
 const gravesJob = require('./graves');
 const homebedJob = require('./homebed');
+const levelJob = require('./level');
 
 const NAME_RE = /^bot[0-9]{1,2}$/; // BotGate's pattern (Velocity plugin)
 const LOGIN_GAP_MS = 4500; // Velocity rate-limits logins
@@ -29,9 +30,9 @@ const NATURAL = /^(stone|deepslate|dirt|grass_block|coarse_dirt|rooted_dirt|podz
 const KEEP_RE = /^(stick|[a-z_]+_planks|coal|charcoal|torch|crafting_table|furnace)$/;
 const FOOD_BELOW = 14; // fetch food from the supply chest when hungry and carrying none
 const FOOD_RETRY_MS = 600000; // an empty chest is not worth a walk every minute
-const RESUMABLE = new Set(['mine', 'chop', 'shift', 'goto', 'deposit', 'follow', 'come', 'guard', 'build', 'excavate', 'shaft', 'hunt', 'bed', 'homebed']);
+const RESUMABLE = new Set(['mine', 'chop', 'shift', 'goto', 'deposit', 'follow', 'come', 'guard', 'build', 'excavate', 'shaft', 'level', 'hunt', 'bed', 'homebed']);
 // Long jobs that survive a restart (see keptOf, saved by server.js, reported by workers).
-const KEEP = new Set(['shift', 'guard', 'mine', 'chop', 'build', 'excavate', 'shaft', 'hunt', 'homebed']); // a resumed build/excavate skips what is done
+const KEEP = new Set(['shift', 'guard', 'mine', 'chop', 'build', 'excavate', 'shaft', 'level', 'hunt', 'homebed']); // a resumed build/excavate skips what is done
 const MAX_INTERRUPTIONS = 3; // deaths/disconnects of one job before it is given up
 const TOOL_RE = /_(pickaxe|axe|shovel|hoe|sword)$|^(shears|bow|crossbow|fishing_rod|shield|trident|flint_and_steel|elytra)$/;
 
@@ -118,6 +119,13 @@ const VALIDATE = {
     const box = {x1: Math.min(p.x, q.x), z1: Math.min(p.z, q.z), x2: Math.max(p.x, q.x), z2: Math.max(p.z, q.z), top: Math.max(p.y, q.y), bottom: Math.max(-59, Math.min(p.y, q.y))};
     if (box.x2 - box.x1 > 15 || box.z2 - box.z1 > 15 || box.x2 - box.x1 < 2 || box.z2 - box.z1 < 2) throw new Error('a shaft is 3 x 3 to 16 x 16 blocks');
     return box;
+  },
+  // Mining at one height of a shaft (the shaft job's box and top/bottom): `y` is the tunnels' feet level,
+  // `length` the main tunnels (4-64) and `branch` the side branches (0-16) every 3rd block.
+  level: (a) => {
+    const box = VALIDATE.shaft(a);
+    const y = num(a.y, box.bottom + 1, box.top - 1, 'y');
+    return {x1: box.x1, z1: box.z1, x2: box.x2, z2: box.z2, top: box.top, y, length: num(a.length ?? 32, 4, 64, 'length'), branch: num(a.branch ?? 8, 0, 16, 'branch')};
   },
   // A wall around a shaft (the box of the shaft job), one block outside it on the ground.
   rim: (a) => {
@@ -420,7 +428,7 @@ class BotRunner {
     if (!this.online && this.queue[0].resume) return; // resumed jobs wait for the reconnect
     const job = (this.current = this.queue.shift());
     job.status = 'running';
-    this.digOnly = job.type === 'excavate' || job.type === 'shaft' ? NATURAL : null; // the walk to the room may dig natural ground only (Codex R3-1)
+    this.digOnly = ['excavate', 'shaft', 'level'].includes(job.type) ? NATURAL : null; // the walk to the room may dig natural ground only (Codex R3-1)
     job.startedAt = Date.now();
     job.progress = '';
     job.t = {doing: '', done: 0, total: 0, open: false}; // live detail; sub-jobs share it through the prototype
@@ -1455,9 +1463,12 @@ const {hunt, bed} = huntJob.makeHunt({goNear, guard, sleep, goals, waitCalm, cra
 
 const {homebed} = homebedJob.makeHomebed({goNear, guard, sleep, goals, crafting, run: buildRunJob, at});
 
+const {level} = levelJob.makeLevel({goNear, waitCalm, guard, sleep, digAt, upkeep, NATURAL, stairRing, at});
+
 const JOBS = {
   grave,
   homebed,
+  level,
   hunt,
   bed,
   goto: (r, job) => goNear(r, job, job.args.x, job.args.y, job.args.z, 1),

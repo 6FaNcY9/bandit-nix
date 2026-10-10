@@ -92,6 +92,7 @@ const DOCS = {
   smeltItem: ['Smelt the given item the given number of times.', {item_name: ['string', 'The name of the input item to smelt.'], num: ['number', 'The number of times to smelt the item.']}],
   placeHere: ['Place a given block in the current location. Do NOT use to build structures, only use for single blocks.', {type: ['string', 'The block type to place.']}],
   digShaft: ['Dig a square shaft straight down to bedrock from corner x1, z1 to x2, z2 (at most 16 x 16), leaving stairs along its walls, so the crew reaches every level without digging everywhere. Natural ground only; it takes long, give it to workers.', {x1: ['number', 'The x of one corner.'], z1: ['number', 'The z of one corner.'], x2: ['number', 'The x of the opposite corner.'], z2: ['number', 'The z of the opposite corner.']}],
+  mineLevel: ['Mine one level of the shaft: from the shaft at height y, dig a 2-high tunnel out of the middle of each of its four walls (32 blocks) with side branches every 3 blocks, and mine every ore it finds. Natural ground only; it takes very long, give it to workers. Levels worth mining: y 16 for iron, y -54 for diamonds and redstone.', {y: ['number', 'The height of the level (the tunnel floor), inside the shaft.']}],
   digRoom: ['Dig out a room (natural ground only, placed blocks stay) from corner x, y, z: width along x, length along z, height up. At most 9 x 9 x 5. Use it for an underground base.', {x: ['number', 'The x coordinate of the corner.'], y: ['number', 'The floor y.'], z: ['number', 'The z coordinate of the corner.'], width: ['number', 'Blocks along x, 1-9.'], length: ['number', 'Blocks along z, 1-9.'], height: ['number', 'Blocks up, 1-5.']}],
   placeBlockAt: ['Place one block (for example a chest) at x, y, z; it needs a solid block below.', {type: ['string', 'The block type to place.'], x: ['number', 'The x coordinate.'], y: ['number', 'The y coordinate.'], z: ['number', 'The z coordinate.']}],
   huntAnimals: ['Hunt animals near where you stand and collect the drops (a sheep is sheared when you have shears). Use it for wool: a bed needs 3 wool of one colour.', {type: ['string', 'sheep, cow, pig or chicken.'], num: ['number', 'How many animals, 1-32.']}],
@@ -105,7 +106,7 @@ const DOCS = {
   endGoal: ['Call when you have accomplished your goal. It will stop self-prompting and the current action.', {}],
 };
 
-const ASSIGN_DOC = ['Give one of your workers (a bot that cannot think) ONE command, for example !assign("bot12", "!collectBlocks(\\"cobblestone\\", 32)"). It reports back when done. Commands a worker understands: !startShift("coal") (keeps collecting into the base chest; one of logs, cobblestone, coal, raw_iron, raw_gold), !collectBlocks("iron_ore", 32), !putInChest("coal", 20), !craftRecipe("stick", 4), !smeltItem("raw_iron", 8), !huntAnimals("sheep", 6), !placeBed(x, y, z, "north"), !setHomeBed, !digRoom(...), !digShaft(...), !goToCoordinates(...).', {bot_name: ['string', 'The worker to command.'], command: ['string', 'The command for the worker, in quotes.']}];
+const ASSIGN_DOC = ['Give one of your workers (a bot that cannot think) ONE command, for example !assign("bot12", "!collectBlocks(\\"cobblestone\\", 32)"). It reports back when done. Commands a worker understands: !startShift("coal") (keeps collecting into the base chest; one of logs, cobblestone, coal, raw_iron, raw_gold), !collectBlocks("iron_ore", 32), !putInChest("coal", 20), !craftRecipe("stick", 4), !smeltItem("raw_iron", 8), !huntAnimals("sheep", 6), !placeBed(x, y, z, "north"), !setHomeBed, !digRoom(...), !digShaft(...), !mineLevel(16), !goToCoordinates(...).', {bot_name: ['string', 'The worker to command.'], command: ['string', 'The command for the worker, in quotes.']}];
 
 const BASE_DOC = ['Get the state of the base: each worker with its job and last result, what the base chest held when last counted, and what is already built or dug.', {}];
 
@@ -113,7 +114,7 @@ const BASE_DOC = ['Get the state of the base: each worker with its job and last 
 const FOREMAN = new Set(['assign', 'baseStatus', 'buildBlueprint', 'digRoom', 'digShaft', 'huntAnimals', 'placeBed', 'setHomeBed', 'placeBlockAt', 'viewChest', 'stats', 'inventory', 'goToCoordinates', 'stop', 'startConversation']);
 const GATHERING = new Set(['collectBlocks', 'collectBlock', 'startShift']);
 // Project jobs run until done; the owner decides who works on them (lab 2026-10-10: the lead pulled a worker off the shaft).
-const PROJECTS = {shaft: 'digging the shaft', excavate: 'digging a room', build: 'building', grave: 'collecting its grave'};
+const PROJECTS = {shaft: 'digging the shaft', level: 'mining a level of the shaft', excavate: 'digging a room', build: 'building', grave: 'collecting its grave'};
 const isProject = (job) => !!job && Object.hasOwn(PROJECTS, job.type);
 // The lead is the foreman whose goal is gathering (the builder bot2 has workers too, but may dig). ponytail: keyword test on the goal text, a !goal that avoids these words slips through.
 const leadsGathering = (a) => a.workers.size > 0 && /gather|collect|mine|chop|\blogs?\b|wood|cobble|coal|iron/i.test(a.goal);
@@ -174,6 +175,8 @@ function promptReason(a, bot, now, checkinMs = CHECKIN_MS, idle = 0) {
 const ROUTINES = new Set(['shift', 'guard', 'follow']);
 const isRoutine = (job) => !!job && ROUTINES.has(job.type);
 
+// The shaft the mining levels leave from (the lab's, dug by !digShaft); SHAFT=x1,z1,x2,z2 overrides.
+const SHAFT = (process.env.SHAFT || '-291,-222,-276,-207').split(',').map(Number);
 const LOG_TYPES = /_log$|^logs?$|^wood$/;
 // What the model says for an ore -> the block ("coal" made a lab shift fail: unknown block, 2026-10-10).
 const ORES = new Set(['coal', 'iron', 'gold', 'copper', 'diamond', 'emerald', 'lapis', 'redstone']);
@@ -234,6 +237,12 @@ function translate(cmd, ctx) {
       const [x1, z1, x2, z2] = a.slice(0, 4).map((v) => Math.round(Number(v)));
       if (![x1, z1, x2, z2].every(Number.isFinite) || Math.abs(x2 - x1) > 15 || Math.abs(z2 - z1) > 15 || Math.abs(x2 - x1) < 2 || Math.abs(z2 - z1) < 2) return {refuse: 'Use !digShaft(x1, z1, x2, z2) with sides of 3-16 blocks.'};
       return {job: ['shaft', {x1, z1, x2, z2}]};
+    }
+    case 'mineLevel': {
+      const y = Math.round(Number(a[0]));
+      if (!Number.isFinite(y) || y < -58 || y > 79) return {refuse: 'Use !mineLevel(y) with y from -58 to 79 (inside the shaft).'};
+      const [x1, z1, x2, z2] = SHAFT;
+      return {job: ['level', {x1, z1, x2, z2, y}]};
     }
     case 'digRoom': {
       const [x, y, z] = a.slice(0, 3).map(Number);
@@ -667,7 +676,7 @@ async function decide(agent, agents, getState, budget) {
         t.job = ['build', {origin: {x: a[1], y: a[2], z: a[3]}, blocks: bp.blocks}];
       }
     }
-    if (['shaft', 'excavate'].includes(t.job[0]) && leadsGathering(agent)) {
+    if (['shaft', 'excavate', 'level'].includes(t.job[0]) && leadsGathering(agent)) {
       agent.push('system', 'Refused: you lead, you do not dig. Give it to a worker with !assign.');
       continue;
     }
