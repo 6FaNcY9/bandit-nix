@@ -2206,7 +2206,7 @@ require('./crafting');
     for (let x = -38; x <= -36; x++) for (let z = -201; z <= -199; z++) blocks.set(`${x},64,${z}`, 'stone');
     const dug = [];
     const bot = {
-      blockAt: (p) => { const n = blocks.get(`${p.x},${p.y},${p.z}`); return n ? {name: n, type: md.blocksByName[n].id, position: p, boundingBox: 'block', getProperties: () => ({})} : null; },
+      blockAt: (p) => { const n = blocks.get(`${p.x},${p.y},${p.z}`); return n ? {name: n, type: md.blocksByName[n].id, position: p, boundingBox: 'block', getProperties: () => ({})} : {name: 'air', type: 0, position: p, boundingBox: 'empty', getProperties: () => ({})}; },
       entity: {position: new Vec3(-37, 66, -196), onGround: true}, game: {dimension: 'overworld'}, entities: {}, food: 20, registry: md,
       inventory: {items: () => [{type: md.itemsByName.stone_pickaxe.id, name: 'stone_pickaxe'}], emptySlotCount: () => 30, slots: []},
       pathfinder: {goto: async () => {}, stop() {}, setGoal() {}, isMining: () => true}, tool: {equipForBlock: async () => {}},
@@ -2250,6 +2250,24 @@ require('./crafting');
     mv2.getBlock = () => ({liquid: false, canFall: false});
     assert.ok(!mv2.safeToBreak(bot.blockAt(new Vec3(0, 60, 0))), 'a retained step is never planned as a dig');
     assert.ok(mv2.safeToBreak(bot.blockAt(new Vec3(1, 60, 0))), 'other natural ground still is');
+
+    // a shaft that could not dig everything is incomplete, not finished (Codex R4-5)
+    runner.keepCells = null; runner.digOnly = null;
+    const one = () => ({t: {}, cancelled: false, type: 'shaft', args: VALIDATE.shaft({x1: 0, z1: 0, x2: 2, z2: 2, top: 60, bottom: 60})});
+    const fill = () => { blocks.clear(); for (let x = 0; x <= 2; x++) for (let z = 0; z <= 2; z++) blocks.set(`${x},60,${z}`, 'stone'); };
+    fill(); dug.length = 0;
+    const real = bot.blockAt;
+    bot.blockAt = () => null; // nothing loaded
+    await assert.rejects(JOBS.shaft(runner, one()), /the shaft reached y 60 but 8 blocks were left/);
+    bot.blockAt = real;
+    assert.deepStrictEqual(dug, []);
+    fill();
+    runner.world.claim = async () => false; // every cell held by someone else
+    await assert.rejects(JOBS.shaft(runner, one()), /the shaft reached y 60 but 8 blocks were left/);
+    runner.world.claim = async () => true;
+    fill();
+    await JOBS.shaft(runner, one());
+    assert.strictEqual(blocks.size, 1, 'a complete shaft still finishes (the kept step is left)');
   }
   { // rim: a wall one block outside the shaft on the ground, with a gap at the stair entrance
     const {JOBS, VALIDATE} = require('./bots');

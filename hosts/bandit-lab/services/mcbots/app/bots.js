@@ -1706,7 +1706,7 @@ const JOBS = {
         }
       }
     }
-    if (left) throw new Error(`${left} blocks of the room were not dug (held by another bot, unreachable or unsafe)`);
+    if (left) throw new Error(`${left} blocks of the room were not dug (held by another bot, unloaded, unreachable or unsafe)`);
     job.noop = !dug; // nothing natural left to dig: the event says "already complete"
   },
 
