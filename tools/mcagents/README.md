@@ -85,3 +85,39 @@ Live 2026-10-10 (bot11-bot14, RTX 4090 laptop GPU on the lab, about 5.6 GB VRAM)
 
 Limits: an agent stops when its goal is done (`!endGoal`). Long-running work needs standing goals
 or the plan of R7 in `docs/NEXT-GOALS.md`. Tests: `node tools/mcagents/agent.test.js`.
+
+Replay harness (Node, no dependencies):
+
+```bash
+node tools/mcagents/replay.js export decisions.jsonl > replay.jsonl
+# After reviewing the frozen dataset, use a model server base URL (or full chat URL):
+node tools/mcagents/replay.js run replay.jsonl --endpoint http://127.0.0.1:11434 --api ollama --model andy-4.2 --seed 11 > ollama-11.jsonl
+node tools/mcagents/replay.js run replay.jsonl --endpoint http://127.0.0.1:11435 --api openai --model andy-4.2-baseline --seed 11 > openai-11.jsonl
+node tools/mcagents/replay.js score ollama-11.jsonl
+node tools/mcagents/replay.js compare ollama-11.jsonl openai-11.jsonl
+node tools/mcagents/replay.test.js
+```
+
+Export de-duplicates sanitized message arrays, strips credential fields/redacts common
+credential patterns, and skips `/api/decision` bodies (only truncated `bot`/`text`, no
+prompt). IDs are prompt SHA-256 hashes; `episode_id` falls back to the agent name.
+Review redaction, assign real episode boundaries, fill missing `goal`/`state` (including
+workers and saved places), and write human `expected` constraints before freezing.
+LOG lacks complete world state; export infers position/chest from STATS and preserves
+prior parsed commands and subsequent prompt outcomes. No ground truth is invented.
+
+Run sends prompts sequentially, thinking off, with agent.js sampling, seed and a 512-token
+cap. Configure the OpenAI-compatible server for 8,192 context; this API has no standard
+context-size parameter. Output preserves raw reply, latency, reported tokens, errors and
+truncation. The harness only calls chat endpoints, never executes bot commands.
+
+Score reports fractions over all rows, translator acceptance (queries/local commands
+included), refusal/no-command (also errors/truncation), `!stop`, and canonical-command
+repeats against the **last prior command in each frozen row**, plus median/p95 latency
+(nearest-rank p95). It reuses agent.js's permissive parser/translator; it does not validate
+all executor arguments, foreman rules or job success. Compare requires matching IDs/seeds
+and frozen prompts/state/history; it emits A/B metrics, B-minus-A differences and per-pair
+boolean/latency deltas. Repeat this for seeds 11, 22, 33, alternating backend order.
+Human goal consistency, harmful-repeat adjudication, tokenizer/context checks and the
+provenance manifest remain the separate protocol in
+[AGENT-TRAINING.md](../../docs/runbooks/minecraft/AGENT-TRAINING.md).
