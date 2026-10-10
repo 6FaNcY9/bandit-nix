@@ -151,7 +151,7 @@ assert.throws(() => loadConfig({BOT_NAMES: 'bot1', PROTECTED_AREAS: '1,2,3'}));
 
 // ---- shared world / combat logic ----
 const W = require('./world');
-const {weaponScore, wantsToEat, deathCause} = require('./combat');
+const {Combat, weaponScore, wantsToEat, deathCause, fightReady} = require('./combat');
 {
   // Deep miners with coal but no wood cannot make torches (bot2 at y -55, 2026-10-10).
   const {needsWood} = require('./bots');
@@ -167,6 +167,23 @@ assert.equal(wantsToEat(17, 6.7, 15), true);
 assert.equal(wantsToEat(17, 20, 15), false);
 assert.equal(wantsToEat(14, 20, 15), true);
 assert.equal(wantsToEat(19, 10, 15), false);
+// fight instead of wait: sword or axe, 2+ armour pieces, health above 12
+assert.equal(fightReady(['stone_sword', 'bread'], 2, 20), true);
+assert.equal(fightReady(['iron_axe'], 4, 13), true);
+assert.equal(fightReady(['stone_sword'], 1, 20), false); // too little armour
+assert.equal(fightReady(['stone_pickaxe'], 4, 20), false); // unarmed
+assert.equal(fightReady(['stone_sword'], 4, 12), false); // hurt
+{
+  const slots = {5: {}, 7: {}};
+  const mk = (defend, health, items) => {
+    const c = Object.create(Combat.prototype);
+    c.r = {getSettings: () => ({defend}), bot: {health, getEquipmentDestSlot: (s) => ({head: 5, torso: 6, legs: 7, feet: 8})[s], inventory: {slots, items: () => items.map((name) => ({name}))}}};
+    return c;
+  };
+  assert.equal(mk(true, 20, ['wooden_sword']).fit(), true);
+  assert.equal(mk(false, 20, ['wooden_sword']).fit(), false); // defend off: combat will not fight, so the bot waits
+  assert.equal(mk(true, 8, ['wooden_sword']).fit(), false);
+}
 // Death causes: only the bot's own death messages; chat and other players are ignored.
 assert.equal(deathCause('bot1', 'bot1 was slain by Zombie'), 'was slain by Zombie');
 assert.equal(deathCause('bot1', 'bot1 fell from a high place'), 'fell from a high place');

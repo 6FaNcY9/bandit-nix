@@ -12,6 +12,10 @@ const TICK_MS = 500;
 // Health only regenerates at food 18+, so a hurt bot must eat earlier than a healthy one.
 const wantsToEat = (food, health, eatBelow) => food < eatBelow || (health < 20 && food < 18);
 
+// A bot with a sword or axe, two armour pieces and more than 12 health fights a mob near its target
+// instead of waiting for it to leave (5 of 8 lab bots stood still at night, 2026-10-10).
+const fightReady = (names, armour, health) => health > 12 && armour >= 2 && names.some((n) => /_(sword|axe)$/.test(n));
+
 const DEATH_PHRASE = /^(was slain by|was shot by|fell|hit the ground|drowned|burned|went up in flames|tried to swim in lava|blew up|was blown up|suffocated|starved|froze|was killed|withered|was pricked|experienced kinetic energy)/;
 // "bot1 fell from a high place" -> "fell from a high place"; null for chat and other players.
 const deathCause = (name, msg) => {
@@ -47,6 +51,13 @@ class Combat {
 
   stop() {
     clearInterval(this.timer);
+  }
+
+  // True when this bot should clear a nearby hostile itself rather than wait for it (see fightReady).
+  fit() {
+    const bot = this.r.bot;
+    const armour = ['head', 'torso', 'legs', 'feet'].filter((s) => bot.inventory.slots[bot.getEquipmentDestSlot(s)]).length;
+    return (this.r.getSettings?.() || DEFAULTS).defend && fightReady(bot.inventory.items().map((i) => i.name), armour, bot.health);
   }
 
   takeover(mode, target, dist) {
@@ -189,4 +200,4 @@ class Combat {
   }
 }
 
-module.exports = {Combat, weaponScore, AVOID_FOOD, wantsToEat, deathCause};
+module.exports = {Combat, weaponScore, AVOID_FOOD, wantsToEat, deathCause, fightReady};

@@ -620,8 +620,9 @@ async function waitCalm(r, job) {
 }
 
 // Another bot reported a hostile within 8 blocks of where we are headed:
-// give it up to 10 s to move on or die (reports expire), then go anyway.
+// give it up to 10 s to move on or die (reports expire), then go anyway. A bot that can fight does not wait.
 async function waitSafe(r, job, x, z) {
+  if (r.combat?.fit?.()) return; // armed and healthy: combat clears the mob when it comes close
   const dim = normDim(r.bot.game?.dimension);
   for (let i = 0; i < 10 && r.world.hostilesNear(x, z, dim, 8).length; i++) {
     job.progress = 'waiting: hostile near target';
