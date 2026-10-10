@@ -133,6 +133,7 @@ assert.ok(commandDocs([], ['bot12']).includes('!assign:') && !commandDocs().incl
   const pa = (t) => assignJob(parseCommand(t), pw, ps);
   assert.deepStrictEqual(pa('!assign("bot17", "!collectBlocks(\\"stone\\", 8)")'), {refuse: 'bot17 is digging the shaft (down to y 40); pick an idle worker.'});
   assert.match(pa('!assign("bot18", "!collectBlocks(\\"stone\\", 8)")').refuse, /^bot18 is building \(placed 3\/22\); pick an idle worker\.$/);
+  assert.deepStrictEqual(assignJob(parseCommand('!assign("bot12", "!collectBlocks(\\"stone\\", 8)")'), pw, {bots: [{name: 'bot12', online: true, job: {type: 'grave', progress: ''}, queue: []}]}), {refuse: 'bot12 is collecting its grave; pick an idle worker.'});
   assert.ok(pa('!assign("bot12", "!collectBlocks(\\"stone\\", 8)")').job, 'an idle worker is fine');
   ps.bots[0].job = null; // finished or failed: the job is gone
   assert.ok(pa('!assign("bot17", "!collectBlocks(\\"stone\\", 8)")').job);

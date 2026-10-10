@@ -112,7 +112,7 @@ const BASE_DOC = ['Get the state of the base: each worker with its job and last 
 const FOREMAN = new Set(['assign', 'baseStatus', 'buildBlueprint', 'digRoom', 'digShaft', 'huntAnimals', 'placeBed', 'placeBlockAt', 'viewChest', 'stats', 'inventory', 'goToCoordinates', 'stop', 'startConversation']);
 const GATHERING = new Set(['collectBlocks', 'collectBlock', 'startShift']);
 // Project jobs run until done; the owner decides who works on them (lab 2026-10-10: the lead pulled a worker off the shaft).
-const PROJECTS = {shaft: 'digging the shaft', excavate: 'digging a room', build: 'building'};
+const PROJECTS = {shaft: 'digging the shaft', excavate: 'digging a room', build: 'building', grave: 'collecting its grave'};
 const isProject = (job) => !!job && Object.hasOwn(PROJECTS, job.type);
 // The lead is the foreman whose goal is gathering (the builder bot2 has workers too, but may dig). ponytail: keyword test on the goal text, a !goal that avoids these words slips through.
 const leadsGathering = (a) => a.workers.size > 0 && /gather|collect|mine|chop|\blogs?\b|wood|cobble|coal|iron/i.test(a.goal);
