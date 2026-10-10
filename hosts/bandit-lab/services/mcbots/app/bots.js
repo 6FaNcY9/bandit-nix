@@ -236,7 +236,7 @@ class BotRunner {
     bot.once('spawn', () => {
       spawnedAt = Date.now();
       this.online = true;
-      const mv = safeMovements(bot, this.protectedAreas);
+      const mv = safeMovements(bot, this.protectedAreas, this);
       bot.pathfinder.setMovements(mv);
       // Unbounded searches toward buried targets ran the bot process out of
       // memory (2026-10-08); cap planning time and radius.
@@ -354,6 +354,7 @@ class BotRunner {
   }
 
   cancel() {
+    this.cancelEpoch = (this.cancelEpoch || 0) + 1; // guardDigs: an equip that began before this must not go on to dig or place
     if (this.current) this.current.cancelled = true;
     const b = this.bot;
     try {
@@ -385,6 +386,7 @@ class BotRunner {
     if (!this.online && this.queue[0].resume) return; // resumed jobs wait for the reconnect
     const job = (this.current = this.queue.shift());
     job.status = 'running';
+    this.digOnly = job.type === 'excavate' ? NATURAL : null; // the walk to the room may dig natural ground only (Codex R3-1)
     job.startedAt = Date.now();
     job.progress = '';
     job.t = {doing: '', done: 0, total: 0, open: false}; // live detail; sub-jobs share it through the prototype
@@ -430,6 +432,7 @@ class BotRunner {
     else if (job.status === 'stopped') this.emit('stop', `stopped: ${jobLabel(job)}`);
     else this.emit('fail', `failed: ${jobLabel(job)} - ${this.lastError.replace(/^\w+: /, '')}`);
     this.current = null;
+    this.digOnly = null;
     setImmediate(() => this.pump());
   }
 
@@ -531,7 +534,7 @@ function unwedge(bot) {
   });
 }
 
-function safeMovements(bot, areas) {
+function safeMovements(bot, areas, runner = null) {
   const mv = new Movements(bot);
   // Bots speak 26.1 to a 26.2 server through ViaBackwards; sprinting, parkour
   // jumps and diagonal corner-cutting make the server reject the move and pull
@@ -541,7 +544,7 @@ function safeMovements(bot, areas) {
   mv.getMoveDiagonal = () => {};
   const inside = (blk) => insideAreas(areas, blk.position.x, blk.position.z);
   const veto = (blk) => (inside(blk) ? 100 : 0);
-  mv.exclusionAreasBreak = [veto];
+  mv.exclusionAreasBreak = [veto, (blk) => (runner?.digOnly && !runner.digOnly.test(blk.name) ? 100 : 0)];
   mv.exclusionAreasPlace = [veto];
   // Every block change counts up, so the path cache never answers from before it.
   if (bot.blockVersion === undefined) {
@@ -709,17 +712,45 @@ function digWhy(bot, block, pos) {
 // itself, after an awaited equip that a Stop or a path reset does not cancel: Codex R2-2). So the last
 // checks sit here: no dig for a stopped job, inside a protected area, or next to a fluid (digAt seals
 // fluids first; the pathfinder never does).
+//
+// The pathfinder awaits bot.equip before it digs or places scaffolding, and a Stop or a path reset
+// does not cancel that await (Codex R2-2, R3-2). So an equip that finishes after a Stop (any equip), or
+// after a path reset (the pathfinder's own), fails and marks the next dig as stale; placements are
+// checked again right before they happen.
 function guardDigs(runner, bot) {
   const dig = bot.dig.bind(bot);
+  const equip = bot.equip.bind(bot);
+  const placeBlock = bot.placeBlock.bind(bot);
+  let resets = 0, stale = false;
+  for (const ev of ['path_reset', 'goal_updated', 'path_stop']) bot.on?.(ev, () => resets++);
+  bot.equip = async (...args) => {
+    const stops = runner.cancelEpoch || 0, before = resets;
+    const own = bot.pathfinder?.isMining?.() || bot.pathfinder?.isBuilding?.();
+    const done = await equip(...args);
+    if ((runner.cancelEpoch || 0) !== stops || (own && resets !== before)) {
+      stale = true;
+      setImmediate(() => { stale = false; }); // the pathfinder's dig follows in the same microtask chain
+      throw new Error('Equip aborted: the job was stopped or the path was reset');
+    }
+    return done;
+  };
   bot.dig = (block, ...rest) => {
     const p = block?.position;
-    if (runner.current?.cancelled) return Promise.reject(new Error('Digging aborted: the job was stopped'));
+    if (runner.current?.cancelled || stale) return Promise.reject(new Error('Digging aborted: the job was stopped'));
     if (p && insideAreas(runner.protectedAreas, p.x, p.z)) return Promise.reject(new Error('Digging aborted: protected area'));
     const live = p && bot.blockAt(p);
-    if (p && (!live || live.name !== block.name)) return Promise.reject(new Error('Digging aborted: the block changed'));
+    if (p && (!live || live.name !== block.name || (block.stateId !== undefined && live.stateId !== block.stateId))) return Promise.reject(new Error('Digging aborted: the block changed'));
+    // A walk may dig only what the job allows (excavate: natural ground, never its own walls).
+    if (runner.digOnly && bot.pathfinder?.isMining?.() && !runner.digOnly.test(block.name)) return Promise.reject(new Error(`Digging aborted: ${block.name} is not part of the job`));
     const danger = p && unsafeDig(bot, p);
     if (danger && / next to it$/.test(danger)) return Promise.reject(new Error(`Digging aborted: ${danger}`));
     return dig(block, ...rest);
+  };
+  bot.placeBlock = (ref, face, ...rest) => {
+    const p = ref?.position && face ? ref.position.plus(face) : null;
+    if (runner.current?.cancelled || stale) return Promise.reject(new Error('Placing aborted: the job was stopped'));
+    if (p && insideAreas(runner.protectedAreas, p.x, p.z)) return Promise.reject(new Error('Placing aborted: protected area'));
+    return placeBlock(ref, face, ...rest);
   };
 }
 
@@ -1505,20 +1536,27 @@ const JOBS = {
       const have = () => bot.inventory.items().filter((i) => i.type === planks?.id).reduce((n, i) => n + i.count, 0);
       const before = recipe ? have() : 0;
       let why = recipe ? '' : 'no recipe';
-      if (recipe) await bot.craft(recipe, log.count, null).catch((e) => { why = e.message.slice(0, 60); });
+      if (recipe) await craftingLib.holding(r, () => bot.craft(recipe, log.count, null)).catch((e) => { why = e.message.slice(0, 60); });
+      guard(job);
       if (recipe && !why && have() <= before) why = 'nothing crafted';
       if (why) noPlanks.push(`${log.name}: ${why}`);
     }
     guard(job);
     if (noPlanks.length) r.emit('info', `re-arm: no planks (${noPlanks.join('; ')})`);
+    // A failed equip is tolerated; a Stop is not: none starts after it, whichever equip it lands in (Codex R2-3).
+    const wear = async (it, slot) => {
+      guard(job);
+      await bot.equip(it, slot).catch(() => {});
+      guard(job);
+    };
     for (const [re, slot] of [[/_helmet$/, 'head'], [/_chestplate$/, 'torso'], [/_leggings$/, 'legs'], [/_boots$/, 'feet']]) {
       const it = best(bot.inventory.items(), re);
-      if (it) await bot.equip(it, slot).catch(() => {});
+      if (it) await wear(it, slot);
     }
     const totem = bot.inventory.items().find((i) => i.name === 'totem_of_undying');
-    if (totem) await bot.equip(totem, 'off-hand').catch(() => {});
+    if (totem) await wear(totem, 'off-hand');
     const sword = best(bot.inventory.items(), /_sword$/);
-    if (sword) await bot.equip(sword, 'hand').catch(() => {});
+    if (sword) await wear(sword, 'hand');
     const worn = ['head', 'torso', 'legs', 'feet'].filter((s) => bot.inventory.slots[bot.getEquipmentDestSlot(s)]).length;
     const off = bot.inventory.slots[bot.getEquipmentDestSlot('off-hand')]?.name;
     await fetchWood(r, job, true);
@@ -1653,4 +1691,4 @@ const JOBS = {
   },
 };
 
-module.exports = {stairRing, BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest, guardDigs, partnerOf, depositList};
+module.exports = {stairRing, BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest, guardDigs, safeMovements, NATURAL, partnerOf, depositList};

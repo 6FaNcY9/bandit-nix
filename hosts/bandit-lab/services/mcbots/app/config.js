@@ -68,6 +68,14 @@ function loadConfig(env = process.env) {
   if (!!workerToken !== !!workerPort) throw new Error('WORKER_PORT and WORKER_TOKEN (or WORKER_TOKEN_FILE) must be set together');
   if (workerPort && (!Number.isInteger(workerPort) || workerPort === Number(env.DASHBOARD_PORT || 8095))) throw new Error('WORKER_PORT must be a port other than the dashboard port');
   if (workerToken && !/^[\w-]{32,128}$/.test(workerToken)) throw new Error('worker token must be 32..128 characters of [A-Za-z0-9_-]');
+  // The lab's worker containers: "label=bot16,bot17;label2=bot2" - each gets its own hub credential for those names only.
+  const hubWorkers = {};
+  for (const part of (env.HUB_WORKERS || '').split(';').map((s) => s.trim()).filter(Boolean)) {
+    const [label, list = ''] = part.split('=');
+    const names = list.split(',').map((s) => s.trim()).filter(Boolean);
+    if (!/^[\w.-]{1,40}$/.test(label) || !names.length || names.some((n) => !NAME_RE.test(n))) throw new Error(`HUB_WORKERS entry "${part}" must be label=bot2,bot3`);
+    hubWorkers[label] = names;
+  }
   // Agent service bearer (H5): may only drive AGENT_BOTS (agentauth.js); no token, no machine access.
   const agentToken = readToken(env.AGENT_TOKEN, env.AGENT_TOKEN_FILE);
   const agentBots = list(env.AGENT_BOTS);
@@ -96,6 +104,7 @@ function loadConfig(env = process.env) {
     loginSeed,
     bluemapUrl: bluemapUrl.replace(/\/+$/, ''),
     workerToken,
+    hubWorkers,
     agentToken,
     agentBots,
     workerPort,

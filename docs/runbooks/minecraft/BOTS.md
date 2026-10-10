@@ -215,6 +215,7 @@ nix run .#mcbots-worker -- bot5          # on the laptop; Ctrl-C stops the bot
   `vino`, 0400; needs one `nrs` after the first pull). Rotate by setting both
   keys again, deploying the lab, `sudo systemctl restart mcbots-seed docker-mcbots`
   and `nrs` on the laptop.
+- Lab workers: each worker container has its own credential, `sha256("mcbots-worker:<label>:<shared token>")` (written by `mcbots-seed` to `/run/mcbots/worker-<label>.env`; the hub derives the same from `HUB_WORKERS` in `default.nix`). It may run only the names listed for its label; the shared token (laptops) may run every other remote name, never a lab worker's. Refusal: `bot16 may not be run with this worker credential` / `... belong to a lab worker` (4003), also right after a hub restart. Laptop workers still share one credential.
 - Names: a bot name belongs to the worker that first announced it, until the hub restarts. A worker is known by `wid` (an HMAC of its login seed, so it needs that seed; a worker without `wid` is known by its host label). Another worker holding the token is refused (`bot12 is taken by another worker`, close code 4003) instead of replacing the owner; the owner reconnects freely and takes a stale socket over. To hand a name to another machine, restart the hub (deploy).
 - What a worker may do: act only for the names in its hello, claim at most 8
   blocks per bot, report mobs/blocks/status. Everything it sends is

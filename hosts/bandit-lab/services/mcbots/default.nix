@@ -57,7 +57,7 @@
         HOST_LABEL = w.label;
         NODE_OPTIONS = "--max-old-space-size=768";
       };
-      environmentFiles = ["/run/mcbots/worker.env"]; # BOT_PASSWORD_SEED, HUB_TOKEN
+      environmentFiles = ["/run/mcbots/worker-${w.label}.env"]; # BOT_PASSWORD_SEED, HUB_TOKEN (this worker's own, R2-6)
       extraOptions = [
         "--network=container:mcbots"
         "--memory=1g"
@@ -86,6 +86,8 @@ in {
             DASHBOARD_PORT = dashboardPort;
             WORKER_HOST = "0.0.0.0"; # inside the container; published on loopback only
             WORKER_PORT = workerPort;
+            # Each worker container's hub credential is good for its own bot names only (R2-6).
+            HUB_WORKERS = lib.concatStringsSep ";" (lib.mapAttrsToList (_: w: "${w.label}=${w.bots}") workers);
             HOST_LABEL = "bandit-lab";
             # tailscale serve identifies the tailnet user; everything else gets 403.
             ALLOWED_TS_LOGINS = "6FaNcY9@github";
@@ -182,7 +184,10 @@ in {
             install -d -m 0700 /var/lib/mcbots
             [ -s /var/lib/mcbots/agent-token ] || head -c 32 /dev/urandom | sha256sum | cut -c1-64 > /var/lib/mcbots/agent-token
             printf 'BOT_PASSWORD_SEED=%s\nWORKER_TOKEN=%s\nAGENT_TOKEN=%s\n' "$seed" "$(tr -d '\n' < ${config.sops.secrets."mcbots-worker-token".path})" "$(cat /var/lib/mcbots/agent-token)" > /run/mcbots/seed.env
-            printf 'BOT_PASSWORD_SEED=%s\nHUB_TOKEN=%s\n' "$seed" "$(tr -d '\n' < ${config.sops.secrets."mcbots-worker-token".path})" > /run/mcbots/worker.env
+            # One hub credential per worker container, derived from the shared token and the container's label
+            # (the hub derives the same, hub.js workerToken), so a compromised worker cannot act as another.
+            shared=$(tr -d '\n' < ${config.sops.secrets."mcbots-worker-token".path})
+            ${lib.concatMapStringsSep "\n" (w: ''printf 'BOT_PASSWORD_SEED=%s\nHUB_TOKEN=%s\n' "$seed" "$(printf 'mcbots-worker:%s:%s' '${w.label}' "$shared" | sha256sum | cut -c1-64)" > /run/mcbots/worker-${w.label}.env'') (lib.attrValues workers)}
           '';
         };
         docker-mcbots = {

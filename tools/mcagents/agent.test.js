@@ -331,6 +331,63 @@ assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}
       assert.strictEqual(jobs.length, sent, 'no second build job');
       assert.match(fm.history.at(-1).content, /^Refused: already done \(built test-pad-3x3 at 1 64 1\)/);
     }
+    { // a completed room is refused for a worker assignment too (R3-4); failed, stopped and other rooms stay eligible
+      const fm = new Agent('bot2', 'lead', null);
+      fm.workers = new Set(['bot3']);
+      const jobs = [];
+      let reply;
+      globalThis.fetch = async (url, opt = {}) => ({ok: true, status: 200, json: async () => (url.endsWith('/api/chat') ? {message: {content: reply}} : (url.endsWith('/api/job') && jobs.push(JSON.parse(opt.body)), {}))});
+      const state = {bots: [{name: 'bot2', online: true, pos: [0, 64, 0], inventory: [], queue: [], job: null}, {name: 'bot3', online: true, pos: [0, 64, 0], inventory: [], queue: [], job: null}], places: []};
+      const go = async (r) => { reply = r; fm.history = []; fm.lastCommand = ''; assigner.delete('bot3'); await decide(fm, new Map([['bot2', fm]]), async () => state, {take: () => true}); };
+      const room = '!assign("bot3", "!digRoom(0, 60, 0, 2, 2, 1)")';
+      await go(room);
+      assert.strictEqual(jobs.length, 1, 'the first assignment goes out');
+      noteFinished(fm, 'finished: excavate 0 60 0 1 60 1 - already complete (0 s)');
+      assert.strictEqual(fm.done.size, 1);
+      await go(room);
+      assert.strictEqual(jobs.length, 1, 'no second excavate for the same room');
+      assert.match(fm.history.at(-1).content, /^Refused: already done \(dug room 0 60 0 2x2x1\)/);
+      await go('!assign("bot3", "!digRoom(5, 60, 5, 2, 2, 1)")');
+      assert.strictEqual(jobs.length, 2, 'a different room is eligible');
+      noteFinished(fm, 'failed: excavate 5 60 5 6 60 6 - blocks left');
+      await go('!assign("bot3", "!digRoom(5, 60, 5, 2, 2, 1)")');
+      assert.strictEqual(jobs.length, 3, 'a failed room is eligible');
+    }
+    { // two agents answering each other end the exchange instead of spending the budget (R3-3)
+      const a = new Agent('bot1', 'lead', null), b = new Agent('bot2', 'lead', null);
+      const agents = new Map([['bot1', a], ['bot2', b]]);
+      let model = 0, reply = (name) => `!startConversation("${name === 'bot1' ? 'bot2' : 'bot1'}", "Done!")`;
+      let who;
+      globalThis.fetch = async (url) => ({ok: true, status: 200, json: async () => (url.endsWith('/api/chat') ? (model++, {message: {content: reply(who)}}) : {})});
+      const state = {bots: [{name: 'bot1', online: true, pos: [0, 64, 0], inventory: [], queue: [], job: null}, {name: 'bot2', online: true, pos: [0, 64, 0], inventory: [], queue: [], job: null}], places: []};
+      a.inbox.push('bot2: (FROM OTHER BOT)start');
+      let delivered = 0;
+      for (const q of [a, b]) { const push = q.inbox.push.bind(q.inbox); q.inbox.push = (...x) => (delivered++, push(...x)); }
+      for (let i = 0; i < 12; i++) {
+        const me = i % 2 ? b : a;
+        who = me.name;
+        me.inbox.length = 0;
+        await decide(me, agents, async () => state, {take: () => true});
+      }
+      assert.ok(delivered <= 2 && model === 12, `the replies stop arriving (${delivered} delivered)`);
+      assert.ok(a.history.concat(b.history).some((m) => /^Not sent/.test(m.content)), 'the sender is told');
+      // yourself: nothing is delivered
+      who = 'bot1';
+      reply = () => '!startConversation("bot1", "hello me")';
+      delivered = 0;
+      await decide(a, agents, async () => state, {take: () => true});
+      assert.strictEqual(delivered, 0);
+      // a new, different request still arrives; more than TALK_MAX per window does not
+      b.inbox.length = 0;
+      reply = () => '!startConversation("bot2", "need 20 cobblestone at the base chest")';
+      await decide(a, agents, async () => state, {take: () => true});
+      assert.strictEqual(b.inbox.length, 1, 'useful new requests still arrive');
+      for (let i = 0; i < 10; i++) {
+        reply = () => `!startConversation("bot2", "request ${i}")`;
+        await decide(a, agents, async () => state, {take: () => true});
+      }
+      assert.ok(b.inbox.length <= 6, `capped (${b.inbox.length})`);
+    }
     let takes = 0; // queries only: every model call takes budget
     const {calls} = await run({replies: ['!stats'], budget: {take: () => (takes++, true)}});
     assert.strictEqual(calls.model, 5);

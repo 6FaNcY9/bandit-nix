@@ -899,6 +899,88 @@ require('./crafting');
   }
 })();
 
+// ---- per-worker hub credentials (Codex R2-6): a lab worker runs its own names only ----
+(async () => {
+  const WebSocket = require('ws');
+  const net = require('node:net');
+  const {execSync} = require('node:child_process');
+  const {WorldModel} = require('./world');
+  const {Hub, createWorkerServer, workerToken} = require('./hub');
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const until = async (f, what, ms = 5000) => {
+    for (let t = 0; t < ms; t += 20) {
+      const v = await f();
+      if (v) return v;
+      await sleep(20);
+    }
+    throw new Error(`timed out: ${what}`);
+  };
+  const shared = 'f00dcafe'.repeat(6);
+  assert.strictEqual(workerToken(shared, 'bandit-lab-worker'), execSync(`printf 'mcbots-worker:%s:%s' bandit-lab-worker ${shared} | sha256sum | cut -c1-64`, {encoding: 'utf8'}).trim(), 'the sh derivation in default.nix matches');
+  assert.deepStrictEqual(require('./config').loadConfig({BOT_NAMES: 'bot1', HUB_WORKERS: 'w-one=bot16,bot17; w-two=bot2'}).hubWorkers, {'w-one': ['bot16', 'bot17'], 'w-two': ['bot2']});
+  assert.throws(() => require('./config').loadConfig({BOT_NAMES: 'bot1', HUB_WORKERS: 'w-one=steve'}), /HUB_WORKERS/);
+  const port = await new Promise((res) => { const s = net.createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); });
+  const fresh = () => new Map([['bot1', {name: 'bot1', start() {}, shutdown() {}, snapshot: () => ({name: 'bot1', online: true}), debug: () => ({}), enqueue() {}}]]);
+  let runners = fresh();
+  const workers = {'w-one': ['bot16', 'bot17', 'bot18'], 'w-two': ['bot2', 'bot3', 'bot4']};
+  const make = () => new Hub({world: new WorldModel(), runners: (runners = fresh()), token: shared, workers, log: () => {}});
+  let hub = make();
+  const server = createWorkerServer(hub);
+  server.removeAllListeners('upgrade');
+  server.on('upgrade', (req, socket, head) => hub.upgrade(req, socket, head));
+  await new Promise((res) => server.listen(port, '127.0.0.1', res));
+  const open = (token) => new Promise((res, rej) => {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/worker`, {headers: {Authorization: `Bearer ${token}`}});
+    const msgs = [];
+    ws.on('message', (d) => msgs.push(JSON.parse(String(d))));
+    ws.on('open', () => res({ws, msgs, send: (m) => ws.send(JSON.stringify(m)), closed: new Promise((r) => ws.on('close', (c) => r(c)))}));
+    ws.on('unexpected-response', (_q, r) => rej(new Error(`HTTP ${r.statusCode}`)));
+    ws.on('error', () => {});
+  });
+  const hello = async (token, bots, extra = {}) => {
+    const c = await open(token);
+    c.send({t: 'hello', v: 1, host: 'h', wid: 'a1'.repeat(16), bots, ...extra});
+    return c;
+  };
+  const welcomed = (c) => until(() => c.msgs.find((m) => m.t === 'welcome'), 'welcome');
+  try {
+    const one = workerToken(shared, 'w-one'), two = workerToken(shared, 'w-two');
+    // each credential runs its own names; the same wid and host label (as both lab containers have) change nothing
+    const a = await hello(one, ['bot16', 'bot17']);
+    await welcomed(a);
+    const b = await hello(two, ['bot2']);
+    await welcomed(b);
+    for (const [token, names] of [[two, ['bot16']], [two, ['bot17', 'bot2']], [one, ['bot2']], [one, ['bot5']], [shared, ['bot16']], [shared, ['bot2', 'bot5']]]) {
+      const evil = await hello(token, names);
+      assert.strictEqual(await evil.closed, 4003, `${token.slice(0, 4)} ${names}`);
+      assert.match(evil.msgs.find((m) => m.t === 'error').message, /may not be run with this worker credential|belong to a lab worker/);
+    }
+    assert.ok(runners.get('bot16').snapshot().connected && runners.get('bot2').snapshot().connected, 'the owners stay connected');
+    assert.ok(!runners.has('bot5'), 'a refused hello creates nothing');
+    // the owner reconnects and replaces its stale socket; the shared (laptop) credential still runs other names
+    const again = await hello(one, ['bot16', 'bot17', 'bot18']);
+    await welcomed(again);
+    assert.strictEqual(await a.closed, 4001);
+    const laptop = await hello(shared, ['bot5'], {wid: 'c3'.repeat(16)});
+    await welcomed(laptop);
+    for (const c of [again, b, laptop]) c.ws.close();
+    // after a hub restart nothing is first-come: the sets are the server's
+    hub.close();
+    for (const c of hub.conns) c.ws.terminate();
+    hub = make();
+    const evil = await hello(two, ['bot16']);
+    assert.strictEqual(await evil.closed, 4003, 'worker 2 cannot claim bot16 first after a restart');
+    const owner = await hello(one, ['bot16']);
+    await welcomed(owner);
+    owner.ws.close();
+    await assert.rejects(open('x'.repeat(40)), /401/);
+  } finally {
+    hub.close();
+    server.close();
+    for (const c of hub.conns) c.ws.terminate();
+  }
+})();
+
 // ---- claims expire out of the per-bot count; offline workers are forgotten after an hour ----
 {
   const {WorldModel, CLAIM_TTL_MS} = require('./world');
@@ -1630,7 +1712,7 @@ require('./crafting');
     const {Vec3} = require('vec3');
     const world = new Map([['0,60,0', 'stone'], ['5,60,5', 'stone'], ['6,60,5', 'water'], ['20,60,20', 'stone']]);
     let dug = 0;
-    const bot = {dig: async () => { dug++; }, entity: {position: new Vec3(0, 62, 3)},
+    const bot = {dig: async () => { dug++; }, equip: async () => {}, placeBlock: async () => {}, entity: {position: new Vec3(0, 62, 3)},
       blockAt: (p) => (world.get(`${p.x},${p.y},${p.z}`) ? {name: world.get(`${p.x},${p.y},${p.z}`), position: p, getProperties: () => ({})} : null)};
     const runner = {current: {cancelled: false}, protectedAreas: [[15, 15, 25, 25]]};
     guardDigs(runner, bot);
@@ -1643,6 +1725,120 @@ require('./crafting');
     runner.current.cancelled = true;
     await assert.rejects(bot.dig(blk(0, 60, 0)), /stopped/);
     assert.strictEqual(dug, 1);
+  }
+  { // the pathfinder's equip-then-dig / equip-then-place survives neither a Stop, a path reset nor a new job (Codex R2-2, R3-2)
+    const {guardDigs, BotRunner} = require('./bots');
+    const EventEmitter = require('node:events');
+    const {Vec3} = require('vec3');
+    const world = new Map();
+    const rig = ({areas = []} = {}) => {
+      world.clear();
+      world.set('0,60,0', {name: 'stone', stateId: 1});
+      let release = () => {}, digs = 0, places = 0, mining = false, building = false;
+      const bot = Object.assign(new EventEmitter(), {
+        equip: () => new Promise((res) => { release = res; }),
+        dig: async () => { digs++; },
+        placeBlock: async () => { places++; },
+        entity: {position: new Vec3(0, 64, 3)},
+        pathfinder: {stop() {}, setGoal() {}, isMining: () => mining, isBuilding: () => building},
+        blockAt: (p) => { const b = world.get(`${p.x},${p.y},${p.z}`); return b ? {...b, position: p, getProperties: () => ({})} : null; },
+      });
+      const runner = Object.assign(Object.create(BotRunner.prototype), {bot, current: {cancelled: false}, protectedAreas: areas});
+      guardDigs(runner, bot);
+      // the pathfinder's executor: equip, then dig (its catch swallows an equip error, then digs anyway)
+      const pfDig = () => { mining = true; return bot.equip({}, 'hand').catch(() => {}).then(() => bot.dig({name: 'stone', stateId: 1, position: new Vec3(0, 60, 0)}, true)).catch(() => {}); };
+      const pfPlace = () => { building = true; return bot.equip({}, 'hand').then(() => bot.placeBlock({position: new Vec3(0, 60, 0)}, new Vec3(0, 1, 0))).catch(() => {}); };
+      return {bot, runner, pfDig, pfPlace, release: () => release(), digs: () => digs, places: () => places};
+    };
+    const flush = () => new Promise((res) => setImmediate(res));
+    let x = rig(), p = x.pfDig();
+    x.release(); await p;
+    assert.strictEqual(x.digs(), 1, 'untouched: the dig goes ahead');
+    for (const [how, act] of [
+      ['Stop, pump clears the job', (q) => { q.runner.cancel(); q.runner.current = null; }],
+      ['Stop, then a new job', (q) => { q.runner.cancel(); q.runner.current = {cancelled: false}; }],
+      ['path reset', (q) => q.bot.emit('path_reset', 'x')],
+      ['goal replaced', (q) => q.bot.emit('goal_updated', null)],
+      ['block state swapped', () => world.set('0,60,0', {name: 'stone', stateId: 2})],
+      ['water arrives', () => world.set('1,60,0', {name: 'water', stateId: 3})],
+      ['block turned to another', () => world.set('0,60,0', {name: 'chest', stateId: 4})],
+    ]) {
+      x = rig();
+      p = x.pfDig();
+      act(x);
+      x.release(); await p; await flush();
+      assert.strictEqual(x.digs(), 0, `dig after: ${how}`);
+    }
+    x = rig({areas: [[-1, -1, 1, 1]]});
+    p = x.pfDig(); x.release(); await p;
+    assert.strictEqual(x.digs(), 0, 'protected target');
+    // scaffolding placement
+    x = rig(); p = x.pfPlace(); x.release(); await p;
+    assert.strictEqual(x.places(), 1, 'untouched: the scaffold goes ahead');
+    for (const [how, act] of [
+      ['Stop', (q) => { q.runner.cancel(); q.runner.current = null; }],
+      ['Stop, then a new job', (q) => { q.runner.cancel(); q.runner.current = {cancelled: false}; }],
+      ['path reset', (q) => q.bot.emit('path_reset', 'x')],
+    ]) {
+      x = rig(); p = x.pfPlace(); act(x); x.release(); await p; await flush();
+      assert.strictEqual(x.places(), 0, `scaffold after: ${how}`);
+    }
+    x = rig({areas: [[-1, -1, 1, 1]]});
+    await assert.rejects(x.bot.placeBlock({position: new Vec3(0, 60, 0)}, new Vec3(0, 1, 0)), /protected/);
+    x = rig(); x.runner.current.cancelled = true;
+    await assert.rejects(x.bot.placeBlock({position: new Vec3(0, 60, 0)}, new Vec3(0, 1, 0)), /stopped/);
+    // a job's own equip does not care about path resets, only about a Stop
+    x = rig(); p = x.bot.equip({}, 'hand'); x.bot.emit('path_reset', 'x'); x.release();
+    await p;
+    x = rig(); p = x.bot.equip({}, 'hand'); x.runner.cancel(); x.release();
+    await assert.rejects(p, /Equip aborted/);
+  }
+  { // placeNear (crafting table / furnace): a Stop during the equip places nothing (Codex R3-2)
+    const {placeNear} = require('./crafting');
+    const {Cancelled} = require('./bots');
+    const {Vec3} = require('vec3');
+    let placed = 0, stopped = false, release;
+    const bot = {
+      inventory: {items: () => [{name: 'crafting_table'}]},
+      entity: {position: new Vec3(0.5, 64, 0.5)},
+      blockAt: (p) => (p.y === 63 ? {boundingBox: 'block', position: p, name: 'stone'} : {boundingBox: 'empty', position: p, name: 'air'}),
+      equip: () => new Promise((res) => { release = res; }),
+      placeBlock: async () => { placed++; },
+    };
+    const p = placeNear(bot, 'crafting_table', [], () => { if (stopped) throw new Cancelled('stopped'); });
+    stopped = true;
+    release();
+    await assert.rejects(p, Cancelled);
+    assert.strictEqual(placed, 0);
+  }
+  { // excavate's walking may dig natural ground only: placed walls stay, also for the ascent (Codex R3-1)
+    const {safeMovements, guardDigs, BotRunner, NATURAL} = require('./bots');
+    const {Movements} = require('mineflayer-pathfinder');
+    const EventEmitter = require('node:events');
+    const {Vec3} = require('vec3');
+    const md = require('minecraft-data')('26.1');
+    let walking = true, dug = 0;
+    const world = {60: 'cobblestone', 61: 'dirt'};
+    const bot = Object.assign(new EventEmitter(), {registry: md, version: '26.1', inventory: {items: () => []}, entity: {position: new Vec3(0, 64, 0)}, entities: {}, pathfinder: {isMining: () => walking}, dig: async () => { dug++; }, equip: async () => {}, placeBlock: async () => {},
+      blockAt: (p) => ({name: world[p.y], position: p, getProperties: () => ({})})});
+    const runner = Object.assign(Object.create(BotRunner.prototype), {bot, current: {cancelled: false}, protectedAreas: []});
+    const mv = safeMovements(bot, [], runner);
+    mv.getBlock = () => ({liquid: false, canFall: false});
+    const blk = (n) => ({type: md.blocksByName[n].id, name: n, position: new Vec3(0, 60, 0)});
+    for (const n of ['cobblestone', 'oak_planks', 'torch']) assert.ok(mv.safeToBreak(blk(n)), `${n}: free outside an excavation`);
+    guardDigs(runner, bot);
+    const dig = (y) => bot.dig({name: world[y], position: new Vec3(0, y, 0)}, true);
+    await dig(60);
+    assert.strictEqual(dug, 1, 'outside an excavation a walk digs what it needs');
+    runner.digOnly = NATURAL;
+    assert.ok(mv.safeToBreak(blk('dirt')) && mv.safeToBreak(blk('stone')));
+    for (const n of ['cobblestone', 'oak_planks', 'torch']) assert.ok(!mv.safeToBreak(blk(n)), `${n}: never planned as a dig during an excavation`);
+    await assert.rejects(dig(60), /not part of the job/);
+    await dig(61);
+    assert.strictEqual(dug, 2, 'natural ground is still dug');
+    walking = false; // the job's own dig (digAt: a chest cover) is not a walk
+    await dig(60);
+    assert.strictEqual(dug, 3);
   }
   { // openChest: the partner is the one block facing + left/right point to (R2-5)
     const {openChest, partnerOf} = require('./bots');
@@ -1837,6 +2033,20 @@ require('./crafting');
     const picks = [A, B].map((q) => q.inv.filter((i) => i.name === 'iron_pickaxe').reduce((s, i) => s + i.count, 0));
     assert.strictEqual(picks[0] + picks[1], 1, 'one spare, one owner');
     assert.strictEqual(chest.closed, chest.opened);
+    // 8. a Stop inside the first armour equip (or the craft) starts no further equip or craft (Codex R2-3)
+    for (const at of ['equip', 'craft']) {
+      chest = chestOf([]);
+      const carried = ['iron_helmet', 'iron_chestplate', 'iron_leggings', 'iron_boots', 'totem_of_undying', 'diamond_sword'].map((n) => it(n));
+      b = botOf(chest, {inv: [...carried, ...(at === 'craft' ? [it('oak_log', 2)] : [])]});
+      const j = {t: {}, cancelled: false};
+      let calls = 0;
+      const stop = async () => { calls++; j.cancelled = true; };
+      if (at === 'equip') b.bot.equip = stop;
+      else { b.bot.craft = stop; b.bot.equip = async () => { calls++; }; }
+      await assert.rejects(run(b, j).go(), Cancelled, at);
+      assert.strictEqual(calls, 1, `${at}: nothing is started after the Stop`);
+      assert.strictEqual(chest.closed, chest.opened);
+    }
   }
   { // excavate: digs natural ground top-down, leaves placed blocks and protected areas alone
     const {JOBS, VALIDATE} = require('./bots');

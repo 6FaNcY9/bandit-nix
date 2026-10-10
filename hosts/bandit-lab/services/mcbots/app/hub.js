@@ -191,8 +191,14 @@ class RemoteRunner {
   }
 }
 
+// A lab worker container's own bearer: derived from the shared token and its label, so it cannot
+// compute another worker's (or the shared) token. mcbots-seed derives the same value in sh (default.nix).
+const workerToken = (shared, label) => crypto.createHash('sha256').update(`mcbots-worker:${label}:${shared}`).digest('hex');
+
 class Hub {
-  constructor({world, runners, token, log = () => {}, protectedAreas = [], supplyChest = null, now = Date.now, events = null, settings = null}) {
+  // workers: {label: [bot names]} - credentials of the lab's worker containers, each tied to the names it may
+  // run. The shared token (laptops) may run every other remote name (R2-6).
+  constructor({world, runners, token, workers = {}, log = () => {}, protectedAreas = [], supplyChest = null, now = Date.now, events = null, settings = null}) {
     this.events = events; // EventLog of the dashboard (optional)
     this.settings = settings; // Settings store of the dashboard (optional): sent to a worker with its welcome
     if (typeof token !== 'string' || !/^[\w-]{32,128}$/.test(token)) throw new Error('worker token must be 32..128 characters of [A-Za-z0-9_-]');
@@ -200,7 +206,10 @@ class Hub {
     this.runners = runners;
     this.owners = new Map(); // remote bot name -> who first announced it
     this.local = new Set(runners.keys()); // the lab's own bots: never claimable by a worker
-    this.tokenHash = crypto.createHash('sha256').update(token).digest();
+    const digest = (t) => crypto.createHash('sha256').update(t).digest();
+    this.tokenHash = digest(token);
+    this.principals = Object.entries(workers).map(([label, names]) => ({label, names: new Set(names), hash: digest(workerToken(token, label))}));
+    this.labNames = new Set(this.principals.flatMap((p) => [...p.names]));
     this.log = log;
     this.protectedAreas = protectedAreas;
     this.supplyChest = supplyChest;
@@ -213,11 +222,18 @@ class Hub {
   }
 
   // ---- connection admission ----
-  tokenOk(header) {
+  // Who the bearer belongs to: a lab worker's principal, the shared one ({label: null}) or null.
+  auth(header) {
     const m = /^Bearer (\S{16,200})$/.exec(String(header || ''));
-    if (!m) return false;
+    if (!m) return null;
     const given = crypto.createHash('sha256').update(m[1]).digest();
-    return crypto.timingSafeEqual(given, this.tokenHash);
+    let who = null;
+    for (const p of [...this.principals, {label: null, names: null, hash: this.tokenHash}]) if (crypto.timingSafeEqual(given, p.hash) && !who) who = p;
+    return who;
+  }
+
+  tokenOk(header) {
+    return !!this.auth(header);
   }
 
   throttled() {
@@ -240,17 +256,18 @@ class Hub {
     if (path !== '/worker') return deny(404, 'Not Found');
     // The token is checked first: a wrong one counts towards the failure window
     // (then 429), but someone guessing never locks the real worker out.
-    if (!this.tokenOk(req.headers.authorization)) {
+    const principal = this.auth(req.headers.authorization);
+    if (!principal) {
       if (this.throttled()) return deny(429, 'Too Many Requests');
       this.fails.push(this.now());
       return deny(401, 'Unauthorized');
     }
     if (this.conns.size >= MAX_CONNS) return deny(503, 'Service Unavailable');
-    this.wss.handleUpgrade(req, socket, head, (ws) => this.onConnection(ws));
+    this.wss.handleUpgrade(req, socket, head, (ws) => this.onConnection(ws, principal));
   }
 
-  onConnection(ws) {
-    const conn = {ws, hello: false, host: '', bots: new Set(), alive: true, lastMsg: this.now(), winStart: this.now(), winCount: 0};
+  onConnection(ws, principal = {label: null, names: null}) {
+    const conn = {ws, principal, hello: false, host: '', bots: new Set(), alive: true, lastMsg: this.now(), winStart: this.now(), winCount: 0};
     this.conns.add(conn);
     const helloTimer = setTimeout(() => !conn.hello && ws.close(4000, 'hello timeout'), HELLO_MS);
     ws.on('pong', () => {
@@ -378,7 +395,10 @@ class Hub {
     // A bot name belongs to the worker that first announced it (until the hub restarts): the same worker
     // may reconnect, another one holding the shared token may not announce or replace it. A worker is
     // known by `wid` (derived from its own login seed) or, from an older worker, by its host label.
-    const who = WID_RE.test(m.wid) ? `k:${m.wid}` : `h:${host}`;
+    const p = conn.principal;
+    const foreign = p.names ? names.filter((n) => !p.names.has(n)) : names.filter((n) => this.labNames.has(n));
+    if (foreign.length) return this.refuse(conn, `${foreign.join(', ')} ${p.names ? 'may not be run with this worker credential' : 'belong to a lab worker'}`);
+    const who = p.label ? `l:${p.label}` : WID_RE.test(m.wid) ? `k:${m.wid}` : `h:${host}`;
     const taken = names.filter((n) => (this.owners.get(n) || who) !== who);
     if (taken.length) return this.refuse(conn, `${taken.join(', ')} ${taken.length > 1 ? 'are' : 'is'} taken by another worker`);
     const fresh = names.filter((n) => !this.runners.has(n)).length;
@@ -492,4 +512,4 @@ function createWorkerServer(hub) {
   return server;
 }
 
-module.exports = {Hub, RemoteRunner, createWorkerServer, cleanSnapshot, cleanDebug, PROTOCOL, KEY_RE, FORGET_MS, cleanPng};
+module.exports = {workerToken, Hub, RemoteRunner, createWorkerServer, cleanSnapshot, cleanDebug, PROTOCOL, KEY_RE, FORGET_MS, cleanPng};

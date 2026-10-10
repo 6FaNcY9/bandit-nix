@@ -36,7 +36,7 @@ const sha = (re) => `'sha256-${require('node:crypto').createHash('sha256').updat
 const CSP = `default-src 'none'; script-src ${sha(/<script>([\s\S]*?)<\/script>/)}; style-src ${sha(/<style>([\s\S]*?)<\/style>/)}; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`;
 // Remote workers register themselves in `runners` (see hub.js), so the
 // dashboard, /api/state and /api/debug list them next to the lab's bots.
-const hub = cfg.workerToken ? new Hub({world, runners, token: cfg.workerToken, log, protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest, events, settings}) : null;
+const hub = cfg.workerToken ? new Hub({world, runners, token: cfg.workerToken, workers: cfg.hubWorkers, log, protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest, events, settings}) : null;
 const workerServer = hub ? createWorkerServer(hub) : null;
 
 // tailscale serve sets Tailscale-User-Login for tailnet users. When

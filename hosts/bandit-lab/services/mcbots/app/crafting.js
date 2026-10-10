@@ -44,7 +44,7 @@ function nearBlock(bot, name, maxDistance = 24) {
 // Place an item from the inventory on a free spot next to the bot.
 // Grass, flowers and leaf litter count as free: placing replaces them.
 const open = (b) => b && b.boundingBox === 'empty' && !/water|lava/.test(b.name);
-async function placeNear(bot, itemName, areas = []) {
+async function placeNear(bot, itemName, areas = [], check = () => {}) {
   const item = bot.inventory.items().find((i) => i.name === itemName);
   if (!item) throw new Error(`no ${itemName} to place`);
   const me = bot.entity.position.floored();
@@ -54,7 +54,9 @@ async function placeNear(bot, itemName, areas = []) {
       const ground = bot.blockAt(me.offset(dx, dy, dz));
       const spot = bot.blockAt(me.offset(dx, dy + 1, dz));
       if (ground?.boundingBox === 'block' && open(spot) && !insideAreas(areas, spot.position.x, spot.position.z)) {
+        check();
         await bot.equip(item, 'hand');
+        check(); // a Stop during the equip places nothing (Codex R3-2)
         await bot.placeBlock(ground, new Vec3(0, 1, 0)).catch(() => {}); // 26.x may not echo the update in time
         for (let i = 0; i < 20; i++) {
           const placed = bot.blockAt(spot.position);
@@ -86,7 +88,7 @@ function makeCrafting({goNear, guard}) {
     }
     if (!block) {
       await ensureItem(r, job, name, 1, depth + 1);
-      block = await placeNear(bot, name, r.protectedAreas);
+      block = await placeNear(bot, name, r.protectedAreas, () => guard(job));
     }
     return bot.blockAt(block.position);
   }
@@ -213,4 +215,4 @@ function fixCraftTiming(bot) {
   });
 }
 
-module.exports = {makeCrafting, fixCraftTiming, FUELS, count, fuelFor, nearBlock};
+module.exports = {makeCrafting, placeNear, holding, fixCraftTiming, FUELS, count, fuelFor, nearBlock};

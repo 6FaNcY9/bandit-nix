@@ -124,6 +124,8 @@ function commandDocs(blueprints = [], workers = []) {
   return docs + '*\n';
 }
 
+const TALK_WINDOW_MS = 300000, TALK_MAX = 6; // messages one bot may send another per window
+
 // Global cap on model calls per minute (sliding window): a decision takes one, each further query
 // round inside it another (MC-4: one decision could make five calls). Agents over the cap wait.
 class Budget {
@@ -348,6 +350,12 @@ function jobName(type, a, blueprint) {
   if (type === 'build') return `built ${blueprint} at ${Math.round(a.origin.x)} ${Math.round(a.origin.y)} ${Math.round(a.origin.z)}`;
   return `dug room ${Math.round(a.x1)} ${Math.round(a.y1)} ${Math.round(a.z1)} ${a.x2 - a.x1 + 1}x${a.z2 - a.z1 + 1}x${a.y2 - a.y1 + 1}`;
 }
+// The refusal for a part that already finished (the model copies its last command whatever the result
+// says), for the foreman's own jobs and for the ones it assigns.
+const alreadyDone = (agent, job, blueprint) => {
+  const part = jobKey(job[0], job[1]) && jobName(job[0], job[1], blueprint);
+  return part && agent.done.has(part) ? `Refused: already done (${part}). Do the next part, or something else.` : null;
+};
 // Remember what we sent (per key, oldest first: one bot runs its jobs in order); when its "finished" event
 // comes (also "already complete"), that part counts as done. A failed one is just forgotten.
 const noteSent = (agent, job, blueprint) => {
@@ -392,7 +400,7 @@ class Agent {
   constructor(name, goal, team) {
     Object.assign(this, {name, goal, team, history: [], inbox: [], places: {}, memory: '', lastCommand: '', failures: 0,
       wake: true, wakeAt: 0, lastDecisionAt: 0, decisions: 0, modelMs: 0, workers: new Set(),
-      sent: new Map(), done: new Set(), last: new Map()}); // sent/done: build and dig jobs by key; last: a worker's last result
+      sent: new Map(), done: new Set(), last: new Map(), talk: new Map()}); // sent/done: build and dig jobs by key; last: a worker's last result
   }
 
   // Mindcraft's prompt has an example answer "Sure, I'll stop. !stop"; Andy-4.2 copied it whenever it was
@@ -518,8 +526,17 @@ async function decide(agent, agents, getState, budget) {
       }
       if (t.local === 'startConversation') {
         const to = agents.get(String(a[0]));
+        const text = String(a[1] ?? '').toLowerCase().replace(/\W+/g, ' ').trim();
+        const sent = (agent.talk.get(a[0]) || []).filter((m) => Date.now() - m.at < TALK_WINDOW_MS);
         if (!to) agent.push('system', `${a[0]} is not a bot here. Bots: ${[...agents.keys()].join(', ')}`);
-        else to.inbox.push(`${agent.name}: (FROM OTHER BOT)${a[1] ?? ''}`);
+        else if (to === agent) agent.push('system', 'Not sent: you cannot talk to yourself.');
+        // Two agents answered "done" to each other until the whole model budget was gone (R3-3): the same
+        // words twice in a row, or more than TALK_MAX messages per window, end the exchange.
+        else if (sent.at(-1)?.text === text || sent.length >= TALK_MAX) agent.push('system', `Not sent: ${a[0]} already has that message, or you have talked a lot. Go on with your work.`);
+        else {
+          agent.talk.set(a[0], [...sent, {at: Date.now(), text}]);
+          to.inbox.push(`${agent.name}: (FROM OTHER BOT)${a[1] ?? ''}`);
+        }
         return;
       }
       if (t.local === 'endConversation') return;
@@ -527,6 +544,11 @@ async function decide(agent, agents, getState, budget) {
         const as = assignJob(cmd, agent.workers, state, ctx.places);
         if (as.refuse) {
           agent.push('system', as.refuse);
+          continue;
+        }
+        const done = alreadyDone(agent, as.job);
+        if (done) {
+          agent.push('system', done);
           continue;
         }
         try {
@@ -588,9 +610,9 @@ async function decide(agent, agents, getState, budget) {
     }
     // The lead bot "built" the eight finished base parts again and again (lab 2026-10-10); the model copies
     // its last command whatever the result says.
-    const part = jobKey(t.job[0], t.job[1]) && jobName(t.job[0], t.job[1], String(cmd.args[0]));
-    if (part && agent.done.has(part)) {
-      agent.push('system', `Refused: already done (${part}). Do the next part, or something else.`);
+    const done = alreadyDone(agent, t.job, String(cmd.args[0]));
+    if (done) {
+      agent.push('system', done);
       continue;
     }
     agent.lastCommand = same;
