@@ -69,6 +69,44 @@ Shortcuts that save the most: the owner provides beds and a starting kit (skips 
 sheep); the base is a blueprint the owner chooses, not one the bots design; R1-R2 before R4,
 because they pay off at once.
 
+## 3b. Hybrid bots: an LLM brain on top of the scripted bots (decided 2026-10-10)
+
+The Andy-4.2 agents (`tools/mcagents/`, live 2026-10-10) split work by role, talk to each other
+and recover from missing material; the scripted bots alone do not. They are **not a replacement**
+for the mcbots code. They are a brain on top of it: the model chooses the next job, and walking,
+digging, fighting, building, claims and protected areas stay the existing code. The rule is to
+**think rarely and coarsely, script long and cheaply**:
+
+- **Body (unchanged):** every bot is an mcbots bot.
+- **Routines (scripted, no LLM):** long jobs that run for minutes to hours: `shift`, `guard`,
+  AFK, keeper standing orders, `build`, crafting chains. Bots in a pure routine role (bot4 AFK at
+  the gold farm, keeper workers) get no agent at all.
+- **Brain (LLM, event-driven):** asked only when something happens: a routine ended or failed, a
+  death, a message from a bot or player, or a 10-minute check-in. One brain can lead several
+  scripted workers ("foreman").
+
+Measured: about 1 s per decision with reasoning off, about 5.6 GB VRAM for the model. At one
+decision per bot every 3 minutes, 20 bots use about 10 % of the GPU. **The limit is CPU, not the
+GPU:** all lab bots run in one Node process, which used a full core (101 %) with 4 bots. The
+mcbots Docker network (`/29`) does not limit the bot count, because all bots share the container's
+one address. That BOTS.md line is probably stale; H6 checks it.
+
+| # | Step | Done when | Size | Owner |
+| --- | --- | --- | --- | --- |
+| H1 | Routines as LLM commands | The translator offers `!startShift`, `!guardHere`, `!afkHere` and treats a running routine as busy (no re-prompting) | S | Claude |
+| H2 | Event-driven brain plus GPU budget | Prompts only on events or a 10-min check-in, a global cap on decisions per minute, decisions per hour in the log; a 1-hour run with 4 agents stays under 5 % GPU on average | S-M | Claude |
+| H3 | Mixed teams | Bots not listed in `AGENTS` stay scripted; documented roles: bot4 AFK, the rest LLM-led | S | Claude |
+| H4 | Foreman | `!assign("bot2", "!collectBlocks(\"iron_ore\", 32)")` lets one brain run scripted workers; live with 1 brain + 3 workers | M | Claude |
+| H5 | Run on the lab, not the laptop | Ollama as a NixOS service (CUDA, loopback only, scoped unfree predicate); mcagents as a hardened systemd service; the agent authenticates to the dashboard with its own token (design reviewed first, see below) | M | Codex (Nix), Claude (token in mcbots) |
+| H6 | More bots per lab | The CPU hog is found and fixed (profile first: view renderer, pathfinder, physics), then more bots through the existing hub/worker processes; the `/29` claim checked | M | Claude |
+| H7 | Base from the agents | The four agents build `base-v1-shell-01..08` from gathered cobblestone on a flat 7x7 spot the owner picks | M | Claude, after H1-H2 |
+
+H5 needs a design decision before code: the dashboard trusts the `Tailscale-User-Login` header,
+so a host service must not reach it by faking that header. Options: (a) an agent token on the
+dashboard, like the worker token; (b) the brain inside the mcbots process, with Ollama reachable
+from the container on a dedicated network. Recommendation: (a). The `architect` subagent or
+Codex reviews it before H5 starts.
+
 ## 4. Contradictions and stale content
 
 Fixed 2026-10-10 (docs only): panel/BlueMap/VoxelDash shown as deployed in `PANEL.md`,

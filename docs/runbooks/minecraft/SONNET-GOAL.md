@@ -240,6 +240,38 @@ died.
 Not part of F1-F3: bot3 stood idle because the supply chest was full (490 coal, 393 cobblestone).
 The owner adds chests now. Storage that grows by itself is R6 in `docs/NEXT-GOALS.md`.
 
+## Hybrid H1-H4, H6 (after F3, when the owner says so)
+
+Plan and reasons: `docs/NEXT-GOALS.md` section 3b. The agent program is `tools/mcagents/agent.js`
+(read it and its README first; `node tools/mcagents/agent.test.js`). Model: `andy-4.2` on the lab's
+Ollama, reached from the laptop with `ssh -N -L 11434:127.0.0.1:11434 bandit-lab`. If Ollama is
+down: `ssh bandit-lab systemctl --user start mcagents-ollama` (ask the owner if that unit is gone).
+Agent tests use **bot11-bot14** on a second stage (`DASHBOARD_PORT=8097`, chest `SUPPLY_CHEST=-97,66,-10`,
+gather at `-100 66 -10`, outside the protected spawn box). Keep bot6 for your own job tests.
+
+- **H1 (decided):** add Mindcraft-style commands to `translate()` and `DOCS`:
+  `!startShift(type)` -> `shift` (logs or a block) into the base chest; `!guardHere(radius)` ->
+  `guard` at the bot's position; `!afkHere` -> `stop` plus no more prompts until a message comes.
+  A routine (`shift`, `guard`, `follow`) never ends by itself, so the main loop must not treat
+  "busy" as "needs a prompt". Tests in `agent.test.js`.
+- **H2 (decided):** prompt only when (1) a job finished/failed/gave up, (2) a death or respawn,
+  (3) a message arrived, or (4) 10 minutes passed during a routine (`CHECKIN_MS`). Add a global
+  cap `MAX_DECISIONS_PER_MIN` (default 12) with a queue. Log decisions per agent per hour and model
+  seconds. Live: 4 agents for 1 hour; report the decisions per hour and `nvidia-smi` utilisation
+  on the lab (`ssh bandit-lab nvidia-smi --query-gpu=utilization.gpu --format=csv`).
+- **H3:** document roles in the README (bot4 AFK stays scripted). There is no new code: bots not in
+  `AGENTS` simply run their mcbots jobs.
+- **H4 (decided):** `!assign(bot, command)`: the brain may give another bot (not an LLM agent) one
+  translated command. Only bots listed in `WORKERS` may be assigned; refuse everything else.
+  Live: bot11 as foreman, bot12-bot14 as workers, goal "fill the base chest with 32 cobblestone
+  and 16 logs".
+- **H6:** profile before changing anything. The lab image has no profiler, so profile the
+  local stage with 4 bots doing the lab's mix (two shifts, one ore mine, one idle):
+  `NODE_OPTIONS="--cpu-prof --cpu-prof-dir=$S/prof" $P/bin/mcbots`. Stop it with SIGINT after 10
+  minutes (the profile is written on a clean exit), then read the `.cpuprofile` (the top self-time
+  functions). Fix the biggest one and measure again. Then check the BOTS.md "/29 = 4 bots" claim
+  against the Velocity and BotGate config, and fix the doc.
+
 ## After B4 (do not start without the owner)
 
 Next is R1 (iron and gold quotas) in `docs/NEXT-GOALS.md` section 3a, when the owner says so.
