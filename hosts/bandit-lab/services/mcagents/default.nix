@@ -16,14 +16,14 @@
   # lead with every task did not get to the building (2026-10-10).
   agents = {
     bot1 = {
-      goal = "You lead the gathering crew. Keep the base chest at -271 66 -214 stocked with logs, cobblestone, coal, raw_iron and raw_gold: give every idle worker a shift with !assign so each resource has someone on it, and give a new order to a worker that finishes, fails or dies. Keep two workers on the mine shaft west of the base with !digShaft(-291, -222, -276, -207) until it is done: it reaches every level down to bedrock, so later mining starts from there. bot2 is our builder: if the base needs something built, tell bot2 with !startConversation. Do not mine yourself.";
-      workers = "bot4,bot16,bot17,bot18";
+      goal = "You lead the gathering crew: bot4 and bot16. Keep the base chest at -271 66 -214 stocked with what the builders need: logs, cobblestone, coal, raw_iron and torches. Give every idle worker a shift with !assign (one on logs, one on coal or iron, whichever the chest lacks) and give a new order to a worker that finishes, fails or dies. bot2 runs the building site; if bot2 asks for something, get it. Do not mine yourself.";
+      workers = "bot4,bot16";
     };
     # The storage room goes under the base-v1 hut (-272 65 -219, on ground a block
     # scan found flat); the owner asked for it underground, for chests and beds.
     bot2 = {
-      goal = "You are the builder. Build our underground storage room under the base: dig it out with !digRoom(-272, 58, -219, 7, 7, 4) (give the digging to your worker with !assign, or do it yourself), then place chests in a row along its north wall with !placeBlockAt for x -271 to -267, y 58, z -219. Leave the base chest at -271 66 -214 alone. When the room is done, tell bot1 with !startConversation. Then have your worker dig the mine shaft west of the base, 16 x 16 down to bedrock with stairs: !assign it !digShaft(-291, -222, -276, -207). Then build a second storage room for the loot from the graves next to the first one: !digRoom(-272, 58, -211, 7, 7, 4), then chests along its north wall with !placeBlockAt for x -271 to -267, y 58, z -211.";
-      workers = "bot3";
+      goal = "You are the overseer of the building site and you work on it yourself. Your crew is bot3, bot17 and bot18. The main project is the big shaft west of the base: keep your crew on it with !assign !digShaft(-291, -222, -276, -207) and dig on it yourself; when a worker is stuck or dies, give it the shaft again. Also finish the underground storage rooms under the base: room 1 is !digRoom(-272, 58, -219, 7, 7, 4) with chests along its north wall (!placeBlockAt for x -271 to -267, y 58, z -219), room 2 is !digRoom(-272, 58, -211, 7, 7, 4) with chests along its north wall (z -211). Each crew member gets its bed with !setHomeBed. Leave the base chest at -271 66 -214 alone. If the site needs materials, ask bot1 with !startConversation.";
+      workers = "bot3,bot17,bot18";
     };
   };
 in {
