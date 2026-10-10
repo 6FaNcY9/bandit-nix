@@ -1629,7 +1629,8 @@ const JOBS = {
           if (job.args.keep && x === job.args.keep.x && z === job.args.keep.z) continue; // a shaft's stair step
           const pos = new Vec3(x, y, z);
           const b = bot.blockAt(pos);
-          if (!b || b.boundingBox === 'empty' || !NATURAL.test(b.name)) continue;
+          if (!b) { left++; continue; } // not loaded is not dug (a shaft resumed right after login "finished" in 0 s)
+          if (b.boundingBox === 'empty' || !NATURAL.test(b.name)) continue;
           const k = `${dim}:${x},${y},${z}`;
           if (r.world && !(await r.world.claim(r.name, k))) {
             left++;
@@ -1659,6 +1660,8 @@ const JOBS = {
   async shaft(r, job) {
     const {x1, z1, x2, z2, top, bottom} = job.args;
     const ring = stairRing(x1, z1, x2, z2);
+    // Walk over first: far away (after a login or a death) the shaft's chunks are not loaded yet.
+    await goNear(r, job, (x1 + x2) >> 1, Math.floor(r.bot.entity.position.y), z1 - 2, 4, {doing: 'walking to the shaft'});
     // ponytail: the start corner comes from the name's char-code sum mod 4 (bot3/bot17/bot18 get three
     // different ones); two bots can still share a corner.
     const corner = [...r.name].reduce((n, c) => n + c.charCodeAt(0), 0) % 4;
@@ -1687,6 +1690,7 @@ const JOBS = {
       Object.assign(job.t, {total: top - bottom + 1, done: top - y + 1}); // excavate borrowed the counters
       job.progress = `shaft ${x1} ${z1}: down to y ${y}${skipped ? `, ${skipped} blocks left (unsafe or unreachable)` : ''}`;
     }
+    if (skipped) throw new Error(`the shaft reached y ${bottom} but ${skipped} blocks were left (unsafe, unreachable or not loaded)`);
   },
 
   // A wall on the ground around a shaft so nobody walks into it, with a gap where the stairs meet

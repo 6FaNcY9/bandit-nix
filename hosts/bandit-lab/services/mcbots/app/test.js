@@ -2057,7 +2057,7 @@ require('./crafting');
     const blocks = new Map([['0,60,0', 'stone'], ['1,60,0', 'cobblestone'], ['0,59,0', 'dirt'], ['1,59,0', 'chest'], ['0,58,0', 'iron_ore']]);
     const order = [];
     const bot = {
-      blockAt: (p) => (blocks.get(`${p.x},${p.y},${p.z}`) ? {name: blocks.get(`${p.x},${p.y},${p.z}`), type: 1, position: p, boundingBox: 'block', getProperties: () => ({})} : null),
+      blockAt: (p) => (blocks.get(`${p.x},${p.y},${p.z}`) ? {name: blocks.get(`${p.x},${p.y},${p.z}`), type: 1, position: p, boundingBox: 'block', getProperties: () => ({})} : {name: 'air', type: 0, position: p, boundingBox: 'empty'}),
       entity: {position: new Vec3(0, 61, 2), onGround: true}, game: {dimension: 'overworld'}, entities: {}, food: 20,
       registry: {blocks: {}, foodsByName: {}},
       inventory: {items: () => [{type: 2, name: 'stone_pickaxe'}], emptySlotCount: () => 30, slots: []}, getEquipmentDestSlot: () => 5,
@@ -2088,7 +2088,7 @@ require('./crafting');
     const blocks = new Map();
     for (let y = 58; y <= 60; y++) for (let x = 0; x <= 2; x++) for (let z = 0; z <= 2; z++) blocks.set(`${x},${y},${z}`, 'stone');
     const bot = {
-      blockAt: (p) => (blocks.get(`${p.x},${p.y},${p.z}`) ? {name: 'stone', type: 1, position: p, boundingBox: 'block', getProperties: () => ({})} : null),
+      blockAt: (p) => (blocks.get(`${p.x},${p.y},${p.z}`) ? {name: 'stone', type: 1, position: p, boundingBox: 'block', getProperties: () => ({})} : {name: 'air', type: 0, position: p, boundingBox: 'empty'}),
       entity: {position: new Vec3(0, 61, 4), onGround: true}, game: {dimension: 'overworld'}, entities: {}, food: 20,
       registry: {blocks: {}, foodsByName: {}},
       inventory: {items: () => [{type: 2, name: 'stone_pickaxe'}], emptySlotCount: () => 30, slots: []}, getEquipmentDestSlot: () => 5,
@@ -2110,13 +2110,16 @@ require('./crafting');
       for (let y = 58; y <= 60; y++) for (let x = 0; x <= 2; x++) for (let z = 0; z <= 2; z++) blocks.set(`${x},${y},${z}`, 'stone');
       blocks.set('1,59,0', 'gravel');
       const name0 = bot.blockAt;
-      bot.blockAt = (p) => { const n = blocks.get(`${p.x},${p.y},${p.z}`); return n ? {name: n, type: 1, position: p, boundingBox: 'block', getProperties: () => ({})} : null; };
+      bot.blockAt = (p) => { const n = blocks.get(`${p.x},${p.y},${p.z}`); return n ? {name: n, type: 1, position: p, boundingBox: 'block', getProperties: () => ({})} : {name: 'air', type: 0, position: p, boundingBox: 'empty'}; };
       try {
         await JOBS.shaft({name: 'bot18', bot, world: {hostilesNear: () => [], claim: async () => true, release() {}}, emit() {}, protectedAreas: [], supplyChest: null, combat: null}, {...job, t: {}});
       } finally { J.place = place0; bot.blockAt = name0; }
       assert.deepStrictEqual(fixed.map((a) => [a.item, a.x, a.y, a.z]), [['cobblestone', 1, 59, 0]]);
     }
     assert.deepStrictEqual([job.t.done, job.t.total], [3, 3]);
+    { // unloaded chunks are not "done": the shaft does not finish in 0 s after a login
+      await assert.rejects(JOBS.shaft({name: 'bot18', bot: {...bot, blockAt: () => null}, world: {hostilesNear: () => [], claim: async () => true, release() {}}, emit() {}, protectedAreas: [], supplyChest: null, combat: null}, {...job, t: {}}), /24 blocks were left/);
+    }
     { // above the surface (an all-air layer) no step is "fixed": no floating stair
       const {JOBS: J} = require('./bots');
       const place0 = J.place, fixed = [];
