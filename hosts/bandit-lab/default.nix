@@ -15,6 +15,7 @@
     ./services/vaultwarden
     ./services/minecraft
     ./services/mcbots
+    ./services/ollama
     ./power.nix
     ./services/aiia
     ./services/auto-rebuild
