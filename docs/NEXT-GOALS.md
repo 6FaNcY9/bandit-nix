@@ -95,7 +95,7 @@ one address. That BOTS.md line is probably stale; H6 checks it.
 | --- | --- | --- | --- | --- |
 | H1 | Routines as LLM commands (**done 2026-10-10**, live: bot11 `!startShift`, bot12 `!guardHere`, no re-prompt in 165 s) | The translator offers `!startShift`, `!guardHere`, `!afkHere` and treats a running routine as busy (no re-prompting) | S | Claude |
 | H2 | Event-driven brain plus GPU budget (**done 2026-10-10**, live 29 min instead of 1 h: 26 model calls for 4 agents, 1.05 s each, GPU 0.7 % average) | Prompts only on events or a 10-min check-in, a global cap on decisions per minute, decisions per hour in the log; a 1-hour run with 4 agents stays under 5 % GPU on average | S-M | Claude |
-| H3 | Mixed teams | Bots not listed in `AGENTS` stay scripted; documented roles: bot4 AFK, the rest LLM-led | S | Claude |
+| H3 | Mixed teams (**done 2026-10-10**, docs only: the agent already ignores bots outside `AGENTS`; live in the H1 run: bot14 had no agent and never got a job while bot11-bot13 worked) | Bots not listed in `AGENTS` stay scripted; documented roles: bot4 AFK, the rest LLM-led | S | Claude |
 | H4 | Foreman | `!assign("bot2", "!collectBlocks(\"iron_ore\", 32)")` lets one brain run scripted workers; live with 1 brain + 3 workers | M | Claude |
 | H5 | Run on the lab, not the laptop | Ollama as a NixOS service (CUDA, loopback only, scoped unfree predicate); mcagents as a hardened systemd service; the agent authenticates to the dashboard with its own token (design reviewed first, see below) | M | Codex (Nix), Claude (token in mcbots) |
 | H6 | More bots per lab | The CPU hog is found and fixed (profile first: view renderer, pathfinder, physics), then more bots through the existing hub/worker processes; the `/29` claim checked | M | Claude |

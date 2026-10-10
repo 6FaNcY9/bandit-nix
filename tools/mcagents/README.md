@@ -37,6 +37,14 @@ Measured 2026-10-10 (bot11-bot14, one shift, one guard, one chop loop, one coal 
 (116 samples every 15 s; peak 85 % of a 15 s sample), 5.6 GB VRAM. The chop loop is the chattiest
 agent because each finished job wakes it (39 decisions/h); the shift and the guard cost 6/h.
 
+Roles (H3): only the bots named in `AGENTS` get a brain; every other bot is untouched and runs
+the plain mcbots jobs, standing orders and dashboard clicks (the agent ignores their events and
+never sends them a job). On the lab: **bot4 stays scripted** (AFK at the gold farm, no agent), the
+rest of bot1-bot3 and the laptop bots can be LLM-led by listing them in `AGENTS`. One bot is never
+controlled by an agent and by the owner at the same time on purpose: to take over an agent's bot,
+remove it from `AGENTS` (or `!stop` it and give it no goal). A foreman gives scripted bots work
+with `!assign` (H4).
+
 Env: `MODEL` (default `andy-4.2`), `THINK=1` (reasoning on: about 20-30 s per decision with 4
 agents on one GPU instead of about 1 s), `LOG` (JSONL of every model call: prompt, thinking,
 reply; raw material for a later fine-tune), `BLUEPRINTS`.
