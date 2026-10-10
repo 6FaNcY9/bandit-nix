@@ -1,5 +1,6 @@
 'use strict';
 require('./itemfix'); // must load before mineflayer
+require('./digfix');
 // One BotRunner per bot: connection lifecycle plus a sequential job queue.
 // Adding a job type (crafting, building, ...) = add one entry to JOBS and one
 // to VALIDATE; nothing else changes.

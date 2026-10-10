@@ -203,6 +203,19 @@ assert.strictEqual(pw('bot1').length, 32);
 const {normalize} = require('./itemfix');
 assert.deepStrictEqual(normalize({enchantments: [{id: 1, level: 5}]}, {enchantments: {1: {name: 'efficiency'}}}), [{name: 'efficiency', lvl: 5}]);
 assert.deepStrictEqual(normalize([{name: 'x', lvl: 1}], {}), [{name: 'x', lvl: 1}]);
+{ // digfix.js: ore blocks get the pickaxe speed bonus (vanilla times)
+  const {fix} = require('./digfix');
+  assert.strictEqual(fix('26.1'), false); // already applied by bots.js
+  const reg = require('prismarine-registry')('26.1');
+  const Block = require('prismarine-block')(reg);
+  const ms = (block, tool) => Block.fromStateId(reg.blocksByName[block].defaultState, 0).digTime(reg.itemsByName[tool]?.id ?? null, false, false, false, [], []);
+  assert.strictEqual(ms('iron_ore', 'iron_pickaxe'), 750);
+  assert.strictEqual(ms('deepslate_diamond_ore', 'iron_pickaxe'), 1150);
+  assert.strictEqual(ms('stone', 'iron_pickaxe'), 400);
+  assert.strictEqual(ms('iron_ore', 'wooden_pickaxe'), 7500); // cannot harvest: no drop, slow
+  assert.ok(ms('iron_ore', 'wooden_axe') > ms('iron_ore', 'wooden_pickaxe')); // an axe is no ore tool
+  assert.strictEqual(ms('diamond_ore', 'stone_pickaxe'), 3750); // tier rules unchanged
+}
 assert.deepStrictEqual(VALIDATE.craft({item: 'stone_pickaxe', count: '2'}), {item: 'stone_pickaxe', count: 2});
 assert.throws(() => VALIDATE.craft({item: 'Stone Pickaxe'}));
 assert.deepStrictEqual(VALIDATE.shift({block: 'logs', x: 1, y: 2, z: 3}), {block: 'logs', x: 1, y: 2, z: 3});
