@@ -69,8 +69,9 @@ function loadConfig(env = process.env) {
   if (agentToken && !/^[\w-]{32,128}$/.test(agentToken)) throw new Error('agent token must be 32..128 characters of [A-Za-z0-9_-]');
   if (agentToken && agentToken === workerToken) throw new Error('the agent token must differ from the worker token');
   if (!!agentToken !== !!agentBots.length) throw new Error('AGENT_TOKEN (or AGENT_TOKEN_FILE) and AGENT_BOTS must be set together');
-  const strangers = agentBots.filter((b) => !names.includes(b));
-  if (strangers.length) throw new Error(`AGENT_BOTS must be among BOT_NAMES: ${strangers.join(', ')}`);
+  // Worker bots (other processes, via the hub) are not in BOT_NAMES, so only the name is checked.
+  const strangers = agentBots.filter((b) => !NAME_RE.test(b));
+  if (strangers.length) throw new Error(`AGENT_BOTS must be bot names: ${strangers.join(', ')}`);
   const host = env.DASHBOARD_HOST || '127.0.0.1';
   if (!allowed.length && host !== '127.0.0.1') {
     throw new Error('DASHBOARD_HOST other than 127.0.0.1 requires ALLOWED_TS_LOGINS');

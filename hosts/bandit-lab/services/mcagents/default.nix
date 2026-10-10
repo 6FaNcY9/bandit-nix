@@ -1,4 +1,4 @@
-# Andy-4.2 brains for bot1-bot4 (tools/mcagents, H5 in docs/NEXT-GOALS.md): the
+# Andy-4.2 lead agent (bot1) over scripted workers (tools/mcagents, H4/H5): the
 # LLM decides, the scripted mcbots jobs execute. Talks only to the dashboard
 # (127.0.0.1:8095, agent bearer: state, events and jobs for AGENT_BOTS) and to
 # Ollama (127.0.0.1:11434). Stopping this service leaves running jobs alone.
@@ -10,14 +10,15 @@
   ...
 }: let
   cfg = config.bandit-lab.mcagents;
+  # Lead mode: one Andy-4.2 brain (bot1) plans and hands out shifts with
+  # !assign; the workers are scripted and stick to their order. On the lab
+  # four independent agents drifted off their goals (2026-10-10).
   goals = {
-    bot1 = "Keep the base chest stocked with logs: run a shift for logs and keep it running. If it stops, find out why (tools, food, health) and fix it.";
-    bot2 = "Keep the base chest stocked with cobblestone: run a shift for stone and keep it running. If it stops, find out why and fix it.";
-    bot3 = "Gather iron and coal for the base: mine iron_ore and coal_ore and put raw_iron and coal into the base chest. Smelt raw_iron into iron_ingot when you have coal.";
-    bot4 = "Gather gold and diamonds for the base: mine gold_ore and diamond_ore deep underground and put raw_gold and diamond into the base chest.";
+    bot1 = "You lead the crew. Keep the base chest stocked with logs, cobblestone, coal, raw_iron and raw_gold. Give every idle worker a shift with !assign so each resource has someone working on it, and give a new order to a worker that finishes, fails or dies. Do not mine yourself.";
   };
+  workers = "bot2,bot3,bot4,bot16,bot17,bot18";
 in {
-  options.bandit-lab.mcagents.enable = lib.mkEnableOption "the Andy-4.2 agents for bot1-bot4" // {default = true;};
+  options.bandit-lab.mcagents.enable = lib.mkEnableOption "the Andy-4.2 lead agent and its workers" // {default = true;};
 
   config = lib.mkIf cfg.enable {
     systemd.services.mcagents = {
@@ -31,6 +32,7 @@ in {
         BLUEPRINTS = "${../mcbots/blueprints}";
         AGENTS = lib.concatStringsSep ";" (lib.mapAttrsToList (bot: goal: "${bot}=${goal}") goals);
         LOG = ""; # one line per reply goes to the journal; full prompts are not kept
+        WORKERS = workers;
       };
       serviceConfig = {
         ExecStart = "${pkgs.nodejs}/bin/node ${../../../../tools/mcagents}/agent.js";
