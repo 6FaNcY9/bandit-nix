@@ -532,6 +532,16 @@ async function main() {
       const ev = await http('GET', `${API}/api/events?since=${lastEventId}`);
       lastEventId = ev.lastId;
       for (const e of ev.events) {
+        // Alerts (mcbots alerts.js: supply chest gone, night, mobs at the base) go to every foreman.
+        if (e.kind === 'alert') {
+          for (const a of agents.values()) {
+            if (!a.workers.size) continue;
+            a.push('system', `ALERT: ${e.text}`);
+            a.wake = true;
+            a.wakeAt ||= Date.now();
+          }
+          continue;
+        }
         const boss = agents.get(assigner.get(e.bot));
         if (boss && /^(finished|failed|gave up|stopped)/.test(e.text)) {
           noteWorker(e.bot, e.text);

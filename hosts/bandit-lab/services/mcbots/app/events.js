@@ -4,7 +4,7 @@
 // id N" and the buffer can never grow. Remote workers send theirs to the hub,
 // which re-validates them with clean() before adding.
 const MAX = 200;
-const KINDS = new Set(['connect', 'disconnect', 'job', 'done', 'fail', 'stop', 'death', 'respawn', 'deposit', 'claim', 'hub', 'info']);
+const KINDS = new Set(['connect', 'disconnect', 'job', 'done', 'fail', 'stop', 'death', 'respawn', 'deposit', 'claim', 'hub', 'info', 'alert']);
 
 class EventLog {
   constructor({max = MAX, now = Date.now} = {}) {

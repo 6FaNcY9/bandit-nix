@@ -12,6 +12,7 @@ const {Hub, RemoteRunner, createWorkerServer} = require('./hub');
 const {EventLog} = require('./events');
 const {Keeper} = require('./keeper');
 const {botView} = require('./view');
+const {Alerts} = require('./alerts');
 const {Settings} = require('./settings');
 const {Places} = require('./places');
 const agentauth = require('./agentauth');
@@ -358,6 +359,22 @@ const keeperTick = setInterval(() => {
     log('keeper', `error: ${e.message}`);
   }
 }, 5000);
+// Alerts for the lead agent (alerts.js), from what a local bot in the overworld sees.
+const alerts = new Alerts({events});
+const alertTick = setInterval(() => {
+  try {
+    const r = [...runners.values()].find((x) => !(x instanceof RemoteRunner) && x.online && x.bot?.entity && /overworld/.test(x.bot.game?.dimension || ''));
+    if (!r || !supplyChest) return;
+    const {Vec3} = require('vec3');
+    alerts.check({
+      chestBlock: r.bot.blockAt(new Vec3(supplyChest.x, supplyChest.y, supplyChest.z))?.name ?? null,
+      timeOfDay: r.bot.time?.timeOfDay,
+      hostiles: world.hostilesNear(supplyChest.x, supplyChest.z, 'overworld', 16),
+    }, supplyChest);
+  } catch (e) {
+    log('alerts', `error: ${e.message}`);
+  }
+}, 5000);
 
 server.listen(cfg.port, cfg.host, () => {
   log('dashboard', `listening on ${cfg.host}:${cfg.port} (${cfg.allowed.length ? `tailscale logins: ${cfg.allowed.join(',')}` : 'local only'})`);
@@ -372,6 +389,7 @@ function shutdown() {
   clearInterval(jobsTimer); // first: stopping the bots cancels their jobs, which must not be saved
   clearInterval(tick);
   clearInterval(keeperTick);
+  clearInterval(alertTick);
   stopBlueMap();
   hub?.close();
   for (const r of runners.values()) r.shutdown();

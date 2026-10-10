@@ -264,6 +264,29 @@ assert.deepStrictEqual(VALIDATE.craft({item: 'stone_pickaxe', count: '2'}), {ite
 assert.throws(() => VALIDATE.craft({item: 'Stone Pickaxe'}));
 assert.deepStrictEqual(VALIDATE.shift({block: 'logs', x: 1, y: 2, z: 3}), {block: 'logs', x: 1, y: 2, z: 3});
 require('./crafting');
+// alerts.js: chest gone/back once each, night/morning on change, mobs at most every 2 minutes.
+{
+  const {Alerts, MOB_EVERY_MS} = require('./alerts');
+  const {EventLog} = require('./events');
+  let t = 0;
+  const ev = new EventLog({now: () => t});
+  const al = new Alerts({events: ev, now: () => t});
+  const chest = {x: 1, y: 2, z: 3};
+  al.check({chestBlock: 'chest', timeOfDay: 6000, hostiles: []}, chest);
+  assert.strictEqual(ev.items.length, 0, 'all well');
+  al.check({chestBlock: 'air', timeOfDay: 6000, hostiles: []}, chest);
+  al.check({chestBlock: 'air', timeOfDay: 6000, hostiles: []}, chest);
+  assert.deepStrictEqual(ev.items.map((e) => [e.kind, e.text]), [['alert', 'the supply chest at 1 2 3 is gone (air there now)']]);
+  al.check({chestBlock: null, timeOfDay: 14000, hostiles: [{name: 'creeper'}, {name: 'creeper'}, {name: 'zombie'}]}, chest);
+  assert.match(ev.items.at(-2).text, /night falls/);
+  assert.match(ev.items.at(-1).text, /creeper x2, zombie x1/);
+  t += 1000;
+  al.check({chestBlock: 'chest', timeOfDay: 14000, hostiles: [{name: 'creeper'}]}, chest);
+  assert.match(ev.items.at(-1).text, /is back/, 'no second mob alert within 2 minutes');
+  t += MOB_EVERY_MS;
+  al.check({chestBlock: 'chest', timeOfDay: 23500, hostiles: [{name: 'creeper'}]}, chest);
+  assert.deepStrictEqual(ev.items.slice(-2).map((e) => e.text.split(':')[0]), ['morning', 'hostile mobs near the base']);
+}
 // pathcache.js: one Block per position inside the window, a fresh one after it.
 {
   const {cacheGetBlock, WINDOW_MS} = require('./pathcache');
