@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {WebSocketServer} = require('ws');
 const {loadConfig} = require('./config');
-const {BotRunner} = require('./bots');
+const {BotRunner, keptOf} = require('./bots');
 const {WorldModel, startBlueMap} = require('./world');
 const {WINDOW_MS} = require('./debug');
 const {Hub, RemoteRunner, createWorkerServer} = require('./hub');
@@ -34,7 +34,7 @@ const sha = (re) => `'sha256-${require('node:crypto').createHash('sha256').updat
 const CSP = `default-src 'none'; script-src ${sha(/<script>([\s\S]*?)<\/script>/)}; style-src ${sha(/<style>([\s\S]*?)<\/style>/)}; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`;
 // Remote workers register themselves in `runners` (see hub.js), so the
 // dashboard, /api/state and /api/debug list them next to the lab's bots.
-const hub = cfg.workerToken ? new Hub({world, runners, token: cfg.workerToken, log, protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest, events}) : null;
+const hub = cfg.workerToken ? new Hub({world, runners, token: cfg.workerToken, log, protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest, events, settings}) : null;
 const workerServer = hub ? createWorkerServer(hub) : null;
 
 // tailscale serve sets Tailscale-User-Login for tailnet users. When
@@ -60,17 +60,12 @@ applyPlaces();
 // Long jobs survive a restart (deploys restart the container): every 5 s the
 // running and queued shift/guard/mine/chop jobs go to STATE_DIR/jobs.json and
 // are queued again at start; a mine/chop keeps only what is left of its count.
-const KEEP = new Set(['shift', 'guard', 'mine', 'chop', 'build']); // a resumed build skips what is already placed
 const jobsFile = process.env.STATE_DIR ? path.join(process.env.STATE_DIR, 'jobs.json') : null;
+// A worker's bots report their own list (hub.js), so bot16-bot18 survive a hub restart too.
 const keptJobs = () => {
   const out = {};
   for (const r of runners.values()) {
-    if (r instanceof RemoteRunner) continue;
-    const list = [r.current, ...r.queue].filter((j) => j && !j.cancelled && KEEP.has(j.type)).map((j) => {
-      const args = {...j.args};
-      if (args.count && j.collected) args.count = Math.max(1, args.count - j.collected);
-      return {type: j.type, args};
-    });
+    const list = r instanceof RemoteRunner ? r.kept : keptOf(r);
     if (list.length) out[r.name] = list;
   }
   return out;
@@ -87,12 +82,12 @@ function resumeJobs() {
   if (Date.now() > resumeUntil) toResume = {};
   for (const [name, list] of Object.entries(toResume)) {
     const r = runners.get(name);
-    if (!r || r instanceof RemoteRunner) {
-      delete toResume[name];
-      continue;
-    }
-    if (!r.online || r.dead) continue;
+    if (!r) continue; // a remote bot whose worker has not connected yet: the 5 min window decides
+    const remote = r instanceof RemoteRunner;
+    if (!r.online || (remote ? r.snap.dead : r.dead)) continue;
     delete toResume[name];
+    if (remote && (r.snap.job || r.snap.queue.length)) continue; // the worker kept playing through the hub restart
+    if (remote) r.kept = list; // keep them in the saved file until the worker's next status reports them
     for (const j of list) {
       try {
         r.enqueue(j.type, j.args);
@@ -133,7 +128,7 @@ const sameOrigin = (req) => {
     return false;
   }
 };
-const state = () => ({now: Date.now(), lastEventId: events.lastId, keeper: keeper?.state() || null, bots: [...runners.values()].map((r) => ({...r.snapshot(), settings: r instanceof RemoteRunner ? null : settings.get(r.name)})), world: world.snapshot(), protectedAreas: cfg.protectedAreas, supplyChest, places: places.list});
+const state = () => ({now: Date.now(), lastEventId: events.lastId, keeper: keeper?.state() || null, bots: [...runners.values()].map((r) => ({...r.snapshot(), settings: settings.get(r.name)})), world: world.snapshot(), protectedAreas: cfg.protectedAreas, supplyChest, places: places.list});
 
 function readJson(req) {
   return new Promise((resolve, reject) => {
@@ -274,9 +269,12 @@ const server = http.createServer(async (req, res) => {
     try {
       const {bot, settings: input} = await readJson(req);
       const r = runners.get(bot);
-      if (!r || r instanceof RemoteRunner) throw new Error('unknown bot (laptop workers keep their own settings)');
+      if (!r) throw new Error('unknown bot');
       const now = settings.set(bot, input);
-      events.add(bot, 'info', `settings: ${Object.entries(input || {}).map(([k, v]) => `${k} ${v}`).join(', ')}`);
+      // A remote bot's worker gets them now, or with its welcome when it comes back.
+      const away = r instanceof RemoteRunner && !r.conn;
+      if (r instanceof RemoteRunner) r.pushSettings(now);
+      events.add(bot, 'info', `settings: ${Object.entries(input || {}).map(([k, v]) => `${k} ${v}`).join(', ')}${away ? ' (applies when its worker reconnects)' : ''}`);
       broadcast();
       return json(200, now);
     } catch (e) {

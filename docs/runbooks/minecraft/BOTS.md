@@ -68,7 +68,9 @@ players blue and hostile mobs red boxes; no textures. Laptop workers (bot5) have
 bot walks up to a hostile this close, so skeletons no longer shoot it from afar), retreat below
 health, eat below food. `POST /api/settings {"bot": "bot1", "settings": {...}}` (same-origin JSON);
 kept in `STATE_DIR/settings.json`, on the lab the named volume `mcbots-state` (the only mount the
-`lab-mcbots` check allows). Laptop workers keep their defaults.
+`lab-mcbots` check allows). Worker bots (bot16-bot18, laptop bots) use the same card: the hub validates and
+stores the settings, forwards them to the worker (`settings` frame, validated again there), and sends them
+with every `welcome`, so a changed value reaches a worker that was away and survives a restart of either side.
 
 **Guard** job: `guard {x, y, z, radius}` or `guard {player, radius}` (radius 4-48, default 16). Until
 stopped, the bot fights every hostile within the radius of the spot or player and walks back when
@@ -103,7 +105,9 @@ granite, ore mined in 16 s.
 **Jobs survive restarts**: every 2 s the running and queued `shift`, `guard`, `mine` and `chop` jobs
 are saved to `STATE_DIR/jobs.json` (a mine/chop with what is left of its count) and queued again
 once each bot is back online after a restart or deploy (a bot away for more than 5 min starts
-empty). A shift whose bot is far from the chest (respawned at world spawn) walks back first.
+empty). Worker bots count too: each worker reports its own list in the status frame, the hub saves it and
+queues it again when the worker is connected and its bot idle (a worker that kept playing through a hub
+restart is not given the job twice). A worker restarted *alone* still loses its queue. A shift whose bot is far from the chest (respawned at world spawn) walks back first.
 A **double chest** stays shut when either half is covered, so a bot checks both halves and digs away scaffold (dirt, stone, cobblestone) on top of the other half too (found live 2026-10-10: a covered second half gave `windowOpen did not fire` on every deposit).
 
 **Forests**: log jobs search 128 blocks and a log shift may work 128 blocks from its chest (64 for

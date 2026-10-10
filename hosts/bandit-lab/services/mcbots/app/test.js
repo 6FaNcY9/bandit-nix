@@ -503,7 +503,8 @@ require('./crafting');
   const world = new WorldModel();
   const labBot = {name: 'bot1', start() {}, shutdown() {}, snapshot: () => ({name: 'bot1', online: true}), debug: () => ({}), enqueue() {}};
   const runners = new Map([['bot1', labBot]]);
-  const hub = new Hub({world, runners, token, log: () => {}, protectedAreas: [[1, 2, 3, 4]], supplyChest: {x: 1, y: 2, z: 3}});
+  const hubSettings = new (require('./settings').Settings)('');
+  const hub = new Hub({world, runners, token, log: () => {}, protectedAreas: [[1, 2, 3, 4]], supplyChest: {x: 1, y: 2, z: 3}, settings: hubSettings});
   const server = createWorkerServer(hub);
   await new Promise((res) => server.listen(port, '127.0.0.1', res));
   const url = `ws://127.0.0.1:${port}/worker`;
@@ -570,6 +571,16 @@ require('./crafting');
     assert.deepStrictEqual(d5.claims, {granted: 4, refused: 0, timedOut: 0}, 'claim counters are sanitised to non-negative ints, unknown keys dropped');
     assert.strictEqual(d5.job.args.evil, '[object Object]'.slice(0, 200));
     assert.doesNotThrow(() => JSON.stringify([s5, d5]));
+    assert.deepStrictEqual(r5.kept, [], 'no kept jobs reported yet');
+    // kept jobs: only the long job types, re-validated; bad entries and over-long lists are dropped
+    a.send({t: 'status', bots: [{name: 'bot5', online: true, kept: [
+      {type: 'say', args: {text: 'hi'}}, {type: 'mine', args: {block: 'stone', count: 'many'}}, 'junk', null,
+      {type: 'shift', args: {block: 'logs', x: 1, y: 64, z: 1, evil: 1}}, {type: 'mine', args: {block: 'stone', count: 3}},
+      ...Array(40).fill({type: 'chop', args: {count: 2}}),
+    ]}]});
+    await until(() => r5.kept.length, 'kept jobs reported');
+    assert.deepStrictEqual(r5.kept.slice(0, 2).map((j) => j.type), ['shift', 'mine']);
+    assert.ok(!('evil' in r5.kept[0].args) && r5.kept.length <= 20);
 
     // jobs from the dashboard go to the worker, validated on the hub first
     r5.enqueue('goto', {x: '1', y: 2, z: 3}, {replace: true});
@@ -682,7 +693,8 @@ require('./crafting');
 
     // the real client against the real hub (stub bots instead of a Minecraft login)
     const got = [];
-    const stub = {name: 'bot6', started: false, start() { this.started = true; }, shutdown() {}, snapshot: () => ({name: 'bot6', online: true, pos: [9, 9, 9], job: null, queue: [], inventory: [], pullbacks: 0}), debug: () => ({pos: [9, 9, 9]}), enqueue: (type, args, opts) => got.push([type, args, opts])};
+    hubSettings.set('bot6', {defend: false, eatBelow: 10}); // chosen before the worker ever connected
+    const stub = {name: 'bot6', started: false, current: null, queue: [], start() { this.started = true; }, shutdown() {}, snapshot: () => ({name: 'bot6', online: true, pos: [9, 9, 9], job: null, queue: [], inventory: [], pullbacks: 0}), debug: () => ({pos: [9, 9, 9]}), enqueue: (type, args, opts) => got.push([type, args, opts])};
     const logs = [];
     const client = new HubClient({url, token, names: ['bot6'], hostLabel: 'lap', log: (w, m) => logs.push(`${w}: ${m}`), makeRunner: () => stub});
     assert.strictEqual(client.world.unreachable, true, 'no reservations before the hub answered');
@@ -692,6 +704,27 @@ require('./crafting');
     assert.ok(stub.started);
     assert.strictEqual(client.world.unreachable, false);
     assert.strictEqual(r6.snapshot().host, 'lap');
+    // settings: the stored ones arrive with the welcome, a change is forwarded, a bad frame is refused on the worker too
+    assert.deepStrictEqual([stub.getSettings().defend, stub.getSettings().eatBelow, stub.getSettings().torches], [false, 10, true]);
+    r6.pushSettings(hubSettings.set('bot6', {torches: false}));
+    await until(() => stub.getSettings().torches === false, 'settings forwarded to the worker');
+    assert.strictEqual(stub.getSettings().defend, false, 'earlier settings stay');
+    client.handle({t: 'settings', bot: 'bot6', settings: {eatBelow: 99}});
+    client.handle({t: 'settings', bot: 'bot7', settings: {eatBelow: 3}});
+    client.handle({t: 'settings', bot: 'bot6', settings: {evil: 1, fightRange: 4}});
+    assert.deepStrictEqual([stub.getSettings().eatBelow, stub.getSettings().fightRange, client.settings.get('bot7').eatBelow], [10, 4, 15], 'refused values and foreign bots change nothing, unknown keys are dropped');
+    assert.ok(logs.some((l) => /bot6: settings from hub rejected/.test(l)));
+    // kept jobs: the worker reports its own list, the hub keeps it; Stop empties it at once
+    stub.current = {type: 'shift', args: {block: 'logs', x: 1, y: 64, z: 1}};
+    stub.queue = [{type: 'mine', args: {block: 'stone', count: 5}, collected: 2}, {type: 'say', args: {text: 'x'}}, {type: 'chop', args: {count: 4}, cancelled: true}];
+    await until(() => r6.kept.length === 2, 'kept jobs reached the hub');
+    assert.deepStrictEqual(r6.kept, [{type: 'shift', args: {block: 'logs', x: 1, y: 64, z: 1}}, {type: 'mine', args: {block: 'stone', count: 3}}]);
+    r6.enqueue('stop');
+    assert.deepStrictEqual(r6.kept, []);
+    stub.current = null;
+    stub.queue = [];
+    await until(() => got.length === 1, 'stop reached the stub bot');
+    got.length = 0;
     r6.enqueue('mine', {block: 'stone', count: 2});
     await until(() => got.length === 1, 'job reached the stub bot');
     assert.deepStrictEqual(got[0], ['mine', {block: 'stone', count: 2}, {replace: false}]);
@@ -720,8 +753,12 @@ require('./crafting');
     for (const c of hub.conns) c.ws.terminate();
     await until(() => client.world.unreachable, 'client noticed the drop');
     assert.strictEqual(await client.world.claim('bot6', 'overworld:42,60,5'), false);
+    hubSettings.set('bot6', {fightRange: 5}); // changed while the worker is away (nothing to forward to)
+    r6.pushSettings(hubSettings.get('bot6'));
     await until(() => !client.world.unreachable && runners.get('bot6').snapshot().connected, 'client reconnected', 6000);
     assert.strictEqual(stub.started, true);
+    await until(() => stub.getSettings().fightRange === 5, 'reconnect brings the settings changed meanwhile');
+    assert.strictEqual(stub.getSettings().torches, false, 'and keeps the rest');
     client.stop();
     await until(() => !runners.get('bot6').snapshot().connected, 'stopped worker is offline');
     assert.strictEqual(runners.get('bot6').snapshot().online, false);
@@ -1173,6 +1210,85 @@ require('./crafting');
     assert.match((await bad.json()).error, /stopped, but the stopped state could not be saved/);
   } finally {
     await b.stop();
+  }
+
+  // C: worker bots - settings are forwarded and kept, kept jobs come back once the worker is connected again
+  const dirC = fs.mkdtempSync(path.join(os.tmpdir(), 'mcbots-workerC-'));
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const until = async (f, what, ms = 6000) => {
+    for (let t = 0; t < ms; t += 50) {
+      const v = await f();
+      if (v) return v;
+      await sleep(50);
+    }
+    throw new Error(`timed out: ${what}`);
+  };
+  const worker = (s, status) => new Promise((res, rej) => {
+    const ws = new WebSocket(`ws://127.0.0.1:${s.wport}/worker`, {headers: {Authorization: `Bearer ${TOKEN}`}});
+    const msgs = [];
+    ws.on('message', (d) => msgs.push(JSON.parse(String(d))));
+    ws.on('open', () => {
+      ws.send(JSON.stringify({t: 'hello', v: 1, host: 'laptop', bots: ['bot5']}));
+      if (status) ws.send(JSON.stringify({t: 'status', bots: [{name: 'bot5', online: true, ...status}]}));
+      res({ws, msgs});
+    });
+    ws.on('error', rej);
+  });
+  const shift = {type: 'shift', args: {block: 'logs', x: 1, y: 64, z: 1}};
+  let c = await launch(dirC);
+  try {
+    let w = await worker(c, {kept: [shift]});
+    const welcome = await until(() => w.msgs.find((m) => m.t === 'welcome'), 'welcome');
+    assert.strictEqual(welcome.settings.bot5.defend, true, 'defaults travel with the welcome');
+    await until(async () => (await c.get('/api/state')).bots.find((b) => b.name === 'bot5')?.online, 'bot5 online');
+    assert.strictEqual((await c.get('/api/state')).bots.find((b) => b.name === 'bot5').settings.eatBelow, 15, 'the dashboard shows remote settings like local ones');
+    assert.strictEqual((await c.call('/api/settings', {bot: 'bot5', settings: {defend: false, eatBelow: 10}})).status, 200);
+    const frame = await until(() => w.msgs.find((m) => m.t === 'settings'), 'settings frame');
+    assert.deepStrictEqual([frame.bot, frame.settings.defend, frame.settings.eatBelow], ['bot5', false, 10]);
+    for (const bad of [{eatBelow: 99}, {defend: 'yes'}]) {
+      assert.strictEqual((await c.call('/api/settings', {bot: 'bot5', settings: bad})).status, 400);
+    }
+    assert.strictEqual((await c.call('/api/settings', {bot: 'bot99', settings: {defend: false}})).status, 400);
+    assert.strictEqual(w.msgs.filter((m) => m.t === 'settings').length, 1, 'refused settings never reach the worker');
+    await until(() => { try { return saved(dirC).bot5; } catch { return null; } }, 'worker job saved', 5000);
+    assert.deepStrictEqual(saved(dirC).bot5, [shift]);
+    w.ws.close();
+    await until(async () => !(await c.get('/api/state')).bots.find((b) => b.name === 'bot5').connected, 'worker gone');
+    assert.strictEqual((await c.call('/api/settings', {bot: 'bot5', settings: {torches: false}})).status, 200, 'accepted while the worker is away');
+    await sleep(2200);
+    assert.deepStrictEqual(saved(dirC).bot5, [shift], 'its job stays in the file while the worker is away');
+  } finally {
+    await c.stop();
+  }
+  // hub restart: the worker connects, the idle bot gets its settings and its shift back
+  c = await launch(dirC);
+  try {
+    const w = await worker(c, {job: null, queue: []});
+    const welcome = await until(() => w.msgs.find((m) => m.t === 'welcome'), 'welcome after restart');
+    assert.deepStrictEqual([welcome.settings.bot5.defend, welcome.settings.bot5.eatBelow, welcome.settings.bot5.torches], [false, 10, false], 'settings survive a hub restart');
+    const job = await until(() => w.msgs.find((m) => m.t === 'job'), 'shift resumed', 5000);
+    assert.deepStrictEqual([job.bot, job.type, job.args], ['bot5', 'shift', shift.args]);
+    assert.ok((await c.get('/api/events?since=0')).events.some((e) => e.bot === 'bot5' && /resumed after restart: shift/.test(e.text)));
+    w.ws.close();
+  } finally {
+    await c.stop();
+  }
+  // a worker that kept playing through the hub restart is not given the job twice
+  fs.writeFileSync(path.join(dirC, 'jobs.json'), JSON.stringify({bot5: [shift]}));
+  c = await launch(dirC);
+  try {
+    const w = await worker(c, {job: {label: 'shift logs', type: 'shift'}, queue: [], kept: [shift]});
+    await until(async () => (await c.get('/api/state')).bots.find((b) => b.name === 'bot5')?.online, 'busy bot online');
+    await sleep(2500);
+    assert.deepStrictEqual(w.msgs.filter((m) => m.t === 'job'), []);
+    assert.deepStrictEqual(saved(dirC).bot5, [shift], 'its reported job stays saved');
+    // Stop all reaches it and empties the file at once (the worker's old report is not trusted)
+    assert.strictEqual((await c.call('/api/job', {bots: 'all', type: 'stop'})).status, 200);
+    assert.deepStrictEqual(saved(dirC), {});
+    await until(() => w.msgs.find((m) => m.t === 'job' && m.type === 'stop'), 'stop forwarded');
+    w.ws.close();
+  } finally {
+    await c.stop();
   }
   console.log('ok');
 })();

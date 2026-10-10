@@ -14,7 +14,7 @@
 const crypto = require('node:crypto');
 const http = require('node:http');
 const {WebSocketServer} = require('ws');
-const {NAME_RE, VALIDATE} = require('./bots');
+const {NAME_RE, VALIDATE, KEEP} = require('./bots');
 const {clean: cleanEvent} = require('./events');
 
 const PROTOCOL = 1;
@@ -69,6 +69,17 @@ function cleanSnapshot(s) {
   };
 }
 
+// The jobs a worker's bot would want back after a restart, re-validated like any job (the hub saves them).
+function cleanKept(v) {
+  return list(v, 20, (j) => {
+    try {
+      return KEEP.has(j?.type) ? {type: j.type, args: VALIDATE[j.type](obj(j.args) || {})} : null;
+    } catch {
+      return null;
+    }
+  }).filter(Boolean);
+}
+
 function cleanDebug(d) {
   d = obj(d) || {};
   const job = obj(d.job);
@@ -102,6 +113,7 @@ class RemoteRunner {
     this.lastSeen = 0;
     this.snap = cleanSnapshot(null);
     this.dbg = cleanDebug(null);
+    this.kept = []; // what the worker last said should survive a hub restart (server.js saves it)
   }
 
   get online() {
@@ -142,9 +154,15 @@ class RemoteRunner {
     };
   }
 
+  // Settings are validated and stored by the caller (Settings.set); the worker validates again.
+  pushSettings(settings) {
+    this.conn?.ws.send(JSON.stringify({t: 'settings', bot: this.name, settings}));
+  }
+
   // Same contract as BotRunner.enqueue: validate here, run on the worker.
   enqueue(type, args = {}, {replace = false} = {}) {
     if (!this.conn) throw new Error(`${this.name} is offline (its worker is not connected)`);
+    if (type === 'stop' || replace === true) this.kept = []; // the next status frame is up to a second away
     let clean = {};
     if (type === 'remove') clean = {id: int(Number(args?.id))};
     else if (type !== 'stop') {
@@ -156,8 +174,9 @@ class RemoteRunner {
 }
 
 class Hub {
-  constructor({world, runners, token, log = () => {}, protectedAreas = [], supplyChest = null, now = Date.now, events = null}) {
+  constructor({world, runners, token, log = () => {}, protectedAreas = [], supplyChest = null, now = Date.now, events = null, settings = null}) {
     this.events = events; // EventLog of the dashboard (optional)
+    this.settings = settings; // Settings store of the dashboard (optional): sent to a worker with its welcome
     if (typeof token !== 'string' || !/^[\w-]{32,128}$/.test(token)) throw new Error('worker token must be 32..128 characters of [A-Za-z0-9_-]');
     this.world = world;
     this.runners = runners;
@@ -266,6 +285,7 @@ class Hub {
           if (!r) continue;
           r.snap = cleanSnapshot(b);
           r.dbg = cleanDebug(b.debug);
+          r.kept = cleanKept(b.kept);
           r.lastSeen = this.now();
         }
         for (const e of list(m.events, 50, (x) => cleanEvent(x, conn.bots))) if (e) this.events?.add(e.bot, e.kind, e.text);
@@ -333,7 +353,8 @@ class Hub {
       r.lastSeen = this.now();
       r.snap = {...r.snap, online: false};
     }
-    conn.ws.send(JSON.stringify({t: 'welcome', v: PROTOCOL, protectedAreas: this.protectedAreas, supplyChest: this.supplyChest}));
+    const settings = this.settings ? Object.fromEntries(names.map((n) => [n, this.settings.get(n)])) : {};
+    conn.ws.send(JSON.stringify({t: 'welcome', v: PROTOCOL, protectedAreas: this.protectedAreas, supplyChest: this.supplyChest, settings}));
     this.log('hub', `worker ${host} connected: ${names.join(', ')}`);
     for (const n of names) this.events?.add(n, 'hub', `worker ${host} connected`);
   }

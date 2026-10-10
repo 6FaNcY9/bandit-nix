@@ -25,6 +25,8 @@ const KEEP_RE = /^(stick|[a-z_]+_planks|coal|charcoal|torch|crafting_table|furna
 const FOOD_BELOW = 14; // fetch food from the supply chest when hungry and carrying none
 const FOOD_RETRY_MS = 600000; // an empty chest is not worth a walk every minute
 const RESUMABLE = new Set(['mine', 'chop', 'shift', 'goto', 'deposit', 'follow', 'come', 'guard', 'build']);
+// Long jobs that survive a restart (see keptOf, saved by server.js, reported by workers).
+const KEEP = new Set(['shift', 'guard', 'mine', 'chop', 'build']); // a resumed build skips what is already placed
 const MAX_INTERRUPTIONS = 3; // deaths/disconnects of one job before it is given up
 const TOOL_RE = /_(pickaxe|axe|shovel|hoe|sword)$|^(shears|bow|crossbow|fishing_rod|shield|trident|flint_and_steel|elytra)$/;
 
@@ -46,6 +48,13 @@ const player = (a) => {
   if (!/^\w{1,16}$/.test(a.player || '')) throw new Error('player must be a valid Minecraft name');
   return {player: a.player};
 };
+
+// The running and queued jobs of a runner that a restart should bring back; a mine/chop keeps only what is left of its count.
+const keptOf = (r) => [r.current, ...(r.queue || [])].filter((j) => j && !j.cancelled && KEEP.has(j.type)).map((j) => {
+  const args = {...j.args};
+  if (args.count && j.collected) args.count = Math.max(1, args.count - j.collected);
+  return {type: j.type, args};
+});
 
 // Normalise and validate job arguments (throws on bad input).
 const VALIDATE = {
@@ -1471,4 +1480,4 @@ const JOBS = {
   },
 };
 
-module.exports = {BotRunner, NAME_RE, VALIDATE, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest};
+module.exports = {BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest};

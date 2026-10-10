@@ -5,7 +5,8 @@
 // are refused (digging jobs stop with an error) rather than guessed.
 const WebSocket = require('ws');
 const {WorldModel} = require('./world');
-const {BotRunner} = require('./bots');
+const {BotRunner, keptOf} = require('./bots');
+const {Settings} = require('./settings');
 const {PROTOCOL} = require('./hub');
 
 const CLAIM_TIMEOUT_MS = 3000;
@@ -141,6 +142,7 @@ class HubClient {
     this.wsOptions = wsOptions;
     this.world = new RemoteWorld();
     this.world.mine = new Set(names);
+    this.settings = new Settings(''); // in memory: the hub keeps them and sends them with every welcome
     this.outEvents = []; // dashboard events waiting for the next status frame (capped)
     const onEvent = (bot, kind, text) => {
       this.outEvents.push({bot, kind, text});
@@ -205,9 +207,11 @@ class HubClient {
       case 'welcome':
         this.backoff = BACKOFF_START;
         this.world.attach((msg) => this.send(msg));
+        for (const n of this.names) this.setSettings(n, m.settings?.[n]);
         if (!this.runners.length) {
           const opts = {protectedAreas: Array.isArray(m.protectedAreas) ? m.protectedAreas : [], supplyChest: m.supplyChest || null};
           this.runners = this.names.map((n) => this.makeRunner(n, opts));
+          for (const r of this.runners) r.getSettings = () => this.settings.get(r.name);
           for (const r of this.runners) r.start();
         }
         clearInterval(this.reporter);
@@ -222,6 +226,8 @@ class HubClient {
         return this.world.claimResult(m.id, m.ok === true);
       case 'world':
         return this.world.applyShared(m);
+      case 'settings':
+        return this.setSettings(m.bot, m.settings);
       case 'job': {
         const r = this.runners.find((x) => x.name === m.bot);
         if (!r) return;
@@ -236,8 +242,18 @@ class HubClient {
     }
   }
 
+  // Same rules as the hub's (settings.clean): a bad value is refused, the old settings stay.
+  setSettings(name, input) {
+    if (!this.names.includes(name) || !input) return;
+    try {
+      this.settings.set(name, input);
+    } catch (e) {
+      this.log(name, `settings from hub rejected: ${e.message}`);
+    }
+  }
+
   report() {
-    this.send({t: 'status', bots: this.runners.map((r) => ({...r.snapshot(), debug: r.debug()})), events: this.outEvents.splice(0)});
+    this.send({t: 'status', bots: this.runners.map((r) => ({...r.snapshot(), debug: r.debug(), kept: keptOf(r)})), events: this.outEvents.splice(0)});
     this.world.flush();
   }
 
