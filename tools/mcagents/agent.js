@@ -99,6 +99,7 @@ const DOCS = {
   setHomeBed: ['Get your own bed so every death sends you back to the base: you take your slot in the storage room, fetch 3 wool (base chest, else sheep nearby) and logs if you lack them, craft the bed, place it and sleep or click it. Give it once, it needs no arguments.', {}],
   placeBed: ['Make a bed from 3 wool of one colour and 3 planks if you have none, place it with its foot at x, y, z and its head one block towards the facing, and sleep or click it so your respawn point is there. It needs 2 free blocks with solid ground below.', {x: ['number', 'The x coordinate of the foot.'], y: ['number', 'The y coordinate.'], z: ['number', 'The z coordinate of the foot.'], facing: ['string', 'north, south, east or west: where the head of the bed points.']}],
   collectGrave: ['Fetch the loot of a grave (the items a bot dropped by dying) at x, y, z, where the bot died: walks there, sneaks and right-clicks the grave, then puts everything except tools, armour and food into the base chest. Only the owner of a grave can take it.', {x: ['number', 'The x coordinate of the death.'], y: ['number', 'The y coordinate.'], z: ['number', 'The z coordinate.']}],
+  tendTreeFarm: ['Run a tree farm in the area from corner x1, z1 to corner x2, z2 (3 to 24 blocks per side): plant saplings on a 3-block grid, chop the grown trees, replant, pick up saplings and apples, and put the logs in the base chest. It never ends by itself; end it with !stop. The base chest needs saplings (oak or birch) to start.', {x1: ['number', 'The x of one corner.'], z1: ['number', 'The z of one corner.'], x2: ['number', 'The x of the opposite corner.'], z2: ['number', 'The z of the opposite corner.']}],
   buildBlueprint: ['Build a saved blueprint with its origin at x, y, z (one above the ground). Use this for every structure.', {name: ['string', 'The blueprint name.'], x: ['number', 'The x coordinate.'], y: ['number', 'The y coordinate.'], z: ['number', 'The z coordinate.']}],
   startConversation: ['Start a conversation with a bot. (FOR OTHER BOTS ONLY)', {player_name: ['string', 'The name of the player to send the message to.'], message: ['string', 'The message to send.']}],
   endConversation: ['End the conversation with the given bot. (FOR OTHER BOTS ONLY)', {player_name: ['string', 'The name of the player to end the conversation with.']}],
@@ -106,7 +107,7 @@ const DOCS = {
   endGoal: ['Call when you have accomplished your goal. It will stop self-prompting and the current action.', {}],
 };
 
-const ASSIGN_DOC = ['Give one of your workers (a bot that cannot think) ONE command, for example !assign("bot12", "!collectBlocks(\\"cobblestone\\", 32)"). It reports back when done. Commands a worker understands: !startShift("coal") (keeps collecting into the base chest; one of logs, cobblestone, coal, raw_iron, raw_gold), !collectBlocks("iron_ore", 32), !putInChest("coal", 20), !craftRecipe("stick", 4), !smeltItem("raw_iron", 8), !huntAnimals("sheep", 6), !placeBed(x, y, z, "north"), !setHomeBed, !digRoom(...), !digShaft(...), !mineLevel(16), !goToCoordinates(...).', {bot_name: ['string', 'The worker to command.'], command: ['string', 'The command for the worker, in quotes.']}];
+const ASSIGN_DOC = ['Give one of your workers (a bot that cannot think) ONE command, for example !assign("bot12", "!collectBlocks(\\"cobblestone\\", 32)"). It reports back when done. Commands a worker understands: !startShift("coal") (keeps collecting into the base chest; one of logs, cobblestone, coal, raw_iron, raw_gold), !collectBlocks("iron_ore", 32), !putInChest("coal", 20), !craftRecipe("stick", 4), !smeltItem("raw_iron", 8), !huntAnimals("sheep", 6), !tendTreeFarm(x1, z1, x2, z2) (plants and chops trees for wood until !stop), !placeBed(x, y, z, "north"), !setHomeBed, !digRoom(...), !digShaft(...), !mineLevel(16), !goToCoordinates(...).', {bot_name: ['string', 'The worker to command.'], command: ['string', 'The command for the worker, in quotes.']}];
 
 const BASE_DOC = ['Get the state of the base: each worker with its job and last result, what the base chest held when last counted, and what is already built or dug.', {}];
 
@@ -172,7 +173,7 @@ function promptReason(a, bot, now, checkinMs = CHECKIN_MS, idle = 0) {
 }
 
 // Jobs that never end by themselves. A bot running one is busy, not "needs a prompt".
-const ROUTINES = new Set(['shift', 'guard', 'follow']);
+const ROUTINES = new Set(['shift', 'guard', 'follow', 'treefarm']);
 const isRoutine = (job) => !!job && ROUTINES.has(job.type);
 
 // The shaft the mining levels leave from (the lab's, dug by !digShaft); SHAFT=x1,z1,x2,z2 overrides.
@@ -262,6 +263,13 @@ function translate(cmd, ctx) {
       return {job: ['bed', {x: Number(a[0]), y: Number(a[1]), z: Number(a[2]), facing}]};
     }
     case 'setHomeBed': return {job: ['homebed', {}]};
+    case 'tendTreeFarm': {
+      const [x1, z1, x2, z2] = a.slice(0, 4).map((v) => Math.round(Number(v)));
+      const [w, l] = [Math.abs(x2 - x1) + 1, Math.abs(z2 - z1) + 1];
+      if (![x1, z1, x2, z2].every(Number.isFinite) || w < 3 || l < 3 || w > 24 || l > 24) return {refuse: 'Use !tendTreeFarm(x1, z1, x2, z2) with sides of 3-24 blocks.'};
+      if (!chest) return {refuse: 'There is no base chest yet.'};
+      return {job: ['treefarm', {x1, z1, x2, z2}]};
+    }
     case 'collectGrave':
       if (![a[0], a[1], a[2]].every((v) => Number.isFinite(Number(v)))) return {refuse: 'Use !collectGrave(x, y, z) with the coordinates where the bot died.'};
       return {job: ['grave', {x: Math.round(a[0]), y: Math.round(a[1]), z: Math.round(a[2])}]};

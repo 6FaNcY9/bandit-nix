@@ -16,6 +16,7 @@ const {normDim, deadlineMs, insideAreas, shouldFight} = require('./world');
 const buildJob = require('./build');
 const huntJob = require('./hunt');
 const gravesJob = require('./graves');
+const treeFarmJob = require('./treefarm');
 const homebedJob = require('./homebed');
 const levelJob = require('./level');
 
@@ -30,9 +31,9 @@ const NATURAL = /^(stone|deepslate|dirt|grass_block|coarse_dirt|rooted_dirt|podz
 const KEEP_RE = /^(stick|[a-z_]+_planks|coal|charcoal|torch|crafting_table|furnace)$/;
 const FOOD_BELOW = 14; // fetch food from the supply chest when hungry and carrying none
 const FOOD_RETRY_MS = 600000; // an empty chest is not worth a walk every minute
-const RESUMABLE = new Set(['mine', 'chop', 'shift', 'goto', 'deposit', 'follow', 'come', 'guard', 'build', 'excavate', 'shaft', 'level', 'hunt', 'bed', 'homebed']);
+const RESUMABLE = new Set(['mine', 'chop', 'shift', 'goto', 'deposit', 'follow', 'come', 'guard', 'build', 'excavate', 'shaft', 'level', 'hunt', 'bed', 'homebed', 'treefarm']);
 // Long jobs that survive a restart (see keptOf, saved by server.js, reported by workers).
-const KEEP = new Set(['shift', 'guard', 'mine', 'chop', 'build', 'excavate', 'shaft', 'level', 'hunt', 'homebed']); // a resumed build/excavate skips what is done
+const KEEP = new Set(['shift', 'guard', 'mine', 'chop', 'build', 'excavate', 'shaft', 'level', 'hunt', 'homebed', 'treefarm']); // a resumed build/excavate skips what is done
 const MAX_INTERRUPTIONS = 3; // deaths/disconnects of one job before it is given up
 const TOOL_RE = /_(pickaxe|axe|shovel|hoe|sword)$|^(shears|bow|crossbow|fishing_rod|shield|trident|flint_and_steel|elytra)$/;
 
@@ -159,6 +160,8 @@ const VALIDATE = {
     }
     return a.slot === undefined ? {} : {slot: num(a.slot, 0, homebedJob.SLOTS - 1, 'slot')};
   },
+  // Plant and chop trees in an area of at most 24 x 24 until stopped; logs go to the supply chest.
+  treefarm: treeFarmJob.farmBox,
   say: (a) => {
     const text = String(a.text ?? '').trim();
     if (!text || text.length > 200) throw new Error('text must be 1..200 characters');
@@ -428,7 +431,7 @@ class BotRunner {
     if (!this.online && this.queue[0].resume) return; // resumed jobs wait for the reconnect
     const job = (this.current = this.queue.shift());
     job.status = 'running';
-    this.digOnly = ['excavate', 'shaft', 'level'].includes(job.type) ? NATURAL : null; // the walk to the room may dig natural ground only (Codex R3-1)
+    this.digOnly = ['excavate', 'shaft', 'level'].includes(job.type) ? NATURAL : job.type === 'treefarm' ? treeFarmJob.DIG_ONLY : null; // the walk to the room may dig natural ground only (Codex R3-1)
     job.startedAt = Date.now();
     job.progress = '';
     job.t = {doing: '', done: 0, total: 0, open: false}; // live detail; sub-jobs share it through the prototype
@@ -1492,8 +1495,15 @@ const {homebed} = homebedJob.makeHomebed({goNear, guard, sleep, goals, crafting,
 
 const {level} = levelJob.makeLevel({goNear, waitCalm, guard, sleep, digAt, upkeep, NATURAL, stairRing, at});
 
+const {treefarm} = treeFarmJob.makeTreeFarm({
+  goNear, guard, sleep, digAt, waitCalm, at,
+  deposit: (r, job) => JOBS.deposit(r, child(job, {type: 'deposit', args: {...r.supplyChest, only: 'logs'}})),
+  withdraw: (r, job, item, count) => JOBS.withdraw(r, child(job, {type: 'withdraw', args: {item, count, ...r.supplyChest}})),
+});
+
 const JOBS = {
   grave,
+  treefarm,
   homebed,
   level,
   hunt,

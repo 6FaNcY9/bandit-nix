@@ -50,6 +50,10 @@ assert.ok(commandDocs([], []).includes('!setHomeBed:') && commandDocs([], ['bot1
 assert.deepStrictEqual(tr('!collectGrave(-272.4, 58, -219)'), {job: ['grave', {x: -272, y: 58, z: -219}]});
 assert.ok(tr('!collectGrave(1, 2)').refuse && tr('!collectGrave("a", 2, 3)').refuse, 'needs three numbers');
 assert.ok(commandDocs([], []).includes('!collectGrave:') && !commandDocs([], ['bot12']).includes('!collectGrave:'), 'workers run it, the foreman only assigns it');
+assert.deepStrictEqual(tr('!tendTreeFarm(-262, -238, -248, -224)'), {job: ['treefarm', {x1: -262, z1: -238, x2: -248, z2: -224}]});
+assert.ok(tr('!tendTreeFarm(0, 0, 30, 5)').refuse && tr('!tendTreeFarm(0, 0, 1, 5)').refuse && tr('!tendTreeFarm(1, 2)').refuse, 'sides 3-24, four numbers');
+assert.ok(translate(parseCommand('!tendTreeFarm(0, 0, 9, 9)'), {pos: null, supplyChest: null}).refuse, 'logs go to the base chest');
+assert.ok(isRoutine({type: 'treefarm'}) && commandDocs([], []).includes('!tendTreeFarm:') && !commandDocs([], ['bot12']).includes('!tendTreeFarm:'), 'a routine; workers run it');
 assert.ok(tr('!placeBed(1, 2, 3, "up")').refuse && tr('!placeBed(1, 2)').refuse);
 assert.match(tr('!smeltItem("coal_ore", 5)').refuse, /gives coal/);
 assert.match(tr('!smeltItem("deepslate_iron_ore", 2)').refuse, /Smelt raw_iron instead/);
