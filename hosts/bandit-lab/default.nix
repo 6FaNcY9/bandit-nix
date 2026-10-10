@@ -80,6 +80,10 @@
   # deploy back. Firmware on the lab is updated by hand, so the timer is not needed.
   systemd.timers.fwupd-refresh.enable = false;
 
+  # Andy-4.2 also runs on the owner's gaming PC when it is free (tools/slayer/README.md);
+  # the tunnel makes it 127.0.0.1:18081 here and mcagents shares the work with Ollama.
+  bandit-lab.slayerTunnel.enable = true;
+
   users.users.${repoConfig.workstation.username}.openssh.authorizedKeys.keys = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHOfT8hlUovvRJtHh5YKJzBhHZSK05WLGERQIq0H7GDt vino@bandit-homelab"
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICJrs3e5pVxii8m//+jkERrWMM02MdfCisnPE+BLZvUx phone@bandit-lab"
