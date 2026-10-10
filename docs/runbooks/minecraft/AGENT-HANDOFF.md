@@ -74,6 +74,249 @@ Do not rely on branch names or an old report as the current task state.
 6. Record the integrated ID. Verify runtime separately after an authorized
    deployment; source review and a successful build do not prove activation.
 
+## Fourth review round, 2026-10-10
+
+State: reviewed / fixes required. Owner: Codex. Branch `review/minecraft-r4`,
+worktree `/tmp/bandit-minecraft-r4`, created from freshly fetched `origin/main`
+**`02ce7b4653599ae44a604c63bfe2e2f97b14b584`**. The original checkout's
+unrelated `flake.lock` change was preserved. This is the frozen review base;
+`origin/main` advanced independently during the review, and later revisions
+are not covered here. Only this document changes; one unsigned commit, never
+push. No bot/Nix edits, activation, or commands against bandit-lab or its bots.
+
+What this change does: adds animal hunting/shearing, bed/respawn jobs, layered
+shafts with retained stair blocks and opposite starting corners, and agent
+status cards. The paired replay harness runs frozen prompts against model APIs.
+Reviewed `ce4a9e1`, `e27da66`, `0f43e5d`, `c86c9a4`, `1e7555f`, `2ee50bd` and
+connected code at the frozen base, plus exact Sonnet fixes
+`c0771405e485ee8ef81127ccf9436fd4e7e3a77b` and
+`c84fa98c4be0566e27a5573ce0dcd912ae7f8017`.
+`app/` below means `hosts/bandit-lab/services/mcbots/app/`; source references
+are at the frozen base. P1 = safety/data loss; P2 = correctness or bounded
+resource use. All reproductions use local fake worlds, promises and packet
+recorders. No real game packets are sent.
+
+### Earlier findings: re-verification
+
+The exact bot and agent suites pass on both Sonnet commits and the frozen base.
+Each decision below applies to all three revisions unless noted.
+
+| Finding | Decision | Concrete reproduction and remaining acceptance |
+| --- | --- | --- |
+| R2-2, P1 delayed pathfinder dig | **Reopened; equip/epoch fix verified.** | Run the actual pathfinder 2.4.5 digging branch with equip held. Stop then clear current, Stop then start a new current job, or emit `path_reset`; release equip: zero raw digs. State swaps/protected/fluid targets are rejected by the existing tests. However, hold native Mineflayer `dig`'s internal `lookAt`, Stop/reset, release: a new `block_dig` status 0 packet is recorded. Details below. Native continuation safety remains open. |
+| R2-3, P1 rearm continuation | **Closed for reproduced withdrawal/craft/equip cases.** | Exact suites: Stop in withdrawal closes the window and starts no craft/equip; Stop in first armour equip with helmet, chestplate, leggings, boots, totem and sword records exactly one equip, no later slot; Stop during plank craft records no equip. `wear` now guards before/after each slot; crafting uses the existing inventory lock. These are inventory stand-ins, not server transaction certification. |
+| R2-6, P2 worker identity | **Closed for configured lab credentials.** | Actual local WebSocket admission: two distinct derived worker credentials use identical `wid` and host. Worker 2 announcing bot16, worker 1 announcing bot2, and shared/laptop token announcing either worker's names receive 4003; owners stay connected. Owner reconnect receives welcome and closes its own old socket with 4001. Restart the hub and retry cross-claim before owner login: still 4003. Source wiring gives each container only its derived HUB_TOKEN and explicit name set. Shared laptop credentials still share their own trust boundary. Minecraft login seeds remain shared; this closure concerns hub registration only. Live credential installation was not checked. |
+| R3-1, P1 excavation walking destroys walls | **Closed for cobblestone/plank/torch cases.** | Actual pinned `Movements.safeToBreak` and wrapped `bot.dig`: cobblestone, oak planks and torch are denied with `digOnly=NATURAL`, dirt/stone pass. Pump sets that policy for excavate; `c84fa98` extends it to shaft. Existing excavation fixture leaves chest/cobblestone, and a repeat does no work. Retained natural stair blocks require a separate coordinate veto: R4-4 below. |
+| R3-2, P1 auxiliary/scaffold placement | **Reopened; outer equip cases verified.** | Hold `placeNear` crafting-table equip, Stop, release: zero placements. Hold pathfinder scaffold equip and Stop/reset (also cleanup/new-job cases): zero placements. But native placement has its own awaited `lookAt`; Stop/reset there still emits `block_place`. Details below. |
+| R3-3, P2 repeated agent conversations | **Closed for the reported exchange.** | Fake model alternates bot1/bot2 `Done!` over 12 decisions: at most two messages delivered; further identical replies get `Not sent`, so they cannot keep waking the peer. Self-message delivers zero. A different useful request is delivered; ten different requests are limited to six per peer/window. The fixture forces 12 decisions to exercise refusals; it does not claim zero model calls for an independently woken agent. |
+| R3-4, P2 repeated completed worker room | **Closed for reported self/worker room cases.** | Record completion of `excavate 0 60 0 1 60 1`, including `already complete`; bot2 assigning that room to bot3 gets `Refused: already done` and zero posts. Failed/stopped rooms and a room at different coordinates still post. Existing self-build completion refusal passes too. The growing completion ledger is separate: R4-7. |
+
+### Must fix
+
+1. **R2-2 — P1: native dig starts after Stop/reset during lookAt.**
+   `app/bots.js:720-747`; installed pinned Mineflayer 4.39.0
+   `lib/plugins/digging.js:18-130`.
+   `guardDigs` checks before calling native dig. Native dig then awaits
+   `lookAt` before setting `targetDigBlock` or sending its start packet. Stop's
+   `stopDigging()` has no pending target to cancel at that point.
+   **Reproduction:** inject the actual native digging plugin into an event
+   emitter bot with a deferred `lookAt` and recording `_client.write`; install
+   actual `guardDigs`. Call `bot.dig(stone, true)`, assert no packets yet, call
+   actual `BotRunner.cancel()`, clear current, release look. One status-0
+   `block_dig` packet starts after Stop. Repeat with `path_reset`: same result.
+   This reproduces on both Sonnet commits and the base. Cancel the fake dig
+   after recording to clear its timer; no real server is needed.
+   **Fix/acceptance:** carry the originating generation and fresh block/safety
+   authorization through native look completion to the packet boundary. Hold
+   equip *and* native look in separate cases; Stop/reset/cleanup/new-job must
+   produce zero late dig packets. A second fixture also confirms that after
+   equip a target underneath the bot over a >3-block drop still reaches raw
+   dig: `unsafeDig` returns the drop warning but the wrapper accepts only its
+   fluid-warning subset. Recheck all applicable hazards, not just fluid names.
+
+2. **R3-2 — P1: native placement starts after Stop/reset during lookAt.**
+   `app/bots.js:749-754`; Mineflayer 4.39.0
+   `lib/plugins/place_block.js:11-14`, `generic_place.js:12-80`.
+   The outer wrapper checks before native `placeBlock`, whose `_genericPlace`
+   awaits `lookAt` before sending the packet. Its continuation has no epoch
+   check. This also applies to the new bed job's `placeBlock`.
+   **Reproduction:** inject the actual native generic/place plugins with
+   registry 26.1, carried stone, deferred look and a packet recorder; install
+   actual `guardDigs`. Start placing against a reference block, Stop/clear
+   current or emit `path_reset`, then release look. One `block_place` packet
+   starts afterward on both fixes and the base. Emit fake block-update replies
+   solely to settle the local promise.
+   **Fix/acceptance:** check cancellation/generation and target authorization
+   after the native look await, immediately before sending. Table, furnace,
+   scaffold and bed cases must send no late packets; keep the existing outer
+   equip regressions as well.
+
+3. **R4-1 — P1: hunt attacks an animal that becomes named or protected.**
+   `app/hunt.js:15-26`, `79-102`.
+   Name/baby eligibility is checked only when choosing the target. Protection
+   is checked before awaited combat/equip/look work, not again before a hit.
+   **Reproduction:** one adult unnamed sheep starts at `(1,64,0)` in sword
+   range. During weapon equip set actual name metadata `metadata[2]` to
+   `{text: 'Dolly'}`. Release equip: the job attacks the now-named sheep. In
+   another run keep areas fixed at `[[2,-1,5,1]]` and move the sheep from x=1
+   to x=2 during equip: one hit occurs inside protection. The fixture removes
+   the sheep on that hit and the job reports success. Initially named or
+   protected sheep are correctly excluded.
+   **Fix/acceptance:** revalidate the live entity's name, age, validity,
+   range and protected coordinates after awaits and before every attack/shear.
+   Repeat both cases during equip, combat wait and look; zero hits/activations.
+   Sword sweep collateral is also not controlled by this target filter; real
+   sweep physics and named neighbours were not simulated.
+
+4. **R4-2 — P1: bed can click after Stop on arrival or sleep failure.**
+   `app/hunt.js:180-188`; `app/bots.js:625-631`.
+   Successful goto has no final cancellation check. Bed immediately activates
+   or sleeps after that return. Its failed-sleep fallback also clicks without
+   checking Stop first.
+   **Reproduction:** run actual `JOBS.bed` with an existing red bed in both
+   planned cells. Daytime fake `pathfinder.goto` sets `job.cancelled=true` and
+   resolves: `activateBlock` starts once before `Cancelled` is thrown. At
+   night make `bot.sleep` set cancelled and reject with `monsters nearby`:
+   the catch starts one `activateBlock` after Stop. Both actual job fixtures
+   finish with `Cancelled`, but the recorded click has already happened.
+   **Fix/acceptance:** guard after arriving and before sleep/click, including
+   the fallback. Stop in goto/sleep failure starts no new activation; preserve
+   listener removal and waking an already sleeping bot as cleanup.
+
+5. **R4-3 — P1: a shaft can remove ground underneath the configured base.**
+   `app/bots.js:1571-1597`, `1614-1629`; configuration evidence only:
+   `hosts/bandit-lab/services/mcbots/default.nix:105-115`.
+   Natural-only does not reserve the base's floor/support. The configured chest
+   `(-37,65,-200)` is outside both configured protected rectangles.
+   **Reproduction:** use those exact rectangles and chest coordinates in a
+   fake world with chest at `(-37,65,-200)` and stone directly below it.
+   Run shaft corners `(-38,-201)` / `(-36,-199)`, top 65, bottom 64.
+   The actual job leaves the chest and removes stone at `(-37,64,-200)`.
+   No deployment or current terrain claim is made; this is accepted job input.
+   **Fix/acceptance:** reserve the base's support footprint against shaft digs,
+   including walking paths, while retaining permitted surface build/chest
+   access. A shaft overlapping it must fail before removing supporting ground.
+
+### Should fix
+
+6. **R4-4 — P2: walking may dig the shaft's retained stairs.**
+   `app/bots.js:389`, `548-549`, `744`, `1584`, `1621-1625`.
+   `keep` excludes a step only from explicit layer targets. Both movement
+   planning and the final walk-dig guard still authorize that natural block.
+   **Reproduction:** actual 3x3 shaft at top 60 / bottom 58 leaves stone at
+   `0,60,0`, `1,59,0`, `2,58,0`. With the production shaft NATURAL policy,
+   pinned `Movements.safeToBreak` permits that retained stone. Mark the fake
+   pathfinder as mining and execute its authorized dig at `0,60,0`: the wrapped
+   dig removes the step. This is a movement-policy reproduction, not proof of
+   a particular live route choosing it.
+   **Fix/acceptance:** reserve all retained stair coordinates for both bots,
+   covering walking/ascent and final dig authorization, not only each layer's
+   scan. A planned walk dig of a retained step must be rejected; natural
+   non-step targets and opposite-corner scans must still work.
+
+7. **R4-5 — P2: incomplete shafts report completion.**
+   `app/bots.js:1587-1591`, `1607-1609`, `1623-1636`.
+   Unloaded cells are treated as absent, and exhausted claim retries are
+   counted in progress but do not fail the parent shaft.
+   **Reproduction A:** every `blockAt` returns null for a 3x3, three-layer
+   shaft: zero walks and digs, but it returns successfully with `t.done=3`
+   and `t.total=3`. **B:** put nine stone blocks in one layer, refuse every
+   claim: three passes finish with all nine blocks present, progress says
+   `8 blocks left`, `done=total=1`, and no error. The pump therefore emits
+   `finished` for incomplete work. Claims omit the one intentionally kept step.
+   **Fix/acceptance:** unknown cells must load or fail; remaining requested
+   blocks must make the job incomplete/failed rather than finished. Keep retry
+   counts bounded and report which layer remains. No infinite retry loop was
+   reproduced: shaft passes are capped at three; walk and dig attempts also
+   have count/deadline limits. Combat waits can intentionally wait for calm.
+
+8. **R4-6 — P2: agent status changes retain every past worker DOM row.**
+   `app/agentauth.js:23-28`; `app/public/index.html:591-600`, `609`.
+   The API bounds each worker list, but accepts arbitrary syntactically valid
+   names. `c.wk` never deletes workers removed from subsequent statuses.
+   **Reproduction:** validate 1,000 statuses for the same permitted agent,
+   each with one different name `bot0` through `bot999`; run the actual
+   `renderAgents` body against DOM stand-ins for each. One card retains
+   `wk.size=1000` although only one worker is displayed. Names all pass
+   `agentStatus`; a bearer holder can keep extending this set. Fixed crews
+   do not trigger growth; changing crews/statuses do.
+   **Fix/acceptance:** delete cached rows absent from the current worker set;
+   validate status crews against the permitted bot domain. Repeating that
+   fixture should retain only the current rows. Per-agent server statuses
+   themselves replace entries and are bounded by configured agent names.
+
+9. **R4-7 — P2: agent completion tracking grows without a cap.**
+   `tools/mcagents/agent.js:336-372`, `401-403`.
+   `noteFinished` shifts a name but leaves its empty `sent` array/key. `done`
+   retains every distinct completed part, though the prompt shows only eight.
+   **Reproduction:** call actual `noteSent` and `noteFinished` for 10,000
+   distinct one-cell rooms with normal finished events. `done.size=10000`
+   and `sent.size=10000`; every remaining sent array is empty. This is
+   cumulative growth across ordinary completed jobs, independent of bounded
+   chat history and rotated logs, not a measured production out-of-memory event.
+   **Fix/acceptance:** delete drained sent entries and choose a bounded or
+   persistent completion policy that preserves the R3-4 duplicate refusal.
+   Repeated finishes must leave no empty pending keys and respect that bound.
+
+### Checks, coverage and limits
+
+- `rtk git fetch origin`; `rtk git worktree add -b review/minecraft-r4
+  /tmp/bandit-minecraft-r4 origin/main`. Frozen base recorded above; no rebase
+  onto changes that arrived later. No push or remote host/bot command.
+- Base bot suite: `rtk proxy env NODE_PATH=/home/vino/src/bandit-nix/hosts/bandit-lab/services/mcbots/app/node_modules node hosts/bandit-lab/services/mcbots/app/test.js`.
+  Base agent and replay suites: `rtk proxy node tools/mcagents/agent.test.js`
+  and `rtk proxy node tools/mcagents/replay.test.js`. All exit 0.
+- Extracted exact app, agent sources and blueprints for `c077140` and `c84fa98`
+  into `/tmp/minecraft-r4-evidence/<revision>` with `git archive`. Their bot
+  and agent suites exit 0. Initial agent runs lacked the scratch blueprint
+  fixture and failed at `agent.test.js:274` with `No blueprint called
+  "test-pad-3x3"`; extracting the same revisions' blueprints resolved it.
+  That was a review-fixture setup error, not a shipped-code failure.
+- Local dependency versions: Mineflayer 4.39.0 and pathfinder 2.4.5; reused the
+  existing dependency install via NODE_PATH, without package/lock changes.
+  Scratch checks (all exit 0): `repro.cjs`, `native-stop.cjs`, `bed-stop.cjs`,
+  `http.cjs` in `/tmp/minecraft-r4-evidence`, and `/tmp/hunt-fixture.js`.
+  Native Stop/reset and pinned executor checks also ran against both fixes.
+  Scratch fixtures are not committed; reproduction sequences above do not
+  require their paths to survive.
+- Actual local HTTP server with bot startup stubbed: missing/wrong bearer,
+  worker-like wrong bearer and human identity cannot POST agentstatus (403);
+  unknown agent is rejected (400); proper bearer POST and authorized human
+  GET succeed. Missing identity and machine bearer cannot GET agents (403).
+  Reposting replaces one status and truncates goal to 500 characters. The
+  machine credential intentionally represents all configured agent bots;
+  status is self-report, not independently verified worker ownership.
+- XSS payloads `<img src=x onerror=alert(1)>` and `<svg onload=alert(1)>`
+  remain data through the endpoint and actual renderer. Goal/role/worker
+  text uses `textContent`; decisions use the text-content helper. No direct
+  injection was reproduced. This was a DOM/source fixture, not a real-browser
+  security test; configured CSP was source-reviewed only.
+- Beds check both foot/head protected cells, blocked/fluid/unloaded cells and
+  support; existing tests pass. No protected bed-footprint bypass reproduced.
+  Native late placement after Stop is still R3-2. No real orientation/physics
+  or protected-area placement acceptance was performed.
+- Initially named/baby/protected animals and players are excluded; tameable
+  wolves/cats/horses are outside the hunt species allowlist. **Ownership limit:**
+  an unnamed adult farm sheep/cow/pig/chicken has no vanilla owner field that
+  proves it is wild. The unchanged-sheep fixture selects and attacks it; being
+  penned/bred by a player does not add an ownership check here. Protect farm
+  areas or require an explicitly authorized hunting area before relying on
+  player-owned livestock safety. Sword collateral remains unverified.
+- Shaft interior protected island, corners outside: final dig guard refuses
+  its stone. No direct protected-terrain bypass reproduced. Fake opposite
+  scans pass; actual simultaneous bot navigation/collisions were not exercised.
+- `1e7555f`: mixed plank crafting, named alert output/throttling and generic
+  item translation regressions pass in existing suites; no new regression
+  found in these fixes. `2ee50bd`: replay tests exercise frozen pairing,
+  redaction, malformed/error/truncated replies and both API shapes using a
+  loopback fake model, with no dashboard/job calls. No real model replay.
+- `rtk git diff --check` and documentation scope/diff reviewed. No dedicated
+  Markdown gate found. No Nix build/flake check for this document-only commit.
+  No live sockets to bandit-lab, world/inventory physics, activation or deployment.
+
+Verdict: fix reopened R2-2/R3-2 and the P1 hunt, bed and base-support holes
+before safety acceptance. R4-4 through R4-7 need correctness/resource fixes.
+
 ## Third review round, 2026-10-10
 
 State: reviewed / fixes required. Owner: Codex. Worktree:
