@@ -22,7 +22,18 @@
 in
   assert lib.assertMsg (lib.elem "--security-opt=no-new-privileges" lab.virtualisation.oci-containers.containers.aiia-redis.extraOptions) "aiia-redis must retain no-new-privileges";
   assert lib.assertMsg (lib.elem "--security-opt=no-new-privileges" lab.virtualisation.oci-containers.containers.aiia-ghost.extraOptions) "aiia-ghost must retain no-new-privileges";
-  assert lib.assertMsg (lab.services.ntfy-sh.settings.listen-http == "127.0.0.1:2586" && lab.services.ntfy-sh.settings.auth-default-access == "deny-all") "ntfy must listen on loopback with deny-all access";
+  # ntfy listens on all addresses only so the bots container can reach it via its Docker gateway
+  # (owner-approved 2026-10-10); then the firewall may admit 2586 from the mcbots subnet and nothing else.
+  assert lib.assertMsg (
+    lab.services.ntfy-sh.settings.auth-default-access
+    == "deny-all"
+    && (lab.services.ntfy-sh.settings.listen-http
+      == "127.0.0.1:2586"
+      || (lab.services.ntfy-sh.settings.listen-http
+        == "0.0.0.0:2586"
+        && lib.hasInfix "iptables -A nixos-fw -s 10.250.77.0/29 -p tcp --dport 2586 -j nixos-fw-accept" fw.extraCommands
+        && lib.length (lib.splitString "--dport 2586" fw.extraCommands) == 2))
+  ) "ntfy must listen on loopback, or on all addresses with the firewall admitting port 2586 only from the mcbots subnet, and keep deny-all access";
   assert lib.assertMsg (lab.services.ntfy-sh.settings.auth-access == ["mcbots:mcbots:wo" "phone:mcbots:ro"]) "ntfy must grant only topic-scoped publisher and reader access";
   assert lib.assertMsg (!lab.services.openssh.openFirewall) "sshd must not open the firewall globally; port 22 is allowed on tailscale0 only";
   assert lib.assertMsg (lib.all (p: lib.elem p fw.interfaces.tailscale0.allowedTCPPorts) [22 139 445]) "tailscale0 must allow SSH (22) and SMB (139, 445)";
