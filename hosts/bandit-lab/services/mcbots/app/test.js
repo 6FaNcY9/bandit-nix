@@ -2339,5 +2339,98 @@ require('./crafting');
     f.bot.placeBlock = async () => {};
     await assert.rejects(JOBS.bed(f.r, bedJob()), /did not take/);
   }
+  { // graves (AxGraves): validation, the pure decisions, then the job against a fake bot
+    const {JOBS, VALIDATE, Cancelled} = require('./bots');
+    const G = require('./graves');
+    const A = require('./agentauth');
+    const {Vec3} = require('vec3');
+    assert.deepStrictEqual(VALIDATE.grave({x: 1.9, y: 64, z: -2}), {x: 1, y: 64, z: -2});
+    assert.throws(() => VALIDATE.grave({x: 1, y: 999, z: 2}), /y must be/);
+    assert.strictEqual(A.agentJobRefusal({bots: ['bot1'], type: 'grave', args: {}}, {agentBots: ['bot1'], supplyChest: {x: 1, y: 2, z: 3}}), null);
+
+    // graveCandidates: nearest first within 3 blocks; never players, items, orbs, invalid or far entities
+    const ent = (id, name, x, y, z, extra = {}) => ({id, name, type: 'other', position: new Vec3(x, y, z), ...extra});
+    const around = [ent(1, 'armor_stand', 0, 65, 1), ent(2, 'text_display', 0, 66.5, 0), ent(3, 'armor_stand', 0, 64, 5), ent(4, 'item', 0, 64, 0), ent(5, 'zombie', 1, 64, 0, {type: 'mob'}), ent(6, 'x', 0, 64, 0, {type: 'player'}), ent(7, 'armor_stand', 0, 64, 1, {isValid: false}), ent(8, 'experience_orb', 0, 64, 0)];
+    assert.deepStrictEqual(G.graveCandidates(around, {x: 0, y: 64, z: 0}).map((e) => e.id), [5, 1, 2]);
+    assert.deepStrictEqual(G.graveCandidates([], {x: 0, y: 64, z: 0}), []);
+
+    // graveAfterDeath: own overworld death near the base, outside protected areas, once
+    const dead = {pos: new Vec3(100.7, 64.2, -50.5), dim: 'minecraft:overworld', chest: {x: 0, y: 64, z: 0}, areas: [[-80, -144, 80, 80]], jobType: 'mine', queued: []};
+    assert.deepStrictEqual(G.graveAfterDeath(dead), {x: 100, y: 64, z: -51});
+    for (const [why, o] of [['no chest', {chest: null}], ['nether', {dim: 'the_nether'}], ['no position', {pos: null}], ['protected', {pos: new Vec3(0, 64, 0)}],
+      ['too far', {pos: new Vec3(1600, 64, 0)}], ['void', {pos: new Vec3(100, -70, 0)}], ['died on the way to a grave', {jobType: 'grave'}],
+      ['already queued', {queued: [{type: 'grave', args: {x: 100, y: 64, z: -51}}]}]]) assert.strictEqual(G.graveAfterDeath({...dead, ...o}), null, why);
+    assert.ok(G.graveAfterDeath({...dead, queued: [{type: 'grave', args: {x: 1, y: 2, z: 3}}]}), 'another grave in the queue does not matter');
+
+    // armourPicks: the best piece per slot, only when better than what is worn
+    const inv = ['iron_helmet', 'leather_helmet', 'diamond_boots', 'iron_boots', 'stone_sword'].map((name) => ({name, count: 1}));
+    assert.deepStrictEqual(G.armourPicks(inv, {head: null, torso: null, legs: null, feet: 'iron_boots'}).map((p) => `${p.slot}:${p.item.name}`), ['head:iron_helmet', 'feet:diamond_boots']);
+    assert.deepStrictEqual(G.armourPicks(inv, {head: 'diamond_helmet', torso: null, legs: null, feet: 'netherite_boots'}), []);
+
+    // the job: a fake bot whose grave gives 65 items when right-clicked while sneaking
+    const fake = ({entities = [ent(1, 'armor_stand', 0, 65, 0)], gives = [{name: 'iron_sword', count: 1}, {name: 'cobblestone', count: 64}], areas = []} = {}) => {
+      const slots = new Array(46).fill(null), events = [], infos = [];
+      let sneak = false;
+      const bot = {
+        entities: Object.fromEntries(entities.map((e) => [e.id, e])), game: {dimension: 'overworld'}, entity: {position: new Vec3(0, 64, 0)},
+        inventory: {slots, items: () => slots.filter(Boolean)}, pathfinder: {goto: async () => {}, setGoal() {}, stop() {}},
+        getEquipmentDestSlot: (s) => ({head: 5, torso: 6, legs: 7, feet: 8}[s]),
+        setControlState: (k, v) => { if (k === 'sneak') { sneak = v; events.push(`sneak ${v}`); } },
+        lookAt: async () => {},
+        _client: {write: (packet, p) => {
+          assert.strictEqual(packet, 'use_entity');
+          if (p.mouse === 0) { events.push(`click ${bot.entities[p.target].name} sneaking=${p.sneaking}`); if (sneak && p.sneaking) gives.forEach((g, i) => (slots[9 + i] = {...g, type: i + 1})); }
+        }},
+        equip: async (item, slot) => events.push(`equip ${item.name} ${slot}`),
+      };
+      return {bot, events, infos, r: {bot, world: {hostilesNear: () => []}, combat: {busy: false, epoch: 0}, emit: (k, t) => infos.push(t), protectedAreas: areas, supplyChest: {x: 5, y: 64, z: 5}}};
+    };
+    const graveJob = (extra = {}) => ({t: {}, cancelled: false, type: 'grave', args: {x: 0, y: 64, z: 0}, ...extra});
+    const realDeposit = JOBS.deposit;
+    const deposits = [];
+    JOBS.deposit = async (r, j) => { deposits.push(j.args); };
+    try {
+      let f = fake();
+      let job = graveJob();
+      await JOBS.grave(f.r, job);
+      assert.deepStrictEqual(f.events, ['sneak true', 'click armor_stand sneaking=true', 'sneak false']);
+      assert.strictEqual(job.collected, 65);
+      assert.deepStrictEqual(deposits, [{x: 5, y: 64, z: 5}], 'deposits into the supply chest');
+      assert.ok(f.infos.some((m) => /^grave at 0 64 0: 65 items back$/.test(m)), f.infos.join('|'));
+
+      // armour that came back is put on before the deposit
+      f = fake({gives: [{name: 'iron_chestplate', count: 1}]});
+      await JOBS.grave(f.r, graveJob());
+      assert.ok(f.events.includes('equip iron_chestplate torso'), f.events.join('|'));
+
+      // the second candidate is tried when the first gives nothing
+      f = fake({entities: [ent(1, 'armor_stand', 0, 64, 1), ent(2, 'text_display', 0, 65, 0)]});
+      const write = f.bot._client.write;
+      f.bot._client.write = (packet, p) => { if (p.target === 2) write(packet, p); else if (p.mouse === 0) f.events.push('click armor_stand (dud)'); };
+      await JOBS.grave(f.r, graveJob());
+      assert.deepStrictEqual(f.events.filter((e) => e.startsWith('click')), ['click armor_stand (dud)', 'click text_display sneaking=true']);
+
+      // refusals and failures; sneak is always released
+      await assert.rejects(JOBS.grave(fake({areas: [[-5, -5, 5, 5]]}).r, graveJob()), /protected area/);
+      f = fake({entities: []});
+      await assert.rejects(JOBS.grave(f.r, graveJob()), /no grave entity within 3 blocks of 0 64 0/);
+      f = fake({gives: []});
+      await assert.rejects(JOBS.grave(f.r, graveJob()), /gave nothing/);
+      assert.strictEqual(f.events.at(-1), 'sneak false');
+      deposits.length = 0;
+      f = fake();
+      job = graveJob();
+      f.bot._client.write = () => { job.cancelled = true; };
+      await assert.rejects(JOBS.grave(f.r, job), Cancelled);
+      assert.deepStrictEqual([f.events.at(-1), deposits.length], ['sneak false', 0], 'a Stop releases sneak and deposits nothing');
+      f = fake();
+      f.r.supplyChest = null; // no chest: the loot stays in the inventory
+      await JOBS.grave(f.r, graveJob());
+      assert.strictEqual(deposits.length, 0);
+      assert.ok(f.infos.some((m) => /65 items back \(no supply chest/.test(m)));
+    } finally {
+      JOBS.deposit = realDeposit;
+    }
+  }
   console.log('ok');
 })();

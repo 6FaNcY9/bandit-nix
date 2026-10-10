@@ -308,6 +308,7 @@ Each bot runs its queue one job at a time. Chat is never read as a command.
 | `place` | item, x y z | puts one block (chest, crafting table, ...) on top of the solid block under x y z; crafts it first when missing; refused inside protected areas |
 | `hunt` | animal, count, x y z, optional radius | kills `count` (1-32) sheep, cows, pigs or chickens within `radius` (4-64, default 24) of x y z and picks the drops up; with shears a sheep is sheared instead (the sheep lives, one that gives no wool does not count); never named or baby animals, never in protected areas; a sword sweep that kills a neighbour counts too; fails with how many it got when none are left in range |
 | `bed` | x y z, facing | a bed with its foot at x y z and its head towards `facing` (north/south/east/west): both cells must be free with solid ground below and outside protected areas; crafts it from 3 wool of one colour and 3 planks when the bot holds none (`need 3 wool of one colour` otherwise: hunt first); a bed already lying there is not placed again; then clicks it (at night sleeps in it for a moment), which sets the spawn point; the event `spawn set at x y z` says so |
+| `grave` | x y z | walks to where a bot died, finds AxGraves' grave entity within 3 blocks, sneaks, right-clicks it (only the owner can), checks the inventory grew, puts on better armour, then deposits everything except tools, food and `KEEP_RE` into the supply chest; event `grave at x y z: N items back`; refused inside protected areas; fails `gave nothing` when it is not the bot's grave or already taken |
 | `say` | text | up to 200 characters; text starting with `/` is rejected |
 | `stop` | | clears the queue and stops walking/digging |
 
@@ -323,6 +324,19 @@ a sword sweeps and kills the sheep beside the target (counted now); the bed's he
 moment after the foot, so the job waits for both before it judges the facing; with wool but no planks `ensureItem` picked the "any bed + dye" recipe and failed (`need 1 more bone`), so `bed` makes the 3 planks first and says `need 3 more planks and have no logs (chop first)`; a bed whose head cell hangs over a
 pit is refused beforehand (`nothing solid under ...`). The night path (`bot.sleep`, refused near monsters or when
 too far) falls back to the plain click; it was not run live (the stage was in daylight).
+
+### Graves (AxGraves)
+
+A dying bot leaves its items and XP in an AxGraves grave for 24 h (then they drop). `app/graves.js`: on its own
+death a bot queues `grave` at the death position right behind the re-arm (before the interrupted job continues),
+only for an overworld death within 1500 blocks of the supply chest, outside protected areas, and not when it died
+on the way to a grave (no loop at a deadly spot). Agents reach it as `!collectGrave(x, y, z)` (`grave` is in the
+agent token policy). The grave is two packet entities at the death block: an `armor_stand` (type `living`) and a
+`text_display` (type `other`); the job tries the nearest of the entities within 3 blocks. mineflayer's
+`bot.activateEntity` always sends `sneaking: false`, which AxGraves ignores, so `graves.js` writes `use_entity`
+itself (interact-at, then interact, `sneaking: true`). Live on the stage (bot11 578 items, bot13 432 items,
+2026-10-10): kill -> respawn -> re-arm -> grave -> deposit, about 45 s with the walk from spawn, the click itself
+under 1 s.
 
 ## Long runs
 

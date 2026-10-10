@@ -94,6 +94,7 @@ const DOCS = {
   placeBlockAt: ['Place one block (for example a chest) at x, y, z; it needs a solid block below.', {type: ['string', 'The block type to place.'], x: ['number', 'The x coordinate.'], y: ['number', 'The y coordinate.'], z: ['number', 'The z coordinate.']}],
   huntAnimals: ['Hunt animals near where you stand and collect the drops (a sheep is sheared when you have shears). Use it for wool: a bed needs 3 wool of one colour.', {type: ['string', 'sheep, cow, pig or chicken.'], num: ['number', 'How many animals, 1-32.']}],
   placeBed: ['Make a bed from 3 wool of one colour and 3 planks if you have none, place it with its foot at x, y, z and its head one block towards the facing, and sleep or click it so your respawn point is there. It needs 2 free blocks with solid ground below.', {x: ['number', 'The x coordinate of the foot.'], y: ['number', 'The y coordinate.'], z: ['number', 'The z coordinate of the foot.'], facing: ['string', 'north, south, east or west: where the head of the bed points.']}],
+  collectGrave: ['Fetch the loot of a grave (the items a bot dropped by dying) at x, y, z, where the bot died: walks there, sneaks and right-clicks the grave, then puts everything except tools, armour and food into the base chest. Only the owner of a grave can take it.', {x: ['number', 'The x coordinate of the death.'], y: ['number', 'The y coordinate.'], z: ['number', 'The z coordinate.']}],
   buildBlueprint: ['Build a saved blueprint with its origin at x, y, z (one above the ground). Use this for every structure.', {name: ['string', 'The blueprint name.'], x: ['number', 'The x coordinate.'], y: ['number', 'The y coordinate.'], z: ['number', 'The z coordinate.']}],
   startConversation: ['Start a conversation with a bot. (FOR OTHER BOTS ONLY)', {player_name: ['string', 'The name of the player to send the message to.'], message: ['string', 'The message to send.']}],
   endConversation: ['End the conversation with the given bot. (FOR OTHER BOTS ONLY)', {player_name: ['string', 'The name of the player to end the conversation with.']}],
@@ -248,6 +249,9 @@ function translate(cmd, ctx) {
       if (![a[0], a[1], a[2]].every((v) => Number.isFinite(Number(v))) || !['north', 'south', 'east', 'west'].includes(facing)) return {refuse: 'Use !placeBed(x, y, z, facing) with facing north, south, east or west.'};
       return {job: ['bed', {x: Number(a[0]), y: Number(a[1]), z: Number(a[2]), facing}]};
     }
+    case 'collectGrave':
+      if (![a[0], a[1], a[2]].every((v) => Number.isFinite(Number(v)))) return {refuse: 'Use !collectGrave(x, y, z) with the coordinates where the bot died.'};
+      return {job: ['grave', {x: Math.round(a[0]), y: Math.round(a[1]), z: Math.round(a[2])}]};
     case 'placeBlockAt':
       if (![a[1], a[2], a[3]].every((v) => Number.isFinite(Number(v)))) return {refuse: 'Use !placeBlockAt(type, x, y, z).'};
       return {job: ['place', {item: String(a[0] ?? ''), x: Number(a[1]), y: Number(a[2]), z: Number(a[3])}]};

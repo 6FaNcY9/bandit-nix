@@ -15,6 +15,7 @@ const {BotTrace, SAMPLE_MS, round} = require('./debug');
 const {normDim, deadlineMs, insideAreas, shouldFight} = require('./world');
 const buildJob = require('./build');
 const huntJob = require('./hunt');
+const gravesJob = require('./graves');
 
 const NAME_RE = /^bot[0-9]{1,2}$/; // BotGate's pattern (Velocity plugin)
 const LOGIN_GAP_MS = 4500; // Velocity rate-limits logins
@@ -78,6 +79,7 @@ const VALIDATE = {
     return {...xyz(a), ...(a.only ? {only: a.only} : {})};
   },
   rearm: xyz,
+  grave: xyz, // where the bot died; AxGraves keeps the loot in a grave there
   craft: (a) => {
     if (!/^[a-z_]{1,48}$/.test(a.item || '')) throw new Error('item must be an item name like stone_pickaxe');
     return {item: a.item, count: num(a.count ?? 1, 1, 64, 'count')};
@@ -300,6 +302,9 @@ class BotRunner {
       this.resumeLater(was, 'died');
       // Re-equip from the supply chest first thing after respawning.
       if (this.supplyChest) this.queue.unshift({id: ++this.jobSeq, type: 'rearm', args: this.supplyChest, status: 'queued'});
+      // ... and then fetch the loot from the grave AxGraves made, before the interrupted job goes on.
+      const spot = gravesJob.graveAfterDeath({pos: p, dim: bot.game?.dimension, chest: this.supplyChest, areas: this.protectedAreas, jobType: this.current?.type, queued: this.queue});
+      if (spot) this.queue.splice(1, 0, {id: ++this.jobSeq, type: 'grave', args: spot, status: 'queued'});
     });
     bot.on('error', (e) => {
       this.lastError = String(e.message || e);
@@ -1378,9 +1383,11 @@ const buildContext = (r) => {
 };
 const build = buildJob.makeBuild({goNear, guard, sleep, goals, digAt, withdraw: buildWithdraw, runJob: buildRunJob, gatherContext: buildContext});
 
+const {grave} = gravesJob.makeGraves({goNear, guard, sleep, deposit: (r, job) => JOBS.deposit(r, child(job, {type: 'deposit', args: r.supplyChest}))});
 const {hunt, bed} = huntJob.makeHunt({goNear, guard, sleep, goals, waitCalm, crafting, at});
 
 const JOBS = {
+  grave,
   hunt,
   bed,
   goto: (r, job) => goNear(r, job, job.args.x, job.args.y, job.args.z, 1),
