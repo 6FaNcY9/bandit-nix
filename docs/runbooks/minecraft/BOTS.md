@@ -586,6 +586,44 @@ before chopping or mining). Without `SUPPLY_CHEST` or quotas the panel is absent
 
 ![Standing orders panel: quotas, stock and who works on what](img/standing-orders.png)
 
+## The plan (R7, `app/plan.js`)
+
+One ordered list of base objectives that the hub works through **without any LLM**, so it keeps
+going when every model backend is down. It is built like the keeper: deterministic, data driven,
+restart safe, and **off by default**. Stage A (the scheduler), B (keeper-driven quotas) and C (role
+chains for idle bots) ship together.
+
+- **Enable:** set `PLAN_ENABLE = "1"` and `PLAN_ROSTER = "bot11,bot12"` (bots the plan may task; none
+  may be in `AGENT_BOTS`, the config refuses it) in `default.nix`, or in the environment of a local
+  stage. A "Plan" panel appears on the dashboard. The plan still starts **switched off after every
+  restart**; switch it on in the panel or `POST /api/plan {"enabled": true}`. Same-origin JSON only;
+  the agent token cannot reach it. "Stop all" switches it off too.
+- **What it does:** `app/plan-config.js` lists the objectives (geometry of this base: base box,
+  base chest -271 66 -214, shaft x -291..-276 / z -222..-207, tree farm, storage room at y 58):
+  home beds, stock basics, shaft to ore, storage room, tree farm, iron quota, iron tools. An
+  objective is *keeper-driven* (the plan borrows the Keeper with the objective's quotas, the base chest
+  and only the roster bots, and gives it back when the objective ends) or *direct* (job chains for
+  idle roster bots; only empty slots are filled, a shaft is cut into one disjoint strip per bot).
+  It never replaces or stops a running job and never takes a bot with a job or a queue.
+- **Order and trouble:** an objective waits for its `needs`. A chain that fails is retried after
+  10 min; 3 failures, or hours without progress, block the objective: it is *parked* (later steps
+  need it; the plan goes on with independent ones) or *skipped* (nothing needs it). The panel has
+  `retry` and `skip` per objective (`POST /api/plan {"retry": id}` / `{"skip": id}`). Standing orders
+  switched on by hand are never taken over: the plan waits.
+- **State:** `STATE_DIR/plan.json` (done, skipped, blocked, slots and results). Done objectives stay
+  done; the rest is re-read from the world, so a deploy loses nothing.
+- **Limits:** the plan uses the base chest from `plan-config.js`, but `homebed` and `treefarm` read
+  the bots' own supply chest (`SUPPLY_CHEST`/a `supply` marker): put a `supply` marker on the base
+  chest first. The shaft, storage-room and iron-tools chains are untested on the real base.
+- **Stage test (2026-10-10, bot11 and bot12 on the laptop, roster of two, other objectives skipped):**
+  `home-beds` handed `homebed 7` and `homebed 8` to the two idle bots at once; both failed on the real
+  base (room 2 is not built: "cobblestone is in the way at -272 58 -206", "No path to the goal"), the
+  plan logged each failure and waited 10 min instead of resending. After `skip` on `home-beds` it moved to
+  `stock-basics`: the keeper was borrowed (plan chest, roster bots only), bot11 counted the base chest
+  in 16 s (logs 95, cobblestone 578), bot12 started `mine coal_ore 32`, the panel showed 50% and
+  "short: coal 0/32, torch 0/64". Skipping the last objective gave the keeper back (its own
+  quotas and chest) and "Stop all" switched the plan off. The base chest was full (0 free slots).
+
 ## Building (`build` job)
 
 Status 2026-10-10: built (`app/build.js`), unit-tested with a fake world in `app/test.js`, and

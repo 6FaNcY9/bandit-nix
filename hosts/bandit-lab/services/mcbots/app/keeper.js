@@ -23,6 +23,8 @@ const KINDS = {
   logs: (n) => n.endsWith('_log'),
   coal: (n) => n === 'coal' || n === 'charcoal',
 };
+// A bot the keeper (and the plan) may give work: online, alive, no job, nothing queued.
+const idle = (s) => !!s && s.online && !s.dead && !s.job && !s.queue.length;
 const matcher = (key) => KINDS[key] || ((n) => n === key);
 const have = (items, key) => Object.entries(items || {}).filter(([n]) => matcher(key)(n)).reduce((s, [, c]) => s + c, 0);
 
@@ -105,7 +107,7 @@ class Keeper {
   }
 
   idle(s) {
-    return !!s && s.online && !s.dead && !s.job && !s.queue.length;
+    return idle(s);
   }
 
   tick() {
@@ -234,4 +236,4 @@ function parseQuotas(text) {
   return out;
 }
 
-module.exports = {Keeper, parseQuotas, PLANS, have, MAX_BOTS, IDLE_MS, COOLDOWN_MS, STOCK_MAX_AGE_MS};
+module.exports = {Keeper, parseQuotas, PLANS, have, idle, MAX_BOTS, IDLE_MS, COOLDOWN_MS, STOCK_MAX_AGE_MS};

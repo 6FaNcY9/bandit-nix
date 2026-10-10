@@ -77,6 +77,12 @@
   <div class="mut" id="kinfo"></div>
   <table id="ktable"></table>
 </div>
+<div class="bar" id="planbar" hidden>
+  <h3>Plan <label><input type="checkbox" id="pon"> work through the base objectives</label> <span id="pmsg" class="mut"></span></h3>
+  <div class="mut" id="pinfo"></div>
+  <table id="ptable"></table>
+  <div class="mut" id="pbots"></div>
+</div>
 <div class="bar" id="chestbar" hidden>
   <h3>Supply chest <button id="chestcount" type="button" class="ghost" title="Send an idle bot to count it">Count it</button></h3>
   <div class="mut" id="chestinfo"></div><div id="chestwarn"></div><div class="mut" id="chestitems"></div>
@@ -310,6 +316,31 @@ function renderKeeper(k) {
   }));
 }
 
+// ---- plan (R7): the ordered base objectives, who has which part ----
+async function planCall(body) {
+  try {
+    const r = await fetch('/api/plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    $('pmsg').textContent = r.ok ? '' : (await r.json()).error;
+  } catch (e) { $('pmsg').textContent = 'failed: ' + e.message; }
+}
+$('pon').onchange = () => planCall({ enabled: $('pon').checked });
+function renderPlan(p) {
+  $('planbar').hidden = !p || !p.available;
+  if (!p || !p.available) return;
+  if (document.activeElement !== $('pon')) $('pon').checked = p.enabled;
+  const c = p.current;
+  $('pinfo').textContent = `${p.pct}% of the plan - ` + (p.finished ? 'finished' : c ? `now: ${c.label} (${c.pct}%)${c.note ? ' - ' + c.note : ''}` : p.parked.length ? 'stalled: ' + p.parked.map((x) => x.id).join(', ') + ' parked' : p.enabled ? 'nothing to do' : 'off') + `. Roster: ${p.roster.join(', ')}. Off after every restart.`;
+  const head = el('tr'); for (const h of ['objective', 'status', '%', '']) head.append(el('th', '', h));
+  $('ptable').replaceChildren(head, ...p.objectives.map((o) => {
+    const tr = el('tr'), act = el('td');
+    if (o.status === 'parked' || o.status === 'skipped') { const b = el('button', 'ghost', 'retry'); b.onclick = () => planCall({ retry: o.id }); act.append(b); }
+    if (o.status === 'active' || o.status === 'parked' || o.status === 'upcoming') { const b = el('button', 'ghost', 'skip'); b.onclick = () => planCall({ skip: o.id }); act.append(' ', b); }
+    tr.append(el('td', o.status === 'active' ? '' : 'mut', o.label), el('td', o.status === 'parked' ? '' : 'mut', o.status + (o.why && o.status !== 'done' ? ` (${o.why})` : '')), el('td', '', String(o.pct)), act);
+    return tr;
+  }));
+  $('pbots').textContent = p.bots.map((b) => `${b.bot}: ${!b.online ? 'offline' : b.role || 'idle'}`).join(' | ');
+}
+
 // ---- events: GET /api/events?since=<id>, kept to the last 200 ----
 let evs = [], evLast = 0;
 function renderEvents() {
@@ -333,7 +364,7 @@ function connect() {
   const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
   ws.onopen = () => { $('conn').textContent = ''; };
   ws.onmessage = (e) => {
-    const m = JSON.parse(e.data); last = m; render(m.bots, m.now); renderKeeper(m.keeper); renderProjects(); renderChest(); allComposer(); radar();
+    const m = JSON.parse(e.data); last = m; render(m.bots, m.now); renderKeeper(m.keeper); renderPlan(m.plan); renderProjects(); renderChest(); allComposer(); radar();
     if (m.lastEventId !== evLast) pollEvents();
   };
   ws.onclose = () => { $('conn').textContent = '(reconnecting...)'; setTimeout(connect, 2000); };

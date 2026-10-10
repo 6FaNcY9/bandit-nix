@@ -60,6 +60,14 @@ function loadConfig(env = process.env) {
     if (n.length !== 3 || n.some((v) => !Number.isInteger(v))) throw new Error('KEEPER_SITE must be x,y,z');
     keeperSite = {x: n[0], y: n[1], z: n[2]};
   }
+  // The plan (plan.js): PLAN_ENABLE makes it available (it still starts switched off), PLAN_ROSTER names
+  // the bots it may task; those must not be agent bots (the LLM crews stay theirs).
+  const planEnable = !!env.PLAN_ENABLE && !/^(0|false|no)$/i.test(env.PLAN_ENABLE);
+  const planRoster = list(env.PLAN_ROSTER);
+  if (planEnable && !planRoster.length) throw new Error('PLAN_ENABLE needs PLAN_ROSTER (comma list of bot names)');
+  const planBad = planRoster.filter((n) => !NAME_RE.test(n));
+  if (planBad.length) throw new Error(`PLAN_ROSTER must be bot names: ${planBad.join(', ')}`);
+  if (new Set(planRoster).size !== planRoster.length) throw new Error('duplicate PLAN_ROSTER name');
   const loginSeed = env.BOT_PASSWORD_SEED || localSeed(env);
   // Optional hub for remote workers (laptop bots): a second listener that only
   // accepts the WebSocket on /worker, guarded by a bearer token.
@@ -86,6 +94,8 @@ function loadConfig(env = process.env) {
   const strangers = agentBots.filter((b) => !NAME_RE.test(b));
   if (strangers.length) throw new Error(`AGENT_BOTS must be bot names: ${strangers.join(', ')}`);
   // The gaming PC's llama-server through the lab tunnel (slayer.js); unset = no card.
+  const overlap = planRoster.filter((n) => agentBots.includes(n));
+  if (planEnable && overlap.length) throw new Error(`PLAN_ROSTER must not contain agent bots: ${overlap.join(', ')}`);
   const slayerUrl = (env.SLAYER_URL || '').replace(/\/+$/, '');
   if (slayerUrl && !/^http:\/\/[\w.-]+(:\d+)?$/.test(slayerUrl)) throw new Error('SLAYER_URL must be http://host:port');
   const slayerStatusCmd = require('./slayer').parseCmd(env.SLAYER_STATUS_CMD);
@@ -105,6 +115,8 @@ function loadConfig(env = process.env) {
     supplyChest,
     keeperQuotas,
     keeperSite,
+    planEnable,
+    planRoster,
     loginSeed,
     bluemapUrl: bluemapUrl.replace(/\/+$/, ''),
     workerToken,

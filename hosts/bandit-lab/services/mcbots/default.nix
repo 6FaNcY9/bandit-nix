@@ -110,6 +110,13 @@ in {
             # Resource site in the forest west of spawn (chest -260 65 -213), so
             # standing orders never dig around the spawn base.
             KEEPER_SITE = "-258,65,-210";
+            # The plan (app/plan.js, R7): one ordered list of base objectives the hub works through
+            # without an LLM. Off while PLAN_ENABLE is empty. With "1" the dashboard gets a Plan panel
+            # (still switched off after every restart); PLAN_ROSTER lists the bots it may task and must
+            # not contain any AGENT_BOTS. Its geometry (base chest, shaft, rooms) is app/plan-config.js,
+            # not SUPPLY_CHEST or KEEPER_SITE.
+            PLAN_ENABLE = "";
+            PLAN_ROSTER = "";
             # Bots never dig or place inside these x1,z1,x2,z2 boxes: the main base
             # around spawn and MidariBread's base (from BlueMap light data, +16).
             PROTECTED_AREAS = "-80,-144,80,80;112,368,272,592";

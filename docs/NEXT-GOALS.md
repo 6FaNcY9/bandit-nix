@@ -61,6 +61,7 @@ at most once a day.
 | | | *Jobs `hunt` (sheep etc., shears first) and `bed` (craft, place, click, "spawn set at") and the agent commands `!huntAnimals`/`!placeBed` shipped 2026-10-10, live-tested on the stage incl. respawn at the bed. Left: the crew's beds in the lab's storage room (the foreman orders them), a night sleep run.* | |
 | R6 | Storage | Deposits go to the chest that holds that item (`storage` roles in `base-v1.json`); the dashboard answers "where is X" | 2-3 | R4 |
 | R7 | The plan | One ordered list (build base-v1 -> storage roles -> iron/gold quotas -> ...) that the hub works through, giving roles to bots and showing progress on the dashboard | 3-5 | R1, R4, R6 |
+| | | *Stages A-C coded 2026-10-10 (`app/plan.js`, `plan-config.js`, BOTS.md "The plan"), off by default (`PLAN_ENABLE`). Left: live runs of the shaft, storage-room and iron objectives, gold, and switching it on for the lab crew.*
 | R8 | Soak | Several days unattended; every failure fixed or turned into a self-recovery | 1-2 weeks alongside | R7 |
 
 Blueprints: `hosts/bandit-lab/services/mcbots/blueprints/` (README there). `base-v1-shell-01..08`

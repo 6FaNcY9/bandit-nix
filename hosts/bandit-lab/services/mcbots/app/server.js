@@ -12,6 +12,8 @@ const {Hub, RemoteRunner, createWorkerServer} = require('./hub');
 const {EventLog} = require('./events');
 const {NtfyNotifier} = require('./notify');
 const {Keeper} = require('./keeper');
+const {Plan} = require('./plan');
+const planConfig = require('./plan-config');
 const {botView} = require('./view');
 const {scanAround} = require('./scan');
 const {Alerts, chestWarnings} = require('./alerts');
@@ -51,7 +53,7 @@ const workerServer = hub ? createWorkerServer(hub) : null;
 // tailscale serve sets Tailscale-User-Login for tailnet users. When
 // ALLOWED_TS_LOGINS is set, nothing is served without it.
 // Standing orders: only with a supply chest and at least one quota; switched off at every start.
-const keeper = cfg.keeperQuotas.length ? new Keeper({runners, world, chest: cfg.supplyChest, quotas: cfg.keeperQuotas, site: cfg.keeperSite, events, log}) : null;
+const keeper = cfg.keeperQuotas.length || cfg.planEnable ? new Keeper({runners, world, chest: cfg.supplyChest, quotas: cfg.keeperQuotas, site: cfg.keeperSite, events, log}) : null;
 // Map markers: the first 'supply' place is the supply chest for every bot, the
 // hub's workers and the keeper; the first 'site' place is where the keeper works.
 const places = new Places(process.env.STATE_DIR || '');
@@ -67,6 +69,8 @@ function applyPlaces() {
   }
 }
 applyPlaces();
+// The plan (R7): off unless PLAN_ENABLE, and switched off after every restart; what it has done is kept in plan.json.
+const plan = cfg.planEnable ? new Plan({runners, world, keeper, places, events, objectives: planConfig.OBJECTIVES, roster: cfg.planRoster, chest: planConfig.BASE.chest, file: process.env.STATE_DIR ? path.join(process.env.STATE_DIR, 'plan.json') : null, log}) : null;
 
 // Long jobs survive a restart (deploys restart the container): every 5 s the
 // running and queued shift/guard/mine/chop jobs go to STATE_DIR/jobs.json and
@@ -144,7 +148,7 @@ const sameOrigin = (req) => {
     return false;
   }
 };
-const state = () => ({now: Date.now(), lastEventId: events.lastId, keeper: keeper?.state() || null, bots: [...runners.values()].map((r) => ({...r.snapshot(), settings: settings.get(r.name)})), world: world.snapshot(), protectedAreas: cfg.protectedAreas, supplyChest, places: places.list, projects: projects.view(), chest: world.stock && {warnings: chestWarnings(world.stock.items, world.stock.free)}});
+const state = () => ({now: Date.now(), lastEventId: events.lastId, keeper: keeper?.state() || null, plan: plan?.state() || null, bots: [...runners.values()].map((r) => ({...r.snapshot(), settings: settings.get(r.name)})), world: world.snapshot(), protectedAreas: cfg.protectedAreas, supplyChest, places: places.list, projects: projects.view(), chest: world.stock && {warnings: chestWarnings(world.stock.items, world.stock.free)}});
 
 function readJson(req) {
   return new Promise((resolve, reject) => {
@@ -302,6 +306,22 @@ const server = http.createServer(async (req, res) => {
       return json(400, {error: e.message});
     }
   }
+  if (req.method === 'GET' && url.pathname === '/api/plan') return json(200, plan ? plan.state() : {available: false});
+  if (req.method === 'POST' && url.pathname === '/api/plan') {
+    if (!sameOrigin(req) || !String(req.headers['content-type']).startsWith('application/json')) return json(403, {error: 'bad origin'});
+    try {
+      if (!plan) throw new Error('the plan is not configured (needs PLAN_ENABLE and PLAN_ROSTER)');
+      const {enabled, skip, retry} = await readJson(req);
+      if (typeof enabled === 'boolean') plan.setEnabled(enabled);
+      else if (typeof skip === 'string') plan.skip(skip);
+      else if (typeof retry === 'string') plan.retry(retry);
+      else throw new Error('send enabled (true/false), skip (an objective id) or retry (an objective id)');
+      broadcast();
+      return json(200, plan.state());
+    } catch (e) {
+      return json(400, {error: e.message});
+    }
+  }
   if (req.method === 'POST' && url.pathname === '/api/places') {
     if (!sameOrigin(req) || !String(req.headers['content-type']).startsWith('application/json')) return json(403, {error: 'bad origin'});
     try {
@@ -410,6 +430,7 @@ const server = http.createServer(async (req, res) => {
           keeper.setEnabled(false);
           keeperOff = true;
         }
+        if (plan?.enabled) plan.setEnabled(false); // it would hand the idle bots new work; this also returns the keeper
       }
       broadcast();
       if (errors.length) throw new Error(errors.join('; '));
@@ -443,6 +464,11 @@ const tick = setInterval(() => {
   hub?.broadcastWorld();
 }, 1000);
 const keeperTick = setInterval(() => {
+  try {
+    plan?.tick(); // before the keeper: a borrowed keeper starts with the plan's quotas
+  } catch (e) {
+    log('plan', `error: ${e.message}`);
+  }
   try {
     keeper?.tick();
   } catch (e) {
