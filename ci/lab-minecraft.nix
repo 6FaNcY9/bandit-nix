@@ -91,6 +91,18 @@ in
       grep -q '^scripts: \["mcbots/overlay.js"\]$' $data/plugins/BlueMap/webapp.conf
       test "$(grep -c overlay $data/plugins/BlueMap/webapp.conf)" -eq 1
       grep -q '^styles: \[\]$' $data/plugins/BlueMap/webapp.conf
+      # BlueMap's own generated default spans lines with a comment inside.
+      printf 'enabled: true\nscripts: [\n  #"js/my-custom-script.js"\n]\nstyles: [\n]\n' > $data/plugins/BlueMap/webapp.conf
+      stage
+      stage
+      grep -q '^scripts: \["mcbots/overlay.js"\]$' $data/plugins/BlueMap/webapp.conf
+      test "$(grep -c overlay $data/plugins/BlueMap/webapp.conf)" -eq 1
+      grep -q '^styles: \[$' $data/plugins/BlueMap/webapp.conf
+      ! grep -q my-custom-script $data/plugins/BlueMap/webapp.conf
+      # An unclosed block is left alone.
+      printf 'scripts: [\n  #"x.js"\n' > $data/plugins/BlueMap/webapp.conf
+      stage 2>/dev/null
+      test "$(wc -l < $data/plugins/BlueMap/webapp.conf)" -eq 2
       printf 'scripts: ["other.js"]\n' > $data/plugins/BlueMap/webapp.conf
       stage 2>/dev/null
       grep -q '^scripts: \["other.js"\]$' $data/plugins/BlueMap/webapp.conf

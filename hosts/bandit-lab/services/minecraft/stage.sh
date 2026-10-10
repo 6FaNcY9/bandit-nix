@@ -152,11 +152,18 @@ install -m 0644 "$STAGE_OVERLAY" "$data/bluemap/web/mcbots/overlay.js"
 # BlueMap generates webapp.conf; register the script in its `scripts` list (idempotent). An unexpected
 # shape is left alone with a warning: the map must still start.
 webapp=$plugins/BlueMap/webapp.conf
+open='^[[:space:]]*scripts:[[:space:]]*\[[[:space:]]*$'
+close='^[[:space:]]*\][[:space:]]*$'
 if [ -f "$webapp" ]; then
   if grep -Eq '^[[:space:]]*scripts:[[:space:]]*\[[[:space:]]*"mcbots/overlay\.js"[[:space:]]*\][[:space:]]*(#.*)?$' "$webapp"; then
     :
   elif [ "$(grep -Ec '^[[:space:]]*scripts:[[:space:]]*\[[[:space:]]*\][[:space:]]*(#.*)?$' "$webapp")" -eq 1 ]; then
     sed -E -i 's|^([[:space:]]*scripts:[[:space:]]*)\[[[:space:]]*\][[:space:]]*(#.*)?$|\1["mcbots/overlay.js"]|' "$webapp"
+    echo "webapp.conf: registered mcbots/overlay.js"
+  elif [ "$(grep -Ec "$open" "$webapp")" -eq 1 ] && block=$(sed -n "/$open/,/$close/p" "$webapp") &&
+    grep -Eq "$close" <<<"$(tail -n 1 <<<"$block")" && ! sed '1d;$d' <<<"$block" | grep -Evq '^[[:space:]]*(#.*)?$'; then
+    # BlueMap's generated default: "scripts: [" + comment lines + "]" (live on the lab, 2026-10-11).
+    sed -E -i "/$open/,/$close/c\\scripts: [\"mcbots/overlay.js\"]" "$webapp"
     echo "webapp.conf: registered mcbots/overlay.js"
   else
     echo "WARNING: unexpected scripts entry in $webapp, overlay not registered" >&2
