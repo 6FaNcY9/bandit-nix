@@ -170,6 +170,22 @@ assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}
   noteWorker('bot9', 'finished: shift stone (10 s)', 5000);
   assert.deepStrictEqual(idleWorkers(ws, st, 6000), ['bot9'], 'a success clears it');
 }
+{ // three failures of one job type within 2 minutes rest the bot even when the wording differs
+  const st = {bots: [{name: 'bot8', online: true, job: null, queue: []}]};
+  const ws = new Set(['bot8']);
+  noteWorker('bot8', 'failed: homebed 1 - white_bed is in the way at -271 58 -213', 1000);
+  noteWorker('bot8', 'failed: homebed 1 - grass_block is in the way at -271 58 -213', 20000);
+  assert.deepStrictEqual(idleWorkers(ws, st, 21000), ['bot8'], 'two different failures do not rest it');
+  noteWorker('bot8', 'failed: homebed 1 - dirt is in the way at -271 58 -213', 40000);
+  assert.deepStrictEqual(idleWorkers(ws, st, 41000), [], 'the third rests it');
+  assert.deepStrictEqual(idleWorkers(ws, st, 40000 + 300001), ['bot8']);
+  noteWorker('bot8', 'failed: homebed 1 - a', 1000000);
+  noteWorker('bot8', 'failed: homebed 1 - b', 1100000);
+  noteWorker('bot8', 'failed: homebed 1 - c', 1200000);
+  assert.deepStrictEqual(idleWorkers(ws, st, 1200001), ['bot8'], 'slow failures (over 2 minutes apart) are not circling');
+  const busy = {bots: [{name: 'bot8', online: true, job: {type: 'homebed', label: 'homebed 1'}, queue: []}], supplyChest: {x: 1, y: 2, z: 3}};
+  assert.match(assignJob(parseCommand('!assign("bot8", "!collectBlocks(\\"stone\\", 8)")'), ws, busy).refuse, /bot8 is setting its bed/, 'a bed in progress is a project');
+}
 { // a foreman's command docs list only its few commands; workers and lone agents keep the full set
   const docs = commandDocs([], ['bot2']);
   const listed = [...docs.matchAll(/^!(\w+):/gm)].map((m) => m[1]).sort();

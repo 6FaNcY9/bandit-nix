@@ -1461,7 +1461,7 @@ const build = buildJob.makeBuild({goNear, guard, sleep, goals, digAt, withdraw: 
 const {grave} = gravesJob.makeGraves({goNear, guard, sleep, deposit: (r, job) => JOBS.deposit(r, child(job, {type: 'deposit', args: r.supplyChest}))});
 const {hunt, bed} = huntJob.makeHunt({goNear, guard, sleep, goals, waitCalm, crafting, at});
 
-const {homebed} = homebedJob.makeHomebed({goNear, guard, sleep, goals, crafting, run: buildRunJob, at});
+const {homebed} = homebedJob.makeHomebed({goNear, guard, sleep, goals, crafting, run: buildRunJob, at, digAt, NATURAL});
 
 const {level} = levelJob.makeLevel({goNear, waitCalm, guard, sleep, digAt, upkeep, NATURAL, stairRing, at});
 

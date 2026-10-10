@@ -114,7 +114,7 @@ const BASE_DOC = ['Get the state of the base: each worker with its job and last 
 const FOREMAN = new Set(['assign', 'baseStatus', 'buildBlueprint', 'digRoom', 'digShaft', 'huntAnimals', 'placeBed', 'setHomeBed', 'placeBlockAt', 'viewChest', 'stats', 'inventory', 'goToCoordinates', 'stop', 'startConversation']);
 const GATHERING = new Set(['collectBlocks', 'collectBlock', 'startShift']);
 // Project jobs run until done; the owner decides who works on them (lab 2026-10-10: the lead pulled a worker off the shaft).
-const PROJECTS = {shaft: 'digging the shaft', level: 'mining a level of the shaft', excavate: 'digging a room', build: 'building', grave: 'collecting its grave'};
+const PROJECTS = {shaft: 'digging the shaft', level: 'mining a level of the shaft', excavate: 'digging a room', build: 'building', grave: 'collecting its grave', homebed: 'setting its bed'};
 const isProject = (job) => !!job && Object.hasOwn(PROJECTS, job.type);
 // The lead is the foreman whose goal is gathering (the builder bot2 has workers too, but may dig). ponytail: keyword test on the goal text, a !goal that avoids these words slips through.
 const leadsGathering = (a) => a.workers.size > 0 && /gather|collect|mine|chop|\blogs?\b|wood|cobble|coal|iron/i.test(a.goal);
@@ -290,7 +290,7 @@ function assignJob(cmd, workers, state, places = {}) {
   if (!workers.has(name)) return {refuse: `${name || 'That bot'} cannot be assigned. Your workers: ${[...workers].join(', ') || 'none'}.`};
   const bot = state.bots.find((b) => b.name === name);
   if (!bot?.online || bot.dead) return {refuse: `${name} is not available right now.`};
-  if (resting(name)) return {refuse: `${name} is resting after two identical failures (${stuckWorkers.get(name).reason}). Give the work to another worker.`};
+  if (resting(name)) return {refuse: `${name} is resting after two identical failures (${stuckWorkers.get(name).note}). Give the work to another worker.`};
   if (isProject(bot.job)) return {refuse: `${name} is ${PROJECTS[bot.job.type]}${bot.job.progress ? ` (${bot.job.progress.replace(/^[^:]*: /, '')})` : ''}; pick an idle worker.`};
   const inner = parseCommand(text);
   if (!inner) return {refuse: 'The second argument must be a command, for example "!collectBlocks(\\"cobblestone\\", 32)".'};
@@ -321,13 +321,17 @@ const workersOf = (env, name, agents) => new Set((env[`WORKERS_${name}`] ?? env.
 // logs in after the foreman's first round sends no event, so it waited for the 10-minute check-in (lab).
 // A worker whose last two orders failed for the same reason (stuck without a pickaxe underground) does
 // not wake the foreman for 5 minutes: it reassigned bot2 every 30 s on the lab, each order failing at once.
-const stuckWorkers = new Map(); // name -> {reason, count, at}
+// Three failures of one job type within 2 minutes rest it too, whatever the wording ("white_bed is in the
+// way" then "grass_block is in the way": homebed circled on the lab).
+const stuckWorkers = new Map(); // name -> {reason, count, at, type, times, note}
 function noteWorker(name, text, now = Date.now()) {
-  const m = /^failed: \w+ .* - (.*)$/.exec(text);
+  const m = /^failed: (\w+) .* - (.*)$/.exec(text);
   if (!m) return stuckWorkers.delete(name);
-  const reason = m[1].replace(/-?\d+/g, '#');
+  const reason = m[2].replace(/-?\d+/g, '#');
   const prev = stuckWorkers.get(name);
-  stuckWorkers.set(name, {reason, count: prev?.reason === reason ? prev.count + 1 : 1, at: now});
+  const times = [...(prev?.type === m[1] ? prev.times : []), now].filter((t) => now - t < 120000);
+  const count = prev?.reason === reason ? prev.count + 1 : 1;
+  stuckWorkers.set(name, {reason, count: times.length >= 3 ? Math.max(count, 2) : count, at: now, type: m[1], times, note: times.length >= 3 && count < 2 ? `${m[1]} failed ${times.length} times in 2 minutes: ${reason}` : reason});
 }
 const resting = (name, now = Date.now()) => {
   const s = stuckWorkers.get(name);

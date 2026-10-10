@@ -38,10 +38,15 @@ const empty = (b) => !!b && b.boundingBox === 'empty' && !FLUID.test(b.name);
 const solid = (b) => !!b && b.boundingBox === 'block';
 
 // blockAt(x, y, z) -> {name, boundingBox} | null. -> {present: true} when a bed already lies on both cells,
-// {problem: text}, or {} when a bed can be placed.
+// {present: true, click: cell} when only one of them holds a bed (any colour, any facing: the other half
+// lies elsewhere or its update is late; the one that is there is clicked), {problem: text}, or {} when a
+// bed can be placed.
 function bedCheck(blockAt, {foot, head}, areas) {
   for (const c of [foot, head]) if (insideAreas(areas, c.x, c.z)) return {problem: `${c.x} ${c.z} is inside a protected area`};
-  if (/_bed$/.test(blockAt(foot.x, foot.y, foot.z)?.name || '') && /_bed$/.test(blockAt(head.x, head.y, head.z)?.name || '')) return {present: true};
+  const isBed = (c) => /_bed$/.test(blockAt(c.x, c.y, c.z)?.name || '');
+  if (isBed(foot) && isBed(head)) return {present: true};
+  const click = [foot, head].find(isBed);
+  if (click) return {present: true, click};
   for (const c of [foot, head]) {
     const here = blockAt(c.x, c.y, c.z);
     if (!here) return {problem: `${c.x} ${c.y} ${c.z} is not loaded`};
@@ -181,8 +186,9 @@ function makeHunt({goNear, guard, sleep, goals, waitCalm, crafting, at}) {
       if (!lies(cells.head)) r.emit('info', `the bed at ${x} ${y} ${z} does not face ${facing}`);
     }
     // Right-click it: that sets the spawn point (day or night); at night sleep in it for a moment.
-    const bedBlock = bot.blockAt(new Vec3(x, y, z));
-    await goNear(r, job, x, y, z, 2, {doing: `walking to the bed at ${at(cells.foot)}`});
+    const target = check.click || cells.foot;
+    const bedBlock = bot.blockAt(new Vec3(target.x, target.y, target.z));
+    await goNear(r, job, target.x, target.y, target.z, 2, {doing: `walking to the bed at ${at(target)}`});
     guard(job); // a Stop on arrival must not click (Codex R4-2)
     let confirmed = false;
     const onMessage = (m) => { if (/respawn point set/i.test(m)) confirmed = true; };

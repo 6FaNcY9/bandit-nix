@@ -2,7 +2,8 @@
 // A home bed for every bot (R5b): `homebed` takes the bot's own slot in the storage rooms (foot on the
 // south wall row, head towards the north), gets 3 wool (the base chest, else sheep around the base) and
 // planks, crafts the bed, places it from the head cell and lets the `bed` job click it (spawn set).
-// A slot that already holds a bed is only clicked. The decisions (which slot, where the bot stands, what
+// A slot that already holds a bed (any colour or facing) is only clicked; a natural block in the slot or
+// where the bot stands is dug first, anything placed (planks, chests) is refused. The decisions (which slot, where the bot stands, what
 // is missing) are pure and tested in test.js with plain objects; makeHomebed() wires them to a bot.
 const {Vec3} = require('vec3');
 const {insideAreas} = require('./world');
@@ -37,7 +38,7 @@ function bedNeeds(items) {
   return {wool: !woolColour(items), planks: sum(/_planks$/) < 3 && sum(/_log$/) < 1};
 }
 
-function makeHomebed({goNear, guard, sleep, goals, crafting, run, at}) {
+function makeHomebed({goNear, guard, sleep, goals, crafting, run, at, digAt, NATURAL}) {
   const items = (bot) => bot.inventory.items();
 
   // 3 wool of one colour: the base chest first, then sheep around the base (one at a time, the drops mix colours).
@@ -96,6 +97,32 @@ function makeHomebed({goNear, guard, sleep, goals, crafting, run, at}) {
     await run(r, job, 'chop', {count: 1});
   }
 
+  // What the bed cells really hold, for the log: the part and facing of the foot, and any bed next to it.
+  function describe(blockAt, cells) {
+    const one = (c) => {
+      const b = blockAt(c.x, c.y, c.z);
+      let props = {};
+      try { props = b?.getProperties?.() || {}; } catch (e) { /* no properties */ }
+      return `${b?.name || 'unloaded'}${props.facing ? ` ${props.part} facing ${props.facing}` : ''}`;
+    };
+    const near = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dz]) => ({x: cells.foot.x + dx, y: cells.foot.y, z: cells.foot.z + dz}))
+      .filter((c) => /_bed$/.test(blockAt(c.x, c.y, c.z)?.name || '')).map((c) => at(c));
+    return `foot ${one(cells.foot)}, head cell ${one(cells.head)}, beds next to the foot: ${near.join(', ') || 'none'}`;
+  }
+
+  // Natural blocks in the slot, the cell the bot stands in (the head) and its head room are dug; the rest stays for bedCheck to refuse.
+  async function clearNatural(r, job, cells) {
+    const {bot} = r;
+    if ([cells.foot, cells.head].some((c) => /_bed$/.test(bot.blockAt(new Vec3(c.x, c.y, c.z))?.name || ''))) return; // a bed is there: it is only clicked
+    for (const c of [cells.foot, cells.head, {...cells.head, y: cells.head.y + 1}]) {
+      const b = bot.blockAt(new Vec3(c.x, c.y, c.z));
+      if (!b || b.boundingBox === 'empty' || !NATURAL.test(b.name)) continue;
+      r.emit('info', `digging ${b.name} out of the bed slot at ${at(c)}`);
+      await digAt(r, job, new Vec3(c.x, c.y, c.z), (n) => NATURAL.test(n));
+      guard(job);
+    }
+  }
+
   async function place(r, job, spot, cells, item) {
     const {bot} = r;
     const blockAt = (a, b, c) => bot.blockAt(new Vec3(a, b, c));
@@ -108,6 +135,7 @@ function makeHomebed({goNear, guard, sleep, goals, crafting, run, at}) {
     await bot.equip(items(bot).find((i) => i.name === item), 'hand');
     guard(job); // a Stop during the equip must not place anything
     await bot.look(YAW[spot.facing], 0, true);
+    await sleep(100); // the look packet leaves with the next physics tick; the server turns the bed by the last one it got
     guard(job);
     const ground = bot.blockAt(new Vec3(spot.x, spot.y - 1, spot.z));
     // forceLook 'ignore': placeBlock would turn the bot towards the block and the bed with it.
@@ -117,6 +145,7 @@ function makeHomebed({goNear, guard, sleep, goals, crafting, run, at}) {
     guard(job);
     if (!lies(cells.foot)) throw new Error(`placing ${item} did not take`);
     r.emit('info', `placed ${item} at ${at(cells.foot)}`);
+    if (!lies(cells.head)) r.emit('info', `the bed did not land facing ${spot.facing}: ${describe(blockAt, cells)} (bot yaw ${bot.entity.yaw})`);
   }
 
   async function homebed(r, job) {
@@ -128,6 +157,7 @@ function makeHomebed({goNear, guard, sleep, goals, crafting, run, at}) {
     // The chunks of the room must be loaded before the bed cells can be read.
     await goNear(r, job, spot.x, spot.y, spot.z, 4, {doing: `walking to the bed slot at ${at(cells.foot)}`});
     guard(job);
+    await clearNatural(r, job, cells);
     let check = bedCheck(blockAt, cells, r.protectedAreas);
     if (check.problem) throw new Error(check.problem);
     if (!check.present) {
