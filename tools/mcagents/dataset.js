@@ -84,7 +84,7 @@ function buildDataset(records, events = [], {cap = 3} = {}) {
   }
   stats.outcomes = {records: outcomes.size, labelled: 0};
   for (const [i, r] of records.entries()) {
-    if (r?.kind === 'outcome') continue;
+    if (r?.kind === 'outcome' || r?.kind === 'solver') continue; // solver prompts are not Mindcraft decisions
     const drop = (why) => count(stats.dropped, why);
     if (!r || !Array.isArray(r.messages) || !r.messages.length || typeof r.reply !== 'string' || typeof r.agent !== 'string' || !Number.isFinite(time(r.t)) || (r.ms !== undefined && (!Number.isFinite(r.ms) || r.ms < 0)) || r.messages.some((m) => !m || !['system', 'user', 'assistant'].includes(m.role) || typeof m.content !== 'string') || r.messages[0].role !== 'system') { drop('invalid'); continue; }
     if (JSON.stringify(sanitize(r)) !== JSON.stringify(r)) { drop('secrets'); continue; }

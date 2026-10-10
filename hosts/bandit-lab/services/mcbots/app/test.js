@@ -52,6 +52,63 @@ for (const bad of ['bot', 'bot100', 'Bot1', 'steve', 'bot1,x']) assert.throws(()
   assert.match(no({bots: ['bot1'], type: 'rearm', args: {}}), /not allowed/);
   for (const type of ['withdraw', 'deposit', 'stock', 'shift']) assert.match(no({bots: ['bot1'], type, args: {x: 9, y: 2, z: 3}}), /supply chest/, type);
 }
+{ // the problem solver's rules (agentauth.js solverRefusal / solverAction), deny by default
+  const A = require('./agentauth');
+  let clock = 1e9;
+  const mk = () => new A.SolverLimiter({now: () => clock});
+  const chest = {x: 1, y: 2, z: 3};
+  const places = [{name: 'Mine', x: 10, y: 60, z: 20}, {name: 'Pit', x: 0, y: 60, z: 0, box: {x1: -3, y1: 50, z1: -3, x2: 5, y2: 70, z2: 5}}];
+  let limiter = mk(), jobs = {bot3: null};
+  const pol = () => ({agentBots: ['bot1', 'bot2'], supplyChest: chest, roster: ['bot3', 'bot4'], places, jobOf: (n) => jobs[n], limiter});
+  const s = (body, bot = 'bot3') => A.agentJobRefusal({bots: [bot], solver: true, ...body}, pol());
+  // every menu job passes with the right arguments
+  const ok = {rearm: chest, deposit: chest, withdraw: {...chest, item: 'coal', count: 3}, craft: {item: 'stone_pickaxe', count: 1}, smelt: {item: 'raw_iron', count: 2}, mine: {block: 'iron_ore', count: 3}, chop: {count: 5}, tidy: {...chest, radius: 16}, goto: {x: 10, y: 60, z: 20}, seal: {x1: -3, y1: 50, z1: -3, x2: 5, y2: 70, z2: 5}};
+  assert.deepStrictEqual([...A.SOLVER_JOBS].sort(), Object.keys(ok).sort(), 'the menu allowlist is exactly this list');
+  for (const [type, args] of Object.entries(ok)) { limiter = mk(); assert.strictEqual(s({type, args}), null, type); }
+  // not on the menu
+  for (const type of ['say', 'build', 'excavate', 'place', 'shaft', 'stop', 'shift', 'stock', 'hunt']) { limiter = mk(); assert.match(s({type, args: {}}), /not on the solver menu/, type); }
+  // who: roster only, never agent bots through the solver door, one bot
+  limiter = mk();
+  assert.match(s({type: 'chop', args: {count: 1}}, 'bot9'), /not a plan roster bot/);
+  assert.match(A.agentJobRefusal({bots: ['bot3', 'bot4'], solver: true, type: 'chop', args: {count: 1}}, pol()), /not an agent bot|one bot/);
+  assert.match(A.agentJobRefusal({bots: 'all', solver: true, type: 'stop'}, pol()), /name their bots/);
+  assert.match(A.agentJobRefusal({bots: ['bot3'], type: 'chop', args: {count: 1}}, pol()), /not an agent bot/, 'without solver:true the old rule holds');
+  assert.strictEqual(A.agentJobRefusal({bots: ['bot1'], solver: true, type: 'build', args: {}}, pol()), null, 'agent bots keep their own rules');
+  // chests, places, zones
+  for (const type of ['rearm', 'deposit', 'withdraw']) { limiter = mk(); assert.match(s({type, args: {x: 9, y: 2, z: 3, item: 'coal'}}), /supply chest/, type); }
+  limiter = mk(); assert.match(s({type: 'goto', args: {x: 11, y: 60, z: 20}}), /named place/);
+  limiter = mk(); assert.match(s({type: 'seal', args: {x1: -3, y1: 50, z1: -3, x2: 6, y2: 70, z2: 5}}), /named zone/);
+  // a fresh job is never replaced
+  limiter = mk(); jobs.bot3 = {runningS: 20};
+  assert.match(s({type: 'chop', args: {count: 1}, replace: true}), /less than 60 s ago/);
+  jobs.bot3 = {runningS: 90}; limiter = mk();
+  assert.strictEqual(s({type: 'chop', args: {count: 1}, replace: true}), null);
+  // rate limit per bot: one per 3 min, ten per hour; another bot is independent
+  limiter = mk(); jobs.bot3 = null;
+  assert.strictEqual(s({type: 'chop', args: {count: 1}}), null);
+  assert.match(s({type: 'chop', args: {count: 1}}), /less than 3 min ago/);
+  assert.strictEqual(s({type: 'chop', args: {count: 1}}, 'bot4'), null);
+  for (let i = 0; i < 9; i++) { clock += 181000; assert.strictEqual(s({type: 'chop', args: {count: 1}}), null, `job ${i + 2}`); }
+  clock += 181000;
+  assert.match(s({type: 'chop', args: {count: 1}}), /10 solver actions this hour/);
+  clock += 3600000;
+  assert.strictEqual(s({type: 'chop', args: {count: 1}}), null, 'the hour passes');
+  assert.match(A.agentJobRefusal({bots: ['bot3'], solver: true, type: 'chop', args: {count: 1}}, {...pol(), limiter: undefined}), /no rate limiter/);
+  assert.ok(A.agentEndpoint('POST', '/api/solver') && !A.agentEndpoint('GET', '/api/solver'));
+  // note / escalate / skip
+  limiter = mk();
+  const act = (b) => A.solverAction(b, {agentBots: ['bot1', 'bot2'], roster: ['bot3'], blocked: ['storage'], limiter});
+  assert.match(act({action: 'say', bot: 'bot3', text: 'x'}).error, /note, escalate or skip/);
+  assert.match(act({action: 'note', bot: 'bot9', text: 'x'}).error, /not a roster bot/);
+  assert.match(act({action: 'note', bot: 'bot3', text: ''}).error, /text required/);
+  assert.deepStrictEqual(act({action: 'note', bot: 'bot3', text: 'bot3 rearm  - no pickaxe'}), {kind: 'info', bot: 'bot3', text: 'solver: bot3 rearm - no pickaxe'});
+  assert.strictEqual(act({action: 'escalate', bot: 'base', text: 'help'}).kind, 'alert');
+  assert.match(act({action: 'escalate', bot: 'base', text: 'again'}).error, /less than 3 min ago/);
+  assert.match(act({action: 'skip', bot: 'plan', text: 'x', objective: 'mine'}).error, /not parked or blocked/);
+  assert.strictEqual(act({action: 'skip', bot: 'plan', text: 'storage skipped', objective: 'storage'}).skip, 'storage');
+  for (let i = 0; i < 2; i++) act({action: 'skip', bot: 'plan', text: 's', objective: 'storage'});
+  assert.match(act({action: 'skip', bot: 'plan', text: 's', objective: 'storage'}).error, /3 solver actions this hour/);
+}
 assert.throws(() => loadConfig({BOT_NAMES: 'bot1', DASHBOARD_HOST: '0.0.0.0'}));
 assert.ok(loadConfig({BOT_NAMES: 'bot1', DASHBOARD_HOST: '0.0.0.0', ALLOWED_TS_LOGINS: 'a@github'}).allowed.length);
 assert.deepStrictEqual(VALIDATE.goto({x: '1', y: 64, z: -3}), {x: 1, y: 64, z: -3});

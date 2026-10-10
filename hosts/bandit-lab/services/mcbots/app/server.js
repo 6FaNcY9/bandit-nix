@@ -151,6 +151,7 @@ const authorized = (req) => {
   if (cfg.trustedProxies.length && !cfg.trustedProxies.includes(peer(req))) return false;
   return cfg.allowed.includes(req.headers['tailscale-user-login']);
 };
+const solverLimiter = new agentauth.SolverLimiter();
 const agentTokenHash = cfg.agentToken ? agentauth.hash(cfg.agentToken) : null;
 // Cross-site guard: browsers send Origin on POST/WS; it must match Host.
 const sameOrigin = (req) => {
@@ -278,6 +279,21 @@ const server = http.createServer(async (req, res) => {
     }
   }
   if (req.method === 'GET' && url.pathname === '/api/crews') return json(200, crews.data);
+  // The problem solver's notes, escalations and plan skips (agentauth.solverAction). Agent token only.
+  if (req.method === 'POST' && url.pathname === '/api/solver') {
+    if (!agent) return json(403, {error: 'forbidden'});
+    if (!sameOrigin(req) || !String(req.headers['content-type']).startsWith('application/json')) return json(403, {error: 'bad origin'});
+    try {
+      const r = agentauth.solverAction(await readJson(req), {agentBots: cfg.agentBots, roster: cfg.planRoster || [], blocked: plan ? [...new Set([...plan.blocked.keys(), ...plan.parked])] : [], limiter: solverLimiter});
+      if (r.error) return json(403, {error: r.error});
+      if (r.skip) plan.skip(r.skip);
+      events.add(r.bot, r.kind, r.text);
+      broadcast();
+      return json(200, {ok: true});
+    } catch (e) {
+      return json(400, {error: e.message});
+    }
+  }
   if (req.method === 'GET' && url.pathname === '/api/agents') return json(200, [...agentStatuses.values()]);
   if (req.method === 'GET' && url.pathname === '/api/world') return json(200, world.snapshot());
   const vm = req.method === 'GET' && /^\/api\/view\/(\w{1,16})\.png$/.exec(url.pathname);
@@ -303,7 +319,7 @@ const server = http.createServer(async (req, res) => {
   }
   const sm = req.method === 'GET' && /^\/api\/scan\/(\w{1,16})$/.exec(url.pathname);
   if (sm) {
-    if (agent && !cfg.agentBots.includes(sm[1])) return json(403, {error: 'not an agent bot'}); // the agent token reaches its own bots only
+    if (agent && !cfg.agentBots.includes(sm[1]) && !(cfg.planRoster || []).includes(sm[1])) return json(403, {error: 'not an agent or roster bot'}); // the agent token reaches its own bots and the plan roster (the solver reads their surroundings)
     const r = runners.get(sm[1]);
     if (!r || !r.online) return json(404, {error: 'offline or unknown bot'});
     try {
@@ -470,8 +486,8 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/job') {
     if (!sameOrigin(req) || !String(req.headers['content-type']).startsWith('application/json')) return json(403, {error: 'bad origin'});
     try {
-      const {bots, type, args, replace} = await readJson(req);
-      const refused = agent && agentauth.agentJobRefusal({bots, type, args}, {agentBots: cfg.agentBots, supplyChest});
+      const {bots, type, args, replace, solver} = await readJson(req);
+      const refused = agent && agentauth.agentJobRefusal({bots, type, args, replace, solver}, {agentBots: cfg.agentBots, supplyChest, roster: cfg.planRoster || [], places: places.list, jobOf: (n) => runners.get(n)?.snapshot().job, limiter: solverLimiter});
       if (refused) return json(403, {error: refused});
       // "all" skips remote bots whose worker is away, so a Stop reaches every
       // bot that can still hear it; naming an offline bot is an error.

@@ -30,6 +30,7 @@ function readLog(file) {
   const decisions = [], outcomes = [];
   for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
     let r; try { r = JSON.parse(line); } catch { continue; }
+    if (r.kind === 'solver') continue; // problem-solver prompts are not Mindcraft decisions
     (r.kind === 'outcome' ? outcomes : decisions).push(r);
   }
   return {decisions, outcomes};

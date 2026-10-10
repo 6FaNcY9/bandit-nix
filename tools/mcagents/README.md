@@ -243,3 +243,16 @@ JSONL log for compatibility and add `backendName`; dashboard decisions carry
 the name.
 
 See `tools/slayer/README.md` for the Windows installer and lab host configuration.
+
+## Problem solver (SOLVER_ENABLE=1)
+
+`solver.js` runs inside this service for the plan's roster bots (not the Andy agents). A failed job, an idle bot
+with a fresh `lastError`, two deaths in 10 minutes or a parked plan objective opens an incident (one per bot,
+30 min life). For an idle bot the model picks ONE menu command (`retry rearm deposit withdraw craft smelt mine
+chop tidy goto seal wait escalate`, names from the map only); after 2 failed fixes it escalates once (an `alert`
+event "solver: ..." that mcbots notify.js sends to the phone). Objectives get `skip` only as the last choice after
+2 failed attempts. Caps: 30 model calls/hour (`SOLVER_MAX_PER_HOUR`). The dashboard enforces the menu again
+(`agentauth.js` `solverRefusal`: roster only, supply chest, named places, 1 job per bot per 3 min, 10 per hour,
+no replace of a job younger than 60 s). Each decision is a `kind: "solver"` line in `decisions.jsonl` with the
+usual outcome line later; every action is also a `solver: ...` event in the dashboard feed.
+Tests: `node tools/mcagents/solver.test.js`.

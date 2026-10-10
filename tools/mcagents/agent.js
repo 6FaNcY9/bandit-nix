@@ -15,6 +15,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {modelRequest, modelReply} = require('./model-protocol');
+const {Solver} = require('./solver');
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
 const ANDY_URL_2 = process.env.ANDY_URL_2 || '';
@@ -867,6 +868,7 @@ function onEvent(agents, e) {
   outcomeEvent(e);
   // Alerts (mcbots alerts.js: supply chest gone, night, mobs at the base) go to every foreman.
   if (e.kind === 'alert') {
+    if (/^solver:/.test(e.text)) return; // the solver's escalation is for the owner's phone, not a prompt
     for (const a of agents.values()) {
       if (!a.workers.size) continue;
       a.push('system', `ALERT: ${e.text}`);
@@ -938,6 +940,10 @@ async function main() {
   postStatus();
   setInterval(postStatus, 30000).unref();
   const getState = () => http('GET', `${API}/api/state`);
+  // The problem solver for the plan's roster bots (solver.js); SOLVER_ENABLE=1 switches it on.
+  const solver = process.env.SOLVER_ENABLE === '1' && TOKEN
+    ? new Solver({http, API, callModel, fetchScan, translate, logCall: (line) => LOG && logCall(line), awaitJob, settle, agents: new Set(agents.keys()), cap: Number(process.env.SOLVER_MAX_PER_HOUR) || 30})
+    : null;
   const busy = new Set();
   const budget = new Budget(MAX_DECISIONS_PER_MIN);
   const t0 = Date.now();
@@ -952,8 +958,10 @@ async function main() {
       const ev = await http('GET', `${API}/api/events?since=${lastEventId}`);
       lastEventId = ev.lastId;
       for (const e of ev.events) onEvent(agents, e);
+      solver?.feed(ev.events);
       const state = await getState();
       const now = Date.now();
+      solver?.tick(state, now).catch((e) => console.error(`[solver] ${e.message}`)); // a model call may take a while: the loop goes on
       expireOutcomes(now);
       const ready = [];
       for (const agent of agents.values()) {
