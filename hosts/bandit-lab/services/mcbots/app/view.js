@@ -61,16 +61,20 @@ function png(w, h, rgb) {
 
 // blockAt(x,y,z) -> block name, or null when not loaded. Yaw/pitch as in mineflayer
 // (yaw 0 looks to -z, increasing counter-clockwise; pitch > 0 looks up).
-function render({blockAt, eye, yaw, pitch, w = 160, h = 90, fov = 70, boxes = []}) {
+// `deadline` (ms timestamp): rows not cast by then stay sky, so one frame can never hold the
+// process for long (a full 256x144 frame took seconds and froze the bots, 2026-10-10).
+function render({blockAt, eye, yaw, pitch, w = 160, h = 90, fov = 70, boxes = [], deadline = Infinity}) {
   const rgb = Buffer.alloc(w * h * 3);
+  for (let i = 0; i < rgb.length; i += 3) { rgb[i] = SKY[0]; rgb[i + 1] = SKY[1]; rgb[i + 2] = SKY[2]; }
   const f = Math.tan((fov * Math.PI) / 360), aspect = w / h;
   // camera basis
   const fx = -Math.sin(yaw) * Math.cos(pitch), fy = Math.sin(pitch), fz = -Math.cos(yaw) * Math.cos(pitch);
   const rx = Math.cos(yaw), rz = -Math.sin(yaw); // right, horizontal
   const ux = Math.sin(yaw) * Math.sin(pitch), uy = Math.cos(pitch), uz = Math.cos(yaw) * Math.sin(pitch); // up = right x forward
-  for (let py = 0; py < h; py++) {
+  rows: for (let py = 0; py < h; py++) {
     const v = (1 - (2 * (py + 0.5)) / h) * f;
     for (let px = 0; px < w; px++) {
+      if (Date.now() > deadline) break rows;
       const u = ((2 * (px + 0.5)) / w - 1) * f * aspect;
       let dx = fx + u * rx + v * ux, dy = fy + v * uy, dz = fz + u * rz + v * uz;
       const n = Math.hypot(dx, dy, dz); dx /= n; dy /= n; dz /= n;
@@ -108,10 +112,13 @@ function slab(o, dx, dy, dz, b) {
 function botView(bot, opts = {}) {
   const e = bot.entity;
   const p = new Vec3(0, 0, 0);
+  // State id -> name, no Block object per step (bot.blockAt built one each time: about 1.7
+  // million objects per frame).
+  const byState = bot.registry.blocksByStateId;
   const blockAt = (x, y, z) => {
     p.x = x; p.y = y; p.z = z;
-    const b = bot.blockAt(p, false); // false: no sign/extra data
-    return b ? b.name : null;
+    if (!bot.world.getColumnAt(p)) return null; // unloaded
+    return byState[bot.world.getBlockStateId(p)]?.name ?? 'air';
   };
   const boxes = Object.values(bot.entities)
     .filter((o) => o !== e && o.position && o.position.distanceTo(e.position) < FOG && (o.type === 'player' || o.type === 'hostile' || o.type === 'mob'))

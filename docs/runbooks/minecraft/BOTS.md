@@ -59,7 +59,7 @@ move, rename, delete. The first overworld `supply` marker replaces `SUPPLY_CHEST
 hub and the keeper; the first `site` marker replaces `KEEPER_SITE`. Kept in `STATE_DIR/places.json`.
 Laptop workers get the supply chest only when they connect.
 
-Each bot card has an **In-game view** (also from the map menu): a 256x144 first-person picture
+Each bot card has an **In-game view** (also from the map menu): a 256x144 first-person picture (at most 150 ms of rendering per frame, at most one frame per 1 s or 4x its render time)
 rendered on the server from the blocks the bot has loaded (`app/view.js`, `GET /api/view/<bot>.png`,
 one frame per bot per 0.7 s, refreshed every second while open). Blocks are flat colours by name,
 players blue and hostile mobs red boxes; no textures. Laptop workers (bot5) have no view yet.

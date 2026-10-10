@@ -915,6 +915,20 @@ require('./crafting');
   const px = (x, y) => [...raw.subarray(y * 49 + 1 + x * 3, y * 49 + 4 + x * 3)];
   assert.deepStrictEqual(px(8, 0), [135, 175, 235], 'sky at the top');
   assert.ok(px(8, 8)[0] < 135 && px(8, 8)[2] < 200, 'floor at the bottom: ' + px(8, 8));
+  // a frame never runs past its deadline: past deadline = all sky; a slow world stops early
+  const skyOnly = require('node:zlib').inflateSync((() => { const i = render({blockAt: world, eye: {x: 0.5, y: 61.6, z: 0.5}, yaw: 0, pitch: 0, w: 16, h: 9, deadline: 0}); return i.subarray(41, i.length - 12); })());
+  assert.deepStrictEqual([...skyOnly.subarray(8 * 49 + 1 + 24, 8 * 49 + 4 + 24)], [135, 175, 235], 'past the deadline the floor is not cast');
+  const slow = (x, y, z) => { const end = Date.now() + 1; while (Date.now() < end); return world(x, y, z); };
+  let t0 = Date.now();
+  render({blockAt: slow, eye: {x: 0.5, y: 61.6, z: 0.5}, yaw: 0, pitch: 0, w: 256, h: 144, deadline: t0 + 50});
+  assert.ok(Date.now() - t0 < 400, `a slow frame stops near its deadline (${Date.now() - t0} ms)`);
+  // botView reads block state ids (no Block object per step); unloaded columns stay unloaded
+  const {botView} = require('./view');
+  const vbot = {entity: {position: {x: 0.5, y: 61, z: 0.5, distanceTo: () => 0}, yaw: 0, pitch: -1.2, eyeHeight: 1.62}, entities: {},
+    registry: {blocksByStateId: {0: {name: 'air'}, 1: {name: 'stone'}}},
+    world: {getColumnAt: (p) => (p.z < -20 ? null : {}), getBlockStateId: (p) => (p.y <= 60 ? 1 : 0)}};
+  const vraw = require('node:zlib').inflateSync((() => { const i = botView(vbot, {w: 16, h: 9}); return i.subarray(41, i.length - 12); })());
+  assert.ok(vraw[8 * 49 + 1 + 24] < 135, 'looking down at stone');
 
   // settings: validated, merged over defaults, kept across a restart in STATE_DIR
   const {Settings, DEFAULTS} = require('./settings');

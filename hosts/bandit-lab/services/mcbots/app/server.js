@@ -184,8 +184,14 @@ const server = http.createServer(async (req, res) => {
   if (vm) {
     const r = runners.get(vm[1]);
     if (!r || r instanceof RemoteRunner || !r.bot?.entity || !r.online) return send(404, 'text/plain', 'no view (offline or remote worker)');
-    const now = Date.now(); // ponytail: one frame per bot per 700 ms, shared by all viewers
-    if (!r.viewFrame || now - r.viewFrame.t > 700) r.viewFrame = {t: now, body: botView(r.bot, {w: 256, h: 144})};
+    // One frame per bot, shared by all viewers, at most every 1 s or 4x its render time
+    // (counted from the end of the render), and never more than 150 ms of rendering.
+    const now = Date.now();
+    const f = r.viewFrame;
+    if (!f || now - f.t > Math.max(1000, 4 * f.ms)) {
+      const body = botView(r.bot, {w: 256, h: 144, deadline: now + 150});
+      r.viewFrame = {t: Date.now(), ms: Date.now() - now, body};
+    }
     res.writeHead(200, {'Content-Type': 'image/png', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'});
     return res.end(r.viewFrame.body);
   }
