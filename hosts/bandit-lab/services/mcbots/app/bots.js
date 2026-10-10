@@ -1040,13 +1040,18 @@ const child = (job, extra = {}) => Object.assign(Object.create(job), {collected:
 // between gets back to light 0, where monsters spawn). Out of torches: craft 4
 // when there is coal or charcoal (sticks come from planks).
 const TORCH_BELOW = 7;
-async function lightUp(r, job, ids = []) {
+// A shaft gets a wall torch every 8 blocks of depth; its rim wall one every 6 blocks.
+const shaftTorchDue = (top, y) => top - y > 0 && (top - y) % 8 === 0;
+const rimTorchDue = (placed) => placed > 0 && placed % 6 === 0;
+// `wall`: a shaft or rim torch - placed even where the light is still fine (it lights the way down), on
+// a wall only (a floor torch would be dug away with the next layer), and never blocks the dig.
+async function lightUp(r, job, ids = [], {wall = false} = {}) {
   const {bot} = r;
   if (!(r.getSettings?.().torches ?? true) || r.combat.busy || bot.currentWindow) return;
   if (Date.now() - (r.torchAt || 0) < 3000) return;
   const feet = bot.entity.position.floored();
   const here = bot.blockAt(feet), below = bot.blockAt(feet.offset(0, -1, 0));
-  if (!here || here.name !== 'air' && here.name !== 'cave_air' || !below || below.boundingBox !== 'block' || (here.light ?? 15) >= TORCH_BELOW) return;
+  if (!here || here.name !== 'air' && here.name !== 'cave_air' || !below || below.boundingBox !== 'block' || (!wall && (here.light ?? 15) >= TORCH_BELOW)) return;
   if (insideAreas(r.protectedAreas, feet.x, feet.z)) return;
   // The client's light data lags behind a fresh torch: also count torches close by.
   const torchIds = ['torch', 'wall_torch'].map((n) => bot.registry.blocksByName[n]?.id).filter((id) => id !== undefined);
@@ -1072,7 +1077,7 @@ async function lightUp(r, job, ids = []) {
     }
   }
   if (!ref) {
-    if (ids.includes(below.type)) return; // the floor itself is a target: it would fall off
+    if (wall || ids.includes(below.type)) return; // the floor itself is a target: it would fall off
     ref = below; face = new Vec3(0, 1, 0);
   }
   const held = bot.heldItem;
@@ -1156,13 +1161,13 @@ async function upkeep(r, job, ids) {
         guard(job);
         r.emit('info', `no food fetched: ${e.message}`); // keep working; the retry timer asks again later
       });
+      // The chest had none: hunt for it. Same 10-minute timer, so at most one hunt per bot per 10 minutes.
+      if (!bot.inventory.items().some((i) => edible(bot, i))) await huntFood(r, job);
     }
     if (bot.inventory.emptySlotCount() < 4 && !jobWants(job, 'cobblestone')) await tossJunk(r, job);
     if (bot.inventory.emptySlotCount() < 2) {
       const chest = chestOf(r, job);
       if (!chest) throw new Error('inventory is full and there is no supply chest to deposit into');
-      // The chest had none: hunt for it. Same 10-minute timer, so at most one hunt per bot per 10 minutes.
-      if (!bot.inventory.items().some((i) => edible(bot, i))) await huntFood(r, job);
       await JOBS.deposit(r, child(job, {type: 'deposit', args: chest}));
       if (bot.inventory.emptySlotCount() < 2) throw new Error('inventory still full after depositing (chest full?)');
     }
@@ -1172,11 +1177,6 @@ async function upkeep(r, job, ids) {
   }
 }
 
-// No tool that can harvest: craft a stone pickaxe, else a wooden one (chopping
-// logs first when there is no wood), else take one from the supply chest.
-async function replacePickaxe(r, job) {
-  const {bot} = r;
-  job.t.doing = 'replacing the pickaxe';
 // Hungry and the supply chest has no food: hunt two cows or pigs (chickens too when there is fuel to cook
 // them) within 24 blocks, then cook the meat if there is fuel, else it is eaten raw (beef, porkchop).
 async function huntFood(r, job) {
@@ -1196,6 +1196,11 @@ async function huntFood(r, job) {
   if (n && fuel(meat, n)) await crafting.smelt(r, child(job, {type: 'smelt'}), meat, n).catch((e) => { guard(job); r.emit('info', `could not cook the ${meat}: ${e.message.slice(0, 80)}`); });
 }
 
+// No tool that can harvest: craft a stone pickaxe, else a wooden one (chopping
+// logs first when there is no wood), else take one from the supply chest.
+async function replacePickaxe(r, job) {
+  const {bot} = r;
+  job.t.doing = 'replacing the pickaxe';
   r.emit('info', 'no pickaxe left: making a new one');
   const has = () => bot.inventory.items().some((i) => i.name.endsWith('_pickaxe'));
   let why = '';
@@ -1802,6 +1807,13 @@ const JOBS = {
         // Only a layer this bot dug ground from: above the surface every step is air (2026-10-10: bot3
         // built a floating stair of cobblestone over the shaft).
         if (dugHere) await fixStep(r, job, keep.x, y, keep.z);
+        // Every 8 layers a torch on the wall beside the stair step (the box edge, so a wall is there). Only when
+        // the bot already carries light; a dark shaft never stops the dig.
+        if (dugHere && shaftTorchDue(top, y) && r.bot.inventory.items().some((i) => /^(torch|coal|charcoal)$/.test(i.name))) {
+          await goNear(r, job, keep.x, y + 1, keep.z, 0, {goal: new goals.GoalBlock(keep.x, y + 1, keep.z), doing: `walking to the stair at y ${y} for a torch`})
+            .then(() => lightUp(r, job, [], {wall: true}))
+            .catch((e) => { guard(job); r.emit('info', `no shaft torch at y ${y}: ${e.message.slice(0, 80)}`); });
+        }
         Object.assign(job.t, {total: top - bottom + 1, done: top - y + 1}); // excavate borrowed the counters
         job.progress = `shaft ${x1} ${z1}: down to y ${y}${skipped ? `, ${skipped} blocks left (unsafe or unreachable)` : ''}`;
       }
@@ -1843,6 +1855,8 @@ const JOBS = {
       try {
         await JOBS.place(r, child(job, {type: 'place', args: {item, x: c.x, y: c.y + 1, z: c.z}}));
         placed++;
+        // A torch on top of every 6th wall block, when the bot already carries one (never crafted here).
+        if (rimTorchDue(placed) && r.bot.inventory.items().some((i) => i.name === 'torch')) await JOBS.place(r, child(job, {type: 'place', args: {item: 'torch', x: c.x, y: c.y + 2, z: c.z}})).catch((e) => guard(job));
       } catch (e) {
         guard(job);
         skipped++;
@@ -1909,4 +1923,4 @@ const JOBS = {
   },
 };
 
-module.exports = {explore, layerOrder, stairRing, BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest, guardDigs, safeMovements, tossJunk, NATURAL, partnerOf, depositList};
+module.exports = {lightUp, shaftTorchDue, rimTorchDue, explore, layerOrder, stairRing, BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest, guardDigs, safeMovements, tossJunk, NATURAL, partnerOf, depositList};

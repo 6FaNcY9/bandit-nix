@@ -2512,6 +2512,39 @@ require('./crafting');
     assert.strictEqual(H.huntTarget(list.filter((e) => e.id !== 10), base).id, 1, 'nearest unnamed adult sheep in range');
     assert.strictEqual(H.huntTarget(list, {...base, x: 105, z: 105, radius: 30}), undefined, 'protected (and the rest out of range)');
     assert.strictEqual(H.huntTarget(list, {...base, areas: [[5, -5, 12, 5]], me: new Vec3(10, 64, 0)})?.id, 10, 'the one at 10,0 is inside the area, so the next nearest');
+    // shaft and rim torches: every 8 layers down, every 6th rim block; a wall torch never needs more than a wall
+    const B = require('./bots');
+    assert.deepStrictEqual([0, 7, 8, 9, 16].map((d) => B.shaftTorchDue(80, 80 - d)), [false, false, true, false, true]);
+    assert.deepStrictEqual([0, 5, 6, 7, 12].map(B.rimTorchDue), [false, false, true, false, true]);
+    {
+      const map = new Map([['0,10,0', ['air', 'empty', 15]], ['0,9,0', ['stone', 'block']], ['0,11,0', ['air', 'empty', 15]], ['1,11,0', ['stone', 'block']]]);
+      const placed = [];
+      const mkr = (items, walls = true) => ({
+        getSettings: () => ({torches: true}), combat: {busy: false}, protectedAreas: [], emit() {},
+        bot: {
+          currentWindow: null, entity: {position: new Vec3(0.5, 10, 0.5)}, heldItem: null, findBlock: () => null,
+          registry: {blocksByName: {torch: {id: 1}, wall_torch: {id: 2}}},
+          inventory: {items: () => items.map((name) => ({name}))},
+          blockAt: (p) => { const b = map.get(`${p.x},${p.y},${p.z}`); return b && (walls || b[0] !== 'stone' || p.y !== 11) ? {name: b[0], boundingBox: b[1], light: b[2], position: p, type: 5} : null; },
+          equip: async () => {}, placeBlock: async (ref) => { placed.push(ref.position.toString()); map.set('0,11,0', ['wall_torch', 'empty']); },
+        },
+      });
+      const job = {t: {}};
+      await B.lightUp(mkr([]), job, [], {wall: true}); // no torch, no coal: returns quietly, the dig goes on
+      await B.lightUp(mkr(['torch'], false), job, [], {wall: true}); // no wall: nothing placed on the floor
+      assert.deepStrictEqual(placed, []);
+      await B.lightUp(mkr(['torch']), job, [], {wall: true}); // bright enough for an ordinary torch, but a shaft torch is placed
+      assert.deepStrictEqual(placed, ['(1, 11, 0)']);
+    }
+    // foodAnimal: cows, then pigs; chickens only when the meat can be cooked
+    const mob = (id, name, x) => ({id, name, position: new Vec3(x, 64, 0)});
+    const fo = {x: 0, y: 64, z: 0, radius: 24, areas: [], done: new Set(), me: new Vec3(0, 64, 0)};
+    assert.strictEqual(H.foodAnimal([mob(1, 'pig', 3), mob(2, 'cow', 9), mob(3, 'chicken', 1)], fo, true), 'cow');
+    assert.strictEqual(H.foodAnimal([mob(1, 'pig', 3), mob(3, 'chicken', 1)], fo, true), 'pig');
+    assert.strictEqual(H.foodAnimal([mob(3, 'chicken', 1)], fo, true), 'chicken');
+    assert.strictEqual(H.foodAnimal([mob(3, 'chicken', 1)], fo, false), undefined, 'raw chicken is not food');
+    assert.strictEqual(H.foodAnimal([mob(2, 'cow', 40)], fo, false), undefined, 'out of range');
+    assert.deepStrictEqual([H.MEAT.cow, H.MEAT.pig, H.MEAT.chicken], ['beef', 'porkchop', 'chicken']);
 
     // bed cells and checks
     const world = (cells) => (x, y, z) => cells[`${x},${y},${z}`] || null;
@@ -2541,15 +2574,6 @@ require('./crafting');
       const cell = new Map(Object.entries(blocks));
       const it = (name, count = 1) => ({name, count, type: name.length});
       const bot = {
-    // foodAnimal: cows, then pigs; chickens only when the meat can be cooked
-    const mob = (id, name, x) => ({id, name, position: new Vec3(x, 64, 0)});
-    const fo = {x: 0, y: 64, z: 0, radius: 24, areas: [], done: new Set(), me: new Vec3(0, 64, 0)};
-    assert.strictEqual(H.foodAnimal([mob(1, 'pig', 3), mob(2, 'cow', 9), mob(3, 'chicken', 1)], fo, true), 'cow');
-    assert.strictEqual(H.foodAnimal([mob(1, 'pig', 3), mob(3, 'chicken', 1)], fo, true), 'pig');
-    assert.strictEqual(H.foodAnimal([mob(3, 'chicken', 1)], fo, true), 'chicken');
-    assert.strictEqual(H.foodAnimal([mob(3, 'chicken', 1)], fo, false), undefined, 'raw chicken is not food');
-    assert.strictEqual(H.foodAnimal([mob(2, 'cow', 40)], fo, false), undefined, 'out of range');
-    assert.deepStrictEqual([H.MEAT.cow, H.MEAT.pig, H.MEAT.chicken], ['beef', 'porkchop', 'chicken']);
         entities, inventory: {items: () => inv}, heldItem: null, game: {dimension: 'overworld'}, time: {timeOfDay: night ? 14000 : 1000}, isSleeping: false,
         entity: {position: new Vec3(0, 64, 0), onGround: true},
         pathfinder: {goto: async () => {}, setGoal() {}, stop() {}, isMoving: () => true},
