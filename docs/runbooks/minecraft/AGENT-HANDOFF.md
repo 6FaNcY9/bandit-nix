@@ -200,6 +200,91 @@ Verification: exact source/callers/tests inspected; isolated VM tests loaded
 this revision's build.js with a fake Vec3/world and reproduced findings 1-3.
 No bot source edited, no live server operations, no full runtime certification.
 
+### MC-4: MCP and agent security review
+
+State: reviewed / changes requested, 2026-10-10. Owner: Codex (review);
+Claude owns `tools/mcagents/**` and bot implementation fixes.
+Base: `50cf46ae8b5f26f6651f0d53acd3ab6a7b1746bd`, including H1 `0b4808b`,
+H2 `b6f07e7`, H3 `cc99163`. Assumed workload: four agents, one trusted local
+MCP client; model replies and world/player text are untrusted input.
+
+Findings and regressions:
+
+1. **P1 — AFK can silently leave a destructive routine running**
+   (`tools/mcagents/agent.js:292-300`). `afkHere` sets `afk` before Stop,
+   suppresses the HTTP error and then suppresses future prompts. `endGoal`
+   similarly clears the goal before the failed Stop. Source-loaded VM test:
+   model returns `!afkHere`, dashboard POST fails, the existing shift remains
+   and `promptReason` stays null even after the check-in deadline. Set AFK/end
+   goal only after acknowledged Stop; retain a pending stop/retry on failure.
+   Test failed/timeout Stop followed by dashboard recovery for both commands.
+2. **P2 — the advertised GPU cap budgets decisions, not inference requests**
+   (`tools/mcagents/agent.js:256-258`, `391-405`). One budget token buys up to
+   five model calls when replies are queries/refusals or jobs fail. VM test
+   returning `!newAction` produced five calls in one decision; 12 decisions can
+   mean 60 requests/minute. Enforce the budget at each `think` call if H2 is
+   meant to bound GPU requests; otherwise explicitly document the multiplier.
+   Regression: queries/refusals cannot exceed the configured inference budget
+   across four agents; waiting for budget must not lose messages/events.
+3. **P2 — protected areas do not protect chest contents**
+   (`tools/mcbots-mcp/server.js:36`, `app/bots.js:1267-1283`). MCP can request
+   `mc_withdraw` at any chest coordinates, including a protected player base;
+   the runner does not check area or chest ownership. This is existing API
+   authority, not code execution. Restrict machine principals to approved
+   supply chests (including deposits/stock), or explicitly grant inventory
+   access; do not promise protected-area isolation for inventories. Regression:
+   a permitted supply chest works, an arbitrary protected chest cannot be
+   withdrawn from by an agent token/MCP principal.
+
+Authority traced:
+
+- `!newAction` and unknown agent commands are refused by a switch, with no
+  eval, shell, code writer or dynamic import. MCP offers a fixed tool table,
+  no chat/say or arbitrary job tool; unknown tools fail. Its arguments are
+  projected into job fields and validated by the dashboard/runner, not merely
+  by the advertised MCP schema. MCP can target `all` for any offered job;
+  current agents send only their own configured bot name. H3 therefore holds
+  for the present translator, not for a stolen dashboard credential.
+- Both blueprint loaders use basename plus `.json`: `../../etc/passwd` cannot
+  traverse outside the configured directory. Local symlinks are followed and
+  names hidden from listings can still be requested (`base-v1` in the agent).
+  Treat that directory/environment as trusted, read-only deployment inputs;
+  use an explicit permitted-name set if hiding a blueprint is a policy.
+- `guardHere` uses the bot's current coordinates and bounds radius to 4..48;
+  `startShift` requires the configured supply chest and uses validated block
+  jobs. These are indefinite routines. Protected areas constrain digging and
+  placing, not walking, combat, chest access or resource use outside the boxes.
+  MC-3's mutation races still apply. The separate `place` job also lacks a
+  cancellation guard after equip (`app/bots.js:1394-1395`); add a Stop-during-
+  equip regression before describing Stop as a universal mutation barrier.
+- Model prose is logged, never sent to Minecraft chat. `startConversation`
+  sends only to another configured agent's inbox; world text can influence a
+  model within its tool authority. There is no player-chat ingestion in the
+  current loop, despite AFK's description saying a player can wake it. Test
+  and document that distinction; human chat does not currently end AFK.
+- MCP sets POST Origin to URL.origin; the agent sends API verbatim. The server
+  compares parsed Origin.host to Host, permits absent Origin, rejects malformed
+  and other-host Origin, and does not compare scheme. This is a browser guard,
+  not authentication: a nonbrowser client can set both. Neither client sends
+  credentials today, so the configured lab dashboard rejects them with 403;
+  never work around this with a forged Tailscale identity header. H5 must add
+  independent authentication. Regression: wrong/absent token and other-origin
+  requests fail; valid token never grants the human admin endpoints.
+- MCP dashboard failures return tool errors with a 20-second request timeout.
+  Agent startup exits if the initial events request fails; later tick failures
+  log and retry after 3 seconds (requests can wait 180 seconds). Ollama failure
+  releases the busy flag but consumes the wake/decision: retry ordinarily waits
+  for the 10-minute check-in or another event. Existing body jobs keep running
+  throughout either outage; loss of the brain is not a Stop. Supervision and
+  bounded backoff belong in H5, with explicit operational stop authority.
+
+Checks: `node tools/mcagents/agent.test.js` and
+`node tools/mcbots-mcp/server.test.js` passed (the latter outside sandbox for
+its loopback fake API); source-loaded VM cases reproduced findings 1 and 2.
+The package build from MC-3 covers existing dashboard/hub tests. No live model,
+dashboard, inventory or world operations. Security findings need Claude fixes
+and negative tests before unattended H5 operation.
+
 ### CX-1: commit this handoff
 
 State: committed (docs only): `def21854df89015f4aa6ec0737b593d864c8338f`.
