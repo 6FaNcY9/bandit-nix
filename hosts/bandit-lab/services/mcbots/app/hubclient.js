@@ -30,6 +30,7 @@ class RemoteWorld extends WorldModel {
     this.outBlocks = new Map();
     this.gone = new Set();
     this.outStock = null;
+    this.outChanges = [];
   }
 
   get unreachable() {
@@ -92,6 +93,11 @@ class RemoteWorld extends WorldModel {
     this.outBlocks.set(`${dim}:${pos.x},${pos.y},${pos.z}`, {type, x: pos.x, y: pos.y, z: pos.z, dim, by});
   }
 
+  // Block changes go up with the next observe frame (the hub keeps the log); at most 300 per second.
+  noteChange(c) {
+    if (this.outChanges.length < 300) this.outChanges.push(c);
+  }
+
   noteStock(by, items, free, chest = null) {
     super.noteStock(by, items, free, chest);
     this.outStock = {by, items, free, chest};
@@ -105,9 +111,10 @@ class RemoteWorld extends WorldModel {
 
   // One batched frame per report interval instead of one per observation.
   flush() {
-    if (!this.link || !(this.outMobs.size || this.outBlocks.size || this.gone.size || this.outStock)) return;
-    this.link.send({t: 'observe', mobs: [...this.outMobs.values()], blocks: [...this.outBlocks.values()], gone: [...this.gone], stock: this.outStock});
+    if (!this.link || !(this.outMobs.size || this.outBlocks.size || this.gone.size || this.outStock || this.outChanges.length)) return;
+    this.link.send({t: 'observe', mobs: [...this.outMobs.values()], blocks: [...this.outBlocks.values()], gone: [...this.gone], stock: this.outStock, changes: this.outChanges});
     this.outStock = null;
+    this.outChanges = [];
     this.outMobs.clear();
     this.outBlocks.clear();
     this.gone.clear();

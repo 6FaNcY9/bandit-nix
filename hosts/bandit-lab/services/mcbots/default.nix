@@ -130,8 +130,16 @@ in {
             # Server panel (admin.js): RCON to Paper over the minecraft network; the password
             # (RCON_PASSWORD) arrives in seed.env, and only the human dashboard path can use it.
             RCON_HOST = "minecraft";
+            # Block log (app/blocklog.js): changes.json and zones.json for the BlueMap overlay are written
+            # here every 15 s; this is BlueMap's webroot directory mcbots/ in the minecraft container.
+            BLOCKLOG_EXPORT_DIR = "/bluemap-overlay";
           };
-          volumes = ["mcbots-state:/state"]; # named volume, not a host path
+          # Named state volume, plus BlueMap's mcbots/ web directory (owner 1000, made by minecraft-plugins,
+          # readable by the minecraft container) for the block-log overlay.
+          volumes = [
+            "mcbots-state:/state"
+            "/srv/containers/minecraft/data/bluemap/web/mcbots:/bluemap-overlay"
+          ];
           ports = [
             "127.0.0.1:${dashboardPort}:${dashboardPort}"
             "127.0.0.1:${workerPort}:${workerPort}"
@@ -204,7 +212,7 @@ in {
           '';
         };
         docker-mcbots = {
-          after = ["docker-network-mcbots.service" "docker-network-minecraft.service" "docker-velocity.service" "mcbots-seed.service"];
+          after = ["docker-network-mcbots.service" "docker-network-minecraft.service" "docker-velocity.service" "mcbots-seed.service" "minecraft-plugins.service"]; # the last one makes the overlay directory
           requires = ["docker-network-mcbots.service" "docker-network-minecraft.service" "mcbots-seed.service"];
           unitConfig.StartLimitIntervalSec = 0;
           serviceConfig = {

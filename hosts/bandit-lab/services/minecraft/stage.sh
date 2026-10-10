@@ -142,6 +142,27 @@ if [ ! -e "$plugins/BlueMap/core.conf" ]; then
   install "${own[@]}" -m 0644 "$STAGE_BLUEMAP_CORE" "$plugins/BlueMap/core.conf"
 fi
 
+# Bot block-log overlay: Nix owns the script. The bots container writes changes.json / zones.json into
+# the same directory (bind mount, see mcbots/default.nix); mcbots/ must be owned by the minecraft uid.
+for dir in bluemap bluemap/web bluemap/web/mcbots; do
+  if [ ! -d "$data/$dir" ]; then install -d "${own[@]}" -m 0755 "$data/$dir"; fi
+done
+install -d "${own[@]}" -m 0755 "$data/bluemap/web/mcbots"
+install -m 0644 "$STAGE_OVERLAY" "$data/bluemap/web/mcbots/overlay.js"
+# BlueMap generates webapp.conf; register the script in its `scripts` list (idempotent). An unexpected
+# shape is left alone with a warning: the map must still start.
+webapp=$plugins/BlueMap/webapp.conf
+if [ -f "$webapp" ]; then
+  if grep -Eq '^[[:space:]]*scripts:[[:space:]]*\[[[:space:]]*"mcbots/overlay\.js"[[:space:]]*\][[:space:]]*(#.*)?$' "$webapp"; then
+    :
+  elif [ "$(grep -Ec '^[[:space:]]*scripts:[[:space:]]*\[[[:space:]]*\][[:space:]]*(#.*)?$' "$webapp")" -eq 1 ]; then
+    sed -E -i 's|^([[:space:]]*scripts:[[:space:]]*)\[[[:space:]]*\][[:space:]]*(#.*)?$|\1["mcbots/overlay.js"]|' "$webapp"
+    echo "webapp.conf: registered mcbots/overlay.js"
+  else
+    echo "WARNING: unexpected scripts entry in $webapp, overlay not registered" >&2
+  fi
+fi
+
 # CommandPanels menus are repository-owned.
 install -d "${own[@]}" -m 0750 "$plugins/CommandPanels" "$plugins/CommandPanels/panels"
 for panel in "$STAGE_PANELS"/*.yml; do

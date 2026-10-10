@@ -4432,3 +4432,85 @@ require('./crafting');
   assert.throws(() => cfgAdmin({BOT_NAMES: 'bot1', RCON_HOST: 'minecraft'}), /RCON_HOST and RCON_PASSWORD/);
   assert.deepStrictEqual(cfgAdmin({BOT_NAMES: 'bot1', RCON_HOST: 'minecraft', RCON_PASSWORD: 'x', BOT_PASSWORD_SEED: 's'}).rcon, {host: 'minecraft', port: 25575, password: 'x'});
 }
+{ // block log: what counts, dedupe, aggregation, export, persistence, bot hook
+  const B = require('./blocklog');
+  const fs = require('node:fs'), os = require('node:os'), path = require('node:path'), {EventEmitter} = require('node:events');
+  assert.strictEqual(B.classify('stone', 'air'), 'removed');
+  assert.strictEqual(B.classify('air', 'oak_planks'), 'built');
+  assert.strictEqual(B.classify('stone', 'oak_planks'), 'built');
+  assert.strictEqual(B.classify('stone', 'water'), 'removed');
+  for (const [a, b] of [['wheat', 'wheat'], ['air', 'water'], ['water', 'lava'], ['lava', 'air'], ['cave_air', 'air'], [null, 'stone'], ['stone', undefined]]) assert.strictEqual(B.classify(a, b), null, `${a}>${b}`);
+  assert.deepStrictEqual(B.areaBoxes([], ''), [B.DEFAULT_AREA]);
+  assert.deepStrictEqual(B.areaBoxes([{dim: 'overworld', box: {x1: 0, z1: 0, x2: 4, z2: 4}}, {dim: 'the_nether', box: {x1: 99, z1: 99, x2: 99, z2: 99}}], ''), [{x1: -16, z1: -16, x2: 20, z2: 20}]);
+  assert.deepStrictEqual(B.areaBoxes([], '5,6,1,2'), [{x1: 1, z1: 2, x2: 5, z2: 6}]);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blocklog-'));
+  let clock = 1e12;
+  const file = path.join(dir, 'log.jsonl');
+  const mk = () => new B.BlockLog({file, now: () => clock, areas: () => [{x1: 0, z1: 0, x2: 10, z2: 10}], max: 5});
+  const log = mk();
+  assert.ok(log.record({x: 1, y: 60, z: 1, from: 'air', to: 'stone', by: 'world'}));
+  assert.ok(!log.record({x: 1, y: 60, z: 1, from: 'air', to: 'stone', by: 'bot3'}), 'same change seen by a second bot');
+  assert.strictEqual(log.list[0].by, 'bot3', 'the named bot wins over "world"');
+  assert.ok(!log.record({x: 50, y: 60, z: 1, from: 'air', to: 'stone'}), 'outside the area');
+  assert.ok(!log.record({x: 2, y: 60, z: 2, from: 'water', to: 'air'}), 'flow');
+  clock += 2500;
+  assert.ok(log.record({x: 1, y: 60, z: 1, from: 'stone', to: 'air'}));
+  assert.ok(log.record({x: 1, y: 60, z: 1, from: 'air', to: 'stone'}), 'the same change again after 2 s is a new one');
+  for (let i = 0; i < 20; i++) log.record({x: 3, y: i, z: 3, from: 'air', to: 'dirt'});
+  assert.ok(log.list.length <= 5 * 1.1 + 1, 'ring is capped');
+  log.flush();
+  assert.strictEqual(mk().list.length, 5, 'reloaded from the file, capped');
+  fs.appendFileSync(file, '{"torn');
+  assert.strictEqual(mk().list.length, 5, 'a torn last line is skipped');
+  const big = new B.BlockLog({file: path.join(dir, 'rot.jsonl'), rotateBytes: 50, areas: () => [{x1: 0, z1: 0, x2: 10, z2: 10}]});
+  big.record({x: 1, y: 1, z: 1, from: 'air', to: 'stone'}); big.record({x: 2, y: 1, z: 1, from: 'air', to: 'stone'}); big.flush();
+  assert.ok(fs.existsSync(path.join(dir, 'rot.jsonl.1')) && !fs.existsSync(path.join(dir, 'rot.jsonl')), 'rotated');
+  { // aggregation: last change per block, window, cap, newest first
+    const t0 = 1e12, c = (x, t, from, to) => ({t, x, y: 1, z: 1, from, to, by: 'world'});
+    const out = B.aggregate([c(1, t0 - 90000000, 'air', 'stone'), c(2, t0 - 5000, 'air', 'stone'), c(2, t0 - 1000, 'stone', 'air'), c(3, t0 - 3000, 'air', 'dirt')], {now: t0, windowMs: 86400000});
+    assert.deepStrictEqual(out.map((e) => [e.x, e.k]), [[2, 'removed'], [3, 'built']], 'old dropped, block 2 ends removed');
+    assert.strictEqual(B.aggregate([c(1, t0, 'air', 'stone'), c(2, t0 - 1, 'air', 'stone')], {now: t0, cap: 1}).length, 1);
+  }
+  { // export: written once, rewritten only on change, zones overworld boxes only
+    const out = path.join(dir, 'web'); fs.mkdirSync(out);
+    const places = [{name: 'Shaft', kind: 'shaft', dim: 'overworld', box: {x1: 0, y1: -40, z1: 0, x2: 3, y2: 60, z2: 3}}, {name: 'Home', kind: 'home', dim: 'overworld'}, {name: 'N', kind: 'base', dim: 'the_nether', box: {x1: 0, y1: 0, z1: 0, x2: 1, y2: 1, z2: 1}}];
+    const ex = new B.Exporter({log: mk(), places: () => places, dir: out, now: () => clock});
+    ex.tick();
+    const ch = JSON.parse(fs.readFileSync(path.join(out, 'changes.json'), 'utf8')), zs = JSON.parse(fs.readFileSync(path.join(out, 'zones.json'), 'utf8'));
+    assert.ok(ch.changes.length && ch.changes[0].k && 'x' in ch.changes[0] && ch.generated === clock);
+    assert.deepStrictEqual(zs.zones.map((z) => z.name), ['Shaft']);
+    const before = fs.statSync(path.join(out, 'zones.json')).mtimeMs;
+    clock += 15000; ex.tick();
+    assert.strictEqual(JSON.parse(fs.readFileSync(path.join(out, 'changes.json'), 'utf8')).generated, ch.generated, 'unchanged: not rewritten');
+    assert.strictEqual(fs.statSync(path.join(out, 'zones.json')).mtimeMs, before);
+  }
+  { // the bot hook: own digs/places are attributed, other changes are "world", other dimensions are ignored
+    const bot = new EventEmitter();
+    bot.game = {dimension: 'minecraft:overworld'};
+    bot.dig = async () => {}; bot.placeBlock = async () => {};
+    const seen = [];
+    B.watchBlocks(bot, 'bot7', (c) => seen.push(c), () => clock);
+    const blk = (name, x, y, z) => ({name, position: {x, y, z}});
+    bot.dig(blk('stone', 1, 2, 3));
+    bot.emit('blockUpdate', blk('stone', 1, 2, 3), blk('air', 1, 2, 3));
+    bot.placeBlock(blk('stone', 5, 5, 5), {x: 0, y: 1, z: 0});
+    bot.emit('blockUpdate', blk('air', 5, 6, 5), blk('cobblestone', 5, 6, 5));
+    bot.emit('blockUpdate', blk('air', 9, 9, 9), blk('stone', 9, 9, 9));
+    bot.emit('blockUpdate', blk('water', 9, 9, 9), blk('air', 9, 9, 9));
+    clock += 20000;
+    bot.emit('blockUpdate', blk('stone', 1, 2, 3), blk('air', 1, 2, 3));
+    bot.game.dimension = 'minecraft:the_nether';
+    bot.emit('blockUpdate', blk('stone', 1, 2, 3), blk('air', 1, 2, 3));
+    assert.deepStrictEqual(seen.map((c) => c.by), ['bot7', 'bot7', 'world', 'world']);
+  }
+  fs.rmSync(dir, {recursive: true});
+}
+{ // worker block changes reach the hub's log through the observe frame, validated
+  const {Hub} = require('./hub');
+  const seen = [];
+  const fake = {world: {noteChange: (c) => seen.push(c), noteMob() {}, noteBlock() {}, forgetMob() {}, noteStock() {}}};
+  Hub.prototype.observe.call(fake, {bots: new Set(['bot3'])}, {changes: [
+    {x: 1, y: 2, z: 3, from: 'air', to: 'stone', by: 'bot3'}, {x: 1, y: 2, z: 3, from: 'air', to: 'stone', by: 'bot99'},
+    {x: 1.5, y: 2, z: 3, from: 'air', to: 'stone'}, {x: 1, y: 2, z: 3, from: 'a b', to: 'stone'}, 'junk']});
+  assert.deepStrictEqual(seen.map((c) => c.by), ['bot3', 'world'], 'bad frames dropped, foreign bot names become "world"');
+}

@@ -485,6 +485,10 @@ class Hub {
       if (![x.x, x.y, x.z].every(Number.isInteger) || !BLOCK_RE.test(String(x.type))) continue;
       this.world.noteBlock(by(x.by), x.type, {x: x.x, y: x.y, z: x.z}, str(x.dim, 32) || 'overworld');
     }
+    for (const x of list(m.changes, 300, (v) => obj(v) || {})) {
+      if (![x.x, x.y, x.z].every(Number.isInteger) || !BLOCK_RE.test(String(x.from)) || !BLOCK_RE.test(String(x.to))) continue;
+      this.world.noteChange({x: x.x, y: x.y, z: x.z, from: x.from, to: x.to, by: conn.bots.has(x.by) ? x.by : 'world'});
+    }
     for (const id of list(m.gone, 200, (v) => v)) if (Number.isFinite(id)) this.world.forgetMob(id);
     // What a worker's bot saw in the supply chest (the keeper plans from it).
     const st = obj(m.stock);

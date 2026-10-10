@@ -103,7 +103,7 @@
   </div>
 <details class="bar" id="vbar"><summary>3D map and box orders <span class="mut">(read from a bot's loaded chunks: click one block for corner A, another for corner B, then send the box as a job)</span></summary>
   <div class="row">area <select id="varea"></select>
-    <span id="vload" class="row"></span><button id="vgo" type="button">Load</button><span id="vinfo" class="mut"></span><span id="vsinfo" class="mut"></span></div>
+    <span id="vload" class="row"></span><button id="vgo" type="button">Load</button><label title="reloads this box every 10 s and keeps the camera"><input type="checkbox" id="vlive"> live</label><span id="vinfo" class="mut"></span><span id="vsinfo" class="mut"></span></div>
   <div class="row">
     <label>y from <input id="vy1" type="range" min="-64" max="319" value="-64"></label><label>to <input id="vy2" type="range" min="-64" max="319" value="319"></label>
     <label>cutaway <input id="vcut" type="range" min="1" max="100" value="100" title="hides the southern part so the inside shows"></label>
@@ -1122,23 +1122,28 @@ function vSurfBuild() {
   });
   VT.dirty = true;
 }
-async function vLoad() {
-  const b = vbox('l'); if (!b) { $('vinfo').textContent = 'fill in the six numbers'; return; }
-  $('vinfo').textContent = 'loading...'; $('vgo').disabled = true;
+async function vLoad(live) { // live: the 10 s refresh keeps camera, selection, height sliders and surroundings
+  const b = vbox('l'); if (!b) { if (!live) $('vinfo').textContent = 'fill in the six numbers'; return; }
+  if (!live) $('vinfo').textContent = 'loading...';
+  $('vgo').disabled = true;
   try {
     await vThree(); vInit();
     const r = await fetch('/api/voxels?' + new URLSearchParams(Object.fromEntries(VKEYS.map((k) => [k, b[k]]))), { cache: 'no-store' }), j = await r.json();
-    if (!r.ok) throw new Error(j.error);
-    VT.data = j; VT.A = VT.B = null;
-    $('vy1').min = $('vy2').min = j.box.y1; $('vy1').max = $('vy2').max = j.box.y2; $('vy1').value = j.box.y1; $('vy2').value = j.box.y2;
-    vFrame(true); vRebuild(); vOutlines(); vBots(); vPreview(); vSurface();
-    $('vinfo').textContent = `${j.blocks.length} visible blocks from ${j.bot}` + (j.unloaded ? `; ${j.unloaded} cells not loaded (empty)` : '');
+    if (!r.ok) { if (live && r.status === 429) { $('vinfo').textContent = 'live: map read busy, retrying'; return; } throw new Error(j.error); }
+    const keep = live && VT.data && VKEYS.every((k) => VT.data.box[k] === j.box[k]);
+    const sel = [VT.A, VT.B];
+    VT.data = j;
+    if (keep) [VT.A, VT.B] = sel; else VT.A = VT.B = null;
+    if (!keep) { $('vy1').min = $('vy2').min = j.box.y1; $('vy1').max = $('vy2').max = j.box.y2; $('vy1').value = j.box.y1; $('vy2').value = j.box.y2; vFrame(true); }
+    vRebuild(); vOutlines(); vBots(); vPreview(); if (!keep) vSurface();
+    $('vinfo').textContent = `${j.blocks.length} visible blocks from ${j.bot}` + (j.unloaded ? `; ${j.unloaded} cells not loaded (empty)` : '') + (keep ? ` (live, ${new Date().toLocaleTimeString()})` : '');
   } catch (e) { $('vinfo').textContent = e.message; $('vinfo').className = 'err'; return; } finally { $('vgo').disabled = false; }
   $('vinfo').className = 'mut';
 }
+setInterval(() => { if ($('vlive').checked && !document.hidden && $('vbar').open && VT.data && !$('vgo').disabled) vLoad(true); }, 10000);
 vmk('vload', 'l', null); vmk('vsel', 's', vPreview);
 for (const [k, v] of Object.entries(VJOBS)) $('vtype').append(new Option(v, k));
-$('vtype').onchange = vExtra; $('vgo').onclick = vLoad; $('vbot').onfocus = vBots;
+$('vtype').onchange = vExtra; $('vgo').onclick = () => vLoad(); $('vbot').onfocus = vBots;
 $('findgo').onclick = async () => {
   const r = await fetch('/api/storage/find?q=' + encodeURIComponent($('findq').value), { cache: 'no-store' }), j = await r.json().catch(() => ({}));
   if (!r.ok) { $('findmsg').textContent = j.error || r.status; $('findres').replaceChildren(); return; }

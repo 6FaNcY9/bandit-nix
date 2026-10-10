@@ -284,6 +284,7 @@ class BotRunner {
     this.log(this.name, `connecting to ${this.host}:${this.port}`);
     const bot = mineflayer.createBot({host: this.host, port: this.port, username: this.name, auth: 'offline', version: '26.1', hideErrors: true});
     this.bot = bot;
+    require('./blocklog').watchBlocks(bot, this.name, (c) => this.world.noteChange?.(c));
     bot.once('spawn', () => guardDigs(this, bot)); // bot.dig exists only once the plugins loaded
     bot.loadPlugin(pathfinder);
     bot.loadPlugin(collectBlock);

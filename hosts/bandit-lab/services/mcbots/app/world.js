@@ -66,6 +66,11 @@ class WorldModel {
     this.stocks = new Map(); // "x,y,z" (or "" with no coordinates) -> the same, per chest: the keeper and the plan read only their own
   }
 
+  // A block change seen by one of this process' bots (blocklog.js); recorded when the hub set a log.
+  noteChange(c) {
+    this.blocklog?.record(c);
+  }
+
   // A bot that opened a chest reports its contents with the chest's coordinates (Codex R6-4: the plan's base
   // chest is not the supply chest, and one chest's numbers must not stand for the other's).
   noteStock(by, items, free = null, chest = null) {

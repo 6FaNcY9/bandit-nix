@@ -21,6 +21,7 @@
     "AxGraves-1.32.0.jar" = dummyJar "ax";
   };
   expansions = pkgs.linkFarm "seed-expansions" {"PAPI-Expansion-Player_R5xV754.jar" = dummyJar "papi";};
+  overlay = dummyJar "overlay.js";
   panels = pkgs.linkFarm "panels" {"admin.yml" = pkgs.writeText "admin.yml" "title: admin\n";};
 in
   assert lib.assertMsg (c.volumes == ["/srv/containers/minecraft/data:/data"]) "the Minecraft container may mount only its data directory (no docker.sock, no unrelated paths)";
@@ -53,7 +54,7 @@ in
         MC_DATA=$data MC_OWNER= \
           STAGE_BLUEMAP=${dummyJar "bluemap"} STAGE_BLUEMAP_VERSION=2.0 \
           STAGE_IMAGEFRAME=${dummyJar "imageframe"} STAGE_IMAGEFRAME_VERSION=1.0 STAGE_IMAGEFRAME_CONFIG=${dummyJar "ifcfg"} \
-          STAGE_BLUEMAP_CORE=${dummyJar "core"} STAGE_PANELS=${panels} STAGE_PATCHES=${dummyJar "patch"} \
+          STAGE_BLUEMAP_CORE=${dummyJar "core"} STAGE_OVERLAY=${overlay} STAGE_PANELS=${panels} STAGE_PATCHES=${dummyJar "patch"} \
           STAGE_SEED=${seeds} STAGE_EXPANSIONS=${expansions} \
           ${scripts.stage}/bin/minecraft-stage
       }
@@ -80,6 +81,19 @@ in
       test ! -e $data/plugins/AxGraves-1.32.0.jar
       grep -q '^allow-flight=false$' $data/server.properties
       test -e $data/plugins/BlueMap-2.0.jar
+
+      # The bot overlay script is staged and registered in BlueMap's webapp.conf, once; an unexpected
+      # scripts entry is left alone (stage must still succeed: the map has to start).
+      test -e $data/bluemap/web/mcbots/overlay.js
+      printf 'enabled: true\nscripts: []\nstyles: []\n' > $data/plugins/BlueMap/webapp.conf
+      stage
+      stage
+      grep -q '^scripts: \["mcbots/overlay.js"\]$' $data/plugins/BlueMap/webapp.conf
+      test "$(grep -c overlay $data/plugins/BlueMap/webapp.conf)" -eq 1
+      grep -q '^styles: \[\]$' $data/plugins/BlueMap/webapp.conf
+      printf 'scripts: ["other.js"]\n' > $data/plugins/BlueMap/webapp.conf
+      stage 2>/dev/null
+      grep -q '^scripts: \["other.js"\]$' $data/plugins/BlueMap/webapp.conf
 
       # A BlueMap config that exists is never overwritten.
       echo custom > $data/plugins/BlueMap/core.conf

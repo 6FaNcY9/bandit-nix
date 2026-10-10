@@ -19,6 +19,7 @@ const {scanAround} = require('./scan');
 const {Alerts, chestWarnings} = require('./alerts');
 const {Settings} = require('./settings');
 const {Places, use: usePlaces, protectedBoxes} = require('./places');
+const {BlockLog, Exporter, areaBoxes} = require('./blocklog');
 const {Projects, PROJECTS} = require('./projects');
 const {Crews} = require('./crews');
 const agentauth = require('./agentauth');
@@ -67,6 +68,11 @@ const keeper = cfg.keeperQuotas.length || cfg.planEnable ? new Keeper({runners, 
 const places = new Places(process.env.STATE_DIR || '');
 usePlaces(places); // zones: plan-config and the job validators read them from here
 places.seed(planConfig.seedZones()); // first start only
+// Block log (blocklog.js): who built or destroyed what where, exported for the BlueMap overlay.
+const blocklog = new BlockLog({file: process.env.STATE_DIR ? path.join(process.env.STATE_DIR, 'blocklog.jsonl') : null, areas: () => areaBoxes(places.list, process.env.BLOCKLOG_AREA)});
+world.blocklog = blocklog;
+const overlay = process.env.BLOCKLOG_EXPORT_DIR ? new Exporter({log: blocklog, places: () => places.list, dir: process.env.BLOCKLOG_EXPORT_DIR, say: (m) => log('blocklog', m)}) : null;
+const blocklogTimer = setInterval(() => (overlay ? overlay.tick() : blocklog.flush()), 15000);
 let supplyChest = cfg.supplyChest;
 const supplyStock = () => (supplyChest ? world.stockAt(supplyChest) : world.stock); // the supply chest's numbers, not the plan's base chest's
 const staticAreas = cfg.protectedAreas.slice();
@@ -598,6 +604,8 @@ function shutdown() {
   clearInterval(keeperTick);
   clearInterval(alertTick);
   slayer.stop();
+  clearInterval(blocklogTimer);
+  blocklog.flush();
   stopBlueMap();
   hub?.close();
   for (const r of runners.values()) r.shutdown();

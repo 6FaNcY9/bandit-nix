@@ -210,6 +210,7 @@ in {
           STAGE_IMAGEFRAME = imageFrame;
           STAGE_IMAGEFRAME_VERSION = imageFrameVersion;
           STAGE_IMAGEFRAME_CONFIG = ./imageframe-config.yml;
+          STAGE_OVERLAY = ./overlay.js;
           STAGE_PANELS = ./commandpanels;
           STAGE_PATCHES = velocityPatch;
           STAGE_SEED = pkgs.linkFarm "minecraft-seed-plugins" seedPlugins;
