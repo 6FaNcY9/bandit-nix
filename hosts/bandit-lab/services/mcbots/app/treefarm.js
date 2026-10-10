@@ -17,7 +17,6 @@ const LEAVES = /_leaves$/;
 const FREE = /^(air|cave_air|short_grass|fern)$/;
 const FLUID = /water|lava/;
 const WANTED_DROP = /_sapling$|^apple$|_log$/;
-const DIG_ONLY = /_(log|leaves)$/; // what the pathfinder may dig on the way
 const RETRY_MS = 300000;
 const BONE_MEAL_USES = 6;
 
@@ -289,4 +288,4 @@ function makeTreeFarm({goNear, guard, sleep, digAt, waitCalm, deposit, withdraw,
   return {treefarm};
 }
 
-module.exports = {SAPLINGS, DIG_ONLY, farmBox, gridCells, groundY, cellState, treeLogs, scan, pickups, pickSapling, makeTreeFarm};
+module.exports = {SAPLINGS, farmBox, gridCells, groundY, cellState, treeLogs, scan, pickups, pickSapling, makeTreeFarm};

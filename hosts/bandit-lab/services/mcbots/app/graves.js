@@ -46,8 +46,9 @@ function armourPicks(items, worn) {
 
 // mineflayer's activateEntity always sends sneaking: false, so write the packets ourselves: first
 // "interact at" (where on the entity), then "interact", as the vanilla client does.
-async function click(bot, e, sneaking) {
+async function click(bot, e, sneaking, guard = () => {}) {
   await bot.lookAt(e.position.offset(0, (e.height || 1) / 2, 0), false);
+  guard(); // a Stop during the look must send no packet (R5-1)
   for (const mouse of [2, 0]) bot._client.write('use_entity', {target: e.id, mouse, sneaking, hand: 0, x: 0, y: 0, z: 0, location: new Vec3(0, 0, 0)});
 }
 
@@ -78,7 +79,8 @@ function makeGraves({goNear, guard, sleep, deposit}) {
       for (const e of found.slice(0, 4)) {
         guard(job);
         if (e.position.distanceTo(bot.entity.position) > 4) await goNear(r, job, e.position.x, e.position.y, e.position.z, 2, {doing: 'closing in on the grave'});
-        await click(bot, e, true).catch((err) => r.emit('info', `grave click on ${e.name} failed: ${err.message}`));
+        await click(bot, e, true, () => guard(job)).catch((err) => r.emit('info', `grave click on ${e.name} failed: ${err.message}`));
+        guard(job); // a Stop cancelled that click: end now instead of waiting for items
         for (let i = 0; i < 12 && countAll(bot) === before; i++) await sleep(250);
         guard(job);
         if (countAll(bot) > before) break;

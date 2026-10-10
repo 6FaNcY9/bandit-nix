@@ -435,7 +435,8 @@ class BotRunner {
     if (!this.online && this.queue[0].resume) return; // resumed jobs wait for the reconnect
     const job = (this.current = this.queue.shift());
     job.status = 'running';
-    this.digOnly = ['excavate', 'shaft', 'level'].includes(job.type) ? NATURAL : job.type === 'treefarm' ? treeFarmJob.DIG_ONLY : null; // the walk to the room may dig natural ground only (Codex R3-1)
+    this.digOnly = ['excavate', 'shaft', 'level', 'treefarm'].includes(job.type) ? NATURAL : null; // the walk to the room may dig natural ground only (Codex R3-1); a farm walk never digs logs or leaves (R5-2)
+    this.digBox = job.type === 'treefarm' ? job.args : null; // ... and only inside the farm box
     job.startedAt = Date.now();
     job.progress = '';
     job.t = {doing: '', done: 0, total: 0, open: false}; // live detail; sub-jobs share it through the prototype
@@ -482,6 +483,7 @@ class BotRunner {
     else this.emit('fail', `failed: ${jobLabel(job)} - ${this.lastError.replace(/^\w+: /, '')}`);
     this.current = null;
     this.digOnly = null;
+    this.digBox = null;
     setImmediate(() => this.pump());
   }
 
@@ -600,7 +602,7 @@ function safeMovements(bot, areas, runner = null) {
   const inside = (blk) => insideAreas(areas, blk.position.x, blk.position.z);
   const veto = (blk) => (inside(blk) ? 100 : 0);
   const held = (blk) => (runner?.reserved?.(blk.position.x, blk.position.y, blk.position.z) ? 100 : 0);
-  mv.exclusionAreasBreak = [veto, held, (blk) => (runner?.digOnly && !runner.digOnly.test(blk.name) ? 100 : 0)];
+  mv.exclusionAreasBreak = [veto, held, (blk) => (runner?.digOnly && !runner.digOnly.test(blk.name) ? 100 : 0), (blk) => (outsideBox(runner?.digBox, blk.position) ? 100 : 0)];
   mv.exclusionAreasPlace = [veto];
   // Every block change counts up, so the path cache never answers from before it.
   if (bot.blockVersion === undefined) {
@@ -610,6 +612,9 @@ function safeMovements(bot, areas, runner = null) {
   }
   return cacheGetBlock(mv, Date.now, () => bot.blockVersion);
 }
+
+// true when a walk's dig target lies outside the job's box ({x1, z1, x2, z2}; no box: no limit)
+const outsideBox = (box, p) => !!box && (p.x < box.x1 || p.x > box.x2 || p.z < box.z1 || p.z > box.z2);
 
 // ---- job implementations: (runner, job) => Promise; throw on failure ----
 const guard = (job) => {
@@ -817,6 +822,7 @@ function guardDigs(runner, bot) {
     if (p && (!live || live.name !== block.name || (block.stateId !== undefined && live.stateId !== block.stateId))) return 'Digging aborted: the block changed';
     // A walk may dig only what the job allows (excavate: natural ground, never its own walls).
     if (runner.digOnly && bot.pathfinder?.isMining?.() && !runner.digOnly.test(block.name)) return `Digging aborted: ${block.name} is not part of the job`;
+    if (p && bot.pathfinder?.isMining?.() && outsideBox(runner.digBox, p)) return 'Digging aborted: a walk may not dig outside the farm';
     const danger = p && unsafeDig(bot, p); // a fluid next to it, or a drop of more than 3 below the bot
     return danger ? `Digging aborted: ${danger}` : null;
   };
@@ -831,6 +837,12 @@ function guardDigs(runner, bot) {
     const why = digRefusal(block);
     return why ? Promise.reject(new Error(why)) : nativeDig(block, ...rest);
   };
+  // Block and entity activation (bone meal, a bed, shears) look first too; only Stop matters there (R5-1).
+  for (const fn of ['activateBlock', 'activateEntity', 'activateEntityAt']) {
+    if (!bot[fn]) continue;
+    const native = withLook('Activating', bot[fn].bind(bot), () => null);
+    bot[fn] = (...args) => (runner.current?.cancelled ? Promise.reject(new Error('Activating aborted: the job was stopped')) : native(...args));
+  }
   const nativePlace = withLook('Placing', placeBlock, placeRefusal);
   bot.placeBlock = (ref, face, ...rest) => {
     const why = placeRefusal(ref, face);
