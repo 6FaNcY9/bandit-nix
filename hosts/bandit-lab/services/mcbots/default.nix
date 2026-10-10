@@ -35,7 +35,7 @@ in {
       image = "${image.imageName}:${image.imageTag}";
       imageFile = image;
       environment = {
-        BOT_NAMES = "bot1,bot2,bot3,bot4,bot6"; # bot1-4 work (LLM agents to come), bot6 AFK at the gold farm; bot5 is the local test bot
+        BOT_NAMES = "bot1,bot2,bot3,bot4,bot10"; # bot1-4 work (LLM agents to come), bot10 AFK at the gold farm; bot5 is the local test bot. A new name must never have been registered in VeloAuth (local stages used bot5-9, bot11-15, bot50-59)
         MC_HOST = "velocity";
         MC_PORT = "25565";
         DASHBOARD_HOST = "0.0.0.0"; # inside the container; published on loopback only

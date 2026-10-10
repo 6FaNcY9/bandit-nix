@@ -234,7 +234,14 @@ class BotRunner {
       else if (/logged in successfully|registered successfully|already logged in/i.test(msg)) {
         authed = true;
         this.log(this.name, 'logged in to VeloAuth');
-      } else if (/incorrect password/i.test(msg)) this.lastError = 'VeloAuth: wrong password for this bot name';
+      } else if (/incorrect password/i.test(msg)) {
+        // Retrying cannot fix a wrong password, and VeloAuth then blocks the source IP, which every
+        // bot of this container shares (2026-10-10: bot6, registered once by a local stage, locked
+        // out the lab crew's address). Give up until mcbots restarts.
+        this.lastError = 'VeloAuth: wrong password for this bot name - gave up; unregister the name or rename the bot, then restart mcbots';
+        this.log(this.name, this.lastError);
+        this.shutdown();
+      }
     });
     bot.on('entityGone', (e) => this.world.forgetMob(e.id));
     bot.on('death', () => {

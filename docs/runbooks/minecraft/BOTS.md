@@ -172,7 +172,7 @@ the dashboard. Positions are sampled every 500 ms (rounded to 0.01) and kept for
 
 The lab app is also the hub. A worker on another machine runs its own bots
 (Mineflayer on that machine, joining Velocity from its tailnet address) and
-reports to the hub; the dashboard then lists them next to bot1..bot4 and bot6 with host,
+reports to the hub; the dashboard then lists them next to bot1..bot4 and bot10 with host,
 online state and last-seen, sends their jobs, and the hub decides every block
 reservation so lab and laptop bots never dig the same block.
 
