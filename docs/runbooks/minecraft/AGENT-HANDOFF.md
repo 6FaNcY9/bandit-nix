@@ -350,6 +350,52 @@ Checks: traced dashboard auth, worker auth separation, translator jobs and Nix
 container/network wiring; reviewed NEXT-GOALS 3b. No executable/configuration
 change, so no new build gate for this design-only commit.
 
+### CX-6: native lab Ollama
+
+State: implemented / source-build acceptance passed, 2026-10-10.
+Unsigned implementation: `0166a2abd9c15c609bf9b8cf1d7e33d6d09e3dd6`.
+Owner: Codex; base `50cf46ae8b5f26f6651f0d53acd3ab6a7b1746bd`.
+Scope: `hosts/bandit-lab/services/ollama/{default.nix,Modelfile,README.md}`,
+`hosts/bandit-lab/default.nix`, `lib/repository.nix`, `ci/lab-surface.nix`.
+
+Native pinned CUDA package, loopback `127.0.0.1:11434`, models in
+`/srv/ollama/models`, parallelism 4 and keep-alive 30m. Provisioning imports
+`andy-4.2` from the requested Q4_K_M GGUF with SHA256
+`3cfccaa17be8d2ded998fab8bd4b7032f91f2a916ac2aa03a412908342228eb1`,
+pinned at upstream revision `d3efcb8137c88cd3c23466ddabf985ea59b52fdf`.
+Modelfile parameters: temperature 0.6, num_ctx 8192. Only `libcublas` was added
+to the unfree-name list after evaluation explicitly refused it. The existing
+CUDA-prefix predicate was preserved, not widened.
+
+Checks: pinned formatting, active-option evaluation, repository checks
+(Alejandra/deadnix/statix), and lab-surface build passed. A negative evaluation
+with host `0.0.0.0` failed with the intended loopback assertion. The GGUF
+download completed and verified in the Nix build; CUDA Ollama and the lab
+toplevel built. A build against the exact implementation commit (git+file rev,
+excluding uncommitted restore work) passed for both the toplevel and lab-surface:
+
+```text
+/nix/store/jznipgxj6nydb9v4hc757saxymkc50kc-nixos-system-bandit-lab-26.11.20260923.4975466
+/nix/store/74cm970l00lj0dp19x94gl75hk900f78-lab-surface
+```
+
+Full flake check attempted once:
+`error: interrupted by the user` at `checks.x86_64-linux.output-evaluation`;
+it is incomplete, not a passed gate.
+
+No activation or inference check. Shipping requires owner GO. The owner must
+stop the temporary lab user unit `mcagents-ollama.service` before activation
+(same port). Runtime CUDA/model checks and rollback instructions are in the
+service README. CX-5 auth/agent service is not implemented by this change.
+
+Claude review, 2026-10-10: not shipped; `0166a2a` stays on Codex's branch. Two blockers:
+(1) the 5.6 GB GGUF is a `fetchurl` output referenced by the provisioning unit, so it is in the
+lab system closure: CI's "Populate Cachix" job would build and push it (runner disk, Cachix
+quota) and every closure copy carries it; download it at provisioning time with the same SHA256
+check into `/srv/ollama` instead. (2) `ollama-cuda` is not in cache.nixos.org (unfree CUDA), so
+it compiles from source (about 50 min on the laptop at load 12) in CI (120-minute job timeout)
+and on the lab at every nixpkgs bump. Decide the package source before shipping.
+
 ### CX-1: commit this handoff
 
 State: committed (docs only): `def21854df89015f4aa6ec0737b593d864c8338f`.
@@ -358,17 +404,31 @@ Checks: document paths and source line references reviewed; whitespace checked.
 
 ### CX-2: backup restore drill
 
-State: blocked on Docker isolation choice; no drill script committed.
+State: implemented / owner-run snapshot acceptance pending, 2026-10-10.
 Owner: Codex. Scope: `tools/restore-drill.sh`, a small test, and the drill section
-of `docs/runbooks/backup-restore.md`. Owner runs sudo; Codex uses fixtures only.
-The existing Minecraft helper uses Docker container/image state outside TMPDIR;
-strict no-write-outside-temp needs a disposable daemon, or explicit permission
-for the existing daemon's temporary state. Neither option touches live containers.
+of `docs/runbooks/backup-restore.md`; test is `ci/test-restore-drill.py`.
+Owner runs sudo/secrets; Codex uses fixtures only. The owner authorized temporary
+state in the existing Docker daemon: exact `restore-drill-` names, no published
+ports, no live volumes, cleanup traps on exit/INT/TERM. SQL storage uses tmpfs,
+Minecraft uses only the new scratch restore, plugins disabled. Images are
+preloaded, never pulled by the drill. No anonymous volumes survive cleanup.
+
+Checks: shell syntax and ShellCheck passed; isolated fixture tests cover success,
+wrong-host snapshots, restore/import failure, symlink rejection, empty DBs,
+Minecraft timeout/errors/early exit, SIGTERM and cleanup failure. SQLite checks
+use actual fixture databases; Docker/restic are mocked. No credentials read and
+no actual snapshot restored or Docker container started by Codex. The runbook
+gives the owner's commands and result template; actual lab and laptop snapshot
+IDs, SQL import and world boot remain pending. Goal #1 is not closed by fixtures.
 
 ### CX-3: container hardening step 1
 
-State: implemented and committed; not integrated, pushed or activated.
-Prepared while CX-2 awaits the required Docker-isolation decision.
+State: shipped and runtime-verified as reported by the owner, 2026-10-10:
+aiia-ghost, aiia-redis, grafana, blackbox-exporter and node-exporter run with
+no-new-privileges; Prometheus targets up. Vaultwarden was shipped by mistake
+and reverted in `50cf46ae8b5f26f6651f0d53acd3ab6a7b1746bd`. It is supervised
+maintenance only, never a normal ship; see `container-hardening.md`.
+The original preparation record below is historical, not a replayable ship list.
 Owner: Codex. One container per unsigned commit: aiia-ghost, aiia-redis, grafana,
 blackbox-exporter, node-exporter; vaultwarden last. Scope: owning modules,
 `ci/lab-surface.nix` and `docs/runbooks/container-hardening.md`.

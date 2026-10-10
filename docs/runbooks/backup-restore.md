@@ -112,6 +112,65 @@ backup's repository lock instead of failing.
 
 ### Restore drill (do this once, then yearly)
 
+CX-2 provides `tools/restore-drill.sh lab|laptop [snapshot-id]` for the peer
+backups. **Run as the owner on the source host**: `lab` on bandit-lab restores
+its snapshot from the laptop; `laptop` on bandit restores its snapshot from the
+lab. The installed `restic-peer` wrapper supplies credentials; the script never
+decrypts SOPS or prints them. It resolves exactly one host-matching snapshot,
+restores by full ID into fresh private scratch space and uses restic `--verify`
+to check restored content. `--no-cache --no-lock` avoids repository/cache writes;
+do not run the drill during peer pruning, which could remove the chosen snapshot.
+
+The lab drill checks Vaultwarden/Mrija SQLite integrity and nonempty schemas,
+records the Vaultwarden user count, imports the MySQL and PostgreSQL dumps,
+requires application tables/databases, and boots the restored Minecraft world.
+It restores Ghost `content-data` too and verifies the restored files with restic.
+The laptop drill restores and verifies `Documents`, requiring at least one file.
+These are bounded recovery samples, not a complete application or home recovery.
+
+All Docker names start `restore-drill-`; SQL containers use network `none` and
+tmpfs database directories. The Minecraft container mounts only the scratch
+copy and uses the default bridge for Paper's excluded download cache, with no
+published ports. **Restored plugins are disabled** because they can contain
+external-service credentials; plugin integrations are not tested. No live
+container, production volume or service is restarted or mounted. Images must
+already be loaded (`--pull never`); the drill leaves the image cache unchanged.
+Exit/INT/TERM traps remove the exact temporary containers (including any
+anonymous image volumes) and scratch tree. Cleanup failure reports the exact
+names/path and retains scratch for the owner. SIGKILL or a reboot cannot run a
+trap; inspect `docker ps -a --filter name=restore-drill-` and the corresponding
+scratch paths before removing only those resources.
+
+Owner prerequisites: Docker access, `restic-peer`, Python 3 with SQLite, Bash,
+gzip, coreutils, findutils and grep. Budget free scratch disk for the restore;
+SQL containers each have a 2 GiB memory cap and Minecraft has 4 GiB. Larger
+databases may require a reviewed resource-limit change. Load the MySQL 8.4 and
+Minecraft image digests used by their owning modules (also pinned in the
+script), plus PostgreSQL 16, matching the lab's native PostgreSQL major version.
+Pin the PostgreSQL image by its inspected digest:
+
+```bash
+# Owner on the lab, one-time drill image preparation:
+sudo docker pull postgres:16
+pg_ref=$(sudo docker image inspect postgres:16 --format '{{index .RepoDigests 0}}')
+sudo env PG_IMAGE="postgres:16@${pg_ref#*@}" bash tools/restore-drill.sh lab
+
+# Owner on the laptop (no Docker needed for this sample):
+sudo bash tools/restore-drill.sh laptop
+
+# Offline fixture checks, no credentials or Docker daemon used:
+python3 ci/test-restore-drill.py
+```
+
+Record UTC date, full snapshot IDs, image digests, output counts and each PASS
+line after **both** owner runs. Do not publish database contents or private
+diagnostics. As of 2026-10-10: source, shell syntax, ShellCheck and isolated
+fixtures checked; **no actual peer snapshot or live Docker restore has been
+tested by Codex**. The owner-run result is pending; this does not close goal #1.
+
+For the optional B2 repository, the older manual smoke checks below remain
+available. They do not establish SQL import or Minecraft startup acceptance.
+
 Never restore over live data to test. The module installs a wrapper, `restic-lab`,
 that already knows the repository, password file and B2 credentials (plain
 `restic` is not on the PATH). Restore into a scratch directory:
