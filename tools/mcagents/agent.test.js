@@ -97,7 +97,7 @@ console.log('ok');
 assert.deepStrictEqual(idleWorkers(new Set(['bot2', 'bot16', 'bot17', 'bot18']), {bots: [
   {name: 'bot2', online: true, job: {type: 'shift'}, queue: []}, {name: 'bot16', online: true, job: null, queue: []},
   {name: 'bot17', online: false, job: null, queue: []}, {name: 'bot18', online: true, dead: true, job: null, queue: []}, {name: 'bot1', online: true, job: null, queue: []}]}), ['bot16']);
-assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}, {name: 'bot1', pos: [0, 0, 0], inventory: []}).includes('!stop'), 'no example answer to copy');
+assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}, {name: 'bot1', pos: [0, 0, 0], inventory: []}).includes("Sure, I'll stop"), 'no example answer to copy');
 // decide() against a fake dashboard and model (global fetch): MC-4 regressions.
 (async () => {
   const realFetch = globalThis.fetch;
