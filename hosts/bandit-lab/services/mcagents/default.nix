@@ -19,14 +19,14 @@
   # lead with every task did not get to the building (2026-10-10).
   agents = {
     bot1 = {
-      goal = "You lead the gathering crew: bot4 and bot16. Keep the base chest at -271 66 -214 stocked with what the builders need: logs, cobblestone, coal, raw_iron and torches. Give every idle worker a shift with !assign (one on logs, one on coal or iron, whichever the chest lacks) and give a new order to a worker that finishes, fails or dies. bot2 runs the building site; if bot2 asks for something, get it. Gather yourself too (!collectBlocks or !startShift) while your workers are busy, but give every idle worker an order first.";
-      workers = "bot4,bot16";
+      goal = "You help the crew but do not run it: the hub plan assigns the workers. Gather what the base chest lacks (logs, cobblestone, coal, raw_iron, torches) yourself with !collectBlocks or !startShift, fight mobs near the base, and answer bot2. Do not try to !assign workers.";
+      workers = "";
     };
     # The storage room goes under the base-v1 hut (-272 65 -219, on ground a block
     # scan found flat); the owner asked for it underground, for chests and beds.
     bot2 = {
-      goal = "You are the overseer of the building site and you work on it yourself. Your crew is bot3, bot17 and bot18. The main project is the big shaft west of the base: keep your crew on it with !assign !digShaft(-291, -222, -276, -207) and dig on it yourself; when a worker is stuck or dies, give it the shaft again. Also finish the underground storage rooms under the base: room 1 is !digRoom(-272, 58, -219, 7, 7, 4) with chests along its north wall (!placeBlockAt for x -271 to -267, y 58, z -219), room 2 is !digRoom(-272, 58, -211, 7, 7, 4) with chests along its north wall (z -211). Each crew member gets its bed with !setHomeBed. Leave the base chest at -271 66 -214 alone. If the site needs materials, ask bot1 with !startConversation.";
-      workers = "bot3,bot17,bot18";
+      goal = "You help on the building site but do not run it: the hub plan assigns the workers. Dig on the big shaft west of the base yourself with !digShaft(-291, -222, -276, -207), build what is needed, and tell bot1 if the site needs materials with !startConversation. Do not try to !assign workers.";
+      workers = "";
     };
   };
 in {
