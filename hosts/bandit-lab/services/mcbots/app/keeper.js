@@ -120,7 +120,7 @@ class Keeper {
       if (this.idle(s)) this.idleSince.has(r.name) || this.idleSince.set(r.name, t);
       else this.idleSince.delete(r.name);
     }
-    const stock = this.world.stock;
+    const stock = this.world.stockAt(this.chest);
     this.finish(snaps, t, stock);
 
     const busy = new Set([...this.work.values()].map((w) => w.bot).concat(this.counting ? [this.counting.bot] : []));
@@ -206,7 +206,7 @@ class Keeper {
   }
 
   state() {
-    const stock = this.world.stock;
+    const stock = this.world.stockAt(this.chest);
     const t = this.now();
     return {
       available: !!this.chest,

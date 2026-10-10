@@ -1088,8 +1088,8 @@ require('./crafting');
     // kept jobs: the worker reports its own list, the hub keeps it; Stop empties it at once
     stub.current = {type: 'shift', args: {block: 'logs', x: 1, y: 64, z: 1}};
     stub.queue = [{type: 'mine', args: {block: 'stone', count: 5}, collected: 2}, {type: 'say', args: {text: 'x'}}, {type: 'chop', args: {count: 4}, cancelled: true}];
-    await until(() => r6.kept.length === 2, 'kept jobs reached the hub');
-    assert.deepStrictEqual(r6.kept, [{type: 'shift', args: {block: 'logs', x: 1, y: 64, z: 1}}, {type: 'mine', args: {block: 'stone', count: 3}}]);
+    await until(() => r6.kept.length === 3, 'kept jobs reached the hub');
+    assert.deepStrictEqual(r6.kept, [{type: 'shift', args: {block: 'logs', x: 1, y: 64, z: 1}}, {type: 'mine', args: {block: 'stone', count: 3}}, {type: 'say', args: {text: 'x'}}], 'the rest of the chain follows the first long job (R6-5); a cancelled one does not');
     r6.enqueue('stop');
     assert.deepStrictEqual(r6.kept, []);
     stub.current = null;
@@ -1630,9 +1630,9 @@ require('./crafting');
     assert.strictEqual(plan.completed.has('stock'), true);
     assert.deepStrictEqual([keeper.enabled, keeper.chest, keeper.quotas, keeper.site, keeper.runners === runners], [false, keeperChest, [['diamond', 1]], {x: 9, y: 9, z: 9}, true], 'the keeper is given back');
     assert.strictEqual(plan.state().current.id, 'after');
-    // restart: switched off, but what was done is remembered
+    // restart: still switched on (a deploy must not stop it), and what was done is remembered
     const again = mk();
-    assert.strictEqual(again.enabled, false);
+    assert.strictEqual(again.enabled, true);
     assert.deepStrictEqual([...again.completed].sort(), ['beds', 'stock']);
     assert.strictEqual(JSON.parse(fs.readFileSync(file, 'utf8')).results['beds#0:bot11'].ok, true);
     assert.deepStrictEqual(again.state().objectives.map((o) => o.status), ['done', 'done', 'upcoming']);
@@ -4138,3 +4138,138 @@ require('./crafting');
   assert.strictEqual(w2.chests.get('-251,59,-214').items.iron_ingot, 9, 'reloads');
   assert.ok(require('./agentauth').agentEndpoint('GET', '/api/storage/find'));
 }
+// ---- Codex round 6 ----
+(async () => {
+  const {WorldModel} = require('./world');
+  const {Vec3} = require('vec3');
+  { // R6-1: another bot's retained stair steps are reserved wherever a walk digs; own strip bounds the dig
+    const w = new WorldModel({now: () => 0});
+    w.claim('bot1', 'shaft:0,60,0');
+    w.claim('bot1', 'shaftend:2,58,2');
+    assert.strictEqual(w.stepHeldByOther('bot2', 0, 60, 0), true, 'layer 0 keeps ring cell 0');
+    assert.strictEqual(w.stepHeldByOther('bot2', 1, 59, 0), true, 'layer 1 keeps ring cell 1');
+    assert.strictEqual(w.stepHeldByOther('bot2', 1, 60, 0), false, 'other cells of the strip are not steps');
+    assert.strictEqual(w.stepHeldByOther('bot2', 1, 57, 0), false, 'below the shaft');
+    assert.strictEqual(w.stepHeldByOther('bot1', 0, 60, 0), false, 'own steps are the job\'s keepCells');
+    w.release('bot1', 'shaft:0,60,0');
+    assert.strictEqual(w.stepHeldByOther('bot2', 0, 60, 0), false, 'released with the job');
+    const runner = new BotRunner('bot2', {host: 'x', port: 1, log: () => {}, world: w, onEvent: () => {}});
+    w.claim('bot1', 'shaft:0,60,0');
+    assert.strictEqual(runner.reserved(0, 60, 0), true, 'BotRunner.reserved consults the shared claims');
+    assert.strictEqual(runner.reserved(5, 60, 0), false);
+  }
+  { // R6-4: stock observations belong to their chest
+    const w = new WorldModel({now: () => 0});
+    const base = {x: -271, y: 66, z: -214}, supply = {x: -37, y: 65, z: -200};
+    w.noteStock('bot1', {coal: 0}, 3, base);
+    w.noteStock('bot2', {coal: 40}, 3, supply);
+    assert.strictEqual(w.stockAt(base).items.coal, 0, 'the supply chest does not stand for the base chest');
+    assert.strictEqual(w.stockAt(supply).items.coal, 40);
+    assert.strictEqual(w.stockAt({x: 1, y: 2, z: 3}), null, 'a chest nobody counted');
+    assert.deepStrictEqual(w.snapshot().stock.chest, supply, 'the dashboard still shows the latest');
+  }
+  { // R6-5: a restart keeps the whole chain behind the first long job
+    const {tailFrom} = require('./bots');
+    const chain = ['withdraw', 'excavate', 'withdraw', 'craft', 'place', 'place'].map((type) => ({type}));
+    assert.deepStrictEqual(tailFrom(chain).map((j) => j.type), ['excavate', 'withdraw', 'craft', 'place', 'place']);
+    assert.deepStrictEqual(tailFrom([{type: 'craft'}, {type: 'say'}]), [], 'no long job: nothing to bring back');
+  }
+  { // R6-6: Stop reaches the plan as its own signal, not as a clean finish
+    const {stoppedSince} = require('./plan');
+    assert.strictEqual(stoppedSince({stoppedAgoS: 5}, 1000, 20000), true);
+    assert.strictEqual(stoppedSince({stoppedAgoS: 50}, 1000, 20000), false, 'a stop before the chain was given');
+    assert.strictEqual(stoppedSince({stoppedAgoS: null}, 1000, 20000), false);
+    const r = new BotRunner('bot1', {host: 'x', port: 1, log: () => {}, world: null, onEvent: () => {}});
+    assert.strictEqual(r.snapshot().stoppedAgoS, null);
+    r.enqueue('stop');
+    assert.ok(r.snapshot().stoppedAgoS <= 1);
+    const {Plan} = require('./plan');
+    const {IDLE_MS} = require('./keeper');
+    let now = 1e6;
+    const snap = (o = {}) => ({online: true, dead: false, job: null, queue: [], inventory: [], lastError: '', lastErrorAgoS: null, ...o});
+    const bot = {name: 'bot11', sent: [], working: false, stopped: null, snapshot() { return snap({job: this.working ? {type: 'excavate', runningS: 5} : null, stoppedAgoS: this.stopped === null ? null : Math.round((now - this.stopped) / 1000)}); }, enqueue(type, args) { this.sent.push(type); this.working = true; }};
+    const objectives = [{id: 'room', label: 'room', needs: [], roles: [{count: 1, jobs: [['excavate', {}]]}]}];
+    const plan = new Plan({runners: new Map([['bot11', bot]]), world: new WorldModel({now: () => now}), objectives, roster: ['bot11'], chest: {x: 1, y: 2, z: 3}, now: () => now});
+    plan.setEnabled(true);
+    plan.tick(); now += IDLE_MS; plan.tick();
+    assert.strictEqual(bot.sent.length, 1);
+    now += 6000; plan.tick(); // seen busy
+    bot.working = false; bot.stopped = now; now += 6000; // Stop: idle again, no error
+    plan.tick();
+    assert.strictEqual(plan.completed.has('room'), false, 'a stopped chain does not close the objective');
+    assert.strictEqual([...plan.results.values()].length, 0);
+    now += IDLE_MS; plan.tick(); now += IDLE_MS; plan.tick();
+    assert.strictEqual(bot.sent.length, 2, 'the slot is open again: the next idle bot gets the chain');
+  }
+  { // owner request: the plan stays on across restarts
+    const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+    const {Plan} = require('./plan');
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'mcbots-planon-')), 'plan.json');
+    const mk = () => new Plan({runners: new Map(), world: new WorldModel(), objectives: [{id: 'a', label: 'a', needs: [], roles: []}], roster: [], chest: null, file});
+    const p = mk();
+    assert.strictEqual(p.enabled, false);
+    p.setEnabled(true);
+    assert.strictEqual(mk().enabled, true, 'restored on start');
+    p.setEnabled(false);
+    assert.strictEqual(mk().enabled, false, 'Stop all is remembered too');
+  }
+  { // R6-2 + R6-3: smelting honours Stop after every await, and one bot at a time uses a furnace
+    const {makeCrafting} = require('./crafting');
+    const {Cancelled} = require('./bots');
+    const guard = (job) => { if (job.cancelled) throw new Cancelled('stopped'); };
+    const crafting = makeCrafting({goNear: async () => {}, guard});
+    const world = new WorldModel();
+    const key = 'furnace:0,64,0';
+    const mkFurnace = (log) => ({log, putFuel: async () => log.push('fuel'), putInput: async () => log.push('input'), outputItem: () => ({}), takeOutput: async () => ({count: 3}), close() { log.push('close'); }});
+    const mkRunner = (name, furnace, onOpen = () => {}) => ({name, world, inventoryBusy: 0, protectedAreas: [], bot: {
+      inventory: {items: () => [{name: 'raw_iron', count: 3}, {name: 'coal', count: 2}]},
+      registry: {blocksByName: {furnace: {id: 1}}, itemsByName: {coal: {id: 10}, raw_iron: {id: 11}}},
+      findBlock: () => ({position: new Vec3(0, 64, 0)}),
+      entity: {position: new Vec3(0.5, 64, 0.5)},
+      blockAt: (p) => ({position: p, name: 'furnace'}),
+      openFurnace: async () => { onOpen(); return furnace; },
+    }});
+    // a Stop while the furnace opens: no fuel, no input, window closed, reservation released
+    let log = [];
+    const job = {cancelled: false, t: {}};
+    let r = mkRunner('bot1', mkFurnace(log), () => { job.cancelled = true; });
+    await assert.rejects(crafting.smelt(r, job, 'raw_iron', 3), Cancelled);
+    assert.deepStrictEqual(log, ['close']);
+    assert.strictEqual(r.inventoryBusy, 0);
+    assert.strictEqual(world.claimedByOther('bot2', key), false, 'furnace released');
+    // a Stop between fuel and input
+    log = [];
+    const job2 = {cancelled: false, t: {}};
+    const f2 = mkFurnace(log);
+    f2.putFuel = async () => { log.push('fuel'); job2.cancelled = true; };
+    await assert.rejects(crafting.smelt(mkRunner('bot1', f2), job2, 'raw_iron', 3), Cancelled);
+    assert.deepStrictEqual(log, ['fuel', 'close'], 'the input is not moved after the Stop');
+    // a furnace another bot holds is not opened; a Stop ends the wait
+    world.claim('bot2', key);
+    log = [];
+    const job3 = {cancelled: true, t: {}};
+    r = mkRunner('bot1', mkFurnace(log), () => log.push('opened'));
+    await assert.rejects(crafting.smelt(r, job3, 'raw_iron', 3), Cancelled);
+    assert.deepStrictEqual(log, [], 'never opened');
+    world.release('bot2', key);
+    // a clean smelt holds the furnace for others while it runs and frees it after
+    log = [];
+    let heldWhile = null;
+    r = mkRunner('bot1', mkFurnace(log), () => { heldWhile = world.claim('bot2', key); });
+    await crafting.smelt(r, {cancelled: false, t: {}}, 'raw_iron', 3);
+    assert.strictEqual(heldWhile, false, 'bot2 is refused while bot1 smelts');
+    assert.deepStrictEqual(log, ['fuel', 'input', 'close']);
+    assert.strictEqual(world.claimedByOther('bot2', key), false);
+  }
+  { // R6-7: the 3D panel's level order is one the server accepts, or says why not
+    const html = require('node:fs').readFileSync(require('node:path').join(__dirname, 'public/index.html'), 'utf8');
+    const body = html.slice(html.indexOf('function boxJob('), html.indexOf('const VJOBS'));
+    const boxJob = new Function(`${body}; return boxJob;`)();
+    const box = (y1, y2) => ({x1: 0, z1: 0, x2: 8, z2: 8, y1, y2});
+    const [type, args] = boxJob('level', box(-50, 60), {length: 32, branch: 8});
+    assert.doesNotThrow(() => VALIDATE[type](args));
+    assert.throws(() => boxJob('level', box(-59, 60), {}), /at least -58/);
+    assert.throws(() => boxJob('level', box(10, 10), {}), /at least 2 high/);
+    assert.doesNotThrow(() => VALIDATE.level(boxJob('level', box(-58, -57), {length: 32, branch: 8})[1]));
+  }
+})();

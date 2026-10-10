@@ -4,7 +4,7 @@
 //
 // Like the keeper it is data driven and restart safe: what is done is re-read from the world (chest
 // stock, blocks, bot inventories) and from what the plan itself saw finish, which is kept in
-// STATE_DIR/plan.json. It starts switched off after every restart. It only ever
+// STATE_DIR/plan.json, together with whether it is switched on (it stays on across restarts). It only ever
 //   - gives a job chain to an IDLE roster bot through enqueue(..., {replace: false}),
 //   - or, for a keeper-driven objective, borrows the Keeper (its quotas, the base chest, the roster)
 //     and gives it back when the objective ends, so one scheduler touches idle bots at a time.
@@ -133,6 +133,8 @@ function nextIndex(objectives, idx, ctx) {
 
 // A chain failed if its bot logged an error after the chain was given.
 const failedSince = (s, at, now) => !!s?.lastError && s.lastErrorAgoS != null && now - s.lastErrorAgoS * 1000 >= at;
+// ... and cut short if Stop (or a replacing click) reached its bot since: that is neither a failure nor a finish.
+const stoppedSince = (s, at, now) => s?.stoppedAgoS != null && now - s.stoppedAgoS * 1000 >= at;
 
 // ---- the scheduler ----
 
@@ -184,6 +186,7 @@ class Plan {
     }
     const ids = new Set(this.objectives.map((o) => o.id));
     const known = (list) => (Array.isArray(list) ? list.filter((id) => ids.has(id)) : []);
+    this.enabled = d.enabled === true; // a deploy must not switch the plan off
     this.completed = new Set(known(d.completed));
     this.skipped = new Set(known(d.skipped));
     for (const [id, n] of Object.entries(d.fails || {})) if (ids.has(id) && Number.isInteger(n)) this.fails.set(id, n);
@@ -196,7 +199,7 @@ class Plan {
     this.dirty = false;
     if (!this.file) return;
     const obj = (m) => Object.fromEntries(m);
-    const data = {completed: [...this.completed], skipped: [...this.skipped], fails: obj(this.fails), blocked: obj(this.blocked), assigned: Object.fromEntries([...this.assigned].map(([id, m]) => [id, obj(m)])), results: obj(this.results)};
+    const data = {enabled: this.enabled, completed: [...this.completed], skipped: [...this.skipped], fails: obj(this.fails), blocked: obj(this.blocked), assigned: Object.fromEntries([...this.assigned].map(([id, m]) => [id, obj(m)])), results: obj(this.results)};
     try {
       fs.writeFileSync(`${this.file}.tmp`, JSON.stringify(data));
       fs.renameSync(`${this.file}.tmp`, this.file);
@@ -212,7 +215,7 @@ class Plan {
     this.started.clear(); // the clock for "no progress" runs only while switched on
     if (!this.enabled) this.giveBack();
     this.say(this.enabled ? 'plan on' : 'plan off (bots finish what they are doing; use Stop to end it)');
-    if (this.dirty) this.save();
+    this.save();
   }
 
   find(id) {
@@ -275,7 +278,7 @@ class Plan {
 
   // The chest numbers, only once the keeper works on the plan's chest and a bot has counted it since.
   trustedStock() {
-    const st = this.world.stock;
+    const st = this.world.stockAt(this.chest);
     return this.borrowed && st && st.t >= this.stockFrom ? st : null;
   }
 
@@ -316,6 +319,9 @@ class Plan {
         this.fails.set(o.id, (this.fails.get(o.id) || 0) + 1);
         slots.set(key, {...e, retryAt: t + RETRY_MS, seen: false});
         this.say(`${e.bot} did not finish ${o.id} (${String(s.lastError).slice(0, 80)}); trying again in ${RETRY_MS / 60000} min`);
+      } else if (stoppedSince(s, e.at, t)) {
+        slots.delete(key); // still open: the next idle bot gets the chain again
+        this.say(`${e.bot} was stopped before finishing its part of ${o.id}`);
       } else {
         e.done = true;
         this.results.set(`${o.id}#${key}`, {ok: true, at: t, bot: e.bot});
@@ -397,7 +403,6 @@ class Plan {
     }
     if (!this.borrowed) {
       this.borrowed = {quotas: k.quotas, chest: k.chest, site: k.site, runners: k.runners};
-      this.world.stock = null; // the numbers on file are about another chest
       this.stockFrom = this.now();
       k.site = null;
     }
@@ -414,7 +419,6 @@ class Plan {
     this.borrowed = null;
     k.setEnabled(false);
     Object.assign(k, b);
-    this.world.stock = null;
   }
 
   // ---- for the dashboard ----
@@ -463,4 +467,4 @@ class Plan {
   }
 }
 
-module.exports = {Plan, assignRoles, objectiveDone, nextIndex, slotsOf, strip, MIN_HOLD_MS, RETRY_MS, MAX_FAILS, TIMEOUT_MS};
+module.exports = {failedSince, stoppedSince, Plan, assignRoles, objectiveDone, nextIndex, slotsOf, strip, MIN_HOLD_MS, RETRY_MS, MAX_FAILS, TIMEOUT_MS};

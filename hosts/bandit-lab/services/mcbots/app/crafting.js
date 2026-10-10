@@ -175,26 +175,47 @@ function makeCrafting({goNear, guard}) {
     if (!fuel) throw new Error(`not enough fuel to smelt ${n} (coal, charcoal, planks or logs)`);
     if (job.t) job.t.doing = `smelting ${n} ${input}`;
     const block = await station(r, job, 'furnace', 0);
-    r.inventoryBusy = (r.inventoryBusy || 0) + 1;
-    const furnace = await bot.openFurnace(block).catch((e) => {
-      r.inventoryBusy--;
-      throw e;
-    });
+    // One bot at a time per furnace, across bots and workers (the hub's claims): a second bot waits for it
+    // instead of being starved of the output (Codex R6-3). Re-claimed while smelting (a claim expires in 2 min).
+    const key = `furnace:${block.position.x},${block.position.y},${block.position.z}`;
+    const take = async () => (await r.world?.claim(r.name, key)) !== false;
+    for (const give = Date.now() + 300000; !(await take()); await new Promise((res) => setTimeout(res, 3000))) {
+      guard(job);
+      if (Date.now() > give) throw new Error('the furnace stayed busy for 5 min');
+    }
     try {
-      await furnace.putFuel(bot.registry.itemsByName[fuel].id, null, needOf(fuel));
-      await furnace.putInput(bot.registry.itemsByName[input].id, null, n);
-      let got = 0;
-      const until = Date.now() + n * 12000 + 20000; // 10 s per item plus slack
-      while (got < n) {
+      guard(job);
+      r.inventoryBusy = (r.inventoryBusy || 0) + 1;
+      let furnace;
+      try {
+        furnace = await bot.openFurnace(block);
+      } catch (e) {
+        r.inventoryBusy--;
+        throw e;
+      }
+      try {
+        // A Stop that lands during any of these awaits must not go on to move items (Codex R6-2).
         guard(job);
-        if (Date.now() > until) throw new Error(`furnace stalled after ${got}/${n} (out of fuel?)`);
-        await new Promise((res) => setTimeout(res, 2000));
-        if (furnace.outputItem()) got += (await furnace.takeOutput())?.count || 0;
-        job.progress = `${got}/${n}`;
+        await furnace.putFuel(bot.registry.itemsByName[fuel].id, null, needOf(fuel));
+        guard(job);
+        await furnace.putInput(bot.registry.itemsByName[input].id, null, n);
+        let got = 0, claimed = Date.now();
+        const until = Date.now() + n * 12000 + 20000; // 10 s per item plus slack
+        while (got < n) {
+          guard(job);
+          if (Date.now() > until) throw new Error(`furnace stalled after ${got}/${n} (out of fuel?)`);
+          await new Promise((res) => setTimeout(res, 2000));
+          guard(job);
+          if (Date.now() - claimed > 40000) { claimed = Date.now(); await take(); guard(job); }
+          if (furnace.outputItem()) got += (await furnace.takeOutput())?.count || 0;
+          job.progress = `${got}/${n}`;
+        }
+      } finally {
+        furnace.close();
+        r.inventoryBusy--;
       }
     } finally {
-      furnace.close();
-      r.inventoryBusy--;
+      r.world?.release(r.name, key);
     }
   }
 

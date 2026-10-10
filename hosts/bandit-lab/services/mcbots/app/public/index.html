@@ -871,7 +871,10 @@ function boxJob(type, b, extra) {
   switch (type) {
     case 'excavate': case 'seal': return [type, { ...b }];
     case 'shaft': return [type, { ...flat, top: b.y2, bottom: b.y1 }];
-    case 'level': return [type, { ...flat, top: b.y2, y: b.y1, length: extra.length, branch: extra.branch }];
+    case 'level': // the server wants bottom + 1 <= y <= top - 1, bottom at least -59 (Codex R6-7)
+      if (b.y1 < -58) throw new Error('a level needs y of at least -58 (bedrock below)');
+      if (b.y2 < b.y1 + 1) throw new Error('a level needs room above it: make the box at least 2 high');
+      return [type, { ...flat, top: b.y2, bottom: b.y1 - 1, y: b.y1, length: extra.length, branch: extra.branch }];
     case 'treefarm': case 'wheatfarm': return [type, flat];
     case 'tidy': return [type, { x: Math.round((b.x1 + b.x2) / 2), y: b.y1, z: Math.round((b.z1 + b.z2) / 2), radius: Math.min(32, Math.max(2, Math.ceil(Math.max(b.x2 - b.x1, b.z2 - b.z1) / 2) + 1)) }];
   }

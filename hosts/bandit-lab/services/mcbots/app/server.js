@@ -65,6 +65,7 @@ const places = new Places(process.env.STATE_DIR || '');
 usePlaces(places); // zones: plan-config and the job validators read them from here
 places.seed(planConfig.seedZones()); // first start only
 let supplyChest = cfg.supplyChest;
+const supplyStock = () => (supplyChest ? world.stockAt(supplyChest) : world.stock); // the supply chest's numbers, not the plan's base chest's
 const staticAreas = cfg.protectedAreas.slice();
 function applyPlaces() {
   // 'protected' zones join PROTECTED_AREAS in place: runners and the hub hold this very array.
@@ -79,7 +80,7 @@ function applyPlaces() {
   }
 }
 applyPlaces();
-// The plan (R7): off unless PLAN_ENABLE, and switched off after every restart; what it has done is kept in plan.json.
+// The plan (R7): available only with PLAN_ENABLE; whether it is switched on, and what it has done, is kept in plan.json.
 const plan = cfg.planEnable ? new Plan({runners, world, keeper, places, events, objectives: planConfig.OBJECTIVES, roster: cfg.planRoster, chest: planConfig.BASE.chest, file: process.env.STATE_DIR ? path.join(process.env.STATE_DIR, 'plan.json') : null, log}) : null;
 
 // Long jobs survive a restart (deploys restart the container): every 5 s the
@@ -158,7 +159,7 @@ const sameOrigin = (req) => {
     return false;
   }
 };
-const state = () => ({now: Date.now(), lastEventId: events.lastId, keeper: keeper?.state() || null, plan: plan?.state() || null, bots: [...runners.values()].map((r) => ({...r.snapshot(), settings: settings.get(r.name)})), world: world.snapshot(), protectedAreas: cfg.protectedAreas, supplyChest, places: places.list, projects: projects.view(), chest: world.stock && {warnings: chestWarnings(world.stock.items, world.stock.free)}});
+const state = () => ({now: Date.now(), lastEventId: events.lastId, keeper: keeper?.state() || null, plan: plan?.state() || null, bots: [...runners.values()].map((r) => ({...r.snapshot(), settings: settings.get(r.name)})), world: world.snapshot(), protectedAreas: cfg.protectedAreas, supplyChest, places: places.list, projects: projects.view(), chest: supplyStock() && {warnings: chestWarnings(supplyStock().items, supplyStock().free)}});
 
 function readJson(req) {
   return new Promise((resolve, reject) => {
@@ -528,8 +529,8 @@ const keeperTick = setInterval(() => {
 const alerts = new Alerts({events});
 const alertTick = setInterval(() => {
   try {
-    alerts.checkChest(world.stock);
-    notifier.chest(world.stock, world.stock && chestWarnings(world.stock.items, world.stock.free));
+    alerts.checkChest(supplyStock());
+    notifier.chest(supplyStock(), supplyStock() && chestWarnings(supplyStock().items, supplyStock().free));
     notifier.tick();
     const r = [...runners.values()].find((x) => !(x instanceof RemoteRunner) && x.online && x.bot?.entity && /overworld/.test(x.bot.game?.dimension || ''));
     if (!r || !supplyChest) return;

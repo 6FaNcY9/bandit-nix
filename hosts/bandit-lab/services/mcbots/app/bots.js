@@ -12,7 +12,7 @@ const {Combat, AVOID_FOOD, deathCause} = require('./combat');
 require('./physicsfix');
 const {cacheGetBlock} = require('./pathcache');
 const {BotTrace, SAMPLE_MS, round} = require('./debug');
-const {normDim, deadlineMs, insideAreas, shouldFight} = require('./world');
+const {normDim, deadlineMs, insideAreas, shouldFight, stairRing} = require('./world');
 const {zoneNamed, inZone} = require('./places');
 const buildJob = require('./build');
 const huntJob = require('./hunt');
@@ -72,7 +72,10 @@ const player = (a) => {
 };
 
 // The running and queued jobs of a runner that a restart should bring back; a mine/chop keeps only what is left of its count.
-const keptOf = (r) => [r.current, ...(r.queue || [])].filter((j) => j && !j.cancelled && KEEP.has(j.type)).map((j) => {
+// From the first long job on, the whole rest of the chain goes too (a plan chain's withdraw, craft and place
+// steps queued behind an excavate), or the tail would be lost and the objective close without it (Codex R6-5).
+const tailFrom = (jobs) => { const i = jobs.findIndex((j) => KEEP.has(j.type)); return i < 0 ? [] : jobs.slice(i); };
+const keptOf = (r) => tailFrom([r.current, ...(r.queue || [])].filter((j) => j && !j.cancelled)).map((j) => {
   const args = {...j.args};
   if (args.count && j.collected) args.count = Math.max(1, args.count - j.collected);
   return {type: j.type, args};
@@ -400,10 +403,12 @@ class BotRunner {
   enqueue(type, args = {}, {replace = false} = {}) {
     if (replace && type !== 'stop' && type !== 'remove') {
       this.queue = [];
+      this.stoppedAt = Date.now();
       this.cancel();
     }
     if (type === 'stop') {
       this.queue = [];
+      this.stoppedAt = Date.now(); // the plan must not count a stopped chain as finished (Codex R6-6)
       this.cancel();
       return;
     }
@@ -454,7 +459,7 @@ class BotRunner {
   // Cells no dig may remove, whoever asks (digAt, a walk, the pathfinder): the chest's floor and the
   // stair steps of the running shaft (Codex R4-3, R4-4).
   reserved(x, y, z) {
-    return this.supportsChest(x, y, z) || !!this.keepCells?.has(`${x},${y},${z}`);
+    return this.supportsChest(x, y, z) || !!this.keepCells?.has(`${x},${y},${z}`) || !!this.world?.stepHeldByOther?.(this.name, x, y, z); // ... and every other bot's (Codex R6-1)
   }
 
   async pump() {
@@ -541,6 +546,7 @@ class BotRunner {
       inventory: top.map(([n, c]) => `${n} x${c}`),
       inventoryKinds: top.length,
       lastError: this.lastError,
+      stoppedAgoS: this.stoppedAt ? Math.round((Date.now() - this.stoppedAt) / 1000) : null,
       lastErrorAgoS: this.trace.error ? Math.round((Date.now() - this.trace.error.t) / 1000) : null,
       pullbacks: this.trace.recentCorrections(),
     };
@@ -850,7 +856,7 @@ function guardDigs(runner, bot) {
     if (p && (!live || live.name !== block.name || (block.stateId !== undefined && live.stateId !== block.stateId))) return 'Digging aborted: the block changed';
     // A walk may dig only what the job allows (excavate: natural ground, never its own walls).
     if (runner.digOnly && bot.pathfinder?.isMining?.() && !runner.digOnly.test(block.name)) return `Digging aborted: ${block.name} is not part of the job`;
-    if (p && bot.pathfinder?.isMining?.() && outsideBox(runner.digBox, p)) return 'Digging aborted: a walk may not dig outside the farm';
+    if (p && bot.pathfinder?.isMining?.() && outsideBox(runner.digBox, p)) return 'Digging aborted: a walk may not dig outside the farm or the shaft strip';
     const danger = p && unsafeDig(bot, p); // a fluid next to it, or a drop of more than 3 below the bot
     return danger ? `Digging aborted: ${danger}` : null;
   };
@@ -973,13 +979,13 @@ async function replant(r, pos, logName) {
   if (/_sapling$/.test(bot.blockAt(pos)?.name || '')) r.emit('info', `replanted ${sapling.name} at ${at(pos)}`);
 }
 
-// Report the supply chest's contents to the shared picture (the keeper plans from it).
-const isSupply = (r, c) => !!r.supplyChest && r.supplyChest.x === c.x && r.supplyChest.y === c.y && r.supplyChest.z === c.z;
+// Report a chest's contents, with its coordinates, to the shared picture (the keeper and the plan plan from the
+// observations of their own chest only).
 function noteStock(r, job, chest) {
-  if (!isSupply(r, job.args)) return;
+  const {x, y, z} = job.args;
   const items = {};
   for (const it of chest.containerItems()) items[it.name] = (items[it.name] || 0) + it.count;
-  r.world?.noteStock(r.name, items, Number.isInteger(chest.inventoryStart) ? chest.inventoryStart - chest.containerItems().length : null); // the container's slots minus the stacks in it
+  r.world?.noteStock(r.name, items, Number.isInteger(chest.inventoryStart) ? chest.inventoryStart - chest.containerItems().length : null, {x, y, z}); // the container's slots minus the stacks in it
 }
 // "64 cobblestone, 12 coal, 3 more kinds": what a deposit put in, biggest first (an event is 200 characters).
 function depositList(byName) {
@@ -1086,16 +1092,6 @@ function layerOrder(x1, z1, x2, z2, corner) {
   for (let x = x1; x <= x2; x++) for (let z = z1; z <= z2; z++) cells.push([x, z]);
   const d = ([x, z]) => Math.max(Math.abs(x - cx), Math.abs(z - cz)) * 1000 + Math.abs(x - cx) + Math.abs(z - cz);
   return corner < 0 ? cells : cells.sort((a, b) => d(a) - d(b));
-}
-
-// The edge cells of a box in walking order; layer k of a shaft keeps cell k (mod the ring) as its step.
-function stairRing(x1, z1, x2, z2) {
-  const ring = [];
-  for (let x = x1; x < x2; x++) ring.push({x, z: z1});
-  for (let z = z1; z < z2; z++) ring.push({x: x2, z});
-  for (let x = x2; x > x1; x--) ring.push({x, z: z2});
-  for (let z = z2; z > z1; z--) ring.push({x: x1, z});
-  return ring;
 }
 
 const child = (job, extra = {}) => Object.assign(Object.create(job), {collected: 0, progress: '', ...extra});
@@ -1723,7 +1719,9 @@ const JOBS = {
     if (!block || !/chest|barrel/.test(block.name)) throw new Error(`no chest at ${x} ${y} ${z} (found ${block?.name})`);
     const only = job.args.only && itemMatcher(job.args.only);
     const isFood = (n) => !!bot.registry.foodsByName[n];
-    const eligible = () => bot.inventory.items().filter((it) => (only ? only(it.name) : !(TOOL_RE.test(it.name) || KEEP_RE.test(it.name) || isFood(it.name))));
+    // What a normal deposit files away; `only` (the keeper's coal and torches) puts just that kind into the chest.
+    const junk = () => bot.inventory.items().filter((it) => !(TOOL_RE.test(it.name) || KEEP_RE.test(it.name) || isFood(it.name)));
+    const eligible = () => (only ? bot.inventory.items().filter((it) => only(it.name)) : junk());
     let moved = 0;
     const byName = {};
     // Put items into the open chest; returns the ones that did not fit (the caller decides what a full chest means).
@@ -1744,12 +1742,14 @@ const JOBS = {
       return rest;
     };
     const fullError = () => new Error(`chest full or deposit failed after ${moved} items: ${job.lastFull}`);
-    // Storage roles: at the base chest, junk goes to the storage-room chests (see storage.js).
-    const rooms = !only && storage.sameXYZ(job.args, planConfig.BASE.chest)
+    // Storage roles: at the base chest, junk goes to the storage-room chests (see storage.js). An `only` deposit
+    // there too: a base chest full of junk must still take the coal (Codex R6-4).
+    const atBase = storage.sameXYZ(job.args, planConfig.BASE.chest);
+    const rooms = atBase
       ? planConfig.BASE.roomChests.filter((c) => bot.blockAt(new Vec3(c.x, c.y, c.z))?.name === 'chest') : [];
     // The storage hall (storage-layout.js): its chests that exist, else the old behaviour.
     const isChest = (c) => bot.blockAt(new Vec3(c.x, c.y, c.z))?.name === 'chest';
-    const hall = !only && storage.sameXYZ(job.args, planConfig.BASE.chest) ? layout.SLOTS.filter(isChest) : [];
+    const hall = atBase ? layout.SLOTS.filter(isChest) : [];
     let chest = await openChest(r, job, block);
     try {
       if (!rooms.length && !hall.length) {
@@ -1758,7 +1758,13 @@ const JOBS = {
         noteStock(r, job, chest);
         return;
       }
-      await fill(chest, eligible().filter((it) => storage.storeFor(it.name, isFood) === 'base'));
+      if (only) {
+        if (!(await fill(chest, eligible())).length) { // it fits: nothing to make room for
+          r.emit('deposit', `deposited ${depositList(byName)} at ${place(r, job.args)}`);
+          noteStock(r, job, chest);
+          return;
+        }
+      } else await fill(chest, junk().filter((it) => storage.storeFor(it.name, isFood) === 'base'));
       // One-off tidy-up: carry up to 9 stacks of junk already in the base chest to the rooms too.
       let carried = 0;
       for (const it of chest.containerItems()) {
@@ -1769,9 +1775,9 @@ const JOBS = {
       noteStock(r, job, chest);
       chest.close();
       chest = null;
-      if (hall.length) await fileToHall(r, job, {fill, left: eligible, isFood, hall});
+      if (hall.length) await fileToHall(r, job, {fill, left: junk, isFood, hall});
       for (const c of rooms) {
-        const left = eligible();
+        const left = junk();
         if (!left.length) break;
         try {
           await goNear(r, job, c.x, c.y, c.z, 3, {doing: `walking to the storage room chest at ${at(c)}`});
@@ -1785,7 +1791,9 @@ const JOBS = {
           chest = null;
         }
       }
-      if (eligible().length) { // the rooms are full or unreachable: the base chest takes the rest
+      // The rooms are full or unreachable: the base chest takes the rest. With `only`, that is the coal that
+      // did not fit before (the junk carried out stays with the bot, never goes back in).
+      if (only ? eligible().length : junk().length) {
         await goNear(r, job, x, y, z, 3, {doing: `walking back to ${place(r, job.args)} to deposit`});
         chest = await openChest(r, job, bot.blockAt(new Vec3(x, y, z)));
         const rest = await fill(chest, eligible());
@@ -2039,6 +2047,14 @@ const JOBS = {
     job.t.total = top - bottom + 1;
     // Walking (the pathfinder digs natural ground) must not remove the steps left standing (Codex R4-4).
     r.keepCells = new Set(Array.from({length: top - bottom + 1}, (_, i) => { const k = ring[i % ring.length]; return `${k.x},${top - i},${k.z}`; }));
+    // ... and the other bots' navigation must not either: hold the strip as two shared claims for the whole job
+    // (refreshed under the claim TTL), and let this bot's walks dig only inside its own strip (Codex R6-1).
+    // The plan cuts one shaft into strips; the cells outside this strip belong to a neighbour.
+    const held = [`shaft:${x1},${top},${z1}`, `shaftend:${x2},${bottom},${z2}`];
+    const hold = () => { for (const k of held) Promise.resolve(r.world?.claim(r.name, k)).catch(() => {}); };
+    hold();
+    const refresh = setInterval(hold, 45000);
+    r.digBox = {x1, z1, x2, z2};
     try {
       for (let y = top; y >= bottom; y--) {
         const keep = ring[(top - y) % ring.length];
@@ -2072,6 +2088,9 @@ const JOBS = {
       }
     } finally {
       r.keepCells = null;
+      r.digBox = null;
+      clearInterval(refresh);
+      for (const k of held) r.world?.release(r.name, k);
     }
     if (skipped) throw new Error(`the shaft reached y ${bottom} but ${skipped} blocks were left (unsafe, unreachable or not loaded)`);
   },
@@ -2176,4 +2195,4 @@ const JOBS = {
   },
 };
 
-module.exports = {lightUp, shaftTorchDue, rimTorchDue, explore, layerOrder, stairRing, BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest, guardDigs, safeMovements, tossJunk, NATURAL, partnerOf, depositList};
+module.exports = {tailFrom, lightUp, shaftTorchDue, rimTorchDue, explore, layerOrder, stairRing, BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest, guardDigs, safeMovements, tossJunk, NATURAL, partnerOf, depositList};

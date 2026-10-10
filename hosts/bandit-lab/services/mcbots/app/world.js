@@ -41,6 +41,16 @@ function parsePlayers(json, dim) {
 
 const CLAIM_TTL_MS = 120000;
 
+// The cells of a shaft's staircase, clockwise along the walls of x1..x2 / z1..z2.
+function stairRing(x1, z1, x2, z2) {
+  const ring = [];
+  for (let x = x1; x < x2; x++) ring.push({x, z: z1});
+  for (let z = z1; z < z2; z++) ring.push({x: x2, z});
+  for (let x = x2; x > x1; x--) ring.push({x, z: z2});
+  for (let z = z2; z > z1; z--) ring.push({x: x1, z});
+  return ring;
+}
+
 class WorldModel {
   constructor({now = Date.now} = {}) {
     this.now = now;
@@ -52,12 +62,21 @@ class WorldModel {
     this.tally = new Map(); // bot -> {granted, refused, timedOut}: shown in /api/debug
     this.chests = new Map(); // storage index: "x,y,z" (smaller half of a double) -> {items: {name: count}, free, t}; fed by openChest()
     this.chestFile = null;
-    this.stock = null; // what a bot last saw in the supply chest: {items: {name: count}, by, free (empty slots or null), t}
+    this.stock = null; // what a bot last saw in any chest it counted: {items: {name: count}, by, free (empty slots or null), chest, t}
+    this.stocks = new Map(); // "x,y,z" (or "" with no coordinates) -> the same, per chest: the keeper and the plan read only their own
   }
 
-  // A bot that opened the supply chest reports its contents; the keeper plans from this.
-  noteStock(by, items, free = null) {
-    this.stock = {items, by, free, t: this.now()};
+  // A bot that opened a chest reports its contents with the chest's coordinates (Codex R6-4: the plan's base
+  // chest is not the supply chest, and one chest's numbers must not stand for the other's).
+  noteStock(by, items, free = null, chest = null) {
+    const c = chest && [chest.x, chest.y, chest.z].every(Number.isInteger) ? {x: chest.x, y: chest.y, z: chest.z} : null;
+    this.stock = {items, by, free, chest: c, t: this.now()};
+    this.stocks.set(c ? `${c.x},${c.y},${c.z}` : '', this.stock);
+  }
+
+  // What was last seen in this chest (an observation without coordinates counts for any chest: older callers and tests).
+  stockAt(chest) {
+    return (chest && this.stocks.get(`${chest.x},${chest.y},${chest.z}`)) || this.stocks.get('') || null;
   }
 
   // The storage index (survives restarts: STATE_DIR/chests.json, written at most every 5 s).
@@ -118,6 +137,24 @@ class WorldModel {
 
   claimStats(by) {
     return {...(this.tally.get(by) || {granted: 0, refused: 0, timedOut: 0})};
+  }
+
+  // Shaft strips are claimed for the whole job as two keys, `shaft:x1,top,z1` and `shaftend:x2,bottom,z2`
+  // (the hub's key format); another bot's stair steps stay standing wherever it digs (Codex R6-1).
+  stepHeldByOther(by, x, y, z) {
+    const t = this.now();
+    for (const [k, c] of this.claims) {
+      if (c.by === by || !k.startsWith('shaft:') || t - c.t >= CLAIM_TTL_MS) continue;
+      const [x1, top, z1] = k.slice(6).split(',').map(Number);
+      const endKey = [...this.claims].find(([e, v]) => e.startsWith('shaftend:') && v.by === c.by)?.[0];
+      if (!endKey) continue;
+      const [x2, bottom, z2] = endKey.slice(9).split(',').map(Number);
+      if (x < x1 || x > x2 || z < z1 || z > z2 || y < bottom || y > top || (x !== x1 && x !== x2 && z !== z1 && z !== z2)) continue;
+      const ring = stairRing(x1, z1, x2, z2);
+      const step = ring[(top - y) % ring.length];
+      if (step.x === x && step.z === z) return true;
+    }
+    return false;
   }
 
   release(by, key) {
@@ -206,7 +243,7 @@ class WorldModel {
       mobs: [...this.mobs.values()].map(age),
       blocks: [...this.blocks.values()].map(age),
       claims: [...this.claims].map(([key, c]) => ({key, by: c.by})),
-      stock: this.stock && {items: this.stock.items, by: this.stock.by, free: this.stock.free, age: Math.round((t - this.stock.t) / 1000)}, // the supply chest as last seen
+      stock: this.stock && {items: this.stock.items, by: this.stock.by, free: this.stock.free, ...(this.stock.chest ? {chest: this.stock.chest} : {}), age: Math.round((t - this.stock.t) / 1000)}, // the supply chest as last seen
     };
   }
 }
@@ -242,4 +279,4 @@ function startBlueMap(world, baseUrl, log, fetchFn = fetch) {
   return () => clearInterval(timer);
 }
 
-module.exports = {CLAIM_TTL_MS, WorldModel, startBlueMap, parsePlayers, isHostile, shouldFight, normDim, deadlineMs, insideAreas, NOTABLE_BLOCKS, MAPS, MOB_TTL_MS, MAX_MOBS, MAX_BLOCKS, NO_FIGHT};
+module.exports = {CLAIM_TTL_MS, stairRing, WorldModel, startBlueMap, parsePlayers, isHostile, shouldFight, normDim, deadlineMs, insideAreas, NOTABLE_BLOCKS, MAPS, MOB_TTL_MS, MAX_MOBS, MAX_BLOCKS, NO_FIGHT};

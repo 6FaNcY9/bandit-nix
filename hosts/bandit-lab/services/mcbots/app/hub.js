@@ -14,7 +14,7 @@
 const crypto = require('node:crypto');
 const http = require('node:http');
 const {WebSocketServer} = require('ws');
-const {NAME_RE, VALIDATE, KEEP} = require('./bots');
+const {NAME_RE, VALIDATE, KEEP, tailFrom} = require('./bots');
 const {clean: cleanEvent} = require('./events');
 
 const PROTOCOL = 1;
@@ -67,19 +67,20 @@ function cleanSnapshot(s) {
     inventoryKinds: int(s.inventoryKinds),
     lastError: str(s.lastError, 300),
     lastErrorAgoS: num(s.lastErrorAgoS),
+    stoppedAgoS: num(s.stoppedAgoS),
     pullbacks: int(s.pullbacks),
   };
 }
 
 // The jobs a worker's bot would want back after a restart, re-validated like any job (the hub saves them).
 function cleanKept(v) {
-  return list(v, 20, (j) => {
+  return tailFrom(list(v, 20, (j) => {
     try {
-      return KEEP.has(j?.type) ? {type: j.type, args: VALIDATE[j.type](obj(j.args) || {})} : null;
+      return Object.hasOwn(VALIDATE, j?.type) ? {type: j.type, args: VALIDATE[j.type](obj(j.args) || {})} : null;
     } catch {
       return null;
     }
-  }).filter(Boolean);
+  }).filter(Boolean));
 }
 
 function cleanDebug(d) {
@@ -489,7 +490,8 @@ class Hub {
     const st = obj(m.stock);
     if (st) {
       const items = Object.fromEntries(Object.entries(obj(st.items) || {}).slice(0, 80).filter(([k, v]) => BLOCK_RE.test(k) && Number.isInteger(v) && v >= 0).map(([k, v]) => [k, Math.min(v, 1e6)]));
-      this.world.noteStock(by(st.by), items, Number.isInteger(st.free) && st.free >= 0 && st.free <= 54 ? st.free : null);
+      const c = obj(st.chest);
+      this.world.noteStock(by(st.by), items, Number.isInteger(st.free) && st.free >= 0 && st.free <= 54 ? st.free : null, c && [c.x, c.y, c.z].every(Number.isInteger) ? {x: c.x, y: c.y, z: c.z} : null);
     }
   }
 
