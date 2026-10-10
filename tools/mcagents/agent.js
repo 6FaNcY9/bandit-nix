@@ -374,12 +374,16 @@ const noteSent = (agent, job, blueprint) => {
   const key = jobKey(job[0], job[1] || {});
   if (key) agent.sent.set(key, [...(agent.sent.get(key) || []), jobName(job[0], job[1], blueprint)]);
 };
+const DONE_MAX = 200; // the prompt shows 8; ponytail: a part finished longer ago than this may be built again
 const noteFinished = (agent, text) => {
   const key = eventKey(text);
-  const name = key && agent.sent.get(key)?.shift();
+  const pending = key && agent.sent.get(key);
+  const name = pending?.shift();
+  if (pending && !pending.length) agent.sent.delete(key); // no empty key stays behind
   if (name && text.startsWith('finished')) {
     agent.done.delete(name); // newest last
     agent.done.add(name);
+    if (agent.done.size > DONE_MAX) agent.done.delete(agent.done.values().next().value);
   }
 };
 
@@ -772,4 +776,4 @@ if (require.main === module) main().catch((e) => {
   process.exit(1);
 });
 
-module.exports = {SAMPLING, decide, Agent, workersOf, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished};
+module.exports = {SAMPLING, decide, Agent, workersOf, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished, alreadyDone};

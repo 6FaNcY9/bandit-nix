@@ -2,7 +2,7 @@
 // node tools/mcagents/agent.test.js — the Mindcraft command translator.
 const assert = require('node:assert');
 process.env.LOG ||= require('node:path').join(require('node:os').tmpdir(), `mcagents-test-${process.pid}.jsonl`); // decide() logs every model call
-const {decide, Agent, workersOf, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished} = require('./agent');
+const {decide, Agent, workersOf, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished, alreadyDone} = require('./agent');
 
 assert.deepStrictEqual(parseCommand('Sure! !collectBlocks("oak_log", 10)'), {name: 'collectBlocks', args: ['oak_log', 10]});
 assert.deepStrictEqual(parseCommand("Bye! !endConversation('john')"), {name: 'endConversation', args: ['john']});
@@ -178,6 +178,16 @@ assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}
   fm.done.delete('built wall-b at 0 70 0');
   noteFinished(fm, 'finished: excavate -272 58 -219 -266 61 -213 (50 s)');
   assert.match(baseLine(fm, state), /Already done: built base-hall at -272 65 -219; dug room -272 58 -219 7x7x4\./);
+  { // completed rooms are bounded and leave no empty pending keys (Codex R4-7)
+    const big = new Agent('bot1', 'g', null);
+    for (let i = 0; i < 1000; i++) {
+      noteSent(big, ['excavate', {x1: i, y1: 60, z1: 0, x2: i, y2: 60, z2: 0}]);
+      noteFinished(big, `finished: excavate ${i} 60 0 ${i} 60 0 (1 s)`);
+    }
+    assert.strictEqual(big.sent.size, 0, 'drained keys are deleted');
+    assert.ok(big.done.size <= 200 && big.done.size >= 100, `done is bounded: ${big.done.size}`);
+    assert.match(alreadyDone(big, ['excavate', {x1: 999, y1: 60, z1: 0, x2: 999, y2: 60, z2: 0}]) || '', /Refused: already done/, 'the recent ones still refuse a repeat');
+  }
   const prompt = fm.system(state, state.bots[0]);
   assert.ok(prompt.includes('BASE: chest (lowest first) coal 12, cobblestone 64') && prompt.includes('YOUR WORKERS') && !prompt.includes('!collectBlocks:') && !prompt.includes('!startShift:'));
   assert.ok(!new Agent('bot9', 'g', null).system(state, state.bots[0]).includes('BASE:'), 'only a foreman has the base line');
