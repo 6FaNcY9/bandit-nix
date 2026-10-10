@@ -43,10 +43,21 @@ function Write-Log($message) {
     if ((Test-Path $log) -and (Get-Item $log).Length -ge 5MB) { Move-Item $log "$log.1" -Force }
     Add-Content $log "$(Get-Date -Format o) port=$port $message"
 }
-function Servers {
+$pidFile = "$base\watch-$port.pid"
+$session = (Get-Process -Id $PID).SessionId
+function Listeners {
+    # Enumerate first: querying an unused LocalPort reports an error, not an empty list.
+    @(Get-NetTCPConnection -State Listen -ErrorAction Stop | Where-Object { $_.LocalPort -eq $port })
+}
+function Servers($listeners) {
+    $record = $null
+    if (Test-Path $pidFile) { $record = Get-Content $pidFile -Raw | ConvertFrom-Json }
     @(Get-CimInstance Win32_Process -Filter "Name='llama-server.exe'" | Where-Object {
         $_.ExecutablePath -eq "$base\llama\llama-server.exe" -and
-        $_.CommandLine -match "--port\s+$port(?:\s|$)"
+        ((($_.SessionId -eq $session) -and $_.CommandLine -match "--port\s+$port(?:\s|$)") -or
+         ($listeners.OwningProcess -contains $_.ProcessId) -or
+         ($record -and $_.ProcessId -eq $record.ProcessId -and
+          $_.CreationDate.ToString('o') -eq $record.CreationDate))
     })
 }
 function Busy {
@@ -90,16 +101,25 @@ try {
             $reason = Busy
         } catch { $reason = "probe failed: $($_.Exception.Message)" }
         try {
-            $servers = Servers
+            $listeners = @(Listeners)
+            $servers = @(Servers $listeners)
             if ($reason) {
                 foreach ($server in $servers) {
                     Stop-Process -Id $server.ProcessId -ErrorAction Stop
                     Write-Log "stopped PID $($server.ProcessId): $reason"
                 }
-            } elseif (-not $servers.Count) {
+                foreach ($listener in $listeners) {
+                    if ($servers.ProcessId -notcontains $listener.OwningProcess) {
+                        Write-Log "left listener PID $($listener.OwningProcess): not ours to stop ($reason)"
+                    }
+                }
+            } elseif (-not $listeners.Count -and -not $servers.Count) {
                 $env:LLAMA_ARG_CHAT_TEMPLATE_KWARGS = '{"enable_thinking":false}'
                 $arguments = "--model $base\models\andy.gguf --alias andy-4.2-baseline --host 127.0.0.1 --port $port --jinja --ctx-size 8192 --parallel 1 --n-gpu-layers $layers --temp 0.6 --top-k 20 --top-p 0.95 --min-p 0 --repeat-penalty 1.0"
                 $server = Start-Process "$base\llama\llama-server.exe" -ArgumentList $arguments -WorkingDirectory "$base\llama" -WindowStyle Hidden -PassThru -RedirectStandardOutput "$base\watch-$port.out.log" -RedirectStandardError "$base\watch-$port.err.log"
+                # Creation time prevents a stale PID file from authorizing a reused PID.
+                $started = Get-CimInstance Win32_Process -Filter "ProcessId=$($server.Id)"
+                @{ ProcessId = $server.Id; CreationDate = $started.CreationDate.ToString('o') } | ConvertTo-Json | Set-Content $pidFile
                 Write-Log "started PID $($server.Id)"
             }
         } catch { Write-Log "error: $($_.Exception.Message)" }

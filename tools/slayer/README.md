@@ -12,7 +12,13 @@ Light games listed one per line in `C:\bandit-ai\light-games.txt` (`#` lines and
 blank lines ignored) never count as games and skip the fullscreen rule while
 focused; `isaac-ng.exe` and `isaac.exe` are built in. The existing
 Andy flags and loopback port 8081 are preserved; only matching bandit-ai server
-PIDs are stopped. Logs rotate `watch.log` at 5 MiB to `watch.log.1`.
+PIDs are stopped. Any listening socket on the configured port prevents a second
+launch, even when another session's process command line cannot be read. While a
+child is loading, `watch-$port.pid` records its PID and creation time. A stop
+requires the exact executable path plus either a matching listener PID, a
+matching command line in the watcher's session, or that recorded identity.
+Unidentified listeners are logged and left running when busy. Logs rotate
+`watch.log` at 5 MiB to `watch.log.1`.
 
 Install from **yassi's interactive PowerShell**, without elevation, after copying
 watch.ps1 to C:\bandit-ai (do not start it while a replay needs the server):
@@ -45,6 +51,13 @@ processes at session end). `TestPort` cannot be 8081. The fake GPU value does no
 bypass the game/fullscreen checks. Without test parameters the server uses GPU
 layers 99, exactly as run.bat does. Interactive fullscreen checks require the
 interactive logon task; an SSH one-shot cannot validate another desktop session.
+
+`test-watch.ps1` checks listener and process ownership with mocked CIM results.
+`test-watch-live.ps1`, beside the watcher on Slayer, checks duplicate suppression,
+idle start and busy stop on CPU-only port 28083, preserving the healthy port-8081
+server. Run with `powershell -NoProfile -ExecutionPolicy Bypass -File <test>` in
+an idle session; the live test requires port 28083 to be free and cleans up its
+own listener and child.
 
 ## Lab setup (owner only)
 
