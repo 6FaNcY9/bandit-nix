@@ -10,7 +10,8 @@ Battle.net, Riot) do not stop inference; their installed games do, by name or
 games installed outside those paths.
 Light games listed one per line in `C:\bandit-ai\light-games.txt` (`#` lines and
 blank lines ignored) never count as games and skip the fullscreen rule while
-focused; `isaac-ng.exe` and `isaac.exe` are built in. The existing
+focused; `isaac-ng.exe`, `isaac.exe` and Wallpaper Engine (`wallpaper64.exe`,
+`wallpaper32.exe`, which lives under `steamapps\common`) are built in. The existing
 Andy flags and loopback port 8081 are preserved; only matching bandit-ai server
 PIDs are stopped. Any listening socket on the configured port prevents a second
 launch, even when another session's process command line cannot be read. While a
