@@ -56,6 +56,10 @@ Candidate image, resolved from the public GHCR `server-cuda` manifest on
 ghcr.io/ggml-org/llama.cpp@sha256:e3f1cdbb7bd8c4d64df34e97336f2b56f67735fb988e074280805b587179f874
 ```
 
+Resolved via the GHCR pull-token endpoint and registry V2
+`/v2/ggml-org/llama.cpp/manifests/server-cuda`, selecting its linux/amd64
+manifest; the image config identifies b11515, source revision
+`3d65c90d04d337e88f2b1f7f0061f40a5324e662` and `/app/llama-server` entrypoint.
 The multi-platform index was
 `sha256:ccfd96bb2aba4ef77e3df656d713ce85bf3c6a886d7974243127c5ad66ca6d2a`.
 Record `llama-server --version`, image labels/source revision and `--help` before
@@ -65,53 +69,68 @@ choose and record another digest, not silently follow a moving tag.
 See [official server documentation](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md)
 and [image versions](https://github.com/ggml-org/llama.cpp/pkgs/container/llama.cpp).
 
-Future runtime staging, outside the Nix closure:
+### Enable and replay the optional module
+
+`hosts/bandit-lab/services/llamacpp/default.nix` is imported alongside Ollama.
+`bandit-lab.llamacpp.enable` defaults to **false**; the owner enables it after
+review. These are future, authorized lab operations, not build checks.
+Ollama remains the production backend and its configuration is unchanged.
+
+Ollama deletes `/var/lib/ollama-import/andy.gguf` after copying it into its blob
+store. Restage the exact pinned bytes before enabling llama.cpp, outside the
+Nix closure. If `andy.gguf` already exists, verify its checksum and reuse it;
+do not replace a file while llama.cpp is running. With llama.cpp stopped:
 
 ```bash
-sudo install -d -m 0700 /var/lib/llama-models
-sudo curl -fL --retry 3 -o /var/lib/llama-models/andy-4.2.q4_k_m.gguf.part \
+set -euo pipefail
+sudo install -d -m 0700 /var/lib/ollama-import
+sudo curl -fL --retry 3 -o /var/lib/ollama-import/andy.gguf.part \
   https://huggingface.co/Mindcraft-CE/Andy-4.2-GGUF/resolve/d3efcb8137c88cd3c23466ddabf985ea59b52fdf/andy-4.2.q4_k_m.gguf
-echo '3cfccaa17be8d2ded998fab8bd4b7032f91f2a916ac2aa03a412908342228eb1  /var/lib/llama-models/andy-4.2.q4_k_m.gguf.part' | sudo sha256sum -c
-sudo mv /var/lib/llama-models/andy-4.2.q4_k_m.gguf.part /var/lib/llama-models/andy-4.2.q4_k_m.gguf
+echo '3cfccaa17be8d2ded998fab8bd4b7032f91f2a916ac2aa03a412908342228eb1  /var/lib/ollama-import/andy.gguf.part' | sudo sha256sum -c
+sudo mv /var/lib/ollama-import/andy.gguf.part /var/lib/ollama-import/andy.gguf
 ```
 
-Keep the staging directory root-owned, no container writes, verify existing
-files before reuse and never overwrite an active model. Derived models get
-versioned filenames and separate checksums. A future oneshot download/import
-unit must fail on bad hashes and order the container after verified staging.
+Run staging with shell error checking (`set -euo pipefail`); never rename after
+a failed download/hash check. The container mounts this root-owned directory
+read-only at `/import`. There is no automatic downloader. A fresh Ollama import
+can remove this file, so finish that import before staging. Optional vision:
+place a separately verified compatible projector in the same directory and set
+`bandit-lab.llamacpp.mmproj = "/import/mmproj.gguf";`; it defaults to `null`.
 
-Proposed owning module shape, reusing the existing Docker/CDI arrangement:
+Add `bandit-lab.llamacpp.enable = true;` to the host configuration and build it
+before the owner's normal deployment procedure. The container uses CDI,
+8192 context, one slot, the embedded GGUF Jinja template, thinking off and the
+same sampling as `tools/mcagents/agent.js`.
+Only `127.0.0.1:8081` is published; no firewall port is added. Other containers
+may still reach its bridge interface; restrict bridge access for durable use.
+See [official server flags and endpoints](https://github.com/ggml-org/llama.cpp/blob/3d65c90d04d337e88f2b1f7f0061f40a5324e662/tools/server/README.md).
 
-```nix
-hardware.nvidia-container-toolkit.enable = true;
-virtualisation.oci-containers.containers.llama-andy = {
-  image = "ghcr.io/ggml-org/llama.cpp@sha256:e3f1cdbb7bd8c4d64df34e97336f2b56f67735fb988e074280805b587179f874";
-  ports = [ "127.0.0.1:11435:8080" ];
-  volumes = [ "/var/lib/llama-models:/models:ro" ];
-  cmd = [
-    "--model" "/models/andy-4.2.q4_k_m.gguf"
-    "--alias" "andy-4.2-baseline"
-    "--host" "0.0.0.0" "--port" "8080"
-    "--jinja" "--chat-template-kwargs" ''{"enable_thinking":false}''
-    "--ctx-size" "8192" "--parallel" "1" "--n-gpu-layers" "99"
-    "--temp" "0.6" "--top-k" "20" "--top-p" "0.95"
-    "--min-p" "0" "--repeat-penalty" "1.0"
-  ];
-  extraOptions = [ "--device=nvidia.com/gpu=all" "--security-opt=no-new-privileges" ];
-};
-systemd.services.docker-llama-andy = {
-  after = [ "nvidia-container-toolkit-cdi-generator.service" ];
-  wants = [ "nvidia-container-toolkit-cdi-generator.service" ];
-};
+Both models may not fit on one GPU. Run the frozen replay sequentially on the
+lab (repository checkout and Node required); the harness sends no bot actions.
+Finish the Ollama run first, then stop its consumer so it cannot reload the
+model. If enabling starts llama.cpp too early, stop it before the Ollama run:
+
+```bash
+sudo systemctl stop docker-llamacpp
+node tools/mcagents/replay.js run replay.jsonl --endpoint http://127.0.0.1:11434 --api ollama --model andy-4.2 --seed 11 > ollama-11.jsonl
+sudo systemctl stop mcagents docker-ollama
+sudo systemctl start docker-llamacpp
+curl --fail http://127.0.0.1:8081/health
+curl --fail http://127.0.0.1:8081/v1/models
+node tools/mcagents/replay.js run replay.jsonl --endpoint http://127.0.0.1:8081 --api openai --model andy-4.2-baseline --seed 11 > llamacpp-11.jsonl
+node tools/mcagents/replay.js compare ollama-11.jsonl llamacpp-11.jsonl > comparison-11.json
 ```
 
-Container listens on its interface; **only host loopback is published**. No
-host networking, LAN/tailnet port or privileged container. Restrict other
-containers' bridge access too if this becomes a durable deployment. The GGUF
-is a host runtime volume, never `builtins.path`, `fetchurl` in a system
-derivation, an image layer, or a Cachix artifact. Use the existing
-[NVIDIA CDI](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/cdi-support.html)
-generator; do not mix the legacy NVIDIA runtime hook with CDI.
+Wait for `/health` to return HTTP 200 (503 means loading) and confirm
+`andy-4.2-baseline` in `/v1/models` before replay. Use the same frozen prompts
+and seeds for both backends; repeat for seeds 22 and 33 as below. Inspect
+per-row errors and the human goal-consistency rubric before judging a winner.
+Do not point production `agent.js` at this URL: its transport is Ollama-only.
+
+Rollback: stop `docker-llamacpp`, start `docker-ollama`, confirm Ollama's
+`/api/tags` contains `andy-4.2`, then restart `mcagents`. Set
+`bandit-lab.llamacpp.enable = false;` and deploy through the normal owner
+procedure to keep it off across boots. Preserve model files and replay results.
 
 `--jinja` uses `tokenizer.chat_template` embedded in the GGUF; do not pass a
 generic `--chat-template` override. Inspect metadata and tokenizer template,
@@ -158,8 +177,8 @@ recovery actions). Sidecar `manifest.json` pins dataset hash, source revision,
 model/GGUF/image hashes, sampling, seeds and templates. Never call `/api/job`
 from the replay harness: validate through pure parser/translation fixtures.
 
-Request-file examples for one frozen row (repeat for every row/seed; `jq` and
-`curl` are existing tools; no replay helper has been implemented):
+Request-file examples for one frozen row (`replay.js` automates the paired
+runs above; these show the equivalent payloads):
 
 ```bash
 jq -s '.[0].messages' replay.jsonl > messages.json
@@ -167,7 +186,7 @@ jq -n --slurpfile m messages.json '{model:"andy-4.2",messages:$m[0],stream:false
 curl --fail-with-body -sS --max-time 180 http://127.0.0.1:11434/api/chat \
   -H 'Content-Type: application/json' --data-binary @ollama-request.json > ollama-response.json
 jq -n --slurpfile m messages.json '{model:"andy-4.2-baseline",messages:$m[0],stream:false,max_tokens:512,seed:11,temperature:0.6,top_k:20,top_p:0.95,min_p:0,repeat_penalty:1.0,chat_template_kwargs:{enable_thinking:false}}' > llama-request.json
-curl --fail-with-body -sS --max-time 180 http://127.0.0.1:11435/v1/chat/completions \
+curl --fail-with-body -sS --max-time 180 http://127.0.0.1:8081/v1/chat/completions \
   -H 'Content-Type: application/json' --data-binary @llama-request.json > llama-response.json
 ```
 
@@ -549,5 +568,5 @@ This runbook proposes formats, commands, gates and deployment shape. Upstream
 pages were checked; repository logging, templates, event retention and service
 wiring were inspected. No live logs, replay metrics, GPU memory benchmark,
 training duration, model export or container runtime compatibility was tested.
-The first implementation should deliver capture/sanitization and paired replay;
+Capture/sanitization and paired replay are implemented in `tools/mcagents/replay.js`;
 training is justified only after serving is stable and reviewed data exists.
