@@ -386,7 +386,7 @@ class BotRunner {
     if (!this.online && this.queue[0].resume) return; // resumed jobs wait for the reconnect
     const job = (this.current = this.queue.shift());
     job.status = 'running';
-    this.digOnly = job.type === 'excavate' ? NATURAL : null; // the walk to the room may dig natural ground only (Codex R3-1)
+    this.digOnly = job.type === 'excavate' || job.type === 'shaft' ? NATURAL : null; // the walk to the room may dig natural ground only (Codex R3-1)
     job.startedAt = Date.now();
     job.progress = '';
     job.t = {doing: '', done: 0, total: 0, open: false}; // live detail; sub-jobs share it through the prototype
