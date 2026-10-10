@@ -1,4 +1,5 @@
-# Private bot notifications; only Tailscale Serve exposes the loopback listener.
+# Private bot notifications: Tailscale Serve exposes it to the tailnet (8447); the bots
+# container reaches it over its Docker network, the only other source the firewall admits.
 {
   config,
   lib,
@@ -8,13 +9,19 @@
 }: let
   url = "https://${repoConfig.lab.tailnetFqdn}:8447";
   credentials = "/var/lib/mcbots/ntfy";
+  # The mcbots Docker network (minecraft/default.nix mcbotsSubnet) and its host-side gateway.
+  botsSubnet = "10.250.77.0/29";
+  botsGateway = "10.250.77.1";
+  port = 2586;
 in {
   services.ntfy-sh = {
     enable = true;
     environmentFile = "${credentials}/server.env";
     settings = {
       base-url = url;
-      listen-http = "127.0.0.1:2586";
+      # All addresses, because the bridge gateway exists only once Docker made the
+      # network; the firewall below admits the bots' subnet and nothing else (owner OK 2026-10-10).
+      listen-http = "0.0.0.0:${toString port}";
       auth-file = "/var/lib/ntfy-sh/user.db";
       auth-default-access = "deny-all";
       auth-access = ["mcbots:mcbots:wo" "phone:mcbots:ro"];
@@ -61,11 +68,15 @@ in {
     serviceConfig.StateDirectoryMode = "0700";
   };
 
-  # The Docker hub publishes via Serve, because host loopback is not its loopback.
+  networking.firewall.extraCommands = "iptables -A nixos-fw -s ${botsSubnet} -p tcp --dport ${toString port} -j nixos-fw-accept";
+  networking.firewall.extraStopCommands = "iptables -D nixos-fw -s ${botsSubnet} -p tcp --dport ${toString port} -j nixos-fw-accept || true";
+
+  # The Docker hub publishes to the gateway: host loopback is not its loopback, and the
+  # tailnet address is firewalled off from the bridge (nothing reached the phone before).
   # Worker containers receive neither the ntfy token nor this environment file.
   virtualisation.oci-containers.containers.mcbots = lib.mkIf config.bandit-lab.mcbots.enable {
     environment = {
-      NTFY_URL = url;
+      NTFY_URL = "http://${botsGateway}:${toString port}";
       NTFY_TOPIC = "mcbots";
     };
     environmentFiles = ["${credentials}/publisher.env"];
