@@ -1,7 +1,7 @@
 'use strict';
 // node tools/mcagents/agent.test.js — the Mindcraft command translator.
 const assert = require('node:assert');
-const {parseCommand, translate, commandDocs, inventoryText, repeatHint, isRoutine} = require('./agent');
+const {parseCommand, translate, commandDocs, inventoryText, repeatHint, isRoutine, Budget, promptReason} = require('./agent');
 
 assert.deepStrictEqual(parseCommand('Sure! !collectBlocks("oak_log", 10)'), {name: 'collectBlocks', args: ['oak_log', 10]});
 assert.deepStrictEqual(parseCommand("Bye! !endConversation('john')"), {name: 'endConversation', args: ['john']});
@@ -41,4 +41,24 @@ assert.strictEqual(tr('!afkHere').local, 'afkHere');
 assert.ok(isRoutine({type: 'shift'}) && isRoutine({type: 'guard'}) && isRoutine({type: 'follow'}));
 assert.ok(!isRoutine({type: 'mine'}) && !isRoutine(null));
 for (const c of ['startShift', 'guardHere', 'afkHere']) assert.ok(commandDocs().includes(`!${c}:`), c);
+// H2: event-driven prompting and the global cap.
+const B = new Budget(3);
+assert.ok(B.take(1000) && B.take(1001) && B.take(1002));
+assert.ok(!B.take(1003), 'cap of 3 per minute');
+assert.ok(B.take(61001), 'the window slides');
+const ag = (o = {}) => ({inbox: [], goal: 'work', afk: false, wake: false, lastDecisionAt: 0, ...o});
+const bot = (o = {}) => ({online: true, dead: false, job: null, queue: [], ...o});
+const T = 10 * 60000;
+assert.strictEqual(promptReason(ag({wake: true}), bot(), T, T), 'event', 'a job result wakes an idle bot');
+assert.strictEqual(promptReason(ag({lastDecisionAt: 1000}), bot(), 1500, T), null, 'idle, nothing happened: no prompt');
+assert.strictEqual(promptReason(ag({lastDecisionAt: 1000}), bot({job: {type: 'shift'}}), 1500, T), null, 'a routine is not re-prompted');
+assert.strictEqual(promptReason(ag({lastDecisionAt: 1000}), bot({job: {type: 'shift'}}), 1000 + T, T), 'checkin', 'check-in during a routine');
+assert.strictEqual(promptReason(ag({wake: true}), bot({job: {type: 'mine'}}), T, T), null, 'a plain job is never interrupted');
+assert.strictEqual(promptReason(ag({wake: true}), bot({queue: [{}]}), T, T), null, 'a queued job (rearm) is not idle');
+assert.strictEqual(promptReason(ag({wake: true, inbox: ['hi']}), bot({job: {type: 'mine'}}), T, T), 'message', 'a message prompts even while working');
+assert.strictEqual(promptReason(ag({wake: true, afk: true}), bot(), T, T), null, 'afk stays silent');
+assert.strictEqual(promptReason(ag({afk: true, inbox: ['hi']}), bot(), T, T), 'message', 'a message ends afk');
+assert.strictEqual(promptReason(ag({wake: true, goal: ''}), bot(), T, T), null, 'no goal, no self-prompt');
+assert.strictEqual(promptReason(ag({wake: true}), bot({dead: true}), T, T), null);
+assert.strictEqual(promptReason(ag({wake: true}), bot({online: false}), T, T), null);
 console.log('ok');

@@ -24,6 +24,10 @@ const BLUEPRINTS = process.env.BLUEPRINTS || path.join(__dirname, '../../hosts/b
 // and chose the same commands as the 0.6 s answers. THINK=1 turns it on.
 const THINK = process.env.THINK === '1';
 const TICK_MS = 3000;
+// The brain thinks rarely: only on an event, a message, or this check-in while a routine runs / the bot idles.
+const CHECKIN_MS = Number(process.env.CHECKIN_MS) || 600000;
+const MAX_DECISIONS_PER_MIN = Number(process.env.MAX_DECISIONS_PER_MIN) || 12; // all agents together
+const STATS_MS = Number(process.env.STATS_MS) || 600000;
 const MAX_QUERIES = 4; // query rounds (!stats, !inventory ...) before the model must act
 const HISTORY = 24; // messages kept per agent
 
@@ -80,6 +84,33 @@ function commandDocs(blueprints = []) {
   }
   if (blueprints.length) docs += `Blueprints you can build: ${blueprints.join(', ')}\n`;
   return docs + '*\n';
+}
+
+// Global cap on decisions per minute (sliding window). Agents over the cap simply wait for a later tick.
+class Budget {
+  constructor(perMin) {
+    Object.assign(this, {perMin, stamps: []});
+  }
+
+  take(now = Date.now()) {
+    this.stamps = this.stamps.filter((t) => now - t < 60000);
+    if (this.stamps.length >= this.perMin) return false;
+    this.stamps.push(now);
+    return true;
+  }
+}
+
+// Why a bot's brain should be asked now: 'message' | 'event' | 'checkin' | null. `a.wake` is set by
+// job results, deaths and respawns; a message prompts even while the bot works; a plain running job
+// (not a routine) is never interrupted.
+function promptReason(a, bot, now, checkinMs = CHECKIN_MS) {
+  if (!bot?.online || bot.dead) return null;
+  if (a.inbox.length) return 'message';
+  if (a.afk || !a.goal) return null;
+  const free = (!bot.job && !bot.queue.length) || isRoutine(bot.job);
+  if (!free) return null;
+  if (a.wake) return 'event';
+  return now - a.lastDecisionAt >= checkinMs ? 'checkin' : null;
 }
 
 // Jobs that never end by themselves. A bot running one is busy, not "needs a prompt".
@@ -165,7 +196,8 @@ function entitiesText(bot, state) {
 // ---- one agent per bot -----------------------------------------------------------
 class Agent {
   constructor(name, goal, team) {
-    Object.assign(this, {name, goal, team, history: [], inbox: [], places: {}, memory: '', lastCommand: '', failures: 0});
+    Object.assign(this, {name, goal, team, history: [], inbox: [], places: {}, memory: '', lastCommand: '', failures: 0,
+      wake: true, wakeAt: 0, lastDecisionAt: 0, decisions: 0, modelMs: 0});
   }
 
   system(state, bot) {
@@ -208,6 +240,7 @@ async function think(agent, state, bot) {
     ...agent.history.map((m) => (m.role === 'system' ? {role: 'user', content: `SYSTEM: ${m.content}`} : m))];
   const out = await http('POST', `${OLLAMA_URL}/api/chat`, {model: MODEL, messages, stream: false, think: THINK, options: {num_ctx: 8192, temperature: 0.6}});
   if (!out.message) throw new Error(`model: ${out.error || 'no answer'}`);
+  agent.modelMs += Date.now() - t0;
   const text = String(out.message.content || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim();
   fs.appendFileSync(LOG, JSON.stringify({t: new Date().toISOString(), agent: agent.name, ms: Date.now() - t0, messages, thinking: out.message.thinking || '', reply: text}) + '\n');
   return text;
@@ -303,32 +336,54 @@ async function main() {
   let lastEventId = (await http('GET', `${API}/api/events?since=0`)).lastId || 0;
   const getState = () => http('GET', `${API}/api/state`);
   const busy = new Set();
-  console.log(`agents: ${[...agents.keys()].join(', ')} model ${MODEL} via ${OLLAMA_URL}, bots via ${API}, log ${LOG}`);
+  const budget = new Budget(MAX_DECISIONS_PER_MIN);
+  const t0 = Date.now();
+  console.log(`agents: ${[...agents.keys()].join(', ')} model ${MODEL} via ${OLLAMA_URL}, bots via ${API}, log ${LOG}; check-in ${CHECKIN_MS / 1000} s, cap ${MAX_DECISIONS_PER_MIN} decisions/min`);
+  setInterval(() => {
+    const h = (Date.now() - t0) / 3600000;
+    for (const a of agents.values()) console.log(`stats [${a.name}] ${a.decisions} decisions in ${(h * 60).toFixed(0)} min (${(a.decisions / h).toFixed(1)}/h), model time ${(a.modelMs / 1000).toFixed(0)} s (${((a.modelMs / 3600000 / h) * 100).toFixed(1)} % of the time)`);
+  }, STATS_MS).unref();
   for (;;) {
     try {
-      // Job results become "Code output" lines, as Mindcraft reports them.
+      // Job results become "Code output" lines, as Mindcraft reports them, and wake the brain.
       const ev = await http('GET', `${API}/api/events?since=${lastEventId}`);
       lastEventId = ev.lastId;
       for (const e of ev.events) {
         const a = agents.get(e.bot);
-        if (!a || !/^(finished|failed|gave up|stopped)/.test(e.text)) continue;
+        if (!a) continue;
+        if (e.kind === 'death' || e.kind === 'respawn') {
+          a.push('system', `Event: ${e.text}`);
+          a.wake = true;
+          a.wakeAt ||= Date.now();
+          continue;
+        }
+        if (!/^(finished|failed|gave up|stopped)/.test(e.text)) continue;
         a.push('system', `Code output:\n${e.text}`);
         a.failures = /^failed/.test(e.text) ? a.failures + 1 : 0;
         if (a.failures >= 2) a.push('system', repeatHint(a.lastCommand));
+        a.wake = true;
+        a.wakeAt ||= Date.now();
       }
       const state = await getState();
+      const now = Date.now();
+      const ready = [];
       for (const agent of agents.values()) {
+        if (busy.has(agent.name)) continue;
         const bot = state.bots.find((b) => b.name === agent.name);
-        if (!bot?.online || bot.dead || busy.has(agent.name)) continue;
-        const idle = !bot.job && !bot.queue.length;
-        const message = agent.inbox.length > 0;
-        if (!idle && !message) continue; // a running job, routines included, is not a reason to prompt
-        if (message) agent.afk = false;
-        while (agent.inbox.length) agent.push('user', agent.inbox.shift());
-        if (idle && !message) {
-          if (!agent.goal || agent.afk) continue;
-          agent.push('system', `You are self-prompting with the goal: "${agent.goal}". Respond:`);
-        }
+        const why = promptReason(agent, bot, now);
+        if (why) ready.push([agent, why, bot]);
+      }
+      ready.sort((x, y) => (x[0].wakeAt || x[0].lastDecisionAt) - (y[0].wakeAt || y[0].lastDecisionAt)); // longest waiting first
+      for (const [agent, why, bot] of ready) {
+        if (!budget.take(now)) break; // over the cap: the rest wait for a later tick
+        if (why === 'message') {
+          agent.afk = false;
+          while (agent.inbox.length) agent.push('user', agent.inbox.shift());
+        } else if (why === 'checkin') {
+          agent.push('system', `Check-in: ${bot.job ? `you have been running "${bot.job.label}" for a while (use !stop first to change it)` : 'you are idle'}. Continue your goal: "${agent.goal}". If all is well reply with just a tab.`);
+        } else agent.push('system', `You are self-prompting with the goal: "${agent.goal}". Respond:`);
+        Object.assign(agent, {wake: false, wakeAt: 0, lastDecisionAt: now});
+        agent.decisions++;
         busy.add(agent.name);
         // One model call at a time per agent; agents run side by side (Ollama queues them).
         decide(agent, agents, getState).catch((e) => console.error(`[${agent.name}] ${e.message}`)).finally(() => busy.delete(agent.name));
@@ -345,4 +400,4 @@ if (require.main === module) main().catch((e) => {
   process.exit(1);
 });
 
-module.exports = {parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine};
+module.exports = {parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason};

@@ -24,6 +24,19 @@ Routines: `!startShift(type)` (logs or a block, into the base chest), `!guardHer
 never ends by itself; the agent loop only prompts a bot that has no job (or got a message), so a
 routine is never re-prompted. End one with `!stop`.
 
+When the brain is asked (H2): only (1) after a job result (finished, failed, gave up, stopped),
+(2) after a death or respawn, (3) when a message arrived, and (4) every `CHECKIN_MS` (default 10
+min) while a routine runs or the bot idles. A bot that is busy with a plain job is not
+interrupted, and `!afkHere` silences it until a message. All agents together make at most
+`MAX_DECISIONS_PER_MIN` (default 12) decisions per minute; the rest wait for a later tick, longest
+waiting first. The agent prints `stats [botN] ... decisions (x/h), model time ...` every
+`STATS_MS` (default 10 min).
+
+Measured 2026-10-10 (bot11-bot14, one shift, one guard, one chop loop, one coal mine; 29 min):
+26 model calls in total, 1.05 s on average, 27 s of model time, GPU utilisation 0.7 % on average
+(116 samples every 15 s; peak 85 % of a 15 s sample), 5.6 GB VRAM. The chop loop is the chattiest
+agent because each finished job wakes it (39 decisions/h); the shift and the guard cost 6/h.
+
 Env: `MODEL` (default `andy-4.2`), `THINK=1` (reasoning on: about 20-30 s per decision with 4
 agents on one GPU instead of about 1 s), `LOG` (JSONL of every model call: prompt, thinking,
 reply; raw material for a later fine-tune), `BLUEPRINTS`.
