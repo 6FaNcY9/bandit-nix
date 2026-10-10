@@ -14,7 +14,7 @@ const BASE = {
   chest: {x: -271, y: 66, z: -214}, // the base chest: every withdraw/deposit of the plan uses it, not SUPPLY_CHEST
   shaft: {x1: -291, z1: -222, x2: -276, z2: -207},
   farm: {x1: -262, z1: -238, x2: -248, z2: -224},
-  // TODO(owner): confirm terrain (placeholder; the owner checks the ground and places the water)
+  // levelled to y 64 by console 2026-10-10, water source under a slab at -258 64 -246 (placeholder; the owner checks the ground and places the water)
   wheat: {x1: -262, z1: -250, x2: -254, z2: -242},
   room: {x1: -272, y1: 58, z1: -219, x2: -266, y2: 60, z2: -213}, // under the base box; floor y 57
   // the wall of single chests on the room's south side (live 2026-10-10): x -272..-266, y 58 and 59, nearest the door first
