@@ -115,7 +115,7 @@ const BASE_DOC = ['Get the state of the base: each worker with its job and last 
 const FOREMAN = new Set(['assign', 'baseStatus', 'buildBlueprint', 'digRoom', 'digShaft', 'huntAnimals', 'placeBed', 'setHomeBed', 'placeBlockAt', 'viewChest', 'stats', 'inventory', 'goToCoordinates', 'stop', 'startConversation']);
 const GATHERING = new Set(['collectBlocks', 'collectBlock', 'startShift']);
 // Project jobs run until done; the owner decides who works on them (lab 2026-10-10: the lead pulled a worker off the shaft).
-const PROJECTS = {shaft: 'digging the shaft', level: 'mining a level of the shaft', excavate: 'digging a room', build: 'building', grave: 'collecting its grave', homebed: 'setting its bed'};
+const PROJECTS = {shaft: 'digging the shaft', level: 'mining a level of the shaft', excavate: 'digging a room', build: 'building', grave: 'collecting its grave', homebed: 'setting its bed', treefarm: 'tending the tree farm', rim: 'walling the shaft'};
 const isProject = (job) => !!job && Object.hasOwn(PROJECTS, job.type);
 // The lead is the foreman whose goal is gathering (the builder bot2 has workers too, but may dig). ponytail: keyword test on the goal text, a !goal that avoids these words slips through.
 const leadsGathering = (a) => a.workers.size > 0 && /gather|collect|mine|chop|\blogs?\b|wood|cobble|coal|iron/i.test(a.goal);
@@ -299,6 +299,8 @@ function assignJob(cmd, workers, state, places = {}) {
   const bot = state.bots.find((b) => b.name === name);
   if (!bot?.online || bot.dead) return {refuse: `${name} is not available right now.`};
   if (resting(name)) return {refuse: `${name} is resting after two identical failures (${stuckWorkers.get(name).note}). Give the work to another worker.`};
+  // A fresh order sticks for a minute: bot1 flipped bot4 between logs and coal every 4 s (lab, 2026-10-10).
+  if (bot.job && bot.job.runningS < 60) return {refuse: `${name} got its order ${Math.round(bot.job.runningS)} s ago (${bot.job.type}); let it work, pick an idle worker.`};
   if (isProject(bot.job)) return {refuse: `${name} is ${PROJECTS[bot.job.type]}${bot.job.progress ? ` (${bot.job.progress.replace(/^[^:]*: /, '')})` : ''}; pick an idle worker.`};
   const inner = parseCommand(text);
   if (!inner) return {refuse: 'The second argument must be a command, for example "!collectBlocks(\\"cobblestone\\", 32)".'};
