@@ -1,0 +1,1 @@
+# Add executable names for games that should not pause inference.

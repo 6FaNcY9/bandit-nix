@@ -22,7 +22,7 @@ try {
     'PASS: existing non-llama listener blocks start and is left alone when busy'
     $listener.Stop()
     RunWatch 0
-    $record = Get-Content C:\bandit-ai\watch-28083.pid -Raw | ConvertFrom-Json
+    $record = Get-Content C:\bandit-ai\runtime\watch-28083.pid -Raw | ConvertFrom-Json
     $childId = [int]$record.ProcessId
     Assert ($baseline -notcontains $childId) 'Missing new child'
     Assert ((Get-Process -Id $childId).Path -eq 'C:\bandit-ai\llama\llama-server.exe') 'Unexpected child executable'
@@ -36,7 +36,7 @@ try {
     } until ($healthy -or (Get-Date) -gt $deadline)
     Assert $healthy 'CPU test server did not become healthy'
     # Remove the record to exercise a server started outside the watcher.
-    Remove-Item C:\bandit-ai\watch-28083.pid
+    Remove-Item C:\bandit-ai\runtime\watch-28083.pid
     RunWatch 0
     Assert (@(LlamaIds).Count -eq ($baseline.Count + 1)) 'Duplicate start with healthy listener and no PID record'
     "PASS: healthy listener PID $childId blocks start without a PID record"

@@ -5,7 +5,7 @@ $session = 1
 $pidFile = Join-Path $env:TEMP "bandit-watch-test-$PID.pid"
 $tokens = $null
 $errors = $null
-$ast = [Management.Automation.Language.Parser]::ParseFile("$PSScriptRoot\watch.ps1", [ref]$tokens, [ref]$errors)
+$ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'watch.ps1'), [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw $errors[0] }
 foreach ($name in @('Listeners', 'Servers')) {
     $definition = $ast.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name }, $true)
@@ -13,6 +13,15 @@ foreach ($name in @('Listeners', 'Servers')) {
 }
 function Get-NetTCPConnection { param($State, $ErrorAction) $script:sockets }
 function Get-CimInstance { param($ClassName, $Filter) $script:processes }
+# PowerShell 7 parses JSON dates automatically; emulate Windows PowerShell 5.1.
+function ConvertFrom-Json {
+    param([Parameter(ValueFromPipeline)]$InputObject)
+    process {
+        $record = Microsoft.PowerShell.Utility\ConvertFrom-Json $InputObject
+        $record.CreationDate = ([datetime]$record.CreationDate).ToString('o')
+        $record
+    }
+}
 function Assert($condition, $message) { if (-not $condition) { throw $message } }
 $created = [datetime]'2026-10-10T13:00:00'
 $script:processes = @(

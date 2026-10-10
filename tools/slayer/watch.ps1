@@ -5,6 +5,11 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $base = 'C:\bandit-ai'
+$runtime = "$base\runtime"
+if (-not (Test-Path $runtime)) { $null = New-Item -ItemType Directory $runtime }
+$model = "$base\models\andy.gguf"
+$modelSha256 = '3cfccaa17be8d2ded998fab8bd4b7032f91f2a916ac2aa03a412908342228eb1'
+$script:modelFailureLogged = $false
 $port = 8081
 $layers = 99
 # A CPU-only second server lets checks leave the replay's GPU server alone.
@@ -39,11 +44,11 @@ public static class BanditWindow {
 }
 '@
 function Write-Log($message) {
-    $log = "$base\watch.log"
+    $log = "$runtime\watch.log"
     if ((Test-Path $log) -and (Get-Item $log).Length -ge 5MB) { Move-Item $log "$log.1" -Force }
     Add-Content $log "$(Get-Date -Format o) port=$port $message"
 }
-$pidFile = "$base\watch-$port.pid"
+$pidFile = "$runtime\watch-$port.pid"
 $session = (Get-Process -Id $PID).SessionId
 function Listeners {
     # Enumerate first: querying an unused LocalPort reports an error, not an empty list.
@@ -94,6 +99,17 @@ function Busy {
     if ($usage -ge 20) { return "non-llama GPU $usage%" }
     return $null
 }
+$script:modelCheck = $null
+function ModelVerified {
+    $item = Get-Item $model -ErrorAction SilentlyContinue
+    if (-not $item -or $item.PSIsContainer) { return $false }
+    $stamp = "$($item.Length):$($item.LastWriteTimeUtc.Ticks)"
+    if ($script:modelCheck -and $script:modelCheck.Stamp -eq $stamp) { return $script:modelCheck.Verified }
+    $verified = (Get-FileHash $model -Algorithm SHA256).Hash.ToLowerInvariant() -eq $modelSha256
+    $script:modelCheck = @{ Stamp = $stamp; Verified = $verified }
+    return $verified
+}
+
 try {
     do {
         $cycle = [Diagnostics.Stopwatch]::StartNew()
@@ -113,14 +129,18 @@ try {
                         Write-Log "left listener PID $($listener.OwningProcess): not ours to stop ($reason)"
                     }
                 }
-            } elseif (-not $listeners.Count -and -not $servers.Count) {
+            } elseif (-not $listeners.Count -and -not $servers.Count -and (ModelVerified)) {
+                # Verification can take seconds; a game may have started during hashing.
+                if (Busy) { throw 'Game appeared during model verification; launch deferred' }
                 $env:LLAMA_ARG_CHAT_TEMPLATE_KWARGS = '{"enable_thinking":false}'
                 $arguments = "--model $base\models\andy.gguf --alias andy-4.2-baseline --host 127.0.0.1 --port $port --jinja --ctx-size 8192 --parallel 1 --n-gpu-layers $layers --temp 0.6 --top-k 20 --top-p 0.95 --min-p 0 --repeat-penalty 1.0"
-                $server = Start-Process "$base\llama\llama-server.exe" -ArgumentList $arguments -WorkingDirectory "$base\llama" -WindowStyle Hidden -PassThru -RedirectStandardOutput "$base\watch-$port.out.log" -RedirectStandardError "$base\watch-$port.err.log"
+                $server = Start-Process "$base\llama\llama-server.exe" -ArgumentList $arguments -WorkingDirectory "$base\llama" -WindowStyle Hidden -PassThru -RedirectStandardOutput "$runtime\watch-$port.out.log" -RedirectStandardError "$runtime\watch-$port.err.log"
                 # Creation time prevents a stale PID file from authorizing a reused PID.
                 $started = Get-CimInstance Win32_Process -Filter "ProcessId=$($server.Id)"
                 @{ ProcessId = $server.Id; CreationDate = $started.CreationDate.ToString('o') } | ConvertTo-Json | Set-Content $pidFile
                 Write-Log "started PID $($server.Id)"
+            } elseif (-not $listeners.Count -and -not $servers.Count) {
+                if (-not $script:modelFailureLogged) { Write-Log "model missing or checksum mismatch; inference disabled"; $script:modelFailureLogged = $true }
             }
         } catch { Write-Log "error: $($_.Exception.Message)" }
         if (-not $Once) { Start-Sleep -Milliseconds ([Math]::Max(0, 15000 - [int]$cycle.ElapsedMilliseconds)) }
