@@ -2,7 +2,7 @@
 // node tools/mcagents/agent.test.js — the Mindcraft command translator.
 const assert = require('node:assert');
 process.env.LOG ||= require('node:path').join(require('node:os').tmpdir(), `mcagents-test-${process.pid}.jsonl`); // decide() logs every model call
-const {decide, Agent, idleWorkers, parseCommand, translate, commandDocs, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText} = require('./agent');
+const {decide, Agent, idleWorkers, trackError, parseCommand, translate, commandDocs, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText} = require('./agent');
 
 assert.deepStrictEqual(parseCommand('Sure! !collectBlocks("oak_log", 10)'), {name: 'collectBlocks', args: ['oak_log', 10]});
 assert.deepStrictEqual(parseCommand("Bye! !endConversation('john')"), {name: 'endConversation', args: ['john']});
@@ -149,6 +149,32 @@ assert.deepStrictEqual(idleWorkers(new Set(['bot2', 'bot16', 'bot17', 'bot18']),
       state.bots[0].job = {type: 'mine', label: 'mine'};
       await decide(agent, new Map([['bot1', agent]]), async () => state, {take: () => true});
       assert.strictEqual(sent.replace, false, 'a plain job finishes first');
+    }
+    { // same job type failing with the same reason twice: a different command of that type is refused too
+      const a = {};
+      trackError(a, 'failed: build at -272 65 -219 22 blocks false - could not reach -260 63 -213: No path to the goal!');
+      trackError(a, 'failed: build at -272 65 -219 10 blocks false - could not reach -260 63 -213: No path to the goal!');
+      assert.strictEqual(a.errStreak, 2);
+      trackError(a, 'finished: goto -260 63 -213 (3 s)');
+      assert.strictEqual(a.errStreak, 0, 'a success clears it');
+      const agent = new Agent('bot1', 'build', null);
+      Object.assign(agent, {errStreak: 2, lastErrType: 'build', lastFailure: 'could not reach the chest'});
+      const jobs = [];
+      globalThis.fetch = async (url, opt = {}) => ({ok: true, status: 200, json: async () => (url.endsWith('/api/chat') ? {message: {content: '!buildBlueprint("test-pad-3x3", 1, 64, 1)'}} : (jobs.push(url), {}))});
+      const state = {bots: [{name: 'bot1', online: true, pos: [0, 64, 0], inventory: [], queue: [], job: null}], places: []};
+      await decide(agent, new Map([['bot1', agent]]), async () => state, {take: () => true});
+      assert.ok(!jobs.some((u) => u.endsWith('/api/job')));
+      assert.match(agent.history.at(-1).content, /build jobs failed 2 times/);
+    }
+    { // a foreman never gathers itself
+      const agent = new Agent('bot1', 'lead', null);
+      agent.workers = new Set(['bot2']);
+      const jobs = [];
+      globalThis.fetch = async (url, opt = {}) => ({ok: true, status: 200, json: async () => (url.endsWith('/api/chat') ? {message: {content: '!collectBlocks("stone", 32)'}} : (jobs.push(url), {}))});
+      const state = {bots: [{name: 'bot1', online: true, pos: [0, 64, 0], inventory: [], queue: [], job: null}], places: []};
+      await decide(agent, new Map([['bot1', agent]]), async () => state, {take: () => true});
+      assert.ok(!jobs.some((u) => u.endsWith('/api/job')));
+      assert.match(agent.history.at(-1).content, /you lead.*!assign\("worker", "!collectBlocks\(\\"stone\\", 32\)"\)/);
     }
     let takes = 0; // queries only: every model call takes budget
     const {calls} = await run({replies: ['!stats'], budget: {take: () => (takes++, true)}});

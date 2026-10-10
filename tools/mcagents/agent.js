@@ -231,6 +231,17 @@ function assignJob(cmd, workers, state, places = {}) {
   return {worker: name, job: t.job, replace: isRoutine(bot.job)};
 }
 
+// Consecutive failures of one job type with the same reason ("failed: build at ... - could not reach X").
+function trackError(a, text) {
+  const m = /^failed: (\w+) .* - (.*)$/.exec(text);
+  if (!m) {
+    if (/^(finished|stopped)/.test(text)) a.errStreak = 0;
+    return;
+  }
+  a.errStreak = m[1] === a.lastErrType && m[2] === a.lastErrReason ? (a.errStreak || 0) + 1 : 1;
+  Object.assign(a, {lastErrType: m[1], lastErrReason: m[2]});
+}
+
 // Online workers with nothing to do: the foreman is woken for them (at most every 30 s). A worker that
 // logs in after the foreman's first round sends no event, so it waited for the 10-minute check-in (lab).
 const idleWorkers = (workers, state) => state.bots.filter((b) => workers.has(b.name) && b.online && !b.dead && !b.job && !b.queue?.length).map((b) => b.name);
@@ -419,6 +430,16 @@ async function decide(agent, agents, getState, budget) {
       agent.push('system', `Refused: ${same} failed ${agent.failures} times in a row (${agent.lastFailure || 'same error'}). Do something different.`);
       continue;
     }
+    // The lead bot tried all eight base parts in a row, each failing on the same unreachable chest (lab).
+    if (agent.errStreak >= 2 && t.job[0] === agent.lastErrType) {
+      agent.push('system', `Refused: ${t.job[0]} jobs failed ${agent.errStreak} times in a row with the same error (${agent.lastFailure}). Fix that cause first, or do something else.`);
+      continue;
+    }
+    // A foreman that mines walks off underground and stops leading (bot1, lab 2026-10-10).
+    if (agent.workers.size && ['mine', 'chop', 'shift'].includes(t.job[0])) {
+      agent.push('system', `Refused: you lead, you do not gather yourself. Give it to a worker: !assign("worker", "${same.replace(/"/g, '\\"')}"). Your workers: ${[...agent.workers].join(', ')}.`);
+      continue;
+    }
     agent.lastCommand = same;
     try {
       // A routine never ends, so a job queued behind it would never start (bot2 had two stone shifts
@@ -486,6 +507,7 @@ async function main() {
         a.push('system', `Code output:\n${e.text}`);
         a.failures = /^failed/.test(e.text) ? a.failures + 1 : 0;
         if (a.failures) a.lastFailure = e.text.replace(/^failed: /, '').slice(0, 160);
+        trackError(a, e.text);
         if (a.failures >= 2) a.push('system', repeatHint(a.lastCommand));
         a.wake = true;
         a.wakeAt ||= Date.now();
@@ -530,4 +552,4 @@ if (require.main === module) main().catch((e) => {
   process.exit(1);
 });
 
-module.exports = {decide, Agent, idleWorkers, parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText};
+module.exports = {decide, Agent, idleWorkers, trackError, parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText};
