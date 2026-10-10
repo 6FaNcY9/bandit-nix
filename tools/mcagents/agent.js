@@ -95,6 +95,7 @@ const DOCS = {
   placeHere: ['Place a given block in the current location. Do NOT use to build structures, only use for single blocks.', {type: ['string', 'The block type to place.']}],
   digShaft: ['Dig a square shaft straight down to bedrock from corner x1, z1 to x2, z2 (at most 16 x 16), leaving stairs along its walls, so the crew reaches every level without digging everywhere. Natural ground only; it takes long, give it to workers.', {x1: ['number', 'The x of one corner.'], z1: ['number', 'The z of one corner.'], x2: ['number', 'The x of the opposite corner.'], z2: ['number', 'The z of the opposite corner.']}],
   mineLevel: ['Mine one level of the shaft: from the shaft at height y, dig a 2-high tunnel out of the middle of each of its four walls (32 blocks) with side branches every 3 blocks, and mine every ore it finds. Natural ground only; it takes very long, give it to workers. Levels worth mining: y 16 for iron, y -54 for diamonds and redstone.', {y: ['number', 'The height of the level (the tunnel floor), inside the shaft.']}],
+  sealArea: ['Wall off the cave openings around a box so monsters stop walking in from the sides: from corner x1, z1 to x2, z2 (3 to 24 blocks per side) and from height y1 to y2 (at most 160 high), every open cell in the four side walls that leads to a cave or tunnel outside gets a cobblestone wall (it places blocks only, never digs, torches the new walls if it carries any). The box must enclose the shaft with a margin: a wall through the shaft would cover its stairs. It takes long, give it to workers.', {x1: ['number', 'The x of one corner.'], z1: ['number', 'The z of one corner.'], x2: ['number', 'The x of the opposite corner.'], z2: ['number', 'The z of the opposite corner.'], y1: ['number', 'The lowest height.'], y2: ['number', 'The highest height.']}],
   digRoom: ['Dig out a room (natural ground only, placed blocks stay) from corner x, y, z: width along x, length along z, height up. At most 9 x 9 x 5. Use it for an underground base.', {x: ['number', 'The x coordinate of the corner.'], y: ['number', 'The floor y.'], z: ['number', 'The z coordinate of the corner.'], width: ['number', 'Blocks along x, 1-9.'], length: ['number', 'Blocks along z, 1-9.'], height: ['number', 'Blocks up, 1-5.']}],
   placeBlockAt: ['Place one block (for example a chest) at x, y, z; it needs a solid block below.', {type: ['string', 'The block type to place.'], x: ['number', 'The x coordinate.'], y: ['number', 'The y coordinate.'], z: ['number', 'The z coordinate.']}],
   huntAnimals: ['Hunt animals near where you stand and collect the drops (a sheep is sheared when you have shears). Use it for wool: a bed needs 3 wool of one colour.', {type: ['string', 'sheep, cow, pig or chicken.'], num: ['number', 'How many animals, 1-32.']}],
@@ -109,7 +110,7 @@ const DOCS = {
   endGoal: ['Call when you have accomplished your goal. It will stop self-prompting and the current action.', {}],
 };
 
-const ASSIGN_DOC = ['Give one of your workers (a bot that cannot think) ONE command, for example !assign("bot12", "!collectBlocks(\\"cobblestone\\", 32)"). It reports back when done. Commands a worker understands: !startShift("coal") (keeps collecting into the base chest; one of logs, cobblestone, coal, raw_iron, raw_gold), !collectBlocks("iron_ore", 32), !putInChest("coal", 20), !collectDrops(16) (picks up dropped items nearby and brings them to the base chest), !craftRecipe("stick", 4), !smeltItem("raw_iron", 8), !huntAnimals("sheep", 6), !tendTreeFarm(x1, z1, x2, z2) (plants and chops trees for wood until !stop), !placeBed(x, y, z, "north"), !setHomeBed, !digRoom(...), !digShaft(...), !mineLevel(16), !goToCoordinates(...).', {bot_name: ['string', 'The worker to command.'], command: ['string', 'The command for the worker, in quotes.']}];
+const ASSIGN_DOC = ['Give one of your workers (a bot that cannot think) ONE command, for example !assign("bot12", "!collectBlocks(\\"cobblestone\\", 32)"). It reports back when done. Commands a worker understands: !startShift("coal") (keeps collecting into the base chest; one of logs, cobblestone, coal, raw_iron, raw_gold), !collectBlocks("iron_ore", 32), !putInChest("coal", 20), !collectDrops(16) (picks up dropped items nearby and brings them to the base chest), !craftRecipe("stick", 4), !smeltItem("raw_iron", 8), !huntAnimals("sheep", 6), !tendTreeFarm(x1, z1, x2, z2) (plants and chops trees for wood until !stop), !placeBed(x, y, z, "north"), !setHomeBed, !digRoom(...), !digShaft(...), !mineLevel(16), !sealArea(x1, z1, x2, z2, y1, y2) (walls the cave openings around the shaft and base), !goToCoordinates(...).', {bot_name: ['string', 'The worker to command.'], command: ['string', 'The command for the worker, in quotes.']}];
 
 const BASE_DOC = ['Get the state of the base: each worker with its job and last result, what the base chest held when last counted, and what is already built or dug.', {}];
 
@@ -117,7 +118,7 @@ const BASE_DOC = ['Get the state of the base: each worker with its job and last 
 const FOREMAN = new Set(['assign', 'baseStatus', 'buildBlueprint', 'digRoom', 'digShaft', 'huntAnimals', 'placeBed', 'setHomeBed', 'placeBlockAt', 'viewChest', 'nearbyBlocks', 'stats', 'inventory', 'goToCoordinates', 'stop', 'startConversation']);
 const GATHERING = new Set(['collectBlocks', 'collectBlock', 'startShift']);
 // Project jobs run until done; the owner decides who works on them (lab 2026-10-10: the lead pulled a worker off the shaft).
-const PROJECTS = {shaft: 'digging the shaft', level: 'mining a level of the shaft', excavate: 'digging a room', build: 'building', grave: 'collecting its grave', homebed: 'setting its bed', treefarm: 'tending the tree farm', rim: 'walling the shaft'};
+const PROJECTS = {shaft: 'digging the shaft', level: 'mining a level of the shaft', excavate: 'digging a room', build: 'building', grave: 'collecting its grave', homebed: 'setting its bed', treefarm: 'tending the tree farm', rim: 'walling the shaft', seal: 'sealing cave openings'};
 const isProject = (job) => !!job && Object.hasOwn(PROJECTS, job.type);
 // The lead is the foreman whose goal is gathering (the builder bot2 has workers too, but may dig). ponytail: keyword test on the goal text, a !goal that avoids these words slips through.
 const leadsGathering = (a) => a.workers.size > 0 && /gather|collect|mine|chop|\blogs?\b|wood|cobble|coal|iron/i.test(a.goal);
@@ -248,6 +249,18 @@ function translate(cmd, ctx) {
       if (!Number.isFinite(y) || y < -58 || y > 79) return {refuse: 'Use !mineLevel(y) with y from -58 to 79 (inside the shaft).'};
       const [x1, z1, x2, z2] = SHAFT;
       return {job: ['level', {x1, z1, x2, z2, y}]};
+    }
+    case 'sealArea': {
+      const [x1, z1, x2, z2, y1, y2] = a.slice(0, 6).map((v) => Math.round(Number(v)));
+      const [w, l, h] = [Math.abs(x2 - x1) + 1, Math.abs(z2 - z1) + 1, Math.abs(y2 - y1) + 1];
+      if (![x1, z1, x2, z2, y1, y2].every(Number.isFinite) || w < 3 || l < 3 || w > 24 || l > 24 || h > 160 || Math.min(y1, y2) < -64 || Math.max(y1, y2) > 319) return {refuse: 'Use !sealArea(x1, z1, x2, z2, y1, y2) with sides of 3-24 blocks, at most 160 high, y from -64 to 319.'};
+      // A side wall inside the shaft footprint would cover the stairs along the shaft walls.
+      const [sx1, sx2] = [Math.min(SHAFT[0], SHAFT[2]), Math.max(SHAFT[0], SHAFT[2])], [sz1, sz2] = [Math.min(SHAFT[1], SHAFT[3]), Math.max(SHAFT[1], SHAFT[3])];
+      const inX = (x) => x >= sx1 && x <= sx2, inZ = (z) => z >= sz1 && z <= sz2;
+      const [bx1, bx2, bz1, bz2] = [Math.min(x1, x2), Math.max(x1, x2), Math.min(z1, z2), Math.max(z1, z2)];
+      const overlapX = bx2 >= sx1 && bx1 <= sx2, overlapZ = bz2 >= sz1 && bz1 <= sz2;
+      if ((overlapZ && (inX(bx1) || inX(bx2))) || (overlapX && (inZ(bz1) || inZ(bz2)))) return {refuse: `The box must enclose the shaft (${SHAFT.join(' ')}) with a margin of at least 1 block, or its walls would cover the stairs.`};
+      return {job: ['seal', {x1, z1, x2, z2, y1, y2}]};
     }
     case 'digRoom': {
       const [x, y, z] = a.slice(0, 3).map(Number);

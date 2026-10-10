@@ -4,7 +4,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const PROJECTS = new Set(['shaft', 'excavate', 'level', 'rim', 'treefarm', 'homebed', 'build', 'grave']);
+const PROJECTS = new Set(['shaft', 'excavate', 'level', 'seal', 'rim', 'treefarm', 'homebed', 'build', 'grave']);
 const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : null);
 
 // One line for the board: scalars as they are, lists as a count, {x,y,z} as coordinates.

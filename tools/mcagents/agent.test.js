@@ -70,6 +70,10 @@ assert.deepStrictEqual(tr('!digShaft(-291, -222, -276, -207)'), {job: ['shaft', 
 assert.ok(tr('!digShaft(0, 0, 20, 5)').refuse, 'at most 16 x 16');
 assert.deepStrictEqual(tr('!mineLevel(16)'), {job: ['level', {x1: -291, z1: -222, x2: -276, z2: -207, y: 16}]});
 assert.ok(tr('!mineLevel(100)').refuse && tr('!mineLevel(-60)').refuse && tr('!mineLevel("a")').refuse && tr('!mineLevel').refuse, 'y inside the shaft');
+assert.deepStrictEqual(tr('!sealArea(-293, -224, -274, -205, -20, 70)'), {job: ['seal', {x1: -293, z1: -224, x2: -274, z2: -205, y1: -20, y2: 70}]});
+for (const bad of ['!sealArea(0, 0, 30, 5, 0, 10)', '!sealArea(0, 0, 5, 5, 0, 200)', '!sealArea(0, 0, 1, 5, 0, 10)', '!sealArea(0, 0, 5, 5, -80, 0)', '!sealArea(0, 0, 5)', '!sealArea("a", 0, 5, 5, 0, 1)', '!sealArea(-291, -224, -274, -205, 0, 70)', '!sealArea(-293, -224, -274, -207, 0, 70)', '!sealArea(-285, -230, -283, -200, 0, 70)']) assert.ok(tr(bad).refuse, `${bad} is refused (size, y range or a wall through the shaft stairs)`);
+assert.ok(tr('!sealArea(-250, -224, -230, -205, 0, 70)').job, 'a box away from the shaft is fine');
+assert.ok(commandDocs([], ['bot12']).includes('!assign:') && /sealArea/.test(commandDocs([], ['bot12'])), 'the foreman can assign it');
 assert.ok(commandDocs([], []).includes('!mineLevel:') && !commandDocs([], ['bot12']).includes('!mineLevel:'), 'workers run it, the foreman only assigns it');
 assert.strictEqual(tr('!craftRecipe("iron_pickaxe", 1)').job[1].item, 'iron_pickaxe');
 assert.strictEqual(tr('!inventory').query, 'inventory');

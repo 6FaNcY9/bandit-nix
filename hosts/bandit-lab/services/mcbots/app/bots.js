@@ -21,6 +21,7 @@ const homebedJob = require('./homebed');
 const levelJob = require('./level');
 const tidyJob = require('./tidy');
 const gearJob = require('./gear');
+const sealJob = require('./seal');
 
 const NAME_RE = /^bot[0-9]{1,2}$/; // BotGate's pattern (Velocity plugin)
 const LOGIN_GAP_MS = 4500; // Velocity rate-limits logins
@@ -33,9 +34,9 @@ const NATURAL = /^(stone|deepslate|dirt|grass_block|coarse_dirt|rooted_dirt|podz
 const KEEP_RE = /^(stick|[a-z_]+_planks|coal|charcoal|torch|crafting_table|furnace)$/;
 const FOOD_BELOW = 14; // fetch food from the supply chest when hungry and carrying none
 const FOOD_RETRY_MS = 600000; // an empty chest is not worth a walk every minute
-const RESUMABLE = new Set(['mine', 'chop', 'shift', 'goto', 'deposit', 'follow', 'come', 'guard', 'build', 'excavate', 'shaft', 'level', 'hunt', 'bed', 'homebed', 'treefarm', 'tidy']);
+const RESUMABLE = new Set(['mine', 'chop', 'shift', 'goto', 'deposit', 'follow', 'come', 'guard', 'build', 'excavate', 'shaft', 'level', 'seal', 'hunt', 'bed', 'homebed', 'treefarm', 'tidy']);
 // Long jobs that survive a restart (see keptOf, saved by server.js, reported by workers).
-const KEEP = new Set(['shift', 'guard', 'mine', 'chop', 'build', 'excavate', 'shaft', 'level', 'hunt', 'homebed', 'treefarm']); // a resumed build/excavate skips what is done
+const KEEP = new Set(['shift', 'guard', 'mine', 'chop', 'build', 'excavate', 'shaft', 'level', 'seal', 'hunt', 'homebed', 'treefarm']); // a resumed build/excavate skips what is done
 const MAX_INTERRUPTIONS = 3; // deaths/disconnects of one job before it is given up
 const TOOL_RE = /_(pickaxe|axe|shovel|hoe|sword)$|^(shears|bow|crossbow|fishing_rod|shield|trident|flint_and_steel|elytra)$/;
 
@@ -131,6 +132,11 @@ const VALIDATE = {
     const box = VALIDATE.shaft(a);
     const y = num(a.y, box.bottom + 1, box.top - 1, 'y');
     return {x1: box.x1, z1: box.z1, x2: box.x2, z2: box.z2, top: box.top, y, length: num(a.length ?? 32, 4, 64, 'length'), branch: num(a.branch ?? 8, 0, 16, 'branch')};
+  },
+  // Walls over the cave openings in the side faces of a box (shaft, base and a margin): two corners and a y range.
+  seal: (a) => {
+    const p = xyz({x: a.x1, y: a.y1 ?? -59, z: a.z1}), q = xyz({x: a.x2, y: a.y2 ?? 80, z: a.z2});
+    return sealJob.validateBox(p, q);
   },
   // A wall around a shaft (the box of the shaft job), one block outside it on the ground.
   rim: (a) => {
@@ -1543,6 +1549,8 @@ const {homebed} = homebedJob.makeHomebed({goNear, guard, sleep, goals, crafting,
 
 const tidy = tidyJob.makeTidy({goNear, guard, sleep, waitCalm, at, deposit: (r, job) => JOBS.deposit(r, child(job, {type: 'deposit', args: r.supplyChest}))});
 
+const seal = sealJob.makeSeal({goNear, guard, sleep, goals, withdraw: buildWithdraw});
+
 const {level} = levelJob.makeLevel({goNear, waitCalm, guard, sleep, digAt, upkeep, NATURAL, stairRing, at});
 
 const {treefarm} = treeFarmJob.makeTreeFarm({
@@ -1557,6 +1565,7 @@ const JOBS = {
   treefarm,
   homebed,
   level,
+  seal,
   hunt,
   bed,
   goto: (r, job) => goNear(r, job, job.args.x, job.args.y, job.args.z, 1),

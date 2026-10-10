@@ -188,7 +188,7 @@ All write endpoints below are for humans only (same-origin JSON POST behind the 
 check, `TRUSTED_PROXIES` rule unchanged); the agent token is refused on them.
 
 - **Projects** (`POST /api/project {bot, action: pause|resume|stop}`): one row per bot with a
-  shaft/excavate/level/rim/treefarm/homebed/build/grave job running, queued or remembered, with progress.
+  shaft/excavate/level/seal/rim/treefarm/homebed/build/grave job running, queued or remembered, with progress.
   The server remembers each bot's last project and its validated arguments in `STATE_DIR/projects.json`
   (any `/api/job`, also the agents', notes it; a stop marks it paused). Pause keeps it, Resume queues
   the *last project given to that bot* again, Stop forgets it. Pausing a *running* project is a bot stop, so that bot's queue
@@ -397,6 +397,7 @@ Each bot runs its queue one job at a time. Chat is never read as a command.
 | `homebed` | optional `slot` 0-13, or x y z (+ `facing`) | the bot's own bed in the storage rooms (`app/homebed.js`, agents: `!setHomeBed`). Slot = foot at z -213 (room 1, x -272..-266, y 58) or z -205 (room 2, slots 7-13), head towards north; without `slot` the crew order bot1 bot2 bot3 bot4 bot16 bot17 bot18 gives slots 0-6. Walks there, refuses protected cells, only clicks when a bed already lies there. Otherwise gets 3 wool of one colour (supply chest first; else `hunt` sheep here, then at 8 stops on a ring 70/140 blocks around the chest), planks (a log from the chest, else `chop`), crafts the bed, stands in the head cell facing north, places it and hands the click to `bed` (spawn set). |
 | `grave` | x y z | walks to where a bot died, finds AxGraves' grave entity within 3 blocks, sneaks, right-clicks it (only the owner can), checks the inventory grew, puts on better armour, then deposits everything except tools, food and `KEEP_RE` into the supply chest; event `grave at x y z: N items back`; refused inside protected areas; fails `gave nothing` when it is not the bot's grave or already taken |
 | `level` | x1 z1 x2 z2 (the shaft's box), y, optional top, length, branch | mining at one height of a shaft: see "Mining levels" |
+| `seal` | x1 z1 x2 z2, y1, y2 | walls over the cave openings in the four side faces of a box (at most 24 x 24, 160 high; the shaft plus a margin): see "Sealing cave openings" |
 | `treefarm` | x1 z1 x2 z2 | tree farm in an area of 3 x 3 to 24 x 24 until stopped: plants saplings (oak first, then birch, spruce, acacia, cherry, jungle; never dark oak or pale oak, which need a 2x2) on a 3-block grid on grass/dirt cells with 4 free blocks above, takes saplings from the supply chest when it has none, chops grown trees (only natural `*_log` blocks inside the area whose base stands on soil and that carry leaves; leaves stay), picks up saplings, apples and logs that fall inside the area, replants, uses bone meal if it has some, and puts the logs into the supply chest when the inventory fills or there is nothing to do. Fails with `no saplings` when the chest has none and nothing grows. Protected areas are skipped; the pathfinder may dig only logs and leaves on the way. Needs room in the supply chest (a full chest fails the job with `destination full`). Live (laptop, 2026-10-10): 4 saplings planted in 90 s, a grown oak chopped (4 logs), its drops and the saplings from decaying leaves picked up and replanted, Stop ends it as `stopped`. Agent command `!tendTreeFarm(x1, z1, x2, z2)` |
 | `say` | text | up to 200 characters; text starting with `/` is rejected |
 | `stop` | | clears the queue and stops walking/digging |
@@ -476,6 +477,36 @@ Arguments are the shaft job's (`x1 z1 x2 z2`, `top` default 80) plus `y`, so the
   tunnels without torches filled with zombies and killed the stage bots (no coal, no armour): give level bots coal or torches.
   Level heights worth queueing: y 16 (iron peak, plus coal and copper), y -54 (diamonds, redstone; lava lakes start at -55, so
   expect plugged fluids), optionally y -16 (gold) and y 0 (lapis).
+
+### Sealing cave openings (`seal` job)
+
+`app/seal.js`. Hostiles walked into the shaft and its tunnels from natural caves (lab 2026-10-10: 11 deaths in 10 minutes), and light
+blocks do not stop mobs arriving from the sides. `seal` scans the four side faces of a box (two corners and a y range, at most
+24 x 24 wide and 160 high, so the shaft plus a margin) and puts a block into every face cell that is air (`air`/`cave_air`) and has a
+non-solid block just outside the box. The top and bottom faces are never walled (the shaft stays open).
+
+- **Place only.** The pathfinder may neither dig nor scaffold during the job (`digOnly` matches nothing, scaffolding is empty; both
+  come back in `finally`), so natural ground is never removed. The bot stands inside the box, off the boundary when it can, and
+  places against a solid neighbour of the cell. Water and lava on the boundary are counted and left alone; an air cell next to
+  fluid outside is walled like any other.
+- **Left alone:** cells in protected areas, within 1 block of the supply chest, within 1 block of a bed, `reserved()` cells, cells
+  open to the sky (nothing solid above them within 40 blocks, leaves do not count: the surface around the shaft is the `rim` job's
+  business), cells not loaded yet. The info line at the start counts them.
+- **Material:** cobblestone, else cobbled deepslate, else dirt. With none carried it takes up to 128 cobblestone from the supply chest
+  (`withdraw`); with no chest, or an empty one, the job fails with `out of wall blocks ... (N walls placed this run, M openings were left)`.
+  A torch goes on the inside face of a new wall when the bot carries one and none shines within 5 blocks.
+- **Bounded:** at most 300 walls and 30 minutes per run; then the job ends with an info note (`capped at 300 walls this run, run it
+  again for the rest`). A cell that fails twice (no path, no stand, did not take) is given up; the job then fails with `N walls placed, M
+  openings left (unreachable, ...)`.
+- **Stop-safe and resumable** (`KEEP`/`RESUMABLE`): the world is the state, so a Stop, a death or a restart scans again and places
+  only what is still open. A fight that takes the pathfinder restarts the job body after the fight (the counters start again).
+- Agent command `!sealArea(x1, z1, x2, z2, y1, y2)` (workers; a foreman assigns it). It refuses a box whose side wall runs through the
+  shaft footprint (`SHAFT`), which would cover the stairs along the shaft walls. Dashboard: job picker `seal`, listed as a project.
+- **Existing tunnels are plugged too.** A mining tunnel (`level` job) that leaves the box is an opening like any cave: sealing puts
+  cobblestone in its mouth, and `level` (natural ground only) cannot dig that out. Mine the levels first, or open the plug by hand.
+- Live (2026-10-10, local stage, bot11 against the lab world, box -293 -224 -274 -205): y 50..64: 136 openings, 45 of them open to the
+  sky and left; the bot mined 120 stone as it went and ended with 24 left that no path reached (`No path to the goal` for stands up
+  on the shaft's cliff). A Stop ended the job as `stopped` after 3 walls, a restart resumed it (`resumed after restart: seal`, 86 -> 77 openings).
 
 ## Long runs
 

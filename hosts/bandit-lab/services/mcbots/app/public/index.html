@@ -583,8 +583,8 @@ $('dbgcopy').onclick = async () => {
 };
 
 // ---- quick actions, job picker, project board, chest panel, crew editor ----
-const PICKER = ['goto', 'come', 'follow', 'guard', 'mine', 'chop', 'deposit', 'rearm', 'tidy', 'grave', 'craft', 'smelt', 'shift', 'stock', 'withdraw', 'place', 'excavate', 'shaft', 'level', 'rim', 'build', 'hunt', 'bed', 'homebed', 'treefarm', 'say'];
-const PROJ = new Set(['shaft', 'excavate', 'level', 'rim', 'treefarm', 'homebed', 'build', 'grave']);
+const PICKER = ['goto', 'come', 'follow', 'guard', 'mine', 'chop', 'deposit', 'rearm', 'tidy', 'grave', 'craft', 'smelt', 'shift', 'stock', 'withdraw', 'place', 'excavate', 'shaft', 'level', 'seal', 'rim', 'build', 'hunt', 'bed', 'homebed', 'treefarm', 'say'];
+const PROJ = new Set(['shaft', 'excavate', 'level', 'seal', 'rim', 'treefarm', 'homebed', 'build', 'grave']);
 let crewData = { crews: {}, goals: {}, slots: {} };
 async function post(url, body) {
   const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
