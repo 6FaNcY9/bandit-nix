@@ -10,6 +10,8 @@
 }: let
   cfg = config.bandit-lab.llamacpp;
 in {
+  imports = [./slayer-tunnel.nix];
+
   options.bandit-lab.llamacpp = {
     enable = lib.mkEnableOption "the loopback-only llama.cpp Andy-4.2 replay server";
     mmproj = lib.mkOption {

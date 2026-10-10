@@ -45,6 +45,9 @@ in {
           # Every model call (prompt + reply) for a later LoRA fine-tune; agent.js
           # rotates it at 50 MB. The journal gets one line per reply.
           LOG = "/var/lib/mcagents/decisions.jsonl";
+        }
+        // lib.optionalAttrs config.bandit-lab.slayerTunnel.enable {
+          ANDY_URL_2 = "http://127.0.0.1:18081";
         };
       serviceConfig = {
         ExecStart = "${pkgs.nodejs}/bin/node ${../../../../tools/mcagents}/agent.js";

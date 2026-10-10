@@ -2,7 +2,19 @@
 // node tools/mcagents/agent.test.js — the Mindcraft command translator.
 const assert = require('node:assert');
 process.env.LOG ||= require('node:path').join(require('node:os').tmpdir(), `mcagents-test-${process.pid}.jsonl`); // decide() logs every model call
-const {decide, Agent, workersOf, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished, alreadyDone} = require('./agent');
+const {decide, Agent, workersOf, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished, alreadyDone, callModel} = require('./agent');
+const {modelRequest, modelReply} = require('./model-protocol');
+
+{ // agent.js and replay.js share one wire mapping for both model APIs
+  const messages = [{role: 'user', content: 'hello'}];
+  assert.deepStrictEqual(modelRequest('ollama', {model: 'andy', messages, sampling: {temperature: 0.6}, think: false}),
+    {model: 'andy', messages, stream: false, think: false, options: {temperature: 0.6}});
+  const openai = modelRequest('openai', {model: 'andy', messages, sampling: {num_ctx: 8192, temperature: 0.6}});
+  assert.equal(openai.num_ctx, undefined);
+  assert.equal(openai.max_tokens, 512);
+  assert.equal(modelReply('ollama', {message: {content: 'a'}}), 'a');
+  assert.equal(modelReply('openai', {choices: [{message: {content: 'b'}}]}), 'b');
+}
 
 assert.deepStrictEqual(parseCommand('Sure! !collectBlocks("oak_log", 10)'), {name: 'collectBlocks', args: ['oak_log', 10]});
 assert.deepStrictEqual(parseCommand("Bye! !endConversation('john')"), {name: 'endConversation', args: ['john']});
@@ -436,6 +448,62 @@ assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}
     const {calls} = await run({replies: ['!stats'], budget: {take: () => (takes++, true)}});
     assert.strictEqual(calls.model, 5);
     assert.strictEqual(takes, calls.model, 'one budget token per model call, the first included');
+    { // Optional backend: health is cached, backend 2 wins ties, and failures fall back.
+      const oldAndy = process.env.ANDY_URL_2;
+      const oldOllama = process.env.OLLAMA_URL;
+      process.env.OLLAMA_URL = 'http://ollama.test';
+      process.env.ANDY_URL_2 = 'http://slayer.test';
+      const seen = [], health = new Map();
+      let failSlayer = false;
+      globalThis.fetch = async (url, opt = {}) => {
+        const u = String(url);
+        if (u.endsWith('/api/tags') || u.endsWith('/health')) {
+          health.set(u, (health.get(u) || 0) + 1);
+          return {ok: true, status: 200, json: async () => ({})};
+        }
+        seen.push(u);
+        if (u.startsWith('http://slayer.test') && failSlayer) return {ok: false, status: 503, json: async () => ({})};
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        return {ok: true, status: 200, json: async () => (u.startsWith('http://slayer.test')
+          ? {choices: [{message: {content: 'slayer'}}]}
+          : {message: {content: 'ollama'}})};
+      };
+      const [first, second] = await Promise.all([callModel([]), callModel([])]);
+      assert.deepStrictEqual([first.backend, second.backend].sort(), [1, 2], 'in-flight requests spread across backends');
+      assert.deepStrictEqual([...health.values()], [1, 1], 'health probes are cached');
+      const preferred = await callModel([]);
+      assert.equal(preferred.backend, 2, 'idle tie breaks to backend 2');
+      failSlayer = true;
+      const fallback = await callModel([]);
+      assert.equal(fallback.backend, 1, 'model error falls back to Ollama');
+      assert.equal(seen.filter((u) => u.endsWith('/v1/chat/completions')).length, 3);
+      { // timeout health/model probes and total failure do not strand in-flight counts
+        process.env.OLLAMA_URL = 'http://ollama-timeout.test';
+        process.env.ANDY_URL_2 = 'http://slayer-timeout.test';
+        let recover = false;
+        globalThis.fetch = async (url) => {
+          const u = String(url);
+          if (u.endsWith('/health')) {
+            if (recover) return {ok: true, json: async () => ({})};
+            throw new DOMException('timeout', 'TimeoutError');
+          }
+          if (u.endsWith('/api/tags')) return {ok: true, json: async () => ({})};
+          if (!recover && u.includes('errors')) throw new DOMException('timeout', 'TimeoutError');
+          return {ok: true, json: async () => (u.endsWith('/v1/chat/completions')
+            ? {choices: [{message: {content: 'recovered'}}]}
+            : {message: {content: 'recovered'}})};
+        };
+        assert.equal((await callModel([])).backend, 1, 'unhealthy Slayer falls back to lab');
+        process.env.OLLAMA_URL = 'http://ollama-errors.test';
+        process.env.ANDY_URL_2 = 'http://slayer-errors.test';
+        await assert.rejects(callModel([]), /timeout/);
+        recover = true;
+        process.env.ANDY_URL_2 = 'http://slayer-recovered.test';
+        assert.equal((await callModel([])).backend, 2, 'both errors recover on next call');
+      }
+      if (oldAndy === undefined) delete process.env.ANDY_URL_2; else process.env.ANDY_URL_2 = oldAndy;
+      if (oldOllama === undefined) delete process.env.OLLAMA_URL; else process.env.OLLAMA_URL = oldOllama;
+    }
   } finally {
     globalThis.fetch = realFetch;
   }

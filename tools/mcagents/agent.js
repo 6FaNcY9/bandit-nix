@@ -14,8 +14,10 @@
 // a later fine-tune. No dependencies: Node 22 fetch only.
 const fs = require('node:fs');
 const path = require('node:path');
+const {modelRequest, modelReply} = require('./model-protocol');
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
+const ANDY_URL_2 = process.env.ANDY_URL_2 || '';
 const MODEL = process.env.MODEL || 'andy-4.2'; // Andy-4.2 (Mar 2026, Qwen3.5-9B), Andy 2.0 License
 const API = process.env.API || 'http://127.0.0.1:8097';
 const LOG = process.env.LOG ?? path.join(process.cwd(), 'mcagents.jsonl'); // LOG= (empty) logs no model calls
@@ -466,6 +468,57 @@ async function http(method, url, body) {
   return data;
 }
 
+const modelBackends = new Map();
+function backends() {
+  const ollamaUrl = process.env.OLLAMA_URL || OLLAMA_URL;
+  const andyUrl2 = process.env.ANDY_URL_2 || ANDY_URL_2;
+  const urls = [[ollamaUrl, 'ollama'], ...(andyUrl2 ? [[andyUrl2, 'openai']] : [])];
+  return urls.map(([url, api], index) => {
+    const key = `${api}:${url}`;
+    if (!modelBackends.has(key)) modelBackends.set(key, {url, api, inflight: 0, health: null});
+    const backend = modelBackends.get(key);
+    backend.number = index + 1;
+    return backend;
+  });
+}
+
+async function healthy(backend) {
+  // Ollama returns 404 for /health; /api/tags is its cheap 1-second health probe.
+  if (backend.number === 1 && !(process.env.ANDY_URL_2 || ANDY_URL_2)) return true;
+  const now = Date.now();
+  if (backend.health && now - backend.health.at < 10000) {
+    backend.health.ok = await backend.health.promise;
+    return backend.health.ok;
+  }
+  const path = backend.api === 'ollama' ? '/api/tags' : '/health';
+  backend.health = {at: now, promise: fetch(`${backend.url.replace(/\/$/, '')}${path}`, {signal: AbortSignal.timeout(1000)})
+    .then((res) => res.ok).catch(() => false)};
+  backend.health.ok = await backend.health.promise;
+  return backend.health.ok;
+}
+
+async function callModel(messages) {
+  const all = backends(), available = [], unavailable = [];
+  for (const backend of all) (await healthy(backend) ? available : unavailable).push(backend);
+  // Backend 2 wins ties because it is the offloaded, faster GPU.
+  available.sort((a, b) => a.inflight - b.inflight || b.number - a.number);
+  // A cached health failure must not prevent request-level fallback after the
+  // other backend errors or times out.
+  unavailable.sort((a, b) => a.inflight - b.inflight || b.number - a.number);
+  const candidates = available.concat(unavailable);
+  const failures = [];
+  for (const backend of candidates) {
+    backend.inflight++;
+    try {
+      const data = await http('POST', `${backend.url.replace(/\/$/, '')}${backend.api === 'ollama' ? '/api/chat' : '/v1/chat/completions'}`,
+        modelRequest(backend.api, {model: MODEL, messages, sampling: SAMPLING, think: THINK}));
+      return {text: modelReply(backend.api, data), backend: backend.number};
+    } catch (error) { failures.push(error); }
+    finally { backend.inflight--; }
+  }
+  throw failures[0] || new Error('No healthy model backend');
+}
+
 // Every model call with its full prompt and reply: the data set for a later LoRA fine-tune. Kept at
 // most ~2 x 50 MB (the current file and one rotated copy).
 function logCall(line) {
@@ -484,12 +537,11 @@ async function think(agent, state, bot) {
   // (job results, self-prompts) go in as user turns marked SYSTEM, as Mindcraft does for such models.
   const messages = [{role: 'system', content: agent.system(state, bot)},
     ...agent.history.map((m) => (m.role === 'system' ? {role: 'user', content: `SYSTEM: ${m.content}`} : m))];
-  const out = await http('POST', `${OLLAMA_URL}/api/chat`, {model: MODEL, messages, stream: false, think: THINK, options: SAMPLING});
-  if (!out.message) throw new Error(`model: ${out.error || 'no answer'}`);
+  const out = await callModel(messages);
   agent.modelMs += Date.now() - t0;
-  const text = String(out.message.content || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-  if (LOG) logCall(JSON.stringify({t: new Date().toISOString(), agent: agent.name, ms: Date.now() - t0, messages, thinking: out.message.thinking || '', reply: text}) + '\n');
-  return text;
+  const text = String(out.text || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+  if (LOG) logCall(JSON.stringify({t: new Date().toISOString(), agent: agent.name, ms: Date.now() - t0, messages, backend: out.backend, reply: text}) + '\n');
+  return out;
 }
 
 async function sendJob(name, type, args, replace = false) {
@@ -504,11 +556,12 @@ async function decide(agent, agents, getState, budget) {
     const bot = state.bots.find((b) => b.name === agent.name);
     if (!bot?.online) return;
     while (!budget.take()) await new Promise((r) => setTimeout(r, 1000));
-    const reply = await think(agent, state, bot);
+    const answer = await think(agent, state, bot);
+    const reply = answer.text;
     agent.push('assistant', reply || '\t');
     const cmd = parseCommand(reply);
     console.log(`[${agent.name}] ${reply.slice(0, 160).replace(/\n/g, ' ')}`);
-    if (TOKEN) http('POST', `${API}/api/decision`, {bot: agent.name, text: reply.slice(0, 200) || '(nothing to do)'}).catch(() => {}); // the dashboard's "Agent decisions"
+    if (TOKEN) http('POST', `${API}/api/decision`, {bot: agent.name, text: reply.slice(0, 200) || '(nothing to do)', backend: answer.backend}).catch(() => {}); // the dashboard's "Agent decisions"
     if (!cmd) return; // just talk
     const same = reply.match(COMMAND_RE)[0];
     if (agent.workers.size && !FOREMAN.has(cmd.name)) {
@@ -776,4 +829,4 @@ if (require.main === module) main().catch((e) => {
   process.exit(1);
 });
 
-module.exports = {SAMPLING, decide, Agent, workersOf, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished, alreadyDone};
+module.exports = {SAMPLING, decide, Agent, workersOf, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished, alreadyDone, callModel, healthy};

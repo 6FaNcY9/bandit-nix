@@ -71,9 +71,14 @@ stay). `!baseStatus` prints the same on request. A build or room that already fi
 (resting) worker gets no order; `mcagents` forgets what is done when it restarts. Replay of three recorded
 situations against the lab model (8 samples each, old vs new `agent.js`): see the commit message.
 
-Env: `MODEL` (default `andy-4.2`), `THINK=1` (reasoning on: about 20-30 s per decision with 4
+Env: `MODEL` (default `andy-4.2`), `ANDY_URL_2` (optional OpenAI-compatible Andy endpoint, for
+example `http://127.0.0.1:18081`), `THINK=1` (reasoning on: about 20-30 s per decision with 4
 agents on one GPU instead of about 1 s), `LOG` (JSONL of every model call: prompt, thinking,
 reply; raw material for a later fine-tune), `BLUEPRINTS`.
+
+When `ANDY_URL_2` is set, requests use the healthy backend with fewer in-flight calls (backend 2
+wins ties), and retry the other backend after a request error or timeout. Ollama health is probed
+with `/api/tags`; OpenAI-compatible backends use `/health`. Health results are cached for 10 seconds.
 
 Live 2026-10-10 (bot11-bot14, RTX 4090 laptop GPU on the lab, about 5.6 GB VRAM):
 - The four agents split the work: miner, lumberjack, builder, helper.

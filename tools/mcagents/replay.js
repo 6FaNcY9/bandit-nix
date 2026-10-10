@@ -5,6 +5,7 @@ const {createHash} = require('node:crypto');
 const {parseArgs} = require('node:util');
 const {performance} = require('node:perf_hooks');
 const {parseCommand, translate, SAMPLING} = require('./agent');
+const {modelRequest, modelReply} = require('./model-protocol');
 
 // Drop credential fields and redact credential-shaped text, including inside prompts.
 const SECRET_KEY = /authorization|cookie|token|password|passwd|secret|api[_-]?key|credential|private[_-]?key/i;
@@ -75,19 +76,14 @@ async function run(rows, {endpoint, api, model, seed}) {
   url.pathname = base.endsWith(route) ? base : base === '/v1' && api === 'openai' ? `${base}/chat/completions` : `${base}${route}`;
   const outputs = [];
   for (const row of rows) {
-    const sampling = {...SAMPLING};
-    delete sampling.num_ctx;
-    const body = {model, messages: row.messages, stream: false, ...(api === 'ollama'
-      ? {think: false, options: {...SAMPLING, num_predict: 512, seed}}
-      : {...sampling, max_tokens: 512, seed, chat_template_kwargs: {enable_thinking: false}})};
+    const body = modelRequest(api, {model, messages: row.messages, sampling: {...SAMPLING, num_predict: 512, seed}});
     const start = performance.now();
     let result;
     try {
       const response = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body), redirect: 'error', signal: AbortSignal.timeout(180000)});
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
-      const reply = api === 'ollama' ? data.message?.content : data.choices?.[0]?.message?.content;
-      if (typeof reply !== 'string') throw new Error('Missing text reply');
+      const reply = modelReply(api, data);
       result = {reply, tokens: api === 'ollama' ? {prompt: data.prompt_eval_count ?? null, completion: data.eval_count ?? null} : data.usage ?? null,
         truncated: api === 'ollama' ? data.done_reason === 'length' : data.choices[0].finish_reason === 'length'};
     } catch (e) { result = {reply: '', error: sanitize(e.message)}; }
