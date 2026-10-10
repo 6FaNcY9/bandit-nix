@@ -391,6 +391,19 @@ class BotRunner {
     this.queue.unshift({...j, status: 'queued', cancelled: false, interrupted: false, interruptions: n, resume: area || true, t: undefined});
   }
 
+  // The floor under the supply chest and the cells next to it (where bots stand) hold the base up: no
+  // job removes them (Codex R4-3).
+  supportsChest(x, y, z) {
+    const c = this.supplyChest;
+    return !!c && y === c.y - 1 && Math.abs(x - c.x) <= 1 && Math.abs(z - c.z) <= 1;
+  }
+
+  // Cells no dig may remove, whoever asks (digAt, a walk, the pathfinder): the chest's floor and the
+  // stair steps of the running shaft (Codex R4-3, R4-4).
+  reserved(x, y, z) {
+    return this.supportsChest(x, y, z) || !!this.keepCells?.has(`${x},${y},${z}`);
+  }
+
   async pump() {
     if (this.current || !this.queue.length) return;
     if (this.dead) return; // the respawn handler pumps again
@@ -555,7 +568,8 @@ function safeMovements(bot, areas, runner = null) {
   mv.getMoveDiagonal = () => {};
   const inside = (blk) => insideAreas(areas, blk.position.x, blk.position.z);
   const veto = (blk) => (inside(blk) ? 100 : 0);
-  mv.exclusionAreasBreak = [veto, (blk) => (runner?.digOnly && !runner.digOnly.test(blk.name) ? 100 : 0)];
+  const held = (blk) => (runner?.reserved?.(blk.position.x, blk.position.y, blk.position.z) ? 100 : 0);
+  mv.exclusionAreasBreak = [veto, held, (blk) => (runner?.digOnly && !runner.digOnly.test(blk.name) ? 100 : 0)];
   mv.exclusionAreasPlace = [veto];
   // Every block change counts up, so the path cache never answers from before it.
   if (bot.blockVersion === undefined) {
@@ -766,6 +780,7 @@ function guardDigs(runner, bot) {
     const p = block?.position;
     if (runner.current?.cancelled || stale) return 'Digging aborted: the job was stopped';
     if (p && insideAreas(runner.protectedAreas, p.x, p.z)) return 'Digging aborted: protected area';
+    if (p && runner.reserved?.(p.x, p.y, p.z)) return 'Digging aborted: that block holds up the base or a shaft step';
     const live = p && bot.blockAt(p);
     if (p && (!live || live.name !== block.name || (block.stateId !== undefined && live.stateId !== block.stateId))) return 'Digging aborted: the block changed';
     // A walk may dig only what the job allows (excavate: natural ground, never its own walls).
@@ -959,6 +974,13 @@ async function fixStep(r, job, x, y, z) {
   } catch (e) {
     guard(job);
     r.emit('info', `stair step at ${x} ${y} ${z} not fixed: ${e.message.slice(0, 80)}`);
+  }
+}
+
+// A box that would dig the ground under the supply chest fails before it digs anything.
+function refuseSupport(r, {x1, z1, x2, z2, y1, y2}) {
+  for (let x = x1; x <= x2; x++) for (let z = z1; z <= z2; z++) for (let y = y1; y <= y2; y++) {
+    if (r.supportsChest?.(x, y, z)) throw new Error(`${x} ${y} ${z} holds up the supply chest`);
   }
 }
 
@@ -1650,6 +1672,7 @@ const JOBS = {
     const {bot} = r;
     const {x1, y1, z1, x2, y2, z2} = job.args;
     for (const [x, z] of [[x1, z1], [x1, z2], [x2, z1], [x2, z2]]) if (insideAreas(r.protectedAreas, x, z)) throw new Error(`${x} ${z} is inside a protected area`);
+    refuseSupport(r, {x1, z1, x2, z2, y1, y2});
     const Vec3 = require('vec3').Vec3;
     const dim = normDim(bot.game?.dimension);
     const total = (x2 - x1 + 1) * (y2 - y1 + 1) * (z2 - z1 + 1);
@@ -1698,30 +1721,37 @@ const JOBS = {
     // ponytail: the start corner comes from the name's char-code sum mod 4 (bot3/bot17/bot18 get three
     // different ones); two bots can still share a corner.
     const corner = [...r.name].reduce((n, c) => n + c.charCodeAt(0), 0) % 4;
+    refuseSupport(r, {x1, z1, x2, z2, y1: bottom, y2: top});
     let skipped = 0;
     job.t.total = top - bottom + 1;
-    for (let y = top; y >= bottom; y--) {
-      const keep = ring[(top - y) % ring.length];
-      let dugHere = false;
-      for (let pass = 1; ; pass++) {
-        guard(job);
-        const layer = child(job, {type: 'excavate', args: {x1, y1: y, z1, x2, y2: y, z2, keep, corner}});
-        try {
-          await JOBS.excavate(r, layer);
-          dugHere ||= !layer.noop;
-          break;
-        } catch (e) {
+    // Walking (the pathfinder digs natural ground) must not remove the steps left standing (Codex R4-4).
+    r.keepCells = new Set(Array.from({length: top - bottom + 1}, (_, i) => { const k = ring[i % ring.length]; return `${k.x},${top - i},${k.z}`; }));
+    try {
+      for (let y = top; y >= bottom; y--) {
+        const keep = ring[(top - y) % ring.length];
+        let dugHere = false;
+        for (let pass = 1; ; pass++) {
           guard(job);
-          if (!/were not dug/.test(e.message)) throw e;
-          if (pass === 3) { skipped += Number(e.message.split(' ')[0]) || 0; break; }
-          await sleep(2000);
+          const layer = child(job, {type: 'excavate', args: {x1, y1: y, z1, x2, y2: y, z2, keep, corner}});
+          try {
+            await JOBS.excavate(r, layer);
+            dugHere ||= !layer.noop;
+            break;
+          } catch (e) {
+            guard(job);
+            if (!/were not dug/.test(e.message)) throw e;
+            if (pass === 3) { skipped += Number(e.message.split(' ')[0]) || 0; break; }
+            await sleep(2000);
+          }
         }
+        // Only a layer this bot dug ground from: above the surface every step is air (2026-10-10: bot3
+        // built a floating stair of cobblestone over the shaft).
+        if (dugHere) await fixStep(r, job, keep.x, y, keep.z);
+        Object.assign(job.t, {total: top - bottom + 1, done: top - y + 1}); // excavate borrowed the counters
+        job.progress = `shaft ${x1} ${z1}: down to y ${y}${skipped ? `, ${skipped} blocks left (unsafe or unreachable)` : ''}`;
       }
-      // Only a layer this bot dug ground from: above the surface every step is air (2026-10-10: bot3
-      // built a floating stair of cobblestone over the shaft).
-      if (dugHere) await fixStep(r, job, keep.x, y, keep.z);
-      Object.assign(job.t, {total: top - bottom + 1, done: top - y + 1}); // excavate borrowed the counters
-      job.progress = `shaft ${x1} ${z1}: down to y ${y}${skipped ? `, ${skipped} blocks left (unsafe or unreachable)` : ''}`;
+    } finally {
+      r.keepCells = null;
     }
     if (skipped) throw new Error(`the shaft reached y ${bottom} but ${skipped} blocks were left (unsafe, unreachable or not loaded)`);
   },

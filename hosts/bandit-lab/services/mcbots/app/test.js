@@ -2197,6 +2197,60 @@ require('./crafting');
     assert.deepStrictEqual(layerOrder(0, 0, 2, 2, 3).slice(0, 4), [[2, 2], [1, 2], [2, 1], [1, 1]], 'growing squares from the corner');
     assert.deepStrictEqual(layerOrder(0, 0, 1, 1, -1), [[0, 0], [0, 1], [1, 0], [1, 1]], 'rooms row by row');
   }
+  { // the floor under the supply chest and a running shaft's stair steps are never dug, by a job or a walk (Codex R4-3, R4-4)
+    const {JOBS, VALIDATE, BotRunner, guardDigs, safeMovements, NATURAL} = require('./bots');
+    const {Movements} = require('mineflayer-pathfinder');
+    const md = require('minecraft-data')('26.1');
+    const {Vec3} = require('vec3');
+    const blocks = new Map([['-37,65,-200', 'chest']]);
+    for (let x = -38; x <= -36; x++) for (let z = -201; z <= -199; z++) blocks.set(`${x},64,${z}`, 'stone');
+    const dug = [];
+    const bot = {
+      blockAt: (p) => { const n = blocks.get(`${p.x},${p.y},${p.z}`); return n ? {name: n, type: md.blocksByName[n].id, position: p, boundingBox: 'block', getProperties: () => ({})} : null; },
+      entity: {position: new Vec3(-37, 66, -196), onGround: true}, game: {dimension: 'overworld'}, entities: {}, food: 20, registry: md,
+      inventory: {items: () => [{type: md.itemsByName.stone_pickaxe.id, name: 'stone_pickaxe'}], emptySlotCount: () => 30, slots: []},
+      pathfinder: {goto: async () => {}, stop() {}, setGoal() {}, isMining: () => true}, tool: {equipForBlock: async () => {}},
+      dig: async (b) => { dug.push(b.position.toString()); blocks.delete(`${b.position.x},${b.position.y},${b.position.z}`); },
+      equip: async () => {}, placeBlock: async () => {}, stopDigging() {}, on() {}, getEquipmentDestSlot: () => 5,
+    };
+    const runner = Object.assign(Object.create(BotRunner.prototype), {name: 'bot5', bot, world: {hostilesNear: () => [], claim: async () => true, release() {}}, emit() {}, protectedAreas: [[-80, -144, 80, 80], [112, 368, 272, 592]], supplyChest: {x: -37, y: 65, z: -200}, combat: null, current: {cancelled: false}});
+    guardDigs(runner, bot);
+    // the exact reproduction: a shaft over the chest's floor fails before it digs anything
+    const job = {t: {}, cancelled: false, type: 'shaft', args: VALIDATE.shaft({x1: -38, z1: -201, x2: -36, z2: -199, top: 65, bottom: 64})};
+    await assert.rejects(JOBS.shaft(runner, job), /holds up the supply chest/);
+    assert.deepStrictEqual(dug, []);
+    assert.strictEqual(blocks.get('-37,64,-200'), 'stone');
+    await assert.rejects(JOBS.excavate(runner, {t: {}, cancelled: false, type: 'excavate', args: {x1: -38, y1: 64, z1: -201, x2: -36, y2: 64, z2: -199}}), /holds up the supply chest/);
+    // a walk (the pathfinder) cannot dig the floor either, and does not plan to
+    await assert.rejects(bot.dig(bot.blockAt(new Vec3(-37, 64, -200)), true), /holds up the base/);
+    await assert.rejects(bot.dig(bot.blockAt(new Vec3(-38, 64, -201)), true), /holds up the base/);
+    const mv = safeMovements(bot, runner.protectedAreas, runner);
+    mv.getBlock = () => ({liquid: false, canFall: false});
+    assert.ok(!mv.safeToBreak(bot.blockAt(new Vec3(-37, 64, -200))), 'never planned as a dig');
+    blocks.set('-37,63,-200', 'stone');
+    assert.ok(mv.safeToBreak(bot.blockAt(new Vec3(-37, 63, -200))), 'ground further down is not reserved');
+    assert.deepStrictEqual(dug, []);
+
+    // a shaft's retained steps are reserved from the start until the job ends
+    blocks.clear();
+    for (let y = 58; y <= 60; y++) for (let x = 0; x <= 2; x++) for (let z = 0; z <= 2; z++) blocks.set(`${x},${y},${z}`, 'stone');
+    runner.supplyChest = null; runner.protectedAreas = [];
+    let seen = null;
+    const dig0 = bot.dig;
+    bot.dig = async (b) => { seen ||= [...runner.keepCells].sort(); return dig0(b); };
+    await JOBS.shaft(runner, {t: {}, cancelled: false, type: 'shaft', args: VALIDATE.shaft({x1: 0, z1: 0, x2: 2, z2: 2, top: 60, bottom: 58})});
+    assert.deepStrictEqual(seen, ['0,60,0', '1,59,0', '2,58,0']);
+    assert.strictEqual(runner.keepCells, null, 'released when the job ends');
+    runner.keepCells = new Set(seen);
+    runner.digOnly = NATURAL;
+    blocks.set('0,60,0', 'stone'); blocks.set('1,60,0', 'stone');
+    dug.length = 0;
+    await assert.rejects(bot.dig(bot.blockAt(new Vec3(0, 60, 0)), true), /holds up the base or a shaft step/);
+    const mv2 = safeMovements(bot, [], runner);
+    mv2.getBlock = () => ({liquid: false, canFall: false});
+    assert.ok(!mv2.safeToBreak(bot.blockAt(new Vec3(0, 60, 0))), 'a retained step is never planned as a dig');
+    assert.ok(mv2.safeToBreak(bot.blockAt(new Vec3(1, 60, 0))), 'other natural ground still is');
+  }
   { // rim: a wall one block outside the shaft on the ground, with a gap at the stair entrance
     const {JOBS, VALIDATE} = require('./bots');
     const {Vec3} = require('vec3');
