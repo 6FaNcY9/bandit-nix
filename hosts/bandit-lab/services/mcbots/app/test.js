@@ -2101,7 +2101,7 @@ require('./crafting');
     const dig0 = bot.dig;
     bot.dig = async (b) => { dug.push(`${b.position.x},${b.position.z}`); return dig0(b); };
     await JOBS.shaft({name: 'bot18', bot, world: {hostilesNear: () => [], claim: async () => true, release() {}}, emit() {}, protectedAreas: [], supplyChest: null, combat: null}, job);
-    assert.strictEqual(dug[0], '0,1', 'bot18 starts at the first corner (its step 0,0 stays)');
+    assert.strictEqual(dug[0], '0,2', 'bot18 (corner 2) starts at x1 z2');
     assert.deepStrictEqual([...blocks.keys()].sort(), ['0,60,0', '1,59,0', '2,58,0'], 'one step left per layer, each one further along');
     { // a gravel step is replaced with cobblestone before the layer below goes
       const {JOBS: J} = require('./bots');
@@ -2120,7 +2120,10 @@ require('./crafting');
     for (let y = 58; y <= 60; y++) for (let x = 0; x <= 2; x++) for (let z = 0; z <= 2; z++) blocks.set(`${x},${y},${z}`, 'stone');
     dug.length = 0;
     await JOBS.shaft({name: 'bot17', bot, world: {hostilesNear: () => [], claim: async () => true, release() {}}, emit() {}, protectedAreas: [], supplyChest: null, combat: null}, {...job, t: {}});
-    assert.strictEqual(dug[0], '2,2', 'bot17 starts at the opposite corner');
+    assert.strictEqual(dug[0], '2,0', 'bot17 (corner 1) starts at x2 z1');
+    const {layerOrder} = require('./bots');
+    assert.deepStrictEqual(layerOrder(0, 0, 2, 2, 3).slice(0, 4), [[2, 2], [1, 2], [2, 1], [1, 1]], 'growing squares from the corner');
+    assert.deepStrictEqual(layerOrder(0, 0, 1, 1, -1), [[0, 0], [0, 1], [1, 0], [1, 1]], 'rooms row by row');
   }
   { // rim: a wall one block outside the shaft on the ground, with a gap at the stair entrance
     const {JOBS, VALIDATE} = require('./bots');

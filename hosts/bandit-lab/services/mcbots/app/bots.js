@@ -931,6 +931,16 @@ async function fixStep(r, job, x, y, z) {
   }
 }
 
+// The cells of a layer in growing squares from one of its corners (0-3), so bots that start at
+// different corners dig apart until they meet; corner -1 (a room) goes row by row.
+function layerOrder(x1, z1, x2, z2, corner) {
+  const cx = corner & 1 ? x2 : x1, cz = corner & 2 ? z2 : z1;
+  const cells = [];
+  for (let x = x1; x <= x2; x++) for (let z = z1; z <= z2; z++) cells.push([x, z]);
+  const d = ([x, z]) => Math.max(Math.abs(x - cx), Math.abs(z - cz)) * 1000 + Math.abs(x - cx) + Math.abs(z - cz);
+  return corner < 0 ? cells : cells.sort((a, b) => d(a) - d(b));
+}
+
 // The edge cells of a box in walking order; layer k of a shaft keeps cell k (mod the ring) as its step.
 function stairRing(x1, z1, x2, z2) {
   const ring = [];
@@ -1024,20 +1034,28 @@ async function wearArmour(r) {
 
 // Chopping by hand is slow: make a stone (else wooden) axe from what the bot
 // carries, at most one try per 5 min.
-async function getAxe(r, job) {
+// Make a stone (else wooden) axe or shovel once the job digs blocks that tool is for; equipForBlock
+// then picks it. One try per kind every 5 minutes, failures only cost the slower dig.
+async function getTool(r, job, kind) {
   const {bot} = r;
-  if (bot.inventory.items().some((i) => i.name.endsWith('_axe')) || Date.now() - (r.axeTriedAt || 0) < 300000) return;
-  r.axeTriedAt = Date.now();
-  for (const item of ['stone_axe', 'wooden_axe']) {
+  const tried = (r.toolTriedAt ||= {});
+  if (bot.inventory.items().some((i) => i.name.endsWith(`_${kind}`)) || Date.now() - (tried[kind] || 0) < 300000) return;
+  tried[kind] = Date.now();
+  for (const item of [`stone_${kind}`, `wooden_${kind}`]) {
     try {
       await crafting.ensureItem(r, child(job), item, 1);
-      r.emit('info', `made a ${item} for chopping`);
+      r.emit('info', `made a ${item} for digging`);
       return;
     } catch (e) {
       guard(job);
     }
   }
 }
+const toolFor = (bot, id) => {
+  const b = bot.registry.blocks[id];
+  if (/_(log|stem)$/.test(b?.name || '') || /mineable\/axe/.test(b?.material || '')) return 'axe';
+  return /mineable\/shovel/.test(b?.material || '') ? 'shovel' : null;
+};
 
 async function upkeep(r, job, ids) {
   if (job.t.upkeep) return;
@@ -1047,7 +1065,7 @@ async function upkeep(r, job, ids) {
     const {bot} = r;
     await lightUp(r, job, ids).catch((e) => { guard(job); r.emit('info', `no torch placed: ${e.message.slice(0, 80)}`); });
     await wearArmour(r);
-    if (ids.some((id) => /_(log|stem)$/.test(bot.registry.blocks[id]?.name || ''))) await getAxe(r, job);
+    for (const kind of new Set(ids.map((id) => toolFor(bot, id)).filter(Boolean))) await getTool(r, job, kind);
     const need = ids.find((id) => !canHarvest(bot, id));
     if (need !== undefined) await replacePickaxe(r, job);
     if (bot.food < FOOD_BELOW && r.supplyChest && !bot.inventory.items().some((i) => edible(bot, i)) && Date.now() - (r.foodTriedAt || 0) > FOOD_RETRY_MS) {
@@ -1598,11 +1616,9 @@ const JOBS = {
     let left = 0, dug = 0;
     job.t.total = total;
     for (let y = y2; y >= y1; y--) {
-      for (let i = x1; i <= x2; i++) {
-        for (let j = z1; j <= z2; j++) {
+      for (const [x, z] of layerOrder(x1, z1, x2, z2, job.args.corner ?? -1)) {
+        {
           guard(job);
-          // reverse: start at the opposite corner, so two bots on one shaft meet only in the middle
-          const [x, z] = job.args.reverse ? [x1 + x2 - i, z1 + z2 - j] : [i, j];
           if (job.args.keep && x === job.args.keep.x && z === job.args.keep.z) continue; // a shaft's stair step
           const pos = new Vec3(x, y, z);
           const b = bot.blockAt(pos);
@@ -1636,8 +1652,9 @@ const JOBS = {
   async shaft(r, job) {
     const {x1, z1, x2, z2, top, bottom} = job.args;
     const ring = stairRing(x1, z1, x2, z2);
-    // ponytail: two directions by the name's char-code parity (bot17/bot18 differ); a third bot shares one.
-    const reverse = [...r.name].reduce((n, c) => n + c.charCodeAt(0), 0) % 2 === 1;
+    // ponytail: the start corner comes from the name's char-code sum mod 4 (bot3/bot17/bot18 get three
+    // different ones); two bots can still share a corner.
+    const corner = [...r.name].reduce((n, c) => n + c.charCodeAt(0), 0) % 4;
     let skipped = 0;
     job.t.total = top - bottom + 1;
     for (let y = top; y >= bottom; y--) {
@@ -1645,7 +1662,7 @@ const JOBS = {
       for (let pass = 1; ; pass++) {
         guard(job);
         try {
-          await JOBS.excavate(r, child(job, {type: 'excavate', args: {x1, y1: y, z1, x2, y2: y, z2, keep, reverse}}));
+          await JOBS.excavate(r, child(job, {type: 'excavate', args: {x1, y1: y, z1, x2, y2: y, z2, keep, corner}}));
           break;
         } catch (e) {
           guard(job);
@@ -1758,4 +1775,4 @@ const JOBS = {
   },
 };
 
-module.exports = {stairRing, BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest, guardDigs, safeMovements, NATURAL, partnerOf, depositList};
+module.exports = {layerOrder, stairRing, BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest, guardDigs, safeMovements, NATURAL, partnerOf, depositList};
