@@ -259,7 +259,21 @@ function trackError(a, text) {
 
 // Online workers with nothing to do: the foreman is woken for them (at most every 30 s). A worker that
 // logs in after the foreman's first round sends no event, so it waited for the 10-minute check-in (lab).
-const idleWorkers = (workers, state) => state.bots.filter((b) => workers.has(b.name) && b.online && !b.dead && !b.job && !b.queue?.length).map((b) => b.name);
+// A worker whose last two orders failed for the same reason (stuck without a pickaxe underground) does
+// not wake the foreman for 5 minutes: it reassigned bot2 every 30 s on the lab, each order failing at once.
+const stuckWorkers = new Map(); // name -> {reason, count, at}
+function noteWorker(name, text, now = Date.now()) {
+  const m = /^failed: \w+ .* - (.*)$/.exec(text);
+  if (!m) return stuckWorkers.delete(name);
+  const reason = m[1].replace(/-?\d+/g, '#');
+  const prev = stuckWorkers.get(name);
+  stuckWorkers.set(name, {reason, count: prev?.reason === reason ? prev.count + 1 : 1, at: now});
+}
+const resting = (name, now = Date.now()) => {
+  const s = stuckWorkers.get(name);
+  return !!s && s.count >= 2 && now - s.at < 300000;
+};
+const idleWorkers = (workers, state, now = Date.now()) => state.bots.filter((b) => workers.has(b.name) && b.online && !b.dead && !b.job && !b.queue?.length && !resting(b.name, now)).map((b) => b.name);
 
 function workersText(workers, state) {
   const lines = [...workers].map((w) => state.bots.find((b) => b.name === w)).filter((b) => b?.online).map((b) => `- ${b.name}: ${b.job ? b.job.label : 'idle'}`);
@@ -520,6 +534,7 @@ async function main() {
       for (const e of ev.events) {
         const boss = agents.get(assigner.get(e.bot));
         if (boss && /^(finished|failed|gave up|stopped)/.test(e.text)) {
+          noteWorker(e.bot, e.text);
           boss.push('system', `Worker ${e.bot}: ${e.text}`);
           boss.wake = true;
           boss.wakeAt ||= Date.now();
@@ -584,4 +599,4 @@ if (require.main === module) main().catch((e) => {
   process.exit(1);
 });
 
-module.exports = {decide, Agent, idleWorkers, trackError, parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText};
+module.exports = {decide, Agent, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText};

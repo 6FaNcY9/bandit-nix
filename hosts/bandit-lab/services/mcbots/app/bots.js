@@ -564,10 +564,17 @@ async function waitSafe(r, job, x, z) {
 // LEG blocks: one 90 s deadline and one path search cannot cover that far.
 const LEG = 48;
 async function goNear(r, job, x, y, z, dist, opts = {}) {
-  // A goal far above (a chest on the surface seen from a mine) gets no path in one search, so the
+  // A goal above (a chest on the surface seen from a mine; 12 levels already failed, bot2 at Y 51 under
+  // the chest at Y 63) gets no path in one search, so the
   // bot climbs first, 16 levels per walk, digging its own stairs (bot1, bot2 and bot3 were
   // stranded underground with "No path" on the lab, 2026-10-10).
-  for (let i = 0; i < 8 && r.bot?.entity && y - r.bot.entity.position.y > 12; i++) {
+  // Only under a roof: out in the open a hill is ordinary walking, and climbing first would build pillars.
+  const covered = () => {
+    const p = r.bot.entity.position.floored();
+    for (let dy = 2; dy <= Math.min(20, y - p.y); dy++) if (r.bot.blockAt(p.offset(0, dy, 0))?.boundingBox === 'block') return true;
+    return false;
+  };
+  for (let i = 0; i < 8 && r.bot?.entity && y - r.bot.entity.position.y > 4 && covered(); i++) {
     const p = r.bot.entity.position;
     const up = Math.min(Math.floor(y), Math.floor(p.y) + 16);
     await goLeg(r, job, p.x, up, p.z, 2, {...opts, goal: new goals.GoalY(up), doing: `climbing to Y ${up} towards ${at({x, y, z})}`});

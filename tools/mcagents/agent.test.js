@@ -2,7 +2,7 @@
 // node tools/mcagents/agent.test.js — the Mindcraft command translator.
 const assert = require('node:assert');
 process.env.LOG ||= require('node:path').join(require('node:os').tmpdir(), `mcagents-test-${process.pid}.jsonl`); // decide() logs every model call
-const {decide, Agent, idleWorkers, trackError, parseCommand, translate, commandDocs, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText} = require('./agent');
+const {decide, Agent, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText} = require('./agent');
 
 assert.deepStrictEqual(parseCommand('Sure! !collectBlocks("oak_log", 10)'), {name: 'collectBlocks', args: ['oak_log', 10]});
 assert.deepStrictEqual(parseCommand("Bye! !endConversation('john')"), {name: 'endConversation', args: ['john']});
@@ -106,6 +106,17 @@ assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}
   const busyBot = {online: true, job: {type: 'rearm'}, queue: []};
   assert.strictEqual(promptReason(a, busyBot, 1000, 600000, 0), null);
   assert.strictEqual(promptReason(a, busyBot, 1000, 600000, 2), 'workers');
+}
+{ // a worker failing twice for the same reason rests (does not wake the foreman) for 5 minutes
+  const st = {bots: [{name: 'bot9', online: true, job: null, queue: []}]};
+  const ws = new Set(['bot9']);
+  noteWorker('bot9', 'failed: shift stone -260 63 -213 - no pickaxe and could not make one: could not reach -278 63 -211', 1000);
+  assert.deepStrictEqual(idleWorkers(ws, st, 2000), ['bot9']);
+  noteWorker('bot9', 'failed: shift coal_ore -260 63 -213 - no pickaxe and could not make one: could not reach -279 63 -210', 3000);
+  assert.deepStrictEqual(idleWorkers(ws, st, 4000), [], 'resting');
+  assert.deepStrictEqual(idleWorkers(ws, st, 3000 + 300001), ['bot9'], 'after 5 minutes again');
+  noteWorker('bot9', 'finished: shift stone (10 s)', 5000);
+  assert.deepStrictEqual(idleWorkers(ws, st, 6000), ['bot9'], 'a success clears it');
 }
 // decide() against a fake dashboard and model (global fetch): MC-4 regressions.
 (async () => {
