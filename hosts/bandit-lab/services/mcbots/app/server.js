@@ -24,6 +24,7 @@ const events = new EventLog();
 // What the LLM agents said and chose (POST /api/decision from the agent service), kept apart so
 // they never push job events out of the 200-entry event log.
 const decisions = new EventLog();
+const agentStatuses = new Map(); // agent -> its last POST /api/agentstatus (goal, workers, role, t)
 const stopBlueMap = startBlueMap(world, cfg.bluemapUrl, log);
 const runners = new Map(cfg.names.map((n) => [n, new BotRunner(n, {host: cfg.mcHost, port: cfg.mcPort, log, world, protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest, loginSeed: cfg.loginSeed, hostLabel: cfg.hostLabel, onEvent: (b, k, t) => events.add(b, k, t)})]));
 const settings = new Settings(process.env.STATE_DIR || '');
@@ -204,6 +205,18 @@ const server = http.createServer(async (req, res) => {
       return json(400, {error: e.message});
     }
   }
+  if (req.method === 'POST' && url.pathname === '/api/agentstatus') {
+    if (!agent) return json(403, {error: 'forbidden'});
+    try {
+      const st = agentauth.agentStatus(await readJson(req), {agentBots: cfg.agentBots});
+      if (st.error) throw new Error(st.error);
+      agentStatuses.set(st.agent, {...st, t: Date.now()});
+      return json(200, {ok: true});
+    } catch (e) {
+      return json(400, {error: e.message});
+    }
+  }
+  if (req.method === 'GET' && url.pathname === '/api/agents') return json(200, [...agentStatuses.values()]);
   if (req.method === 'GET' && url.pathname === '/api/world') return json(200, world.snapshot());
   const vm = req.method === 'GET' && /^\/api\/view\/(\w{1,16})\.png$/.exec(url.pathname);
   if (vm) {

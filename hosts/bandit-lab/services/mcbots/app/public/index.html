@@ -50,6 +50,11 @@
   .menu { position:absolute; z-index:5; background:var(--card); border:1px solid var(--bd); border-radius:8px; padding:6px; display:flex; flex-direction:column; gap:4px; min-width:180px; box-shadow:0 4px 16px rgba(0,0,0,.35); }
   .menu b { padding:2px 4px; }
   .card.pick { outline:2px solid #16a34a; }
+  #agents { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr)); gap:12px; }
+  .ag img { width:100%; height:auto; image-rendering:pixelated; border-radius:6px; background:#000; display:block; margin:6px 0; }
+  .ag .wk { display:flex; gap:8px; align-items:center; border-top:1px solid var(--bd); padding:4px 0; }
+  .ag .wk img { width:80px; margin:0; flex:none; } .ag .wk div { min-width:0; word-break:break-word; }
+  .ag .dec { font:12px/1.5 ui-monospace,monospace; word-break:break-word; }
   .view img { width:100%; height:auto; image-rendering:pixelated; border-radius:6px; background:#000; display:block; margin-top:6px; }
 </style>
 </head>
@@ -76,6 +81,7 @@
 <div id="bots" class="grid"></div>
 <div class="bar" id="allbar"><h3>Give the same job to several bots</h3><div id="allcomposer"></div></div>
 <div class="bar"><h3>Events <select id="evbot"></select></h3><div id="events"></div></div>
+<div class="bar"><h3>Agents <span class="mut">(LLM brains: goal, own view, workers, last decisions)</span></h3><div id="agents"></div></div>
 <div class="bar"><h3>Agent decisions <span class="mut">(what the LLM said and chose, newest first)</span></h3><div id="decisions"></div></div>
 <details id="dbg" class="bar"><summary>Advanced: debug (last 30 s per bot: server pull-backs, job step, last error)</summary>
   <div class="row"><button id="dbgcopy" type="button">Copy /api/debug JSON</button><span id="dbgmsg" class="mut"></span></div>
@@ -573,6 +579,36 @@ async function pollDecisions() {
 }
 setInterval(pollDecisions, 4000);
 pollDecisions();
+// ---- agents: GET /api/agents (goal, role, workers), views from /api/view, jobs from the state ----
+const agentCards = new Map();
+let agentList = [];
+const viewSrc = (n) => `/api/view/${encodeURIComponent(n)}.png?t=${Date.now()}`;
+const onScreen = (e) => { const r = e.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight; };
+function renderAgents() {
+  const root = $('agents');
+  for (const a of agentList) {
+    let c = agentCards.get(a.agent);
+    if (!c) { c = { root: el('div', 'card ag'), head: el('h2'), goal: el('div', 'mut'), img: el('img'), crew: el('div'), decs: el('div', 'dec'), wk: new Map() }; c.img.alt = a.agent + ' in-game view'; c.root.append(c.head, c.goal, c.img, c.crew, c.decs); agentCards.set(a.agent, c); root.append(c.root); }
+    c.head.textContent = `${a.agent} ${a.role || ''}`;
+    c.goal.textContent = `goal: ${a.goal || '(none)'} (updated ${new Date(a.t).toLocaleTimeString()})`;
+    c.crew.replaceChildren(...a.workers.map((w) => {
+      let r = c.wk.get(w);
+      if (!r) { r = { row: el('div', 'wk'), img: el('img'), txt: el('div') }; r.img.alt = w + ' view'; r.img.loading = 'lazy'; r.row.append(r.img, r.txt); c.wk.set(w, r); }
+      const b = last.bots.find((x) => x.name === w);
+      r.txt.textContent = `${w}: ${!b ? 'unknown' : b.activity || (b.job ? `${b.job.label} ${b.job.progress || ''}` : b.online ? 'idle - no job' : 'offline')}`;
+      return r.row;
+    }));
+    c.decs.replaceChildren(...decs.filter((e) => e.bot === a.agent).slice(-5).reverse().map((e) => el('div', '', `${new Date(e.t).toLocaleTimeString()} ${e.text}`)));
+  }
+}
+async function pollAgents() {
+  try { agentList = await (await fetch('/api/agents', { cache: 'no-store' })).json(); renderAgents(); } catch {}
+}
+setInterval(pollAgents, 5000);
+pollAgents();
+const tickViews = (workers) => { if (document.hidden) return; for (const c of agentCards.values()) { if (workers) { for (const r of c.wk.values()) if (onScreen(r.img)) r.img.src = viewSrc(r.img.alt.replace(' view', '')); } else if (onScreen(c.img)) c.img.src = viewSrc(c.img.alt.replace(' in-game view', '')); } };
+setInterval(() => { tickViews(false); renderAgents(); }, 3000);
+setInterval(() => tickViews(true), 5000);
 </script>
 </body>
 </html>

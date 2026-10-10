@@ -15,7 +15,15 @@ function bearerMatches(header, tokenHash) {
   return !!(m && tokenHash && crypto.timingSafeEqual(hash(m[1]), tokenHash));
 }
 
-const agentEndpoint = (method, path) => (method === 'GET' && (path === '/api/state' || path === '/api/events')) || (method === 'POST' && (path === '/api/job' || path === '/api/decision'));
+const agentEndpoint = (method, path) => (method === 'GET' && (path === '/api/state' || path === '/api/events')) || (method === 'POST' && (path === '/api/job' || path === '/api/decision' || path === '/api/agentstatus'));
+
+// The agent's self-description for the dashboard's Agents section: a cleaned status, or {error}.
+function agentStatus({agent, goal, workers, role}, {agentBots}) {
+  if (!agentBots.includes(agent)) return {error: 'agent must be an agent bot'};
+  if (typeof goal !== 'string' || (role !== undefined && typeof role !== 'string')) return {error: 'goal and role must be strings'};
+  if (!Array.isArray(workers) || workers.length > 12 || !workers.every((w) => typeof w === 'string' && /^[A-Za-z0-9_]{1,16}$/.test(w))) return {error: 'workers must be at most 12 bot names'};
+  return {agent, goal: goal.slice(0, 500), workers, role: (role || '').slice(0, 40)};
+}
 
 // Why the agent may not send this job, or null.
 function agentJobRefusal({bots, type, args}, {agentBots, supplyChest}) {
@@ -30,4 +38,4 @@ function agentJobRefusal({bots, type, args}, {agentBots, supplyChest}) {
   return null;
 }
 
-module.exports = {hash, bearerMatches, agentEndpoint, agentJobRefusal, AGENT_JOBS};
+module.exports = {agentStatus, hash, bearerMatches, agentEndpoint, agentJobRefusal, AGENT_JOBS};
