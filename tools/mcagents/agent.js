@@ -252,8 +252,9 @@ function trackError(a, text) {
     if (/^(finished|stopped)/.test(text)) a.errStreak = 0;
     return;
   }
-  a.errStreak = m[1] === a.lastErrType && m[2] === a.lastErrReason ? (a.errStreak || 0) + 1 : 1;
-  Object.assign(a, {lastErrType: m[1], lastErrReason: m[2]});
+  const reason = m[2].replace(/-?\d+/g, '#'); // "22 blocks left" and "10 blocks left" are one reason
+  a.errStreak = m[1] === a.lastErrType && reason === a.lastErrReason ? (a.errStreak || 0) + 1 : 1;
+  Object.assign(a, {lastErrType: m[1], lastErrReason: reason});
 }
 
 // Online workers with nothing to do: the foreman is woken for them (at most every 30 s). A worker that

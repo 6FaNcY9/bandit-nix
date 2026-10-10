@@ -165,6 +165,8 @@ assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}
       trackError(a, 'failed: build at -272 65 -219 22 blocks false - could not reach -260 63 -213: No path to the goal!');
       trackError(a, 'failed: build at -272 65 -219 10 blocks false - could not reach -260 63 -213: No path to the goal!');
       assert.strictEqual(a.errStreak, 2);
+      trackError(a, 'failed: build at -272 65 -219 7 blocks false - could not reach -261 64 -213: No path to the goal!');
+      assert.strictEqual(a.errStreak, 3, 'numbers do not make a new reason');
       trackError(a, 'finished: goto -260 63 -213 (3 s)');
       assert.strictEqual(a.errStreak, 0, 'a success clears it');
       const agent = new Agent('bot1', 'build', null);
