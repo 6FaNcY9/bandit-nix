@@ -2155,6 +2155,17 @@ require('./crafting');
       JOBS.place = place0;
     }
   }
+  { // explore: a protected direction is skipped, not the whole search
+    const {explore} = require('./bots');
+    const {Vec3} = require('vec3');
+    const goals = [];
+    const bot = {entity: {position: new Vec3(0, 64, 0), onGround: true}, game: {dimension: 'overworld'}, entities: {},
+      pathfinder: {goto: async (g) => { goals.push(g); }, stop() {}, setGoal() {}}};
+    // bot17 + n 1 starts east ([1, 0]); the east target 32 0 is protected.
+    await explore({bot, name: 'bot17', protectedAreas: [[20, -10, 40, 10]], emit() {}, world: {hostilesNear: () => []}}, {t: {}, cancelled: false, type: 'chop', args: {}}, 'logs', 1);
+    assert.ok(goals.length >= 1, 'it still walks somewhere');
+    assert.ok(!goals.some((g) => g.x === 32 && g.z === 0), 'not into the protected area');
+  }
   { // digAt rechecks the block after every walk and equip: a Stop or a swapped block means no dig
     const {digAt, Cancelled} = require('./bots');
     const {Vec3} = require('vec3');

@@ -1145,11 +1145,18 @@ async function toBand(r, job, band, what) {
 async function explore(r, job, what, n, leash = LEASH) {
   const {bot} = r;
   const dirs = [[1, 0], [0, 1], [-1, 0], [0, -1]];
-  const [dx, dz] = dirs[(n + (r.name.charCodeAt(r.name.length - 1) || 0)) % 4]; // bots spread out
   const p = bot.entity.position;
+  // The first direction (bots spread out) whose target is allowed: next to spawn protection every
+  // try used to end at once and a chop failed in a second (bot18, 2026-10-10).
+  const ok = ([dx, dz]) => {
+    const x = Math.floor(p.x) + dx * EXPLORE_STEP, z = Math.floor(p.z) + dz * EXPLORE_STEP;
+    return !insideAreas(r.protectedAreas, x, z) && !(job.type === 'shift' && Math.hypot(x - job.args.x, z - job.args.z) > leash); // shifts stay near the chest
+  };
+  const start = n + (r.name.charCodeAt(r.name.length - 1) || 0);
+  const dir = [0, 1, 2, 3].map((i) => dirs[(start + i) % 4]).find(ok);
+  if (!dir) return;
+  const [dx, dz] = dir;
   const x = Math.floor(p.x) + dx * EXPLORE_STEP, z = Math.floor(p.z) + dz * EXPLORE_STEP;
-  if (insideAreas(r.protectedAreas, x, z)) return;
-  if (job.type === 'shift' && Math.hypot(x - job.args.x, z - job.args.z) > leash) return; // stay near the chest
   r.emit('info', `no ${what} left in reach: tunnelling ${EXPLORE_STEP} blocks to ${x} ${Math.floor(p.y)} ${z}`);
   await goNear(r, job, x, Math.floor(p.y), z, 3, {doing: `tunnelling to new ${what} ground near ${x} ${Math.floor(p.y)} ${z}`}).catch((e) => {
     guard(job);
@@ -1780,4 +1787,4 @@ const JOBS = {
   },
 };
 
-module.exports = {layerOrder, stairRing, BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest, guardDigs, safeMovements, NATURAL, partnerOf, depositList};
+module.exports = {explore, layerOrder, stairRing, BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest, guardDigs, safeMovements, NATURAL, partnerOf, depositList};
