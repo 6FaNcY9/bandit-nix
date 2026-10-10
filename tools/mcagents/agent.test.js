@@ -123,6 +123,16 @@ console.log('ok');
       ({agent} = await run({replies: [cmd]})); // acknowledged Stop: now quiet
       assert.ok(cmd === '!afkHere' ? agent.afk : agent.goal === '', cmd);
     }
+    { // the same command after two failures is refused without a job
+      const agent = new Agent('bot1', 'mine coal', null);
+      Object.assign(agent, {lastCommand: '!collectBlocks("coal_ore", 5)', failures: 2, lastFailure: 'no pickaxe'});
+      const jobs = [];
+      globalThis.fetch = async (url, opt = {}) => ({ok: true, status: 200, json: async () => (url.endsWith('/api/chat') ? {message: {content: '!collectBlocks("coal_ore", 5)'}} : (jobs.push(url), {}))});
+      const state = {bots: [{name: 'bot1', online: true, pos: [0, 64, 0], inventory: [], queue: [], job: null}], places: []};
+      await decide(agent, new Map([['bot1', agent]]), async () => state, {take: () => true});
+      assert.ok(!jobs.some((u) => u.endsWith('/api/job')), 'no job for a twice-failed command');
+      assert.match(agent.history.at(-1).content, /Refused: .*no pickaxe/);
+    }
     let takes = 0; // queries only: every model call after the first takes budget
     const {calls} = await run({replies: ['!stats'], budget: {take: () => (takes++, true)}});
     assert.strictEqual(calls.model, 5);

@@ -258,7 +258,7 @@ class Agent {
 
   system(state, bot) {
     const self = this.goal ? `YOUR CURRENT ASSIGNED GOAL: "${this.goal}"` : '';
-    return `You are an AI Minecraft bot named ${this.name} that can converse with players, see, move, mine, build, and interact with the world by using commands.\n${self} Be a friendly, casual, effective, and efficient robot. Be very brief in your responses, don't apologize constantly, don't give instructions or make lists unless asked, and don't refuse requests. Don't pretend to act, use commands immediately when requested. Do NOT say this: 'Sure, I've stopped. *stops*', instead say this: 'Sure, I'll stop. !stop'. Respond only as ${this.name}, never output '(FROM OTHER BOT)' or pretend to be someone else. If you have nothing to say or do, respond with an just a tab '\t'. This is extremely important to me, take a deep breath and have fun :)\nSummarized memory:'${this.memory}'\n${statsText(bot, state)}\n${inventoryText(bot)}\n${workersText(this.workers, state)}${commandDocs(blueprintNames(), [...this.workers])}\nConversation Begin:`;
+    return `You are an AI Minecraft bot named ${this.name} that can converse with players, see, move, mine, build, and interact with the world by using commands.\n${self} Rules: when you carry items for your goal, put them into the base chest with !putInChest before you start something else. Smelting needs fuel (coal). For gathering, prefer !startShift: it keeps going and fills the base chest by itself. Be a friendly, casual, effective, and efficient robot. Be very brief in your responses, don't apologize constantly, don't give instructions or make lists unless asked, and don't refuse requests. Don't pretend to act, use commands immediately when requested. Do NOT say this: 'Sure, I've stopped. *stops*', instead say this: 'Sure, I'll stop. !stop'. Respond only as ${this.name}, never output '(FROM OTHER BOT)' or pretend to be someone else. If you have nothing to say or do, respond with an just a tab '\t'. This is extremely important to me, take a deep breath and have fun :)\nSummarized memory:'${this.memory}'\n${statsText(bot, state)}\n${inventoryText(bot)}\n${workersText(this.workers, state)}${commandDocs(blueprintNames(), [...this.workers])}\nConversation Begin:`;
   }
 
   push(role, content) {
@@ -403,6 +403,11 @@ async function decide(agent, agents, getState, budget) {
     }
     const same = reply.match(COMMAND_RE)[0];
     if (same !== agent.lastCommand) agent.failures = 0;
+    // Andy-4.2 ignored the repeat hint and sent one failing command eight times (live 2026-10-10).
+    if (same === agent.lastCommand && agent.failures >= 2) {
+      agent.push('system', `Refused: ${same} failed ${agent.failures} times in a row (${agent.lastFailure || 'same error'}). Do something different.`);
+      continue;
+    }
     agent.lastCommand = same;
     try {
       await sendJob(agent.name, ...t.job);
@@ -467,6 +472,7 @@ async function main() {
         if (!/^(finished|failed|gave up|stopped)/.test(e.text)) continue;
         a.push('system', `Code output:\n${e.text}`);
         a.failures = /^failed/.test(e.text) ? a.failures + 1 : 0;
+        if (a.failures) a.lastFailure = e.text.replace(/^failed: /, '').slice(0, 160);
         if (a.failures >= 2) a.push('system', repeatHint(a.lastCommand));
         a.wake = true;
         a.wakeAt ||= Date.now();
