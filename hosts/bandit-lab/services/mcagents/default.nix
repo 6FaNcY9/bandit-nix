@@ -144,5 +144,51 @@ in {
         RandomizedDelaySec = "10min";
       };
     };
+    # Daily training export (owner, 2026-10-11): good decisions and solver calls from the log as
+    # sft.jsonl + stats.json for the LoRA run on the gaming PC (tools/slayer/train). The data is bot
+    # prompts and state only (dataset.js drops secret-shaped and human-chat rows). The dynamic user's
+    # state directory is private, so a root ExecStartPost publishes the result world-readable under
+    # /var/lib/mcagents-export for the admin user. Empty or missing log: empty export, exit 0.
+    systemd.tmpfiles.rules = ["d /var/lib/mcagents-export 0755 root root -"];
+    systemd.services.mcagents-dataset = {
+      description = "Export logged Minecraft agent decisions as an SFT dataset";
+      environment.LOG = "/var/lib/mcagents/decisions.jsonl";
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${pkgs.nodejs}/bin/node ${../../../../tools/mcagents}/export-sft.js /var/lib/mcagents/decisions.jsonl /var/lib/mcagents/export";
+        ExecStartPost = "+${pkgs.coreutils}/bin/install -m 0644 /var/lib/mcagents/export/sft.jsonl /var/lib/mcagents/export/stats.json /var/lib/mcagents-export/";
+        # Same dynamic user as mcagents.service, so the log is readable.
+        DynamicUser = true;
+        User = "mcagents";
+        StateDirectory = "mcagents";
+        Nice = 19;
+        IOSchedulingClass = "idle";
+        CPUSchedulingPolicy = "idle";
+        TimeoutStartSec = "10min";
+        NoNewPrivileges = true;
+        CapabilityBoundingSet = "";
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        PrivateTmp = true;
+        PrivateDevices = true;
+        PrivateNetwork = true;
+        ProtectKernelTunables = true;
+        ProtectKernelModules = true;
+        ProtectControlGroups = true;
+        LockPersonality = true;
+        RestrictNamespaces = true;
+        RestrictAddressFamilies = "none";
+        SystemCallFilter = "@system-service";
+        MemoryMax = "512M";
+      };
+    };
+    systemd.timers.mcagents-dataset = {
+      wantedBy = ["timers.target"];
+      # A calendar time, not OnBootSec (see the idle-replay timer).
+      timerConfig = {
+        OnCalendar = "*-*-* 04:20:00";
+        RandomizedDelaySec = "10min";
+      };
+    };
   };
 }

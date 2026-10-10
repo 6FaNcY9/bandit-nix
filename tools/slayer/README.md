@@ -133,6 +133,12 @@ the idle replay (`tools/mcagents/idle-replay.js`) records. A running server is n
 swapped: the change takes effect the next time the watcher starts it (after a game).
 Go back: delete `C:\bandit-ai\candidate.json`.
 
+## Training lock
+
+`C:\bandit-ai\busy.ps1` holds the Busy probe (shared with `train\run-guarded.ps1`). While
+`C:\bandit-ai\training.lock` exists and is younger than 24 h, the watcher treats the PC as busy
+("training"): it stops its server and does not start one. See `train\README.md` (LoRA training).
+
 ## Lab integration
 
 The existing `bandit-lab.slayerTunnel.enable = true;` remains compatible, with

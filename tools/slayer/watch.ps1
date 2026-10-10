@@ -20,29 +20,8 @@ if ($TestPort) {
 }
 $mutex = New-Object Threading.Mutex($false, "Local\bandit-ai-watch-$port")
 if (-not $mutex.WaitOne(0)) { exit }
-Add-Type @'
-using System;
-using System.Runtime.InteropServices;
-public static class BanditWindow {
-    [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left, Top, Right, Bottom; }
-    [DllImport("kernel32.dll")] public static extern uint WTSGetActiveConsoleSessionId();
-    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll")] public static extern IntPtr GetShellWindow();
-    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
-    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out Rect r);
-    [DllImport("user32.dll")] public static extern IntPtr MonitorFromWindow(IntPtr h, uint flags);
-    [StructLayout(LayoutKind.Sequential)] public struct Monitor { public int Size; public Rect Bounds, Work; public uint Flags; }
-    [DllImport("user32.dll")] public static extern bool GetMonitorInfo(IntPtr h, ref Monitor m);
-    public static uint ForegroundPid() { uint pid; GetWindowThreadProcessId(GetForegroundWindow(), out pid); return pid; }
-    public static bool Fullscreen() {
-        var h = GetForegroundWindow();
-        if (h == IntPtr.Zero || h == GetShellWindow()) return false;
-        Rect r; var m = new Monitor(); m.Size = Marshal.SizeOf(m);
-        if (!GetWindowRect(h, out r) || !GetMonitorInfo(MonitorFromWindow(h, 2), ref m)) throw new Exception("Window probe failed");
-        return r.Left <= m.Bounds.Left && r.Top <= m.Bounds.Top && r.Right >= m.Bounds.Right && r.Bottom >= m.Bounds.Bottom;
-    }
-}
-'@
+# Busy probe shared with train\run-guarded.ps1 (C:\bandit-ai\busy.ps1).
+. "$base\busy.ps1"
 function Write-Log($message) {
     $log = "$runtime\watch.log"
     if ((Test-Path $log) -and (Get-Item $log).Length -ge 5MB) { Move-Item $log "$log.1" -Force }
@@ -65,40 +44,11 @@ function Servers($listeners) {
           $_.CreationDate.ToString('o') -eq $record.CreationDate))
     })
 }
-function Busy {
-    if (-not $TestPort -and [BanditWindow]::WTSGetActiveConsoleSessionId() -ne (Get-Process -Id $PID).SessionId) { return 'another console session (or no console)' }
-    # Light games never count as games and do not trigger the fullscreen rule while focused.
-    $light = @('isaac-ng.exe', 'isaac.exe', 'wallpaper64.exe', 'wallpaper32.exe', 'chrome.exe', 'msedge.exe', 'firefox.exe', 'brave.exe', 'vlc.exe')
-    if (Test-Path "$base\light-games.txt") {
-        $light += @(Get-Content "$base\light-games.txt" | ForEach-Object { $_.Trim() } | Where-Object { $_ -and -not $_.StartsWith('#') })
-    }
-    $foreground = Get-CimInstance Win32_Process -Filter "ProcessId=$([BanditWindow]::ForegroundPid())"
-    $lightForeground = $null -ne $foreground -and $light -contains $foreground.Name
-    if (-not $lightForeground -and [BanditWindow]::Fullscreen()) { return 'fullscreen window' }
-    $games = @(Get-CimInstance Win32_Process | Where-Object {
-        $_.Name -notin $light -and (
-            $_.Name -match '^(Minecraft|javaw|RobloxPlayerBeta|FortniteClient-Win64-Shipping|VALORANT-Win64-Shipping|cs2|GTA5|RocketLeague)\.exe$' -or
-            $_.ExecutablePath -match '\\(steamapps\\common|Epic Games|Riot Games)\\'
-        )
-    })
-    if ($games.Count) { return "game $($games[0].Name)" }
-    if ($null -ne $GpuPercent) { $usage = $GpuPercent }
-    else {
-        $llama = @(Get-CimInstance Win32_Process -Filter "Name='llama-server.exe'" | ForEach-Object ProcessId)
-        # Light games (Minecraft, Isaac, browsers) may use the GPU next to Andy: their load does not count either.
-        $llama += @(Get-CimInstance Win32_Process | Where-Object { $light -contains $_.Name } | ForEach-Object ProcessId)
-        $counters = @(Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine)
-        if (-not $counters.Count) { throw 'No GPU engine counters; refusing inference' }
-        $engines = @{}
-        foreach ($counter in $counters) {
-            if ($counter.Name -notmatch '^pid_(\d+)_(.+)$') { throw 'Unrecognized GPU counter' }
-            if ($llama -contains [int]$Matches[1]) { continue }
-            $engine = $Matches[2]
-            $engines[$engine] += [int]$counter.UtilizationPercentage
-        }
-        $usage = ($engines.Values | Measure-Object -Maximum).Maximum
-    }
-    if ($usage -ge 20) { return "non-llama GPU $usage%" }
+# train\run-guarded.ps1 holds C:\bandit-ai\training.lock while it trains: the GPU is its, so the
+# server is stopped and not started. A lock older than 24 h is a crash leftover and ignored.
+function Training {
+    $lock = Get-Item "$base\training.lock" -ErrorAction SilentlyContinue
+    if ($lock -and ((Get-Date) - $lock.LastWriteTime).TotalHours -lt 24) { return 'training' }
     return $null
 }
 $script:modelChecks = @{}
@@ -132,6 +82,7 @@ try {
         $cycle = [Diagnostics.Stopwatch]::StartNew()
         try {
             $reason = Busy
+            if (-not $reason) { $reason = Training }
         } catch { $reason = "probe failed: $($_.Exception.Message)" }
         try {
             $listeners = @(Listeners)
@@ -148,7 +99,7 @@ try {
                 }
             } elseif (-not $listeners.Count -and -not $servers.Count -and ($serving = Serving)) {
                 # Verification can take seconds; a game may have started during hashing.
-                if (Busy) { throw 'Game appeared during model verification; launch deferred' }
+                if ((Busy) -or (Training)) { throw 'Game appeared during model verification; launch deferred' }
                 $env:LLAMA_ARG_CHAT_TEMPLATE_KWARGS = '{"enable_thinking":false}'
                 $arguments = "--model $($serving.Path) --alias $($serving.Alias) --host 127.0.0.1 --port $port --jinja --ctx-size 8192 --parallel 1 --n-gpu-layers $layers --temp 0.6 --top-k 20 --top-p 0.95 --min-p 0 --repeat-penalty 1.0"
                 $server = Start-Process "$base\llama\llama-server.exe" -ArgumentList $arguments -WorkingDirectory "$base\llama" -WindowStyle Hidden -PassThru -RedirectStandardOutput "$runtime\watch-$port.out.log" -RedirectStandardError "$runtime\watch-$port.err.log"

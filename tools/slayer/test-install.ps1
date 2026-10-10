@@ -3,7 +3,7 @@ function Assert($ok, $message) { if (-not $ok) { throw $message } }
 $installer = Get-Content "$PSScriptRoot\install.ps1" -Raw
 $watcher = Get-Content "$PSScriptRoot\watch.ps1" -Raw
 $vbs = Get-Content "$PSScriptRoot\watch.vbs" -Raw
-foreach ($text in $installer, $watcher) {
+foreach ($text in $installer, $watcher, (Get-Content "$PSScriptRoot\busy.ps1" -Raw)) {
     $tokens = $null; $errors = $null
     [Management.Automation.Language.Parser]::ParseInput($text, [ref]$tokens, [ref]$errors) | Out-Null
     Assert (-not $errors.Count) "PowerShell parse failed: $($errors[0])"
@@ -15,7 +15,7 @@ Assert ($installer -match '100\.64\.0\.0/10') 'SSH firewall must be tailnet-only
 Assert ($installer -match "wscript\.exe.*watch\.vbs") 'Task must launch the VBS wrapper'
 Assert ($watcher -match 'Get-FileHash.*SHA256' -and $watcher -match 'model missing or checksum mismatch') 'Watcher must gate serving on model verification'
 Assert ($vbs -match 'shell\.Run.*powershell\.exe.*watch\.ps1.*0, False') 'VBS must launch PowerShell hidden and asynchronously'
-foreach ($name in 'watch.ps1', 'watch.vbs', 'light-games.txt') {
+foreach ($name in 'watch.ps1', 'busy.ps1', 'watch.vbs', 'light-games.txt') {
     $pattern = "'" + [regex]::Escape($name) + "' = '([^']+)'"
     $payload = [regex]::Match($installer, $pattern).Groups[1].Value
     $source = Get-Content (Join-Path $PSScriptRoot $name) -Raw

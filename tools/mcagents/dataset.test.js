@@ -134,3 +134,29 @@ try {
   assert.throws(() => buildDataset([], [{id: 1, t: 'bad', bot: 'bot1', text: 'finished: goto 1 64 2'}]));
 } finally { fs.rmSync(dir, {recursive: true, force: true}); }
 console.log('dataset tests passed');
+
+// export-sft.js: decisions + good solver calls, tolerant of torn lines and a missing log.
+{
+  const {exportSft, readRecords} = require('./export-sft');
+  const solver = (id, extra = {}) => ({kind: 'solver', t: '2026-10-10T10:00:00Z', id, episode_id: `solver-${id}`, agent: 'solver', messages: [{role: 'system', content: 'You fix problems'}, user('BOT: bot1')], reply: '!goToCoordinates(1, 64, 2)', ...extra});
+  const outcome = (id, result) => ({kind: 'outcome', t: '2026-10-10T10:01:00Z', id, agent: 'solver', result, reason: 'x', ms: 5});
+  const res = exportSft([solver('s1'), outcome('s1', 'good'), solver('s2'), outcome('s2', 'bad'), solver('s3', {reply: 'token=abc123456789'}), outcome('s3', 'good'), solver('s4', {error: 'nope'}), outcome('s4', 'good')]);
+  assert.deepEqual(res.rows.map((r) => r.source), ['solver'], 'only good, clean solver calls');
+  assert.equal(res.rows[0].messages.at(-1).content, goto);
+  assert.ok(['train', 'val', 'test'].includes(res.rows[0].split));
+  assert.equal(res.stats.solver_rows, 1);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sft-'));
+  const run = (file) => spawnSync(process.execPath, [path.join(__dirname, 'export-sft.js'), file, path.join(dir, 'out')], {encoding: 'utf8'});
+  let r = run(path.join(dir, 'missing.jsonl'));
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(fs.readFileSync(path.join(dir, 'out/sft.jsonl'), 'utf8'), '');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'out/stats.json'), 'utf8')).rows, 0);
+  fs.writeFileSync(path.join(dir, 'log.jsonl'), [JSON.stringify(row(100, goto)), '{"torn":', JSON.stringify(event(1, 105, 'bot1', 'x'))].join('\n') + '\n');
+  assert.equal(readRecords(path.join(dir, 'log.jsonl')).torn, 1);
+  r = run(path.join(dir, 'log.jsonl'));
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'out/stats.json'), 'utf8')).torn_lines, 1);
+  assert.equal(fs.statSync(path.join(dir, 'out/sft.jsonl')).mode & 0o777, 0o644);
+  fs.rmSync(dir, {recursive: true});
+  console.log('export-sft ok');
+}
