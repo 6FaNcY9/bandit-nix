@@ -531,6 +531,7 @@ require('./crafting');
     const plain = await fetch(`http://127.0.0.1:${port}/api/state`);
     assert.strictEqual(plain.status, 404, 'no dashboard routes on the worker port');
     const auth = {Authorization: `Bearer ${token}`};
+    const W1 = 'a1'.repeat(16), W2 = 'b2'.repeat(16); // two workers' ids (hubclient derives them from the login seed)
 
     // a worker may not take over the lab's bots, nor send anything before hello
     let a = await open(auth);
@@ -548,7 +549,7 @@ require('./crafting');
 
     // a proper worker
     a = await open(auth);
-    a.send({t: 'hello', v: 1, host: 'laptop', bots: ['bot5']});
+    a.send({t: 'hello', v: 1, host: 'laptop', wid: W1, bots: ['bot5']});
     const welcome = await until(() => a.msgs.find((m) => m.t === 'welcome'), 'welcome');
     assert.deepStrictEqual([welcome.protectedAreas, welcome.supplyChest], [[[1, 2, 3, 4]], {x: 1, y: 2, z: 3}]);
     const r5 = runners.get('bot5');
@@ -629,12 +630,12 @@ require('./crafting');
     assert.ok(![...world.claims.values()].some((c) => c.by === 'bot5'), 'claims of a gone worker are released');
     assert.throws(() => r5.enqueue('goto', {x: 1, y: 2, z: 3}), /offline/);
 
-    // a reconnect replaces a stale connection
+    // a reconnect replaces a stale connection (same worker: same wid, whatever its host label says)
     const old = await open(auth);
-    old.send({t: 'hello', v: 1, host: 'laptop', bots: ['bot5']});
+    old.send({t: 'hello', v: 1, host: 'laptop', wid: W1, bots: ['bot5']});
     await until(() => old.msgs.find((m) => m.t === 'welcome'), 'welcome 1');
     const fresh = await open(auth);
-    fresh.send({t: 'hello', v: 1, host: 'laptop2', bots: ['bot5']});
+    fresh.send({t: 'hello', v: 1, host: 'laptop2', wid: W1, bots: ['bot5']});
     await until(() => fresh.msgs.find((m) => m.t === 'welcome'), 'welcome 2');
     assert.strictEqual(await old.closed, 4001);
     assert.strictEqual(r5.snapshot().connected, true, 'the new connection stays owner');
@@ -645,10 +646,10 @@ require('./crafting');
     // a replaced connection must not keep acting for the bot it lost
     {
       const o = await open(auth);
-      o.send({t: 'hello', v: 1, host: 'a', bots: ['bot8']});
+      o.send({t: 'hello', v: 1, host: 'a', wid: W1, bots: ['bot8']});
       await until(() => o.msgs.find((m) => m.t === 'welcome'), 'welcome old');
       const n = await open(auth);
-      n.send({t: 'hello', v: 1, host: 'b', bots: ['bot8']});
+      n.send({t: 'hello', v: 1, host: 'b', wid: W1, bots: ['bot8']});
       await until(() => n.msgs.find((m) => m.t === 'welcome'), 'welcome new');
       o.send({t: 'claim', id: 1, key: 'overworld:70,60,5', by: 'bot8'});
       o.send({t: 'ping'});
@@ -656,6 +657,97 @@ require('./crafting');
       assert.ok(!world.claims.has('overworld:70,60,5'), 'a replaced connection cannot claim');
       n.ws.close();
       await until(() => !runners.get('bot8').snapshot().connected, 'bot8 offline');
+    }
+
+    // bot names belong to the worker that first announced them (R2-6)
+    {
+      const hello = async (wid, host, bots) => {
+        const c = await open(auth);
+        c.send({t: 'hello', v: 1, host, ...(wid ? {wid} : {}), bots});
+        return c;
+      };
+      const welcomed = (c, what) => until(() => c.msgs.find((m) => m.t === 'welcome'), what);
+      const lab = await hello(W1, 'bandit-lab-worker', ['bot16', 'bot17']);
+      await welcomed(lab, 'lab worker');
+      // another credential holder can neither announce nor replace them, nor the laptop's bot5
+      for (const names of [['bot16'], ['bot16', 'bot21'], ['bot5'], ['bot17', 'bot5']]) {
+        const evil = await hello(W2, 'bandit-lab-worker', names);
+        assert.strictEqual(await evil.closed, 4003, names.join());
+        assert.match(evil.msgs.find((m) => m.t === 'error').message, /taken by another worker/);
+        assert.ok(runners.get('bot16').snapshot().connected, 'the owner stays connected');
+        assert.ok(runners.get('bot16').conn.bots.has('bot16'));
+      }
+      assert.ok(!runners.has('bot21'), 'a refused hello binds and creates nothing');
+      // the same worker (same id, whatever its label) takes its names back and replaces the stale socket
+      const again = await hello(W1, 'renamed-host', ['bot16', 'bot17']);
+      await welcomed(again, 'owner again');
+      assert.strictEqual(await lab.closed, 4001);
+      // a free name goes to whoever asks first; a worker without id is told apart by its host label
+      const other = await hello(W2, 'laptop', ['bot21']);
+      await welcomed(other, 'second worker, free name');
+      const old1 = await hello(null, 'oldhost', ['bot22']);
+      await welcomed(old1, 'worker without id');
+      const old2 = await hello(null, 'elsewhere', ['bot22']);
+      assert.strictEqual(await old2.closed, 4003);
+      const old3 = await hello(W1, 'oldhost', ['bot22']);
+      assert.strictEqual(await old3.closed, 4003, 'an id does not match a name bound by label');
+      const old4 = await hello(null, 'oldhost', ['bot22']);
+      await welcomed(old4, 'same label reconnects');
+      assert.strictEqual(await old1.closed, 4001);
+      for (const c of [again, other, old4]) c.ws.close();
+      await until(() => !runners.get('bot16').snapshot().connected && !runners.get('bot22').snapshot().connected, 'all offline');
+    }
+
+    // a worker restarted alone: the hub queues its bots' KEEP jobs again once they are online and idle
+    {
+      const hello = async () => {
+        const c = await open(auth);
+        c.send({t: 'hello', v: 1, host: 'laptop', wid: W2, bots: ['bot20']});
+        await until(() => c.msgs.find((m) => m.t === 'welcome'), 'welcome bot20');
+        return c;
+      };
+      const keep = [{type: 'mine', args: {block: 'stone', count: 5}}];
+      const status = (c, extra) => c.send({t: 'status', bots: [{name: 'bot20', ...extra}]});
+      const jobs = (c) => c.msgs.filter((m) => m.t === 'job');
+      let c = await hello();
+      status(c, {online: true, job: {type: 'mine', label: 'mine stone 5'}, kept: keep});
+      const r20 = runners.get('bot20');
+      await until(() => r20.kept.length === 1, 'kept reported');
+      c.ws.close(); // the worker is restarted
+      await until(() => !r20.snapshot().connected, 'worker gone');
+      c = await hello();
+      status(c, {online: false, kept: []}); // the new process: not logged in yet, nothing queued
+      await sleep(150);
+      assert.strictEqual(r20.kept.length, 1, 'the old list is kept while the bot logs in');
+      assert.strictEqual(jobs(c).length, 0);
+      status(c, {online: true, kept: []});
+      await until(() => jobs(c).length === 1, 'job queued again');
+      assert.deepStrictEqual([jobs(c)[0].type, jobs(c)[0].args], ['mine', {block: 'stone', count: 5}]);
+      assert.strictEqual(r20.kept.length, 1, 'saved until the worker reports it');
+      status(c, {online: true, kept: []}); // not queued twice
+      await sleep(150);
+      assert.strictEqual(jobs(c).length, 1);
+      // a plain reconnect (the worker never stopped) keeps the worker's own queue: nothing is sent
+      status(c, {online: true, job: {type: 'mine', label: 'mine stone 5'}, kept: keep});
+      await until(() => r20.kept.length === 1 && r20.snap.job, 'job running');
+      c.ws.close();
+      await until(() => !r20.snapshot().connected, 'blip');
+      c = await hello();
+      status(c, {online: true, job: {type: 'mine', label: 'mine stone 5'}, kept: keep});
+      await sleep(150);
+      assert.strictEqual(jobs(c).length, 0);
+      // a stop forgets them; a bot that stays away past the window starts empty
+      c.ws.close();
+      await until(() => !r20.snapshot().connected, 'blip 2');
+      c = await hello();
+      const realNow = hub.now;
+      hub.now = () => Date.now() + 6 * 60000;
+      status(c, {online: true, kept: []});
+      await until(() => r20.kept.length === 0, 'window over: adopt the worker list');
+      assert.strictEqual(jobs(c).length, 0);
+      hub.now = realNow;
+      c.ws.close();
+      await until(() => !r20.snapshot().connected, 'bot20 offline');
     }
 
     // a flooding worker is cut off
@@ -1483,6 +1575,200 @@ require('./crafting');
     runner.current.cancelled = true;
     await assert.rejects(bot.dig(blk(0, 60, 0)), /stopped/);
     assert.strictEqual(dug, 1);
+  }
+  { // openChest: the partner is the one block facing + left/right point to (R2-5)
+    const {openChest, partnerOf} = require('./bots');
+    const {Vec3} = require('vec3');
+    // left half -> offset of its partner (clockwise of facing); the right half's is the opposite
+    const STEP = {north: [1, 0], south: [-1, 0], east: [0, 1], west: [0, -1]};
+    const world = (chests) => { // chests: [[x, z, name, facing, type]]; a cobblestone cover over each
+      const blocks = new Map();
+      for (const [x, z, name, facing, type] of chests) {
+        blocks.set(`${x},64,${z}`, [name, type ? {facing, type} : {}]);
+        blocks.set(`${x},65,${z}`, ['cobblestone', {}]);
+      }
+      const dug = [];
+      const job = {t: {}, cancelled: false};
+      const bot = {
+        blockAt: (p) => {
+          const b = blocks.get(`${p.x},${p.y},${p.z}`);
+          return b ? {name: b[0], position: p, boundingBox: 'block', getProperties: () => b[1]} : null;
+        },
+        entity: {position: new Vec3(0, 64, 5), onGround: true}, game: {dimension: 'overworld'}, entities: {}, inventory: {items: () => [{type: 1, name: 'stone_pickaxe'}]},
+        pathfinder: {goto: async () => {}, stop() {}, setGoal() {}}, tool: {equipForBlock: async () => {}},
+        dig: async (blk) => { dug.push(`${blk.position.x},${blk.position.z}`); blocks.delete(`${blk.position.x},${blk.position.y},${blk.position.z}`); },
+        openContainer: async () => 'box', stopDigging() {},
+      };
+      const r = {bot, world: {hostilesNear: () => []}, emit() {}, protectedAreas: []};
+      return {bot, open: (x, z) => openChest(r, job, bot.blockAt(new Vec3(x, 64, z))), dug};
+    };
+    for (const [facing, [dx, dz]] of Object.entries(STEP)) {
+      for (const half of ['left', 'right']) {
+        const s = half === 'left' ? 1 : -1;
+        const other = half === 'left' ? 'right' : 'left';
+        // the opened half at 10,10; its partner where facing + side say; an unrelated chest of the
+        // other half's type, same facing, on the wrong axis (and one opposite the partner)
+        const px = 10 + s * dx, pz = 10 + s * dz;
+        const wrong = [[10 + dz, 10 + dx, 'chest', facing, other], [10 - s * dx, 10 - s * dz, 'chest', facing, other]];
+        const w = world([[10, 10, 'chest', facing, half], [px, pz, 'chest', facing, other], ...wrong]);
+        assert.strictEqual(partnerOf(w.bot, w.bot.blockAt(new Vec3(10, 64, 10))).position.x, px, `${facing} ${half}`);
+        assert.strictEqual(await w.open(10, 10), 'box');
+        assert.deepStrictEqual(w.dug.sort(), [`10,10`, `${px},${pz}`].sort(), `${facing} ${half}: only the pair's covers`);
+      }
+      // two adjacent double chests: each half pairs with its own partner, never the neighbouring pair's
+      const along = (k) => [10 + k * dx, 10 + k * dz];
+      const pair = (k, l) => [[...along(k), 'chest', facing, l ? 'left' : 'right'], [...along(k + 1), 'chest', facing, l ? 'right' : 'left']];
+      // left at k, right at k+1 (left's partner lies +step); pair 2 starts at k+2
+      const two = [...pair(0, true), ...pair(2, true)];
+      for (const [k, want] of [[0, [0, 1]], [1, [0, 1]], [2, [2, 3]], [3, [2, 3]]]) {
+        const w = world(two);
+        await w.open(...along(k));
+        assert.deepStrictEqual(w.dug.sort(), want.map((i) => along(i).join(',')).sort(), `${facing} adjacent pairs, opening block ${k}`);
+      }
+    }
+    // missing/unloaded partner, two singles, a different type of chest, a barrel, unknown facing
+    let w = world([[0, 0, 'chest', 'north', 'left']]);
+    await w.open(0, 0);
+    assert.deepStrictEqual(w.dug, ['0,0'], 'unloaded partner: only its own cover');
+    w = world([[0, 0, 'chest', 'north', 'single'], [1, 0, 'chest', 'north', 'single']]);
+    await w.open(0, 0);
+    assert.deepStrictEqual(w.dug, ['0,0'], 'two singles');
+    w = world([[0, 0, 'chest', 'north', 'left'], [1, 0, 'trapped_chest', 'north', 'right']]);
+    await w.open(0, 0);
+    assert.deepStrictEqual(w.dug, ['0,0'], 'a trapped chest is no partner of a chest');
+    w = world([[0, 0, 'chest', 'north', 'left'], [1, 0, 'chest', 'south', 'right']]);
+    await w.open(0, 0);
+    assert.deepStrictEqual(w.dug, ['0,0'], 'facing must match');
+    w = world([[0, 0, 'barrel'], [1, 0, 'barrel']]);
+    assert.strictEqual(partnerOf(w.bot, w.bot.blockAt(new Vec3(0, 64, 0))), null);
+  }
+  { // rearm: the optional spare pickaxe / logs / planks never end the equipment step (R2-4)
+    const {JOBS, Cancelled} = require('./bots');
+    const {Vec3} = require('vec3');
+    const SLOT = {head: 5, torso: 6, legs: 7, feet: 8, 'off-hand': 45};
+    const it = (name, count = 1) => ({name, count, type: name.length * 7 + name.charCodeAt(0), metadata: null});
+    const PLANKS = {oak_planks: 900, birch_planks: 901};
+    // a shared chest so two bots can race for the same stack; cap = most stacks the bot can carry
+    const chestOf = (items) => ({items: items.map((i) => ({...i})), opened: 0, closed: 0});
+    const botOf = (chest, {inv = [], cap = 36, craft, failAt = {}} = {}) => {
+      const slots = [];
+      const equipped = [];
+      const bot = {
+        findBlocks: () => [new Vec3(0, 64, 0)],
+        blockAt: (p) => (p.y === 64 ? {name: 'chest', position: p, boundingBox: 'block', getProperties: () => ({})} : null),
+        entity: {position: new Vec3(0, 64, 3), onGround: true}, game: {dimension: 'overworld'}, entities: {},
+        registry: {blocksByName: {chest: {id: 1}}, itemsByName: {...Object.fromEntries(Object.entries(PLANKS).map(([k, v]) => [k, {id: v}]))}, foodsByName: {bread: {}}},
+        pathfinder: {goto: async () => {}, stop() {}, setGoal() {}},
+        inventory: {items: () => inv, slots},
+        getEquipmentDestSlot: (s) => SLOT[s],
+        openContainer: async () => {
+          chest.opened++;
+          return {
+            containerItems: () => chest.items,
+            close: () => chest.closed++,
+            withdraw: async (type, _m, n) => {
+              if (failAt.withdraw) throw new Error(failAt.withdraw);
+              const src = chest.items.find((i) => i.type === type);
+              if (!src || src.count < n) throw new Error('Server rejected transaction');
+              if (!inv.some((i) => i.type === type) && inv.length >= cap) throw new Error('Inventory is full');
+              src.count -= n;
+              if (!src.count) chest.items.splice(chest.items.indexOf(src), 1);
+              const mine = inv.find((i) => i.type === type);
+              if (mine) mine.count += n; else inv.push({...src, count: n});
+            },
+          };
+        },
+        recipesFor: (id) => [{id}],
+        craft: craft || (async (recipe, n) => {
+          const logI = inv.findIndex((i) => /_log$/.test(i.name));
+          inv[logI].count -= n; if (!inv[logI].count) inv.splice(logI, 1);
+          inv.push({name: 'oak_planks', type: recipe.id, count: 4 * n});
+        }),
+        equip: async (item, dest) => { equipped.push(`${item.name}>${dest}`); },
+      };
+      return {bot, inv, equipped};
+    };
+    const run = (b, job = {t: {}, cancelled: false}) => {
+      const infos = [];
+      const r = {bot: b.bot, world: {hostilesNear: () => []}, emit: (k, m) => infos.push(m), protectedAreas: [], supplyChest: null};
+      return {go: () => JOBS.rearm(r, Object.assign(job, {args: {x: 0, y: 64, z: 0}})), job, infos};
+    };
+    // 1. full inventory with a pickaxe and carried armour: the spare pickaxe cannot be taken, the armour is worn
+    let chest = chestOf([it('iron_pickaxe'), it('bread', 20)]);
+    let b = botOf(chest, {inv: [it('stone_pickaxe'), it('iron_helmet'), it('iron_chestplate')], cap: 3});
+    let x = run(b);
+    await x.go();
+    assert.deepStrictEqual(b.equipped, ['iron_helmet>head', 'iron_chestplate>torso']);
+    assert.strictEqual(chest.closed, chest.opened, 'window closed');
+    assert.ok(x.infos.some((m) => /could not take iron_pickaxe/.test(m)), 'reported');
+    assert.strictEqual(b.inv.filter((i) => i.name === 'iron_pickaxe').length, 0);
+    // 2. the last spare is taken between containerItems() and withdraw(): rearm still equips and feeds
+    chest = chestOf([it('diamond_sword'), it('iron_pickaxe'), it('bread', 20)]);
+    b = botOf(chest, {inv: [it('stone_pickaxe'), it('iron_boots')]});
+    const left = b.bot.openContainer;
+    b.bot.openContainer = async (...a) => {
+      const box = await left(...a);
+      const w = box.withdraw;
+      box.withdraw = async (type, m, n) => {
+        if (chest.items.find((i) => i.type === type)?.name === 'iron_pickaxe') chest.items.splice(chest.items.findIndex((i) => i.type === type), 1); // another bot was faster
+        return w(type, m, n);
+      };
+      return box;
+    };
+    x = run(b);
+    await x.go();
+    assert.deepStrictEqual(b.equipped.sort(), ['diamond_sword>hand', 'iron_boots>feet']);
+    assert.strictEqual(b.inv.find((i) => i.name === 'bread')?.count, 20, 'food still taken');
+    assert.strictEqual(chest.closed, 1);
+    // 3. the log stack changed (a taller one than offered): not an error either
+    chest = chestOf([it('oak_log', 1)]);
+    b = botOf(chest, {inv: [it('stone_sword')]});
+    b.bot.openContainer = ((f) => async () => { const box = await f(); const w = box.withdraw; box.withdraw = async () => { chest.items.length = 0; return w(1, null, 2); }; return box; })(b.bot.openContainer);
+    await run(b).go();
+    assert.deepStrictEqual(b.equipped, ['stone_sword>hand']);
+    // 4. full output inventory: the planks craft fails; reported, the rest done, no throw
+    chest = chestOf([it('oak_log', 2)]);
+    b = botOf(chest, {inv: [it('iron_sword')], craft: async () => { throw new Error('Inventory full'); }});
+    x = run(b);
+    await x.go();
+    assert.ok(/no planks/.test(x.job.progress), x.job.progress);
+    assert.ok(x.infos.some((m) => /no planks \(oak_log: Inventory full\)/.test(m)));
+    assert.deepStrictEqual(b.equipped, ['iron_sword>hand']);
+    // 4b. a craft that returns but makes nothing is reported too
+    b = botOf(chestOf([it('oak_log', 1)]), {craft: async () => {}});
+    x = run(b);
+    await x.go();
+    assert.ok(/no planks/.test(x.job.progress) && x.infos.some((m) => /nothing crafted/.test(m)));
+    // 5. 0 / 1 / 2 logs become planks, a woodcutter's 3+ stay logs
+    for (const [logs, planks] of [[0, 0], [1, 4], [2, 8], [3, 0], [20, 0]]) {
+      b = botOf(chestOf([]), {inv: logs ? [it('oak_log', logs)] : []});
+      x = run(b);
+      await x.go();
+      const n = (re) => b.inv.filter((i) => re.test(i.name)).reduce((s, i) => s + i.count, 0);
+      assert.strictEqual(n(/_planks$/), planks, `${logs} logs`);
+      assert.strictEqual(n(/_log$/), planks ? 0 : logs, `${logs} logs left`);
+      assert.ok(!/no planks/.test(x.job.progress), `${logs} logs: ${x.job.progress}`);
+    }
+    // 5b. logs from the chest: never more than 2 in total, then converted
+    chest = chestOf([it('oak_log', 64)]);
+    b = botOf(chest, {inv: [it('oak_log', 1)]});
+    await run(b).go();
+    assert.strictEqual(chest.items[0].count, 63);
+    assert.strictEqual(b.inv.find((i) => /_planks/.test(i.name))?.count, 8);
+    // 6. a Stop during a failed withdrawal ends the job and closes the window
+    chest = chestOf([it('iron_helmet')]);
+    b = botOf(chest);
+    const job = {t: {}, cancelled: false};
+    b.bot.openContainer = ((f) => async () => { const box = await f(); box.withdraw = async () => { job.cancelled = true; throw new Error('aborted'); }; return box; })(b.bot.openContainer);
+    await assert.rejects(run(b, job).go(), Cancelled);
+    assert.strictEqual(chest.closed, chest.opened);
+    // 7. two bots re-arm from the same chest with one spare pickaxe: one gets it, nobody throws or duplicates
+    chest = chestOf([it('iron_pickaxe'), it('bread', 40)]);
+    const A = botOf(chest, {inv: [it('stone_pickaxe')]}), B = botOf(chest, {inv: [it('stone_pickaxe')]});
+    await Promise.all([run(A).go(), run(B).go()]);
+    const picks = [A, B].map((q) => q.inv.filter((i) => i.name === 'iron_pickaxe').reduce((s, i) => s + i.count, 0));
+    assert.strictEqual(picks[0] + picks[1], 1, 'one spare, one owner');
+    assert.strictEqual(chest.closed, chest.opened);
   }
   { // excavate: digs natural ground top-down, leaves placed blocks and protected areas alone
     const {JOBS, VALIDATE} = require('./bots');

@@ -805,15 +805,23 @@ const itemMatcher = (what) => (what === 'logs' ? (n) => n.endsWith('_log') : wha
 // dirt (which grows grass)/cobblestone/stone/netherrack, and a chest it bridged over stayed shut
 // for the bots (2026-10-08): clear that kind of cover, report anything else.
 const SCAFFOLD = /^(dirt|grass_block|cobblestone|stone|netherrack)$/; // dirt turns into grass in the light
+// The left half's partner lies clockwise of `facing`, the right half's counter-clockwise (read off
+// double chests on the live server, 2026-10-10: north-facing left at x, right at x+1).
+const PARTNER_STEP = {north: [1, 0], south: [-1, 0], east: [0, 1], west: [0, -1]};
+function partnerOf(bot, block) {
+  const {type, facing} = block.getProperties?.() || {};
+  const step = PARTNER_STEP[facing];
+  if (!step || (type !== 'left' && type !== 'right')) return null;
+  const s = type === 'left' ? 1 : -1;
+  const b = bot.blockAt(block.position.offset(s * step[0], 0, s * step[1]));
+  const q = b?.name === block.name && b.getProperties?.();
+  return q && q.facing === facing && q.type === (type === 'left' ? 'right' : 'left') ? b : null;
+}
 async function openChest(r, job, block) {
   const {bot} = r;
-  // A double chest stays shut when either half is covered. Its partner is the neighbour that faces the
-  // same way and has the other `type` (left/right); a single chest beside it is not one (Codex review).
-  const props = block.getProperties?.() || {};
-  const partner = props.type === 'left' || props.type === 'right' ? [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dz]) => bot.blockAt(block.position.offset(dx, 0, dz))).find((b) => {
-    const q = b?.name === block.name && b.getProperties?.();
-    return q && q.facing === props.facing && q.type !== 'single' && q.type !== props.type;
-  }) : null;
+  // A double chest stays shut when either half is covered. Its partner is the one block that the
+  // half's left/right and facing point to (a single chest or another pair beside it is not one).
+  const partner = partnerOf(bot, block);
   for (const half of /chest/.test(block.name) ? [block, partner].filter(Boolean) : []) {
     guard(job); // a Stop between the covers digs nothing more
     const p = half.position.offset(0, 1, 0);
@@ -1406,25 +1414,33 @@ const JOBS = {
       job.t.doing = `re-arming from ${place(r, job.args)}`;
       await goNear(r, job, pos.x, pos.y, pos.z, 3, {brave: true, doing: job.t.doing});
       const box = await openChest(r, job, bot.blockAt(pos));
+      // One failed withdrawal (inventory full, another bot took the last one) never ends the visit:
+      // the rest of the gear, the food and the equip step below still happen. A Stop does end it.
+      const take = async (what, item, n) => {
+        try {
+          await box.withdraw(item.type, item.metadata, n);
+        } catch (e) {
+          guard(job);
+          r.emit('info', `re-arm: could not take ${what}: ${e.message.slice(0, 80)}`);
+        }
+        guard(job); // a Stop between withdrawals takes nothing more (the chest still closes)
+      };
       try {
         for (const re of WANT) {
           const have = best(mine(), re);
           const offer = best(box.containerItems(), re);
-          if (offer && (!have || tier(offer.name) > tier(have.name))) await box.withdraw(offer.type, offer.metadata, 1);
-          guard(job); // a Stop between withdrawals takes nothing more (the chest still closes)
+          if (offer && (!have || tier(offer.name) > tier(have.name))) await take(offer.name, offer, 1);
         }
+        const food = box.containerItems().filter((i) => isFood(i.name)).sort((a, b) => (b.name === 'golden_carrot') - (a.name === 'golden_carrot'))[0];
+        if (food && foodCount() < 32) await take(food.name, food, Math.min(32 - foodCount(), food.count));
         // A spare pickaxe and 2 logs (table + sticks for a stone pickaxe): a pickaxe that breaks deep
         // underground otherwise strands the bot - no wood there, and the way up by hand is "No path"
-        // (bot2 and bot3, 2026-10-10).
+        // (bot2 and bot3, 2026-10-10). Last, so they never take a slot the food needs.
         const count = (re) => bot.inventory.items().filter((i) => re.test(i.name)).reduce((n, i) => n + i.count, 0);
         const spare = best(box.containerItems(), /_pickaxe$/);
-        if (spare && count(/_pickaxe$/) < 2) await box.withdraw(spare.type, spare.metadata, 1);
-        guard(job);
+        if (spare && count(/_pickaxe$/) < 2) await take(spare.name, spare, 1);
         const log = box.containerItems().find((i) => /_log$/.test(i.name));
-        if (log && count(/_log$/) < 2) await box.withdraw(log.type, log.metadata, Math.min(2 - count(/_log$/), log.count));
-        guard(job);
-        const food = box.containerItems().filter((i) => isFood(i.name)).sort((a, b) => (b.name === 'golden_carrot') - (a.name === 'golden_carrot'))[0];
-        if (food && foodCount() < 32) await box.withdraw(food.type, food.metadata, Math.min(32 - foodCount(), food.count));
+        if (log && count(/_log$/) < 2) await take(log.name, log, Math.min(2 - count(/_log$/), log.count));
       } finally {
         box.close();
       }
@@ -1432,13 +1448,20 @@ const JOBS = {
     // Logs would go back into the chest with the next deposit; planks are kept (KEEP_RE). Only the
     // two spare logs: a woodcutter's load stays logs.
     const carried = bot.inventory.items().filter((i) => /_log$/.test(i.name));
+    const noPlanks = [];
     for (const log of carried.reduce((n, i) => n + i.count, 0) <= 2 ? carried : []) {
       const planks = bot.registry.itemsByName[log.name.replace(/_log$/, '_planks')];
       const recipe = planks && bot.recipesFor(planks.id, null, 1, null)[0];
       guard(job); // no craft after a Stop (Codex R2-3)
-      if (recipe) await bot.craft(recipe, log.count, null).catch(() => {});
+      const have = () => bot.inventory.items().filter((i) => i.type === planks?.id).reduce((n, i) => n + i.count, 0);
+      const before = recipe ? have() : 0;
+      let why = recipe ? '' : 'no recipe';
+      if (recipe) await bot.craft(recipe, log.count, null).catch((e) => { why = e.message.slice(0, 60); });
+      if (recipe && !why && have() <= before) why = 'nothing crafted';
+      if (why) noPlanks.push(`${log.name}: ${why}`);
     }
     guard(job);
+    if (noPlanks.length) r.emit('info', `re-arm: no planks (${noPlanks.join('; ')})`);
     for (const [re, slot] of [[/_helmet$/, 'head'], [/_chestplate$/, 'torso'], [/_leggings$/, 'legs'], [/_boots$/, 'feet']]) {
       const it = best(bot.inventory.items(), re);
       if (it) await bot.equip(it, slot).catch(() => {});
@@ -1450,7 +1473,7 @@ const JOBS = {
     const worn = ['head', 'torso', 'legs', 'feet'].filter((s) => bot.inventory.slots[bot.getEquipmentDestSlot(s)]).length;
     const off = bot.inventory.slots[bot.getEquipmentDestSlot('off-hand')]?.name;
     await fetchWood(r, job, true);
-    job.progress = `armour ${worn}/4, ${sword?.name || 'no sword'}, off-hand ${off || 'empty'}, food ${foodCount()}`;
+    job.progress = `armour ${worn}/4, ${sword?.name || 'no sword'}, off-hand ${off || 'empty'}, food ${foodCount()}${noPlanks.length ? ', no planks' : ''}`;
   },
 
   build: (r, job) => build(r, job),
@@ -1551,4 +1574,4 @@ const JOBS = {
   },
 };
 
-module.exports = {BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest, guardDigs};
+module.exports = {BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest, guardDigs, partnerOf};

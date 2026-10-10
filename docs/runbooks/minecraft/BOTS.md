@@ -107,8 +107,8 @@ are saved to `STATE_DIR/jobs.json` (a mine/chop with what is left of its count) 
 once each bot is back online after a restart or deploy (a bot away for more than 5 min starts
 empty). Worker bots count too: each worker reports its own list in the status frame, the hub saves it and
 queues it again when the worker is connected and its bot idle (a worker that kept playing through a hub
-restart is not given the job twice). A worker restarted *alone* still loses its queue. A shift whose bot is far from the chest (respawned at world spawn) walks back first.
-A **double chest** stays shut when either half is covered, so a bot checks both halves and digs away scaffold (dirt, stone, cobblestone) on top of the other half too (found live 2026-10-10: a covered second half gave `windowOpen did not fire` on every deposit).
+restart is not given the job twice). A worker restarted *alone* is handled by the hub, which still has the bot's last reported list: it queues the jobs again when the bot is online and idle, within 5 min of the worker's hello (a plain reconnect of a worker that kept playing is not given them twice; `Stop` forgets them). A shift whose bot is far from the chest (respawned at world spawn) walks back first.
+A **double chest** stays shut when either half is covered, so a bot checks both halves and digs away scaffold (dirt, stone, cobblestone) on top of the other half too (found live 2026-10-10: a covered second half gave `windowOpen did not fire` on every deposit). The other half is the one block that `facing` and `type` point to (the `left` half's partner lies clockwise of `facing`, the `right` half's counter-clockwise: north-facing left at x, right at x+1); a neighbouring pair or a single chest is never touched.
 
 **Forests**: log jobs search 128 blocks and a log shift may work 128 blocks from its chest (64 for
 stone and ore); with nothing left the bot walks on to new ground. Where a log came off dirt or grass
@@ -210,6 +210,7 @@ nix run .#mcbots-worker -- bot5          # on the laptop; Ctrl-C stops the bot
   `vino`, 0400; needs one `nrs` after the first pull). Rotate by setting both
   keys again, deploying the lab, `sudo systemctl restart mcbots-seed docker-mcbots`
   and `nrs` on the laptop.
+- Names: a bot name belongs to the worker that first announced it, until the hub restarts. A worker is known by `wid` (an HMAC of its login seed, so it needs that seed; a worker without `wid` is known by its host label). Another worker holding the token is refused (`bot12 is taken by another worker`, close code 4003) instead of replacing the owner; the owner reconnects freely and takes a stale socket over. To hand a name to another machine, restart the hub (deploy).
 - What a worker may do: act only for the names in its hello, claim at most 8
   blocks per bot, report mobs/blocks/status. Everything it sends is
   re-validated and size-capped on the hub (`hub.js`). Jobs go the other way
@@ -312,7 +313,7 @@ in `app/bots.js`, checked before every block):
   from the supply chest; then carry on where it was. Chopping without an axe is
   fine, so a broken axe is not replaced.
 - **Hunger**: food below 14, none in the inventory and a supply chest set: walk
-  there and take food (the `rearm` routine), at most once per 10 min. The
+  there and take food (the `rearm` routine), at most once per 10 min. Every withdrawal in `rearm` is allowed to fail (full inventory, another bot took the last one): it is logged as `re-arm: could not take ...` and the armour, food and equip steps still happen. Food comes before the spare pickaxe and the 2 logs. Planks that could not be crafted show as `no planks` in the job's progress. The
   existing combat loop eats from the inventory below 15 (below 18 while hurt).
 - **No wood for torches**: a `mine` or `shift` on an ore, with a supply chest set and
   fewer than 2 logs and fewer than 8 planks in the inventory, first takes 4 logs from the

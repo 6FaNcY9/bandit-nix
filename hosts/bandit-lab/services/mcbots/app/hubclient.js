@@ -138,6 +138,8 @@ class HubClient {
     this.token = token;
     this.names = names;
     this.hostLabel = hostLabel;
+    // Who this worker is to the hub: stable, secret-derived (the seed never leaves the machine). Bot names bind to it.
+    this.wid = loginSeed ? require('node:crypto').createHmac('sha256', String(loginSeed)).update('mcbots-worker-id').digest('hex').slice(0, 32) : undefined;
     this.log = log;
     this.wsOptions = wsOptions;
     this.world = new RemoteWorld();
@@ -166,7 +168,7 @@ class HubClient {
     this.log('hub', `connecting to ${this.url}`);
     const ws = new WebSocket(this.url, {headers: {Authorization: `Bearer ${this.token}`}, handshakeTimeout: 10000, maxPayload: 1 << 20, ...this.wsOptions});
     this.ws = ws;
-    ws.on('open', () => ws.send(JSON.stringify({t: 'hello', v: PROTOCOL, host: this.hostLabel, bots: this.names})));
+    ws.on('open', () => ws.send(JSON.stringify({t: 'hello', v: PROTOCOL, host: this.hostLabel, wid: this.wid, bots: this.names})));
     ws.on('message', (data) => {
       let m;
       try {

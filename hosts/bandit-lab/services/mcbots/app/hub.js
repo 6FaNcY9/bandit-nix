@@ -31,6 +31,8 @@ const MAX_MSGS_PER_S = 200; // a real worker sends a handful per second
 const AUTH_FAILS = 20; // per minute, then 429 until the window passes
 const KEY_RE = /^[a-z_]{1,32}:-?\d{1,9},-?\d{1,4},-?\d{1,9}$/;
 const HOST_RE = /^[\w.-]{1,40}$/;
+const WID_RE = /^[0-9a-f]{32}$/;
+const RESUME_MS = 300000; // a restarted worker's bot has this long to log in before its old jobs are dropped
 const BLOCK_RE = /^[a-z_]{1,48}$/;
 
 // ---- sanitizers: nothing a worker sends is trusted ----
@@ -113,6 +115,7 @@ class RemoteRunner {
     this.lastSeen = 0;
     this.snap = cleanSnapshot(null);
     this.dbg = cleanDebug(null);
+    this.resume = null; // {jobs, until}: KEEP jobs to queue again after the worker restarted
     this.kept = []; // what the worker last said should survive a hub restart (server.js saves it)
   }
 
@@ -180,6 +183,7 @@ class Hub {
     if (typeof token !== 'string' || !/^[\w-]{32,128}$/.test(token)) throw new Error('worker token must be 32..128 characters of [A-Za-z0-9_-]');
     this.world = world;
     this.runners = runners;
+    this.owners = new Map(); // remote bot name -> who first announced it
     this.local = new Set(runners.keys()); // the lab's own bots: never claimable by a worker
     this.tokenHash = crypto.createHash('sha256').update(token).digest();
     this.log = log;
@@ -285,7 +289,7 @@ class Hub {
           if (!r) continue;
           r.snap = cleanSnapshot(b);
           r.dbg = cleanDebug(b.debug);
-          r.kept = cleanKept(b.kept);
+          if (this.resumeKept(r) === 'none') r.kept = cleanKept(b.kept);
           r.lastSeen = this.now();
         }
         for (const e of list(m.events, 50, (x) => cleanEvent(x, conn.bots))) if (e) this.events?.add(e.bot, e.kind, e.text);
@@ -313,6 +317,27 @@ class Hub {
     }
   }
 
+  // A worker restarted alone (the hub stayed up): its bots start with no queue while the hub still has
+  // their KEEP jobs. Queue them again once the bot is online and idle, like server.js does at hub start.
+  // 'wait': keep the old list for now; 'resumed': just sent; 'none': nothing pending (adopt the worker's list).
+  resumeKept(r) {
+    if (!r.resume) return 'none';
+    if (this.now() > r.resume.until || r.snap.job || r.snap.queue.length) { // gave up, or the worker kept playing (a plain reconnect)
+      r.resume = null;
+      return 'none';
+    }
+    if (!r.snap.online || r.snap.dead) return 'wait';
+    const {jobs} = r.resume;
+    r.resume = null;
+    for (const j of jobs) {
+      try {
+        r.enqueue(j.type, j.args);
+        this.events?.add(r.name, 'info', `resumed after worker restart: ${j.type}`);
+      } catch {} // an entry the validator refuses is dropped
+    }
+    return 'resumed';
+  }
+
   owned(conn, name) {
     if (typeof name !== 'string' || !conn.bots.has(name)) return null;
     const r = this.runners.get(name);
@@ -329,6 +354,12 @@ class Hub {
     }
     const lab = names.filter((n) => this.local.has(n));
     if (lab.length) return this.refuse(conn, `${lab.join(', ')} run in the lab`);
+    // A bot name belongs to the worker that first announced it (until the hub restarts): the same worker
+    // may reconnect, another one holding the shared token may not announce or replace it. A worker is
+    // known by `wid` (derived from its own login seed) or, from an older worker, by its host label.
+    const who = WID_RE.test(m.wid) ? `k:${m.wid}` : `h:${host}`;
+    const taken = names.filter((n) => (this.owners.get(n) || who) !== who);
+    if (taken.length) return this.refuse(conn, `${taken.join(', ')} ${taken.length > 1 ? 'are' : 'is'} taken by another worker`);
     const fresh = names.filter((n) => !this.runners.has(n)).length;
     if (this.runners.size - this.local.size + fresh > MAX_REMOTE_BOTS) return this.refuse(conn, 'too many remote bots');
     // A reconnect replaces the old connection (it may be a dead NAT mapping).
@@ -339,6 +370,7 @@ class Hub {
         old.ws.close(4001, 'replaced by a new connection');
       }
     }
+    for (const n of names) this.owners.set(n, who);
     conn.hello = true;
     conn.host = host;
     conn.bots = new Set(names);
@@ -348,6 +380,7 @@ class Hub {
         r = new RemoteRunner(n, this.now);
         this.runners.set(n, r);
       }
+      if (r.kept.length && !r.resume) r.resume = {jobs: r.kept, until: this.now() + RESUME_MS};
       r.conn = conn;
       r.host = host;
       r.lastSeen = this.now();
