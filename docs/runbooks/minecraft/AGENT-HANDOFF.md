@@ -164,13 +164,13 @@ No bot source edited, no live server operations, no full runtime certification.
 
 ### CX-1: commit this handoff
 
-State: ready to commit (docs only).
+State: committed (docs only): `def21854df89015f4aa6ec0737b593d864c8338f`.
 Owner: Codex. Scope: this file only. Accepted split and task states recorded.
 Checks: document paths and source line references reviewed; whitespace checked.
 
 ### CX-2: backup restore drill
 
-State: implementation next; Docker isolation choice pending owner response.
+State: blocked on Docker isolation choice; no drill script committed.
 Owner: Codex. Scope: `tools/restore-drill.sh`, a small test, and the drill section
 of `docs/runbooks/backup-restore.md`. Owner runs sudo; Codex uses fixtures only.
 The existing Minecraft helper uses Docker container/image state outside TMPDIR;
@@ -179,12 +179,41 @@ for the existing daemon's temporary state. Neither option touches live container
 
 ### CX-3: container hardening step 1
 
-State: queued after CX-2.
+State: implemented and committed; not integrated, pushed or activated.
+Prepared while CX-2 awaits the required Docker-isolation decision.
 Owner: Codex. One container per unsigned commit: aiia-ghost, aiia-redis, grafana,
 blackbox-exporter, node-exporter; vaultwarden last. Scope: owning modules,
 `ci/lab-surface.nix` and `docs/runbooks/container-hardening.md`.
 Each commit requires lab-surface and lab toplevel builds and a post-deploy probe.
 Owner GO required for each shipment; Codex never pushes or activates.
+
+Ordered unsigned commits (each passed pinned formatting, lab-surface and the
+bandit-lab toplevel build before commit; configuration inputs unchanged at commit):
+
+| Container | Commit |
+| --- | --- |
+| aiia-ghost | `f132fec2404c7643a90208bb2efb6a3831aecc19` |
+| aiia-redis | `48a03383ce158309ced7f8cea53408086553aeed` |
+| grafana | `c4d21994d65bb658fb6203df9eca87e7aa4c245d` |
+| blackbox-exporter | `db46ef8bf2cd7a75097572a83ec9ffc83e06ef35` |
+| node-exporter | `dd0f2958ec38bd6c28f461b84849e1970441fd38` |
+| vaultwarden | `0800f63ada0d443537b5ed8605002caa1e807974` |
+
+Checks used for each container:
+
+```bash
+rtk nix build .#checks.x86_64-linux.lab-surface \
+  .#nixosConfigurations.bandit-lab.config.system.build.toplevel \
+  --no-link --no-update-lock-file
+```
+
+The full `rtk nix flake check --no-update-lock-file` was attempted once on
+`0800f63` and reported `error: interrupted by the user` at `output-evaluation`.
+It is incomplete, not a passed gate. The final lab toplevel built to
+`/nix/store/1zhn98y3dma1dqf2hlkd0fv8m4z3jdgm-nixos-system-bandit-lab-26.11.20260923.4975466`.
+Owner probes and the necessary per-service Compose recreation are in
+`docs/runbooks/container-hardening.md`. Integration must build the final signed
+candidate again; these source builds do not certify a later cherry-pick result.
 
 ### CX-4: secrets-check cleanup
 
