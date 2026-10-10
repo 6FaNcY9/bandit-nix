@@ -482,6 +482,16 @@ Arguments are the shaft job's (`x1 z1 x2 z2`, `top` default 80) plus `y`, so the
 What a bot does on its own while a `mine`, `chop` or `shift` job runs (`upkeep()`
 in `app/bots.js`, checked before every block):
 
+- **Iron gear** (`ensureGear`, `app/gear.js`, once per 5 min, only when the food is fine and there is
+  something to do): 3 or more raw iron and coal or charcoal in the inventory are smelted into ingots (no
+  more than the missing gear needs, and never the ore the job itself is mining, which belongs in the
+  chest). Then, with the ingots on hand and in this order: iron pickaxe (3), iron sword (2), then the
+  cheapest empty armour slot first (boots 4, helmet 5, leggings 7, chestplate 8), worn at once. Iron
+  or better already held (a diamond pickaxe counts) or any piece already in a slot is never replaced.
+  A failure (no wood for the sticks or the table, no cobblestone for the furnace) is an info event and the
+  job carries on. Live on the local stage (bot11, 2026-10-10, `mine stone`, given 20 raw iron, 4 coal, 4
+  logs, 16 cobblestone): `smelted 20 raw iron`, then pickaxe, sword, boots, helmet (6 ingots left, leggings
+  need 7); a second job after 10 more raw iron made leggings and chestplate, and no second pickaxe.
 - **Broken tool**: no pickaxe that can harvest the block: craft a stone pickaxe,
   else a wooden one (chopping 3 logs first when it has no wood), else take one
   from the supply chest; then carry on where it was. Chopping without an axe is
@@ -516,7 +526,7 @@ in `app/bots.js`, checked before every block):
 
 A switch on the dashboard ("Standing orders") that keeps the supply chest stocked
 (`app/keeper.js`). Quotas are declared in `default.nix` (`KEEPER_QUOTAS`, now
-`logs:64,cobblestone:128,coal:32,torch:64`; optional `KEEPER_SITE=x,y,z` to walk to
+`logs:64,cobblestone:128,coal:32,torch:64,raw_iron:16,iron_pickaxe:2,iron_sword:1`; optional `KEEPER_SITE=x,y,z` to walk to
 before chopping or mining). Without `SUPPLY_CHEST` or quotas the panel is absent.
 
 - **Off after every restart.** Switching on does nothing but read the chest and
@@ -530,7 +540,10 @@ before chopping or mining). Without `SUPPLY_CHEST` or quotas the panel is absent
   jobs: logs = `chop` + `deposit only logs`; cobblestone = `mine stone` + `deposit
   only cobblestone`; coal = `mine coal_ore` + `deposit only coal`; torch = `withdraw
   coal`, `withdraw logs`, `craft torch`, `deposit only torch` (only when the chest
-  already holds the coal and a log). Everything shows up in the cards, the event log
+  already holds the coal and a log); raw_iron = `mine iron_ore` + `deposit only raw_iron`; iron_pickaxe
+  and iron_sword = `withdraw` raw iron (3 or 2 per tool), coal, 8 cobblestone and logs, `smelt`, `craft`,
+  `deposit only <tool>` (blocked until the chest holds all of it; `rearm` hands out the best pickaxe and sword).
+  The stone pickaxe quota was dropped for this kit; `PLANS.stone_pickaxe` is still there. Everything shows up in the cards, the event log
   ("keeper") and can be stopped like any other job.
 - A chain that ends without the chest getting more of the item puts that item on a
   10 min cooldown (no ore nearby must not become a loop). Items without a recipe

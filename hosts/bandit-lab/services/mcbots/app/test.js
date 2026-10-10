@@ -1370,9 +1370,29 @@ require('./crafting');
   assert.match(PLANS.stone_pickaxe(3, chest, {cobblestone: 8, oak_log: 3}).blocked, /9 cobblestone/);
   assert.match(PLANS.stone_pickaxe(3, chest, {cobblestone: 9, oak_log: 2}).blocked, /3 logs/);
   assert.strictEqual(PLANS.stone_pickaxe(1, chest, {cobblestone: 3, birch_log: 2}).length, 4);
+  // iron kit: raw iron, coal, cobblestone and logs come out, the bot smelts and crafts, the tool goes back
+  const kitStock = {raw_iron: 6, coal: 1, cobblestone: 8, oak_log: 2};
+  assert.deepStrictEqual(PLANS.iron_pickaxe(2, chest, kitStock).map((j) => j[0]), ['withdraw', 'withdraw', 'withdraw', 'withdraw', 'smelt', 'craft', 'deposit']);
+  assert.deepStrictEqual(PLANS.iron_pickaxe(2, chest, kitStock).find((j) => j[0] === 'smelt')[1], {item: 'raw_iron', count: 6});
+  assert.strictEqual(PLANS.iron_pickaxe(2, chest, kitStock).at(-1)[1].only, 'iron_pickaxe');
+  assert.match(PLANS.iron_pickaxe(2, chest, {...kitStock, raw_iron: 5}).blocked, /6 raw_iron/);
+  assert.match(PLANS.iron_sword(1, chest, {...kitStock, coal: 0}).blocked, /1 coal/);
+  assert.match(PLANS.iron_sword(1, chest, {...kitStock, cobblestone: 7}).blocked, /8 cobblestone/);
+  assert.deepStrictEqual(PLANS.raw_iron(16, chest).map((j) => [j[0], j[1].block || j[1].only]), [['mine', 'iron_ore'], ['deposit', 'raw_iron']]);
+  // gear: pickaxe, sword, then the cheapest armour; never what is already held or worn
+  const {gearPlan, ingotsWanted} = require('./gear');
+  assert.deepStrictEqual(gearPlan(0, []), []);
+  assert.deepStrictEqual(gearPlan(3, []), ['iron_pickaxe']);
+  assert.deepStrictEqual(gearPlan(2, []), ['iron_sword']);
+  assert.deepStrictEqual(gearPlan(9, ['stone_pickaxe']), ['iron_pickaxe', 'iron_sword', 'iron_boots']);
+  assert.deepStrictEqual(gearPlan(30, ['diamond_pickaxe', 'iron_sword', 'iron_boots']), ['iron_helmet', 'iron_leggings', 'iron_chestplate']);
+  assert.deepStrictEqual(gearPlan(30, ['netherite_sword', 'leather_helmet', 'iron_chestplate', 'iron_leggings', 'iron_boots', 'iron_pickaxe']), []);
+  assert.deepStrictEqual(gearPlan(8, ['iron_pickaxe', 'iron_sword']), ['iron_boots']);
+  assert.strictEqual(ingotsWanted([]), 29);
+  assert.strictEqual(ingotsWanted(['iron_pickaxe', 'iron_sword', 'iron_helmet', 'iron_chestplate', 'iron_leggings', 'iron_boots']), 0);
   // chain arguments pass the real validators (the bots would refuse them otherwise)
   const {VALIDATE: V} = require('./bots');
-  for (const [type, args] of [...PLANS.logs(40, chest), ...PLANS.cobblestone(64, chest), ...PLANS.coal(8, chest), ...PLANS.torch(16, chest, {coal: 9, oak_log: 3}), ...PLANS.stone_pickaxe(3, chest, {cobblestone: 9, oak_log: 3}), ['stock', chest], ['goto', chest]]) assert.doesNotThrow(() => V[type](args), type);
+  for (const [type, args] of [...PLANS.logs(40, chest), ...PLANS.cobblestone(64, chest), ...PLANS.coal(8, chest), ...PLANS.torch(16, chest, {coal: 9, oak_log: 3}), ...PLANS.stone_pickaxe(3, chest, {cobblestone: 9, oak_log: 3}), ...PLANS.raw_iron(16, chest), ...PLANS.iron_pickaxe(2, chest, kitStock), ...PLANS.iron_sword(1, chest, kitStock), ['stock', chest], ['goto', chest]]) assert.doesNotThrow(() => V[type](args), type);
   assert.throws(() => V.deposit({...chest, only: 'Bad Name'}));
   assert.deepStrictEqual(V.deposit(chest), chest); // plain deposits are unchanged
 }

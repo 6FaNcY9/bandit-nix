@@ -54,6 +54,7 @@ at most once a day.
 | --- | --- | --- | --- | --- |
 | R1 | Iron and gold quotas | Keeper plans for `raw_iron` and `raw_gold` (mine at the ore band, deposit into their chest); iron and gold arrive in the chest without help | 1-2 | B4 |
 | R2 | Tool progression | A bot with iron in reach makes an iron pickaxe (gold needs it), sword and armour by itself, and the keeper keeps spare iron kits in the supply chest | 1-2 | R1 |
+| | | *R2 shipped in code 2026-10-10 (not yet pushed): `ensureGear` smelts carried raw iron and crafts pickaxe, sword and armour; keeper quotas `raw_iron:16,iron_pickaxe:2,iron_sword:1`. Live on the stage (bot11). Left: gold (no raw_gold plan, no gold use), logs as furnace fuel, and a live keeper run of the new plans.* | |
 | R3 | Survival (Stage 3) | Arrow side-step, no swimming in lava, retreat at night, collect drops after a death; one day of shifts without a lost kit | 2-4 | R2 |
 | R4 | Bigger builds | Blueprints larger than 5x5x3, block states (chest, furnace, bed facing; torch), reach from inside a structure or simple scaffolding, several builders on one blueprint; `base-v1.json` builds | 4-8 | B4; design reviewed by `architect` first |
 | R5 | Respawn point | Each bot clicks the base bed once (and again after the bed is replaced); deaths respawn at the base | 1 (beds from the owner) / 2 (sheep for wool) | R4 |

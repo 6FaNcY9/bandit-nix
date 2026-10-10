@@ -20,6 +20,7 @@ const treeFarmJob = require('./treefarm');
 const homebedJob = require('./homebed');
 const levelJob = require('./level');
 const tidyJob = require('./tidy');
+const gearJob = require('./gear');
 
 const NAME_RE = /^bot[0-9]{1,2}$/; // BotGate's pattern (Velocity plugin)
 const LOGIN_GAP_MS = 4500; // Velocity rate-limits logins
@@ -1143,6 +1144,37 @@ async function getTool(r, job, kind) {
     }
   }
 }
+// Iron the bot carries becomes ingots (coal or charcoal burns; the job's own ore is left for the
+// chest), then the missing iron pickaxe, sword and armour are crafted and worn. One try per 5 min,
+// only when there is something to do; every failure is logged and the job carries on.
+async function ensureGear(r, job) {
+  const {bot} = r;
+  const n = (name) => craftingLib.count(bot, name);
+  if ((n('raw_iron') < 3 && !n('iron_ingot')) || Date.now() - (r.gearTriedAt || 0) < 300000) return;
+  const worn = ['head', 'torso', 'legs', 'feet'].map((s) => bot.inventory.slots[bot.getEquipmentDestSlot(s)]).filter(Boolean);
+  const owned = [...bot.inventory.items(), ...worn].map((i) => i.name);
+  const wanted = gearJob.ingotsWanted(owned) - n('iron_ingot');
+  const smeltN = Math.min(n('raw_iron'), wanted);
+  const canSmelt = smeltN >= 1 && n('raw_iron') >= 3 && !jobWants(job, 'iron_ore') && ['coal', 'charcoal'].some((f) => n(f) >= Math.ceil(smeltN / 8));
+  if (!canSmelt && !gearJob.gearPlan(n('iron_ingot'), owned).length) return;
+  r.gearTriedAt = Date.now();
+  if (canSmelt) {
+    await crafting.smelt(r, child(job, {type: 'smelt'}), 'raw_iron', smeltN)
+      .then(() => r.emit('info', `smelted ${smeltN} raw iron`))
+      .catch((e) => { guard(job); r.emit('info', `could not smelt the iron: ${e.message.slice(0, 80)}`); });
+  }
+  for (const item of gearJob.gearPlan(n('iron_ingot'), owned)) {
+    try {
+      await crafting.ensureItem(r, child(job), item, 1);
+      r.emit('info', `made an ${item}`);
+      await wearArmour(r);
+    } catch (e) {
+      guard(job);
+      r.emit('info', `could not make an ${item}: ${e.message.slice(0, 80)}`);
+    }
+  }
+}
+
 const toolFor = (bot, id) => {
   const b = bot.registry.blocks[id];
   if (/_(log|stem)$/.test(b?.name || '') || /mineable\/axe/.test(b?.material || '')) return 'axe';
@@ -1170,6 +1202,7 @@ async function upkeep(r, job, ids) {
       // The chest had none: hunt for it. Same 10-minute timer, so at most one hunt per bot per 10 minutes.
       if (!bot.inventory.items().some((i) => edible(bot, i))) await huntFood(r, job);
     }
+    if (bot.food >= FOOD_BELOW) await ensureGear(r, job);
     if (bot.inventory.emptySlotCount() < 4 && !jobWants(job, 'cobblestone')) await tossJunk(r, job);
     if (bot.inventory.emptySlotCount() < 2) {
       const chest = chestOf(r, job);

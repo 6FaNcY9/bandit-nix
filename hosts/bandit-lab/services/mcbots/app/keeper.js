@@ -48,6 +48,19 @@ PLANS.stone_pickaxe = (n, c, stock) => {
   if (have(stock, 'logs') < logs) return {blocked: `needs ${logs} logs in the chest (for the sticks and a table)`};
   return [['withdraw', {item: 'cobblestone', count: 3 * n, ...c}], ['withdraw', {item: 'logs', count: logs, ...c}], ['craft', {item: 'stone_pickaxe', count: n}], ['deposit', {...c, only: 'stone_pickaxe'}]];
 };
+// Raw iron for the kit below; a mine job with this block keeps what it digs (bots.js ensureGear does not smelt it).
+PLANS.raw_iron = (n, c) => [['mine', {block: 'iron_ore', count: n}], ['deposit', {...c, only: 'raw_iron'}]];
+// Iron tools: the chest gives raw iron, coal for the furnace, 8 cobblestone for one and logs for the sticks and a
+// table; the bot smelts, crafts and puts the tool back. Needs 3 (pickaxe) or 2 (sword) ingots per tool.
+for (const [item, ingots] of [['iron_pickaxe', 3], ['iron_sword', 2]]) {
+  PLANS[item] = (n, c, stock) => {
+    const raw = ingots * n;
+    const need = [['raw_iron', raw], ['coal', Math.ceil(raw / 8)], ['cobblestone', 8], ['logs', Math.ceil(n / 2) + 1]];
+    const short = need.find(([what, k]) => have(stock, what) < k);
+    if (short) return {blocked: `needs ${short[1]} ${short[0]} in the chest first`};
+    return [...need.map(([what, k]) => ['withdraw', {item: what, count: k, ...c}]), ['smelt', {item: 'raw_iron', count: raw}], ['craft', {item, count: n}], ['deposit', {...c, only: item}]];
+  };
+}
 const WORKSITE = new Set(['chop', 'mine']); // jobs that start with a walk to the work site, when one is set
 
 class Keeper {

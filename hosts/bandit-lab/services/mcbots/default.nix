@@ -106,7 +106,7 @@ in {
             # Standing orders (dashboard switch, off after every restart): what the
             # keeper keeps in the supply chest, item:amount. Optional KEEPER_SITE
             # "x,y,z" makes the bots walk there before they chop or mine.
-            KEEPER_QUOTAS = "logs:64,cobblestone:128,coal:32,torch:64,stone_pickaxe:3";
+            KEEPER_QUOTAS = "logs:64,cobblestone:128,coal:32,torch:64,raw_iron:16,iron_pickaxe:2,iron_sword:1";
             # Resource site in the forest west of spawn (chest -260 65 -213), so
             # standing orders never dig around the spawn base.
             KEEPER_SITE = "-258,65,-210";
