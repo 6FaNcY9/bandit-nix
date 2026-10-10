@@ -149,6 +149,9 @@ const ROUTINES = new Set(['shift', 'guard', 'follow']);
 const isRoutine = (job) => !!job && ROUTINES.has(job.type);
 
 const LOG_TYPES = /_log$|^logs?$|^wood$/;
+// What the model says for an ore -> the block ("coal" made a lab shift fail: unknown block, 2026-10-10).
+const ORES = new Set(['coal', 'iron', 'gold', 'copper', 'diamond', 'emerald', 'lapis', 'redstone']);
+const blockOf = (t) => (t === 'cobblestone' ? 'stone' : ORES.has(t.replace(/^raw_/, '')) ? `${t.replace(/^raw_/, '')}_ore` : t);
 const ORE_DROPS = {coal_ore: 'coal', iron_ore: 'raw_iron', gold_ore: 'raw_gold', copper_ore: 'raw_copper', diamond_ore: 'diamond', emerald_ore: 'emerald', lapis_ore: 'lapis_lazuli', redstone_ore: 'redstone', nether_quartz_ore: 'quartz', nether_gold_ore: 'gold_nugget'};
 
 // Mindcraft command -> {job: [type, args]} | {query: name} | {local: name} | {refuse: why}.
@@ -167,13 +170,13 @@ function translate(cmd, ctx) {
     case 'collectBlocks': case 'collectBlock': {
       const type = String(a[0] ?? '').replace(/^minecraft:/, '');
       if (LOG_TYPES.test(type)) return {job: ['chop', {count: n(a[1], 1)}]};
-      return {job: ['mine', {block: type === 'cobblestone' ? 'stone' : type, count: n(a[1], 1)}]};
+      return {job: ['mine', {block: blockOf(type), count: n(a[1], 1)}]};
     }
     case 'startShift': {
       if (!chest) return {refuse: 'There is no base chest yet.'};
       const type = String(a[0] ?? '').replace(/^minecraft:/, '');
       if (!type) return {refuse: 'Say what to collect, for example !startShift("logs").'};
-      return {job: ['shift', {block: LOG_TYPES.test(type) ? 'logs' : type === 'cobblestone' ? 'stone' : type, ...chest}]};
+      return {job: ['shift', {block: LOG_TYPES.test(type) ? 'logs' : blockOf(type), ...chest}]};
     }
     case 'guardHere':
       if (!ctx.pos) return {refuse: 'Position unknown.'};
