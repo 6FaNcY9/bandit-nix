@@ -918,6 +918,16 @@ require('./crafting');
   assert.match(events.items.at(-1).text, /removed from the list/);
   hub.close();
 }
+{ // a deposit event names what went in, biggest first, and stays short
+  const {depositList} = require('./bots');
+  assert.strictEqual(depositList({coal: 12, cobblestone: 64}), '64 cobblestone, 12 coal');
+  assert.strictEqual(depositList({a: 1, b: 2, c: 3, d: 4, e: 5, f: 6}), '6 f, 5 e, 4 d, 3 c, 2 more kinds');
+  // the agent's state carries the supply chest as last seen
+  const sw = new W.WorldModel({now: () => 5000});
+  assert.strictEqual(sw.snapshot().stock, null);
+  sw.noteStock('bot3', {cobblestone: 64});
+  assert.deepStrictEqual(sw.snapshot().stock, {items: {cobblestone: 64}, by: 'bot3', age: 0});
+}
 // ---- event log, activity line, queue removal ----
 {
   const {EventLog, clean, MAX} = require('./events');
@@ -1121,6 +1131,23 @@ require('./crafting');
   await new Promise((res) => setTimeout(res, 50));
   assert.strictEqual(ran, 1);
   JOBS.goto = goto;
+})();
+// A job that had nothing to do says so in its finished event; the agent reads it.
+(async () => {
+  const {JOBS} = require('./bots');
+  const seen = [];
+  const q = new BotRunner('bot1', {host: 'x', port: 1, log: () => {}, world: null, onEvent: (b, k, t) => seen.push(`${k}: ${t}`)});
+  q.online = true;
+  const goto = JOBS.goto;
+  JOBS.goto = (r, job) => { job.noop = job.args.x === 1; };
+  q.enqueue('goto', {x: 1, y: 2, z: 3});
+  for (let i = 0; i < 100 && !seen.some((e) => e.startsWith('done')); i++) await new Promise((res) => setTimeout(res, 20));
+  q.enqueue('goto', {x: 2, y: 2, z: 3});
+  for (let i = 0; i < 100 && seen.filter((e) => e.startsWith('done')).length < 2; i++) await new Promise((res) => setTimeout(res, 20));
+  JOBS.goto = goto;
+  const done = seen.filter((e) => e.startsWith('done'));
+  assert.match(done[0], /^done: finished: goto 1 2 3 - already complete \(\d+ s\)$/);
+  assert.match(done[1], /^done: finished: goto 2 2 3 \(\d+ s\)$/, 'a job that worked has no such note');
 })();
 // A job queued after "stop" must survive the stopped job winding down.
 (async () => {
@@ -1535,6 +1562,11 @@ require('./crafting');
     f.job.args = pad({x: 600, y: 64, z: 600});
     await f.build(f.r, f.job);
     assert.strictEqual(f.log.placed, 2);
+    assert.ok(!f.job.noop, 'a build that placed blocks is not "already complete"');
+    const again = {t: {}, cancelled: false, args: pad({x: 600, y: 64, z: 600})};
+    await f.build(f.r, again);
+    assert.strictEqual(again.noop, true, 'a second build of the finished blueprint had nothing to do');
+    assert.strictEqual(f.log.placed, 2);
     f.job.args = pad({x: 600, y: 64, z: 600}, {remove: true});
     await f.build(f.r, f.job);
     assert.deepStrictEqual([...f.blocks.keys()], ['600,64,600'], 'the pre-existing block stays');
@@ -1813,7 +1845,11 @@ require('./crafting');
     const job = {t: {}, cancelled: false, type: 'excavate', args: {x1: 0, y1: 58, z1: 0, x2: 1, y2: 60, z2: 0}};
     const r = {bot, world: {hostilesNear: () => [], claim: async () => true, release() {}}, emit() {}, protectedAreas: [], supplyChest: null, combat: null};
     await JOBS.excavate(r, job);
+    assert.ok(!job.noop, 'a dig that removed blocks is not "already complete"');
     assert.deepStrictEqual(order, ['stone@60', 'dirt@59', 'iron_ore@58'], 'top-down, natural ground only');
+    const again = {...job, t: {}};
+    await JOBS.excavate(r, again);
+    assert.strictEqual(again.noop, true, 'a second dig of the same room had nothing to do');
     assert.deepStrictEqual([...blocks.values()].sort(), ['chest', 'cobblestone'], 'placed blocks stay');
     await assert.rejects(JOBS.excavate({...r, protectedAreas: [[-5, -5, 5, 5]]}, {...job, t: {}}), /protected/);
   }

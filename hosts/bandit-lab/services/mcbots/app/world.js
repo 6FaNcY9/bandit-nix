@@ -166,6 +166,7 @@ class WorldModel {
       mobs: [...this.mobs.values()].map(age),
       blocks: [...this.blocks.values()].map(age),
       claims: [...this.claims].map(([key, c]) => ({key, by: c.by})),
+      stock: this.stock && {items: this.stock.items, by: this.stock.by, age: Math.round((t - this.stock.t) / 1000)}, // the supply chest as last seen
     };
   }
 }

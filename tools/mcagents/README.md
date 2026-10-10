@@ -56,6 +56,16 @@ foreman is asked again at once (a shift never reports back). Live 2026-10-10 wit
 base chest with 32 cobblestone and 16 logs": it gave bot12 and bot14 a stone shift and bot13 a log
 shift within about a minute; after 13 min the shifts carried 778 + 351 cobblestone and 196 logs.
 
+A foreman sees a short command list: `!assign`, `!baseStatus`, `!buildBlueprint`, `!digRoom`,
+`!placeBlockAt`, `!viewChest`, `!stats`, `!inventory`, `!goToCoordinates`, `!stop`, `!startConversation`
+(anything else is refused with a one-line hint; workers and agents without workers keep the full set). Its
+prompt carries one `BASE:` line (the base chest as last counted, lowest first, from `/api/state`
+`world.stock`, and which builds and rooms it saw finish), each worker's last result (`STUCK` after two
+identical failures), and the workers' deposits as `bot3 put 64 cobblestone into the base chest` (the last three
+stay). `!baseStatus` prints the same on request. A build or room that already finished is refused, a stuck
+(resting) worker gets no order; `mcagents` forgets what is done when it restarts. Replay of three recorded
+situations against the lab model (8 samples each, old vs new `agent.js`): see the commit message.
+
 Env: `MODEL` (default `andy-4.2`), `THINK=1` (reasoning on: about 20-30 s per decision with 4
 agents on one GPU instead of about 1 s), `LOG` (JSONL of every model call: prompt, thinking,
 reply; raw material for a later fine-tune), `BLUEPRINTS`.

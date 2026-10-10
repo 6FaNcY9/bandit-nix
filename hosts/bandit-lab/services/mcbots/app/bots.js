@@ -407,7 +407,7 @@ class BotRunner {
     }
     const took = Math.round((Date.now() - job.startedAt) / 1000);
     if (job.interrupted) this.emit('info', `interrupted: ${jobLabel(job)} (it continues after the respawn/reconnect)`);
-    else if (job.status === 'done') this.emit('done', `finished: ${jobLabel(job)} (${took} s)`);
+    else if (job.status === 'done') this.emit('done', `finished: ${jobLabel(job)}${job.noop ? ' - already complete' : ''} (${took} s)`);
     else if (job.status === 'stopped') this.emit('stop', `stopped: ${jobLabel(job)}`);
     else this.emit('fail', `failed: ${jobLabel(job)} - ${this.lastError.replace(/^\w+: /, '')}`);
     this.current = null;
@@ -804,6 +804,11 @@ function noteStock(r, job, chest) {
   const items = {};
   for (const it of chest.containerItems()) items[it.name] = (items[it.name] || 0) + it.count;
   r.world?.noteStock(r.name, items);
+}
+// "64 cobblestone, 12 coal, 3 more kinds": what a deposit put in, biggest first (an event is 200 characters).
+function depositList(byName) {
+  const all = Object.entries(byName).sort((a, b) => b[1] - a[1]);
+  return [...all.slice(0, 4).map(([n, c]) => `${c} ${n}`), ...(all.length > 4 ? [`${all.length - 4} more kinds`] : [])].join(', ');
 }
 // "logs" stands for every kind of log; anything else is an exact item name.
 const itemMatcher = (what) => (what === 'logs' ? (n) => n.endsWith('_log') : what === 'coal' ? (n) => n === 'coal' || n === 'charcoal' : (n) => n === what);
@@ -1332,6 +1337,7 @@ const JOBS = {
     const chest = await openChest(r, job, block);
     try {
       let moved = 0;
+      const byName = {};
       const only = job.args.only && itemMatcher(job.args.only);
       for (const it of bot.inventory.items()) {
         guard(job);
@@ -1339,12 +1345,13 @@ const JOBS = {
         try {
           await chest.deposit(it.type, it.metadata, it.count);
           moved += it.count;
+          byName[it.name] = (byName[it.name] || 0) + it.count;
           job.progress = `${moved} items`;
         } catch (e) {
           throw new Error(`chest full or deposit failed after ${moved} items: ${e.message}`);
         }
       }
-      if (moved) r.emit('deposit', `deposited ${moved} items at ${place(r, job.args)}`);
+      if (moved) r.emit('deposit', `deposited ${depositList(byName)} at ${place(r, job.args)}`);
       noteStock(r, job, chest);
     } finally {
       chest.close();
@@ -1493,7 +1500,7 @@ const JOBS = {
     const Vec3 = require('vec3').Vec3;
     const dim = normDim(bot.game?.dimension);
     const total = (x2 - x1 + 1) * (y2 - y1 + 1) * (z2 - z1 + 1);
-    let left = 0;
+    let left = 0, dug = 0;
     job.t.total = total;
     for (let y = y2; y >= y1; y--) {
       for (let x = x1; x <= x2; x++) {
@@ -1510,7 +1517,8 @@ const JOBS = {
           try {
             await upkeep(r, job, [b.type]);
             job.t.doing = `digging out the room at ${x1} ${y1} ${z1}`;
-            if (!(await digAt(r, job, pos, (n) => n === b.name))) left++;
+            if (await digAt(r, job, pos, (n) => n === b.name)) dug++;
+            else left++;
           } finally {
             r.world?.release(r.name, k);
           }
@@ -1521,6 +1529,7 @@ const JOBS = {
       }
     }
     if (left) throw new Error(`${left} blocks of the room were not dug (held by another bot, unreachable or unsafe)`);
+    job.noop = !dug; // nothing natural left to dig: the event says "already complete"
   },
 
   craft: (r, job) => crafting.ensureItem(r, job, job.args.item, crafting.count(r.bot, job.args.item) + job.args.count),
@@ -1581,4 +1590,4 @@ const JOBS = {
   },
 };
 
-module.exports = {BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest, guardDigs, partnerOf};
+module.exports = {BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest, guardDigs, partnerOf, depositList};

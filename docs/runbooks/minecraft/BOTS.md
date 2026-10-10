@@ -164,6 +164,11 @@ with ids above `since`. Workers send theirs with their status frames; the hub
 keeps only events for the worker's own bots, with a known kind and at most 200
 characters.
 
+Two event texts are read by the lead agent: a `build` or `excavate` that found nothing to do ends
+`finished: ... - already complete (0 s)`, and a deposit names what went in (`deposited 64
+cobblestone, 12 coal at the supply chest`, biggest four kinds). `/api/state` carries the supply
+chest as the last bot saw it, `world.stock: {items, by, age}` (null before the first count).
+
 The page's Content-Security-Policy allows exactly its own inline script and
 style by hash (`default-src 'none'`, `connect-src 'self'`): no CDN, no other
 origin. A change to the page changes the hashes automatically.

@@ -2,7 +2,7 @@
 // node tools/mcagents/agent.test.js — the Mindcraft command translator.
 const assert = require('node:assert');
 process.env.LOG ||= require('node:path').join(require('node:os').tmpdir(), `mcagents-test-${process.pid}.jsonl`); // decide() logs every model call
-const {decide, Agent, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText} = require('./agent');
+const {decide, Agent, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished} = require('./agent');
 
 assert.deepStrictEqual(parseCommand('Sure! !collectBlocks("oak_log", 10)'), {name: 'collectBlocks', args: ['oak_log', 10]});
 assert.deepStrictEqual(parseCommand("Bye! !endConversation('john')"), {name: 'endConversation', args: ['john']});
@@ -118,6 +118,67 @@ assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}
   noteWorker('bot9', 'finished: shift stone (10 s)', 5000);
   assert.deepStrictEqual(idleWorkers(ws, st, 6000), ['bot9'], 'a success clears it');
 }
+{ // a foreman's command docs list only its few commands; workers and lone agents keep the full set
+  const docs = commandDocs([], ['bot2']);
+  const listed = [...docs.matchAll(/^!(\w+):/gm)].map((m) => m[1]).sort();
+  assert.deepStrictEqual(listed, ['assign', 'baseStatus', 'buildBlueprint', 'digRoom', 'goToCoordinates', 'inventory', 'placeBlockAt', 'startConversation', 'stats', 'stop', 'viewChest']);
+  assert.ok([...commandDocs().matchAll(/^!(\w+):/gm)].length > 20 && commandDocs().includes('!collectBlocks:'), 'no workers: the full set');
+  assert.deepStrictEqual(tr('!collectBlocks("stone", 3)'), {job: ['mine', {block: 'stone', count: 3}]}, 'translate() is unchanged for workers');
+}
+{ // the foreman's base summary: chest counts from the last stock/deposit and which parts are done
+  const fm = new Agent('bot1', 'lead', null);
+  fm.workers = new Set(['bot2']);
+  const state = {bots: [{name: 'bot1', online: true, pos: [0, 64, 0], inventory: []}, {name: 'bot2', online: true, job: null, queue: []}], world: {stock: {items: {coal: 12, cobblestone: 64}, by: 'bot3', age: 30}}, places: []};
+  assert.strictEqual(baseLine(fm, state), 'BASE: chest (lowest first) coal 12, cobblestone 64 (counted 30 s ago). Already done: nothing built or dug yet.\n');
+  assert.match(baseLine(fm, {...state, world: {}}), /chest not counted yet/);
+  noteSent(fm, ['build', {origin: {x: -272, y: 65, z: -219}, blocks: new Array(22).fill({})}], 'base-hall');
+  noteSent(fm, ['excavate', {x1: -272, y1: 58, z1: -219, x2: -266, y2: 61, z2: -213}]);
+  noteFinished(fm, 'finished: build at -272 65 -219 22 blocks false - already complete (0 s)');
+  assert.deepStrictEqual([...fm.done], ['built base-hall at -272 65 -219']);
+  noteFinished(fm, 'finished: build at 1 2 3 5 blocks false (4 s)');
+  assert.strictEqual(fm.done.size, 1, 'a build we did not send is not recorded');
+  noteSent(fm, ['build', {origin: {x: 0, y: 70, z: 0}, blocks: new Array(5).fill({})}], 'wall-a');
+  noteSent(fm, ['build', {origin: {x: 0, y: 70, z: 0}, blocks: new Array(5).fill({})}], 'wall-b');
+  noteFinished(fm, 'failed: build at 0 70 0 5 blocks false - could not reach 1 2 3'); // wall-a failed
+  noteFinished(fm, 'finished: build at 0 70 0 5 blocks false (9 s)'); // wall-b, same origin and size
+  assert.deepStrictEqual([...fm.done], ['built base-hall at -272 65 -219', 'built wall-b at 0 70 0']);
+  fm.done.delete('built wall-b at 0 70 0');
+  noteFinished(fm, 'finished: excavate -272 58 -219 -266 61 -213 (50 s)');
+  assert.match(baseLine(fm, state), /Already done: built base-hall at -272 65 -219; dug room -272 58 -219 7x7x4\./);
+  const prompt = fm.system(state, state.bots[0]);
+  assert.ok(prompt.includes('BASE: chest (lowest first) coal 12, cobblestone 64') && prompt.includes('YOUR WORKERS') && !prompt.includes('!collectBlocks:') && !prompt.includes('!startShift:'));
+  assert.ok(!new Agent('bot9', 'g', null).system(state, state.bots[0]).includes('BASE:'), 'only a foreman has the base line');
+  // worker lines carry the last result and a stuck note
+  noteWorker('bot2', 'failed: shift stone 1 2 3 - no pickaxe: could not reach 1 2 3', 1);
+  noteWorker('bot2', 'failed: shift stone 1 2 3 - no pickaxe: could not reach 4 5 6');
+  fm.last.set('bot2', 'failed: shift stone 1 2 3 - no pickaxe: could not reach 4 5 6');
+  assert.match(baseStatusText(fm, state), /^BASE STATUS\nYOUR WORKERS \(use !assign\)\n- bot2: idle \(last: failed: shift stone.*\) STUCK.*\nBASE: chest \(lowest first\) coal 12, cobblestone/);
+  assert.match(assignJob(parseCommand('!assign("bot2", "!startShift(\\"logs\\")")'), new Set(['bot2']), {...state, supplyChest: {x: 1, y: 2, z: 3}}).refuse, /bot2 is resting after two identical failures \(no pickaxe: could not reach #.*\)\. Give the work to another worker/, 'a stuck worker gets no order');
+  noteWorker('bot2', 'finished: shift stone (3 s)');
+  assert.ok(assignJob(parseCommand('!assign("bot2", "!startShift(\\"logs\\")")'), new Set(['bot2']), {...state, supplyChest: {x: 1, y: 2, z: 3}}).job, 'after a success it can be assigned again');
+}
+{ // events: a worker's deposit reaches its foreman as one short line, without waking it
+  const fm = new Agent('bot1', 'lead', null);
+  fm.workers = new Set(['bot3']);
+  fm.wake = false;
+  const agents = new Map([['bot1', fm]]);
+  onEvent(agents, {bot: 'bot3', kind: 'deposit', text: 'deposited 64 cobblestone at the supply chest'});
+  assert.strictEqual(fm.history.length, 0, 'bot3 was never assigned by this foreman');
+  assigner.set('bot3', 'bot1');
+  onEvent(agents, {bot: 'bot3', kind: 'deposit', text: 'deposited 64 cobblestone, 12 coal at the supply chest'});
+  onEvent(agents, {bot: 'bot3', kind: 'deposit', text: 'deposited 5 oak_log at 1 2 3'});
+  assert.deepStrictEqual(fm.history, [{role: 'system', content: 'bot3 put 64 cobblestone, 12 coal into the base chest'}], 'one line; a chest that is not the base chest is not news');
+  assert.strictEqual(fm.wake, false);
+  for (let i = 1; i <= 5; i++) onEvent(agents, {bot: 'bot3', kind: 'deposit', text: `deposited ${i} coal at the supply chest`});
+  assert.deepStrictEqual(fm.history.map((m) => m.content), ['bot3 put 3 coal into the base chest', 'bot3 put 4 coal into the base chest', 'bot3 put 5 coal into the base chest'], 'the history keeps the last three');
+  onEvent(agents, {bot: 'bot3', kind: 'done', text: 'finished: build at 1 2 3 5 blocks false - already complete (0 s)'});
+  assert.strictEqual(fm.last.get('bot3'), 'finished: build at 1 2 3 5 blocks false - already complete (0 s)');
+  assert.ok(fm.wake && fm.history.at(-1).content.startsWith('Worker bot3: finished: build'));
+  assigner.delete('bot3');
+  fm.wake = false;
+  onEvent(agents, {bot: 'bot10', kind: 'alert', text: 'night falls'});
+  assert.ok(fm.wake && fm.history.at(-1).content === 'ALERT: night falls', 'an alert goes to every foreman');
+}
 // decide() against a fake dashboard and model (global fetch): MC-4 regressions.
 (async () => {
   const realFetch = globalThis.fetch;
@@ -198,6 +259,54 @@ assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}
       await decide(agent, new Map([['bot1', agent]]), async () => state, {take: () => true});
       assert.ok(!jobs.some((u) => u.endsWith('/api/job')));
       assert.match(agent.history.at(-1).content, /you lead.*!assign\("worker", "!collectBlocks\(\\"stone\\", 32\)"\)/);
+    }
+    { // a foreman gets a one-line refusal for a command it does not have, and !baseStatus answers from known facts
+      const fm = new Agent('bot1', 'lead', null);
+      fm.workers = new Set(['bot2']);
+      const jobs = [];
+      let reply;
+      globalThis.fetch = async (url, opt = {}) => ({ok: true, status: 200, json: async () => (url.endsWith('/api/chat') ? {message: {content: reply}} : (jobs.push(url), {}))});
+      const state = {bots: [{name: 'bot1', online: true, pos: [0, 64, 0], inventory: [], queue: [], job: null}, {name: 'bot2', online: true, job: {type: 'shift', label: 'shift logs'}, queue: []}], world: {stock: {items: {coal: 2}, by: 'bot2', age: 200}}, places: []};
+      const once = async (r) => { reply = r; fm.history = []; await decide(fm, new Map([['bot1', fm]]), async () => state, {take: () => true}); return fm.history.filter((m) => m.role === 'system').map((m) => m.content); };
+      for (const r of ['!entities', '!goal("x")', '!rememberHere("a")', '!afkHere', '!craftRecipe("stick", 1)', '!help']) {
+        const [first] = await once(r);
+        assert.match(first, /^Refused: !\w+ is not one of your commands\. Yours: !assign.*!startConversation\.$/, r);
+        assert.ok(!first.includes('\n'), 'one line');
+      }
+      assert.match((await once('!startShift("stone")'))[0], /you lead.*!assign\("worker", "!startShift\(\\"stone\\"\)"\)/);
+      assert.ok(!jobs.some((u) => u.endsWith('/api/job')), 'nothing was sent for a refused command');
+      const [status] = await once('!baseStatus');
+      assert.match(status, /^BASE STATUS\nYOUR WORKERS \(use !assign\)\n- bot2: shift logs\nBASE: chest \(lowest first\) coal 2 \(counted 3 min ago\)\./);
+      await once('!stats'); // listed commands still work
+      assert.match(fm.history[1].content, /^STATS/);
+      await once('!goToCoordinates(1, 64, 2)');
+      assert.ok(jobs.some((u) => u.endsWith('/api/job')), 'a listed command is sent');
+      const lone = new Agent('bot1', 'solo', null); // no workers: !entities and !baseStatus behave as before
+      reply = '!entities';
+      await decide(lone, new Map([['bot1', lone]]), async () => state, {take: () => true});
+      assert.match(lone.history[1].content, /^NEARBY_ENTITIES/);
+      reply = '!baseStatus';
+      lone.history = [];
+      await decide(lone, new Map([['bot1', lone]]), async () => state, {take: () => true});
+      assert.match(lone.history[1].content, /not available here/);
+    }
+    { // a part that already finished is not built again (the model copies its last command)
+      const fm = new Agent('bot1', 'lead', null);
+      fm.workers = new Set(['bot2']);
+      const bp = JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, '../../hosts/bandit-lab/services/mcbots/blueprints/test-pad-3x3.json'), 'utf8'));
+      const jobs = [];
+      globalThis.fetch = async (url, opt = {}) => ({ok: true, status: 200, json: async () => (url.endsWith('/api/chat') ? {message: {content: '!buildBlueprint("test-pad-3x3", 1, 64, 1)'}} : (jobs.push(url), {}))});
+      const state = {bots: [{name: 'bot1', online: true, pos: [0, 64, 0], inventory: [], queue: [], job: null}], places: []};
+      const go = () => decide(fm, new Map([['bot1', fm]]), async () => state, {take: () => true});
+      await go();
+      assert.strictEqual(jobs.filter((u) => u.endsWith('/api/job')).length, 1, 'the first build goes out');
+      assert.strictEqual(fm.sent.size, 1);
+      onEvent(new Map([['bot1', fm]]), {bot: 'bot1', kind: 'done', text: `finished: build at 1 64 1 ${bp.blocks.length} blocks false (12 s)`});
+      assert.deepStrictEqual([...fm.done], ['built test-pad-3x3 at 1 64 1']);
+      const sent = jobs.length;
+      await go();
+      assert.strictEqual(jobs.length, sent, 'no second build job');
+      assert.match(fm.history.at(-1).content, /^Refused: already done \(built test-pad-3x3 at 1 64 1\)/);
     }
     let takes = 0; // queries only: every model call takes budget
     const {calls} = await run({replies: ['!stats'], budget: {take: () => (takes++, true)}});

@@ -98,18 +98,25 @@ const DOCS = {
   endGoal: ['Call when you have accomplished your goal. It will stop self-prompting and the current action.', {}],
 };
 
-const ASSIGN_DOC = ['Give one of your workers (a bot that cannot think) ONE command, for example !assign("bot12", "!collectBlocks(\\"cobblestone\\", 32)"). It reports back when done. Only action commands (collect, startShift, putInChest, craft, goTo...) work.', {bot_name: ['string', 'The worker to command.'], command: ['string', 'The command for the worker, in quotes.']}];
+const ASSIGN_DOC = ['Give one of your workers (a bot that cannot think) ONE command, for example !assign("bot12", "!collectBlocks(\\"cobblestone\\", 32)"). It reports back when done. Commands a worker understands: !startShift("coal") (keeps collecting into the base chest; one of logs, cobblestone, coal, raw_iron, raw_gold), !collectBlocks("iron_ore", 32), !putInChest("coal", 20), !craftRecipe("stick", 4), !smeltItem("raw_iron", 8), !digRoom(...), !goToCoordinates(...).', {bot_name: ['string', 'The worker to command.'], command: ['string', 'The command for the worker, in quotes.']}];
+
+const BASE_DOC = ['Get the state of the base: each worker with its job and last result, what the base chest held when last counted, and what is already built or dug.', {}];
+
+// A foreman (an agent with workers) gets few commands: the workers do the gathering, crafting and smelting.
+const FOREMAN = new Set(['assign', 'baseStatus', 'buildBlueprint', 'digRoom', 'placeBlockAt', 'viewChest', 'stats', 'inventory', 'goToCoordinates', 'stop', 'startConversation']);
+const GATHERING = new Set(['collectBlocks', 'collectBlock', 'startShift']);
 
 function commandDocs(blueprints = [], workers = []) {
   let docs = '\n*COMMAND DOCS\n You can use the following commands to perform actions and get information about the world. \n    Use the commands with the syntax: !commandName or !commandName("arg1", 1.2, ...) if the command takes arguments.\n\n    Do not use codeblocks. Use double quotes for strings. Only use one command in each response, trailing commands and comments will be ignored.\n';
   for (const [name, [desc, params]] of Object.entries(DOCS)) {
+    if (workers.length && !FOREMAN.has(name)) continue;
     docs += `!${name}: ${desc}\n`;
     if (Object.keys(params).length) {
       docs += 'Params:\n';
       for (const [p, [type, d]] of Object.entries(params)) docs += `${p}: (${type}) ${d}\n`;
     }
   }
-  if (workers.length) docs += `!assign: ${ASSIGN_DOC[0]}\nParams:\nbot_name: (string) ${ASSIGN_DOC[1].bot_name[1]}\ncommand: (string) ${ASSIGN_DOC[1].command[1]}\nYour workers: ${workers.join(', ')}\n`;
+  if (workers.length) docs += `!assign: ${ASSIGN_DOC[0]}\nParams:\nbot_name: (string) ${ASSIGN_DOC[1].bot_name[1]}\ncommand: (string) ${ASSIGN_DOC[1].command[1]}\nYour workers: ${workers.join(', ')}\n!baseStatus: ${BASE_DOC[0]}\n`;
   if (blueprints.length) docs += `Blueprints you can build: ${blueprints.join(', ')}\n`;
   return docs + '*\n';
 }
@@ -236,6 +243,7 @@ function assignJob(cmd, workers, state, places = {}) {
   if (!workers.has(name)) return {refuse: `${name || 'That bot'} cannot be assigned. Your workers: ${[...workers].join(', ') || 'none'}.`};
   const bot = state.bots.find((b) => b.name === name);
   if (!bot?.online || bot.dead) return {refuse: `${name} is not available right now.`};
+  if (resting(name)) return {refuse: `${name} is resting after two identical failures (${stuckWorkers.get(name).reason}). Give the work to another worker.`};
   const inner = parseCommand(text);
   if (!inner) return {refuse: 'The second argument must be a command, for example "!collectBlocks(\\"cobblestone\\", 32)".'};
   const t = translate(inner, {pos: bot.pos, supplyChest: state.supplyChest, places});
@@ -275,10 +283,58 @@ const resting = (name, now = Date.now()) => {
 };
 const idleWorkers = (workers, state, now = Date.now()) => state.bots.filter((b) => workers.has(b.name) && b.online && !b.dead && !b.job && !b.queue?.length && !resting(b.name, now)).map((b) => b.name);
 
-function workersText(workers, state) {
-  const lines = [...workers].map((w) => state.bots.find((b) => b.name === w)).filter((b) => b?.online).map((b) => `- ${b.name}: ${b.job ? b.job.label : 'idle'}`);
+// Each worker with its job, its last result and, after two identical failures, a "stuck" note.
+function workersText(workers, state, last = new Map()) {
+  const lines = [...workers].map((w) => state.bots.find((b) => b.name === w)).filter((b) => b?.online).map((b) => {
+    const l = last.get(b.name);
+    return `- ${b.name}: ${b.job ? b.job.label : 'idle'}${l ? ` (last: ${l.slice(0, 100)})` : ''}${resting(b.name) ? ' STUCK: failed twice the same way, give it a different job later' : ''}`;
+  });
   return lines.length ? `YOUR WORKERS (use !assign)\n${lines.join('\n')}\n` : '';
 }
+
+// ---- what the base looks like: the chest as last counted, what is built or dug ----
+const sinceText = (s) => (s < 90 ? `${s} s` : `${Math.round(s / 60)} min`);
+
+function baseLine(agent, state) {
+  const s = state.world?.stock;
+  const items = s && Object.entries(s.items).sort((a, b) => a[1] - b[1]).slice(0, 8).map(([n, c]) => `${n} ${c}`);
+  const chest = s ? `${items.length ? `(lowest first) ${items.join(', ')}` : 'empty'} (counted ${sinceText(s.age)} ago)` : 'not counted yet (!viewChest)';
+  const done = [...agent.done].slice(-8);
+  return `BASE: chest ${chest}. Already done: ${done.length ? done.join('; ') : 'nothing built or dug yet'}.\n`;
+}
+
+const baseStatusText = (agent, state) => `BASE STATUS\n${workersText(agent.workers, state, agent.last)}${baseLine(agent, state)}`;
+
+// A job's identity in the dashboard's label ("build at 1 2 3 22 blocks false", "excavate 1 2 3 7 8 9") and a
+// short name for the foreman. Same key from what we sent and from the "finished" event.
+function jobKey(type, a) {
+  const r = (v) => Math.round(Number(v));
+  if (type === 'build') return `build ${r(a.origin.x)} ${r(a.origin.y)} ${r(a.origin.z)} ${a.blocks.length}`;
+  if (type === 'excavate') return `excavate ${[a.x1, a.y1, a.z1, a.x2, a.y2, a.z2].map(r).join(' ')}`;
+  return null;
+}
+const eventKey = (text) => {
+  const m = /^(?:finished|failed|stopped|gave up): (?:build at (-?\d+) (-?\d+) (-?\d+) (\d+) blocks|excavate ((?:-?\d+ ?){6})\b)/.exec(text);
+  return !m ? null : m[5] ? `excavate ${m[5].trim()}` : `build ${m[1]} ${m[2]} ${m[3]} ${m[4]}`;
+};
+function jobName(type, a, blueprint) {
+  if (type === 'build') return `built ${blueprint} at ${Math.round(a.origin.x)} ${Math.round(a.origin.y)} ${Math.round(a.origin.z)}`;
+  return `dug room ${Math.round(a.x1)} ${Math.round(a.y1)} ${Math.round(a.z1)} ${a.x2 - a.x1 + 1}x${a.z2 - a.z1 + 1}x${a.y2 - a.y1 + 1}`;
+}
+// Remember what we sent (per key, oldest first: one bot runs its jobs in order); when its "finished" event
+// comes (also "already complete"), that part counts as done. A failed one is just forgotten.
+const noteSent = (agent, job, blueprint) => {
+  const key = jobKey(job[0], job[1] || {});
+  if (key) agent.sent.set(key, [...(agent.sent.get(key) || []), jobName(job[0], job[1], blueprint)]);
+};
+const noteFinished = (agent, text) => {
+  const key = eventKey(text);
+  const name = key && agent.sent.get(key)?.shift();
+  if (name && text.startsWith('finished')) {
+    agent.done.delete(name); // newest last
+    agent.done.add(name);
+  }
+};
 
 // ---- Mindcraft-style status texts ------------------------------------------------
 function statsText(bot, state) {
@@ -300,18 +356,32 @@ function entitiesText(bot, state) {
   return `NEARBY_ENTITIES\n${[...players, ...Object.entries(mobs).map(([k, c]) => `- entities: ${c} ${k}(s)`)].join('\n') || 'None'}\n`;
 }
 
+const DEPOSIT_RE = /^\w+ put .+ into the base chest$/;
+const WORKER_RULES = 'Rules: when you carry items for your goal, put them into the base chest with !putInChest before you start something else. Smelting needs fuel (coal). For gathering, prefer !startShift: it keeps going and fills the base chest by itself.';
+const FOREMAN_RULES = 'Rules: you lead, your workers do the work. Give gathering, crafting and smelting to workers with !assign (for gathering prefer !startShift); you only build, dig and place. The BASE line shows the chest and what is already done: never build or dig a finished part again, and when a result says "already complete" move on to the next part. A STUCK worker needs a different job, not the same order. Smelting needs coal.';
+
 // ---- one agent per bot -----------------------------------------------------------
 class Agent {
   constructor(name, goal, team) {
     Object.assign(this, {name, goal, team, history: [], inbox: [], places: {}, memory: '', lastCommand: '', failures: 0,
-      wake: true, wakeAt: 0, lastDecisionAt: 0, decisions: 0, modelMs: 0, workers: new Set()});
+      wake: true, wakeAt: 0, lastDecisionAt: 0, decisions: 0, modelMs: 0, workers: new Set(),
+      sent: new Map(), done: new Set(), last: new Map()}); // sent/done: build and dig jobs by key; last: a worker's last result
   }
 
   // Mindcraft's prompt has an example answer "Sure, I'll stop. !stop"; Andy-4.2 copied it whenever it was
   // unsure (the lab lead bot answered nothing else for minutes, 2026-10-10), so it is left out.
   system(state, bot) {
     const self = this.goal ? `YOUR CURRENT ASSIGNED GOAL: "${this.goal}"` : '';
-    return `You are an AI Minecraft bot named ${this.name} that can converse with players, see, move, mine, build, and interact with the world by using commands.\n${self} Rules: when you carry items for your goal, put them into the base chest with !putInChest before you start something else. Smelting needs fuel (coal). For gathering, prefer !startShift: it keeps going and fills the base chest by itself. Be a friendly, casual, effective, and efficient robot. Be very brief in your responses, don't apologize constantly, don't give instructions or make lists unless asked, and don't refuse requests. Don't pretend to act, use commands immediately when requested. Respond only as ${this.name}, never output '(FROM OTHER BOT)' or pretend to be someone else. If you have nothing to say or do, respond with an just a tab '\t'. This is extremely important to me, take a deep breath and have fun :)\nSummarized memory:'${this.memory}'\n${statsText(bot, state)}\n${inventoryText(bot)}\n${workersText(this.workers, state)}${commandDocs(blueprintNames(), [...this.workers])}\nConversation Begin:`;
+    const rules = this.workers.size ? FOREMAN_RULES : WORKER_RULES;
+    return `You are an AI Minecraft bot named ${this.name} that can converse with players, see, move, mine, build, and interact with the world by using commands.\n${self} ${rules} Be a friendly, casual, effective, and efficient robot. Be very brief in your responses, don't apologize constantly, don't give instructions or make lists unless asked, and don't refuse requests. Don't pretend to act, use commands immediately when requested. Respond only as ${this.name}, never output '(FROM OTHER BOT)' or pretend to be someone else. If you have nothing to say or do, respond with an just a tab '\t'. This is extremely important to me, take a deep breath and have fun :)\nSummarized memory:'${this.memory}'\n${statsText(bot, state)}\n${inventoryText(bot)}\n${this.workers.size ? baseLine(this, state) : ''}${workersText(this.workers, state, this.last)}${commandDocs(blueprintNames(), [...this.workers])}\nConversation Begin:`;
+  }
+
+  // "bot3 put 64 cobblestone into the base chest": only the last three stay in the history.
+  pushDeposit(line) {
+    this.push('system', line);
+    const dep = (m) => m.role === 'system' && DEPOSIT_RE.test(m.content);
+    let extra = this.history.filter(dep).length - 3;
+    this.history = this.history.filter((m) => !dep(m) || extra-- <= 0);
   }
 
   push(role, content) {
@@ -389,6 +459,17 @@ async function decide(agent, agents, getState, budget) {
     console.log(`[${agent.name}] ${reply.slice(0, 160).replace(/\n/g, ' ')}`);
     if (TOKEN) http('POST', `${API}/api/decision`, {bot: agent.name, text: reply.slice(0, 200) || '(nothing to do)'}).catch(() => {}); // the dashboard's "Agent decisions"
     if (!cmd) return; // just talk
+    const same = reply.match(COMMAND_RE)[0];
+    if (agent.workers.size && !FOREMAN.has(cmd.name)) {
+      agent.push('system', GATHERING.has(cmd.name)
+        ? `Refused: you lead, you do not gather yourself. Give it to a worker: !assign("worker", "${same.replace(/"/g, '\\"')}"). Your workers: ${[...agent.workers].join(', ')}.`
+        : `Refused: !${cmd.name} is not one of your commands. Yours: ${[...FOREMAN].map((c) => `!${c}`).join(', ')}.`);
+      continue;
+    }
+    if (agent.workers.size && cmd.name === 'baseStatus') {
+      agent.push('system', baseStatusText(agent, state));
+      continue;
+    }
     const ctx = {pos: bot.pos, supplyChest: state.supplyChest, places: {...Object.fromEntries((state.places || []).map((p) => [p.name, p])), ...agent.places}};
     const t = translate(cmd, ctx);
     if (t.refuse) {
@@ -428,6 +509,7 @@ async function decide(agent, agents, getState, budget) {
           continue;
         }
         assigner.set(as.worker, agent.name);
+        noteSent(agent, as.job);
         // Idle workers left: ask again right away (a shift never reports back, so nothing else would wake the foreman).
         if (state.bots.some((b) => b.name !== as.worker && agent.workers.has(b.name) && b.online && !b.dead && !b.job && !b.queue?.length && !assigner.has(b.name))) {
           agent.wake = true;
@@ -466,7 +548,6 @@ async function decide(agent, agents, getState, budget) {
         t.job = ['build', {origin: {x: a[1], y: a[2], z: a[3]}, blocks: bp.blocks}];
       }
     }
-    const same = reply.match(COMMAND_RE)[0];
     if (same !== agent.lastCommand) agent.failures = 0;
     // Andy-4.2 ignored the repeat hint and sent one failing command eight times (live 2026-10-10).
     if (same === agent.lastCommand && agent.failures >= 2) {
@@ -478,9 +559,11 @@ async function decide(agent, agents, getState, budget) {
       agent.push('system', `Refused: ${t.job[0]} jobs failed ${agent.errStreak} times in a row with the same error (${agent.lastFailure}). Fix that cause first, or do something else.`);
       continue;
     }
-    // A foreman that mines walks off underground and stops leading (bot1, lab 2026-10-10).
-    if (agent.workers.size && ['mine', 'chop', 'shift'].includes(t.job[0])) {
-      agent.push('system', `Refused: you lead, you do not gather yourself. Give it to a worker: !assign("worker", "${same.replace(/"/g, '\\"')}"). Your workers: ${[...agent.workers].join(', ')}.`);
+    // The lead bot "built" the eight finished base parts again and again (lab 2026-10-10); the model copies
+    // its last command whatever the result says.
+    const part = jobKey(t.job[0], t.job[1]) && jobName(t.job[0], t.job[1], String(cmd.args[0]));
+    if (part && agent.done.has(part)) {
+      agent.push('system', `Refused: already done (${part}). Do the next part, or something else.`);
       continue;
     }
     agent.lastCommand = same;
@@ -492,8 +575,51 @@ async function decide(agent, agents, getState, budget) {
       agent.push('system', `Code output: Action failed. ${e.message}`);
       continue;
     }
+    noteSent(agent, t.job, String(cmd.args[0]));
     return;
   }
+}
+
+// One dashboard event: job results become "Code output" lines, as Mindcraft reports them, and wake the brain.
+function onEvent(agents, e) {
+  // Alerts (mcbots alerts.js: supply chest gone, night, mobs at the base) go to every foreman.
+  if (e.kind === 'alert') {
+    for (const a of agents.values()) {
+      if (!a.workers.size) continue;
+      a.push('system', `ALERT: ${e.text}`);
+      a.wake = true;
+      a.wakeAt ||= Date.now();
+    }
+    return;
+  }
+  const boss = agents.get(assigner.get(e.bot));
+  const put = boss && e.kind === 'deposit' && /^deposited (.+) at the supply chest$/.exec(e.text);
+  if (put) boss.pushDeposit(`${e.bot} put ${put[1]} into the base chest`); // news, not a reason to wake
+  if (boss && /^(finished|failed|gave up|stopped)/.test(e.text)) {
+    noteWorker(e.bot, e.text);
+    boss.last.set(e.bot, e.text);
+    noteFinished(boss, e.text);
+    boss.push('system', `Worker ${e.bot}: ${e.text}`);
+    boss.wake = true;
+    boss.wakeAt ||= Date.now();
+  } else if (boss && (e.kind === 'death' || e.kind === 'respawn')) boss.push('system', `Worker ${e.bot}: ${e.text}`);
+  const a = agents.get(e.bot);
+  if (!a) return;
+  if (e.kind === 'death' || e.kind === 'respawn') {
+    a.push('system', `Event: ${e.text}`);
+    a.wake = true;
+    a.wakeAt ||= Date.now();
+    return;
+  }
+  if (!/^(finished|failed|gave up|stopped)/.test(e.text)) return;
+  a.push('system', `Code output:\n${e.text}`);
+  noteFinished(a, e.text);
+  a.failures = /^failed/.test(e.text) ? a.failures + 1 : 0;
+  if (a.failures) a.lastFailure = e.text.replace(/^failed: /, '').slice(0, 160);
+  trackError(a, e.text);
+  if (a.failures >= 2) a.push('system', repeatHint(a.lastCommand));
+  a.wake = true;
+  a.wakeAt ||= Date.now();
 }
 
 async function main() {
@@ -531,41 +657,7 @@ async function main() {
       // Job results become "Code output" lines, as Mindcraft reports them, and wake the brain.
       const ev = await http('GET', `${API}/api/events?since=${lastEventId}`);
       lastEventId = ev.lastId;
-      for (const e of ev.events) {
-        // Alerts (mcbots alerts.js: supply chest gone, night, mobs at the base) go to every foreman.
-        if (e.kind === 'alert') {
-          for (const a of agents.values()) {
-            if (!a.workers.size) continue;
-            a.push('system', `ALERT: ${e.text}`);
-            a.wake = true;
-            a.wakeAt ||= Date.now();
-          }
-          continue;
-        }
-        const boss = agents.get(assigner.get(e.bot));
-        if (boss && /^(finished|failed|gave up|stopped)/.test(e.text)) {
-          noteWorker(e.bot, e.text);
-          boss.push('system', `Worker ${e.bot}: ${e.text}`);
-          boss.wake = true;
-          boss.wakeAt ||= Date.now();
-        } else if (boss && (e.kind === 'death' || e.kind === 'respawn')) boss.push('system', `Worker ${e.bot}: ${e.text}`);
-        const a = agents.get(e.bot);
-        if (!a) continue;
-        if (e.kind === 'death' || e.kind === 'respawn') {
-          a.push('system', `Event: ${e.text}`);
-          a.wake = true;
-          a.wakeAt ||= Date.now();
-          continue;
-        }
-        if (!/^(finished|failed|gave up|stopped)/.test(e.text)) continue;
-        a.push('system', `Code output:\n${e.text}`);
-        a.failures = /^failed/.test(e.text) ? a.failures + 1 : 0;
-        if (a.failures) a.lastFailure = e.text.replace(/^failed: /, '').slice(0, 160);
-        trackError(a, e.text);
-        if (a.failures >= 2) a.push('system', repeatHint(a.lastCommand));
-        a.wake = true;
-        a.wakeAt ||= Date.now();
-      }
+      for (const e of ev.events) onEvent(agents, e);
       const state = await getState();
       const now = Date.now();
       const ready = [];
@@ -609,4 +701,4 @@ if (require.main === module) main().catch((e) => {
   process.exit(1);
 });
 
-module.exports = {decide, Agent, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText};
+module.exports = {decide, Agent, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished};

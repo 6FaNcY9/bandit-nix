@@ -241,6 +241,7 @@ function makeBuild({goNear, guard, sleep, goals, digAt, withdraw, runJob, gather
           missing = lack();
         }
       }
+      let first = true;
       for (;;) {
         guard(job);
         const now = Date.now();
@@ -250,7 +251,11 @@ function makeBuild({goNear, guard, sleep, goals, digAt, withdraw, runJob, gather
         job.t.total = total;
         job.t.done = total - left;
         job.progress = `${plan.remove ? 'removed' : 'placed'} ${total - left}/${total}`;
-        if (s.done) return;
+        if (s.done) {
+          job.noop = first; // done before this run did anything: the event says "already complete"
+          return;
+        }
+        first = false;
         if (s.stuck) throw new Error(s.stuck);
         if (s.wait) {
           stalled(`${s.wait} blocks left that this bot cannot place or reach`);
