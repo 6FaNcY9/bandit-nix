@@ -52,6 +52,9 @@ in {
         // lib.optionalAttrs (inferenceNames != []) {
           ANDY_URLS = lib.concatStringsSep "," inferenceUrls;
           ANDY_BACKEND_NAMES = lib.concatStringsSep "," inferenceNames;
+          # The lab's RTX 4090 thinks first; the gaming PCs only take the overflow and
+          # are otherwise free for replays and training (owner, 2026-10-10).
+          ANDY_PREFER = "lab";
         }
         // lib.optionalAttrs (inferenceHosts ? slayer) {
           ANDY_URL_2 = "http://127.0.0.1:${toString inferenceHosts.slayer.localPort}";

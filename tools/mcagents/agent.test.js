@@ -570,6 +570,9 @@ assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}
         assert.equal((await callModel([])).backendName, 'second', 'request failure tries next PC');
         failed.add('pc2.test'); failed.add('pc3.test');
         assert.equal((await callModel([])).backendName, 'lab', 'all PCs failing falls back to lab');
+        failed.clear(); process.env.ANDY_PREFER = 'lab';
+        assert.equal((await callModel([])).backendName, 'lab', 'ANDY_PREFER=lab: an idle lab goes first');
+        delete process.env.ANDY_PREFER;
         delete process.env.ANDY_URLS; delete process.env.ANDY_BACKEND_NAMES;
       }
       { // a PC that passes its health probe but never answers the model call must not hold the agent for minutes (Codex R5-3)

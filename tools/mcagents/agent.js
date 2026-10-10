@@ -550,7 +550,10 @@ function backends() {
     const backend = modelBackends.get(key);
     backend.number = index + 1;
     backend.name = name;
-    backend.order = api === 'ollama' ? offloads.length : index - 1;
+    // ANDY_PREFER=lab: the lab's own GPU takes the work first and the PCs only take the overflow (they are
+    // free for replays and training then); otherwise the PCs go first and Ollama is the fallback.
+    const labFirst = process.env.ANDY_PREFER === 'lab';
+    backend.order = api === 'ollama' ? (labFirst ? -1 : offloads.length) : index - 1;
     return backend;
   });
 }
