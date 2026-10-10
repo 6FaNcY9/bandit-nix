@@ -732,36 +732,62 @@ function guardDigs(runner, bot) {
   const dig = bot.dig.bind(bot);
   const equip = bot.equip.bind(bot);
   const placeBlock = bot.placeBlock.bind(bot);
-  let resets = 0, stale = false;
+  const lookAt = bot.lookAt?.bind(bot);
+  let resets = 0, stale = false, looking = null;
   for (const ev of ['path_reset', 'goal_updated', 'path_stop']) bot.on?.(ev, () => resets++);
+  const mark = () => ({stops: runner.cancelEpoch || 0, before: resets, own: bot.pathfinder?.isMining?.() || bot.pathfinder?.isBuilding?.()});
+  const moved = (m) => (runner.cancelEpoch || 0) !== m.stops || (m.own && resets !== m.before);
   bot.equip = async (...args) => {
-    const stops = runner.cancelEpoch || 0, before = resets;
-    const own = bot.pathfinder?.isMining?.() || bot.pathfinder?.isBuilding?.();
+    const m = mark();
     const done = await equip(...args);
-    if ((runner.cancelEpoch || 0) !== stops || (own && resets !== before)) {
+    if (moved(m)) {
       stale = true;
       setImmediate(() => { stale = false; }); // the pathfinder's dig follows in the same microtask chain
       throw new Error('Equip aborted: the job was stopped or the path was reset');
     }
     return done;
   };
-  bot.dig = (block, ...rest) => {
-    const p = block?.position;
-    if (runner.current?.cancelled || stale) return Promise.reject(new Error('Digging aborted: the job was stopped'));
-    if (p && insideAreas(runner.protectedAreas, p.x, p.z)) return Promise.reject(new Error('Digging aborted: protected area'));
-    const live = p && bot.blockAt(p);
-    if (p && (!live || live.name !== block.name || (block.stateId !== undefined && live.stateId !== block.stateId))) return Promise.reject(new Error('Digging aborted: the block changed'));
-    // A walk may dig only what the job allows (excavate: natural ground, never its own walls).
-    if (runner.digOnly && bot.pathfinder?.isMining?.() && !runner.digOnly.test(block.name)) return Promise.reject(new Error(`Digging aborted: ${block.name} is not part of the job`));
-    const danger = p && unsafeDig(bot, p);
-    if (danger && / next to it$/.test(danger)) return Promise.reject(new Error(`Digging aborted: ${danger}`));
-    return dig(block, ...rest);
+  // Mineflayer's own dig and placeBlock await lookAt before the packet goes out, so a Stop or a path
+  // reset in that await would still start the dig or placement (Codex R2-2, R3-2). The wrappers below
+  // leave their context for the lookAt call they make synchronously; lookAt re-checks it when the look is done.
+  if (lookAt) {
+    bot.lookAt = async (...args) => {
+      const c = looking;
+      await lookAt(...args);
+      const why = c && (moved(c.m) || runner.current?.cancelled ? `${c.verb} aborted: the job was stopped or the path was reset` : c.recheck());
+      if (why) throw new Error(why);
+    };
+  }
+  const withLook = (verb, fn, recheck) => (...args) => {
+    looking = {verb, m: mark(), recheck: () => recheck(...args)};
+    try { return fn(...args); } finally { looking = null; }
   };
-  bot.placeBlock = (ref, face, ...rest) => {
+  const digRefusal = (block) => {
+    const p = block?.position;
+    if (runner.current?.cancelled || stale) return 'Digging aborted: the job was stopped';
+    if (p && insideAreas(runner.protectedAreas, p.x, p.z)) return 'Digging aborted: protected area';
+    const live = p && bot.blockAt(p);
+    if (p && (!live || live.name !== block.name || (block.stateId !== undefined && live.stateId !== block.stateId))) return 'Digging aborted: the block changed';
+    // A walk may dig only what the job allows (excavate: natural ground, never its own walls).
+    if (runner.digOnly && bot.pathfinder?.isMining?.() && !runner.digOnly.test(block.name)) return `Digging aborted: ${block.name} is not part of the job`;
+    const danger = p && unsafeDig(bot, p); // a fluid next to it, or a drop of more than 3 below the bot
+    return danger ? `Digging aborted: ${danger}` : null;
+  };
+  const placeRefusal = (ref, face) => {
     const p = ref?.position && face ? ref.position.plus(face) : null;
-    if (runner.current?.cancelled || stale) return Promise.reject(new Error('Placing aborted: the job was stopped'));
-    if (p && insideAreas(runner.protectedAreas, p.x, p.z)) return Promise.reject(new Error('Placing aborted: protected area'));
-    return placeBlock(ref, face, ...rest);
+    if (runner.current?.cancelled || stale) return 'Placing aborted: the job was stopped';
+    if (p && insideAreas(runner.protectedAreas, p.x, p.z)) return 'Placing aborted: protected area';
+    return null;
+  };
+  const nativeDig = withLook('Digging', dig, digRefusal);
+  bot.dig = (block, ...rest) => {
+    const why = digRefusal(block);
+    return why ? Promise.reject(new Error(why)) : nativeDig(block, ...rest);
+  };
+  const nativePlace = withLook('Placing', placeBlock, placeRefusal);
+  bot.placeBlock = (ref, face, ...rest) => {
+    const why = placeRefusal(ref, face);
+    return why ? Promise.reject(new Error(why)) : nativePlace(ref, face, ...rest);
   };
 }
 

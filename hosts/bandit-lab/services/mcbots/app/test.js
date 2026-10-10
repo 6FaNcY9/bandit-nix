@@ -1793,6 +1793,66 @@ require('./crafting');
     x = rig(); p = x.bot.equip({}, 'hand'); x.runner.cancel(); x.release();
     await assert.rejects(p, /Equip aborted/);
   }
+  { // mineflayer's native dig / placeBlock await lookAt before the packet: a Stop or path reset there sends nothing (Codex R2-2, R3-2)
+    const {guardDigs, BotRunner} = require('./bots');
+    const EventEmitter = require('node:events');
+    const {Vec3} = require('vec3');
+    const rig = ({areas = [], mining = false} = {}) => {
+      let release = () => {}, packets = [];
+      const world = new Map([['0,60,0', {name: 'stone', stateId: 1}]]);
+      const bot = Object.assign(new EventEmitter(), {
+        lookAt: () => new Promise((res) => { release = res; }),
+        entity: {position: new Vec3(0, 64, 3)},
+        pathfinder: {stop() {}, setGoal() {}, isMining: () => mining, isBuilding: () => false},
+        blockAt: (p) => { const b = world.get(`${p.x},${p.y},${p.z}`); return b ? {...b, position: p, getProperties: () => ({})} : null; },
+        equip: async () => {},
+      });
+      bot.dig = async (blk) => { await bot.lookAt(blk.position); packets.push('block_dig'); }; // the native order: look, then packet
+      bot.placeBlock = async (ref) => { await bot.lookAt(ref.position); packets.push('block_place'); };
+      const runner = Object.assign(Object.create(BotRunner.prototype), {bot, current: {cancelled: false}, protectedAreas: areas});
+      guardDigs(runner, bot);
+      return {bot, runner, world, packets, release: () => release()};
+    };
+    const flush = () => new Promise((res) => setImmediate(res));
+    const stone = () => ({name: 'stone', stateId: 1, position: new Vec3(0, 60, 0)});
+    const ref = () => ({position: new Vec3(0, 60, 0)});
+    let x = rig(), p = x.bot.dig(stone(), true);
+    x.release(); await p;
+    assert.deepStrictEqual(x.packets, ['block_dig'], 'untouched: the dig goes ahead');
+    x = rig(); p = x.bot.placeBlock(ref(), new Vec3(0, 1, 0));
+    x.release(); await p;
+    assert.deepStrictEqual(x.packets, ['block_place'], 'untouched: the placement goes ahead');
+    for (const [how, act, opts] of [
+      ['Stop, pump clears the job', (q) => { q.runner.cancel(); q.runner.current = null; }],
+      ['Stop, then a new job', (q) => { q.runner.cancel(); q.runner.current = {cancelled: false}; }],
+      ['path reset (the pathfinder\'s own)', (q) => q.bot.emit('path_reset', 'x'), {mining: true}],
+      ['block swapped', (q) => q.world.set('0,60,0', {name: 'stone', stateId: 2})],
+      ['water arrives', (q) => q.world.set('1,60,0', {name: 'water', stateId: 3})],
+    ]) {
+      x = rig(opts); p = x.bot.dig(stone(), true); act(x); x.release();
+      await assert.rejects(p, /Digging aborted/, `dig after: ${how}`);
+      await flush();
+      assert.deepStrictEqual(x.packets, [], `dig packet after: ${how}`);
+    }
+    for (const [how, act, opts] of [
+      ['Stop', (q) => { q.runner.cancel(); q.runner.current = null; }],
+      ['Stop, then a new job', (q) => { q.runner.cancel(); q.runner.current = {cancelled: false}; }],
+      ['path reset', (q) => q.bot.emit('path_reset', 'x'), {mining: true}],
+    ]) {
+      x = rig(opts); p = x.bot.placeBlock(ref(), new Vec3(0, 1, 0)); act(x); x.release();
+      await assert.rejects(p, /Placing aborted/, `place after: ${how}`);
+      assert.deepStrictEqual(x.packets, [], `place packet after: ${how}`);
+    }
+    // a path reset does not touch a job's own dig (digAt), only the pathfinder's
+    x = rig(); p = x.bot.dig(stone(), true); x.bot.emit('path_reset', 'x'); x.release(); await p;
+    assert.deepStrictEqual(x.packets, ['block_dig']);
+    // other lookAt callers (combat, follow) are not affected
+    x = rig(); p = x.bot.lookAt(new Vec3(0, 0, 0)); x.runner.cancel(); x.release(); await p;
+    // a drop of more than 3 below the bot is refused for a walk's raw dig too
+    x = rig(); x.bot.entity.position = new Vec3(0, 61, 0);
+    for (let y = 59; y > 54; y--) x.world.set(`0,${y},0`, {name: 'air', stateId: 9});
+    await assert.rejects(x.bot.dig(stone(), true), /drop of more than 3/);
+  }
   { // placeNear (crafting table / furnace): a Stop during the equip places nothing (Codex R3-2)
     const {placeNear} = require('./crafting');
     const {Cancelled} = require('./bots');
@@ -1819,7 +1879,7 @@ require('./crafting');
     const md = require('minecraft-data')('26.1');
     let walking = true, dug = 0;
     const world = {60: 'cobblestone', 61: 'dirt'};
-    const bot = Object.assign(new EventEmitter(), {registry: md, version: '26.1', inventory: {items: () => []}, entity: {position: new Vec3(0, 64, 0)}, entities: {}, pathfinder: {isMining: () => walking}, dig: async () => { dug++; }, equip: async () => {}, placeBlock: async () => {},
+    const bot = Object.assign(new EventEmitter(), {registry: md, version: '26.1', inventory: {items: () => []}, entity: {position: new Vec3(3, 64, 0)}, entities: {}, pathfinder: {isMining: () => walking}, dig: async () => { dug++; }, equip: async () => {}, placeBlock: async () => {},
       blockAt: (p) => ({name: world[p.y], position: p, getProperties: () => ({})})});
     const runner = Object.assign(Object.create(BotRunner.prototype), {bot, current: {cancelled: false}, protectedAreas: []});
     const mv = safeMovements(bot, [], runner);
