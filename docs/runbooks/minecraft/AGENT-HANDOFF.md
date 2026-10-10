@@ -74,6 +74,188 @@ Do not rely on branch names or an old report as the current task state.
 6. Record the integrated ID. Verify runtime separately after an authorized
    deployment; source review and a successful build do not prove activation.
 
+## Third review round, 2026-10-10
+
+State: reviewed / fixes required. Owner: Codex. Worktree:
+`/home/vino/.local/share/codex/worktrees/aa45/bandit-nix`, branch
+`review/minecraft-r3`. Fetched origin and rebased the clean assigned branch
+onto `origin/main`, exact base `1e7555f2165029cdac256b8b12e3e6c544038c28`.
+No local commits preceded this review. Only this document changes; one unsigned
+commit, never push. No bot/Nix edits, activation, or commands against bandit-lab
+or its bots. Earlier live claims below remain their authors' historical reports.
+
+What this change does: two foremen coordinate separate worker crews, with room
+excavation, individual placement, base alerts and rotated decision logs. This
+review covers `5497099`, `dd10896`, `d3003b7`, `0b9800b`, `9962c56`, `78dcf50`,
+`04ce21f`, `4048a72`, and `1e7555f`, including their connected callers at the
+exact base. `app/` means `hosts/bandit-lab/services/mcbots/app/`; line references
+below are at that base. All reproductions are local fixtures, not live acceptance.
+
+### R2 re-verification
+
+Exact sources from `5497099f0bdf57e9aebcca4fc138e1c41a545f66` and
+`dd10896cbb2c103a56e5a0b823ac9224acc0dcf5` were extracted into scratch
+directories. Their bot suites and the current bot/agent suites pass. Passing
+those suites does not cover the continuation and shared-identity cases below.
+
+| Finding | Decision | Reproduction and regression acceptance |
+| --- | --- | --- |
+| R2-1, P1 forged human dashboard identity | **Closed for the configured lab boundary.** | Extracted actual authorization predicate on `5497099` and the base: forged allowed login from `127.0.0.1`, IPv4-mapped loopback and `10.250.77.3` fails; configured gateways `10.250.77.1` and mapped `172.22.0.1` pass with the allowed login; missing login fails. Actual bearer policy still denies settings, `all` and bot10. Both namespace-sharing workers retain `--cap-drop=ALL` and receive no agent bearer. Retain these cases for both worker containers and legitimate Tailscale access. Empty `TRUSTED_PROXIES` still trusts arbitrary header sources, so this closure requires the explicit current gateway list; socket provenance and Tailscale forwarding were not checked live. |
+| R2-2, P1 delayed pathfinder dig after Stop/reset | **Reopened.** | On `5497099` and the base, cancelled-current, protected target, name swap and adjacent water/lava all refuse digs. However, execute the pinned pathfinder's real digging branch with equip held, run actual `BotRunner.cancel()` and let actual `pump()` finish the cancelled goto; `current` becomes null. Release equip: one old dig starts. A new uncancelled job also admits it; a same-name block-state swap is not rejected. Details and acceptance below. |
+| R2-3, P1 rearm mutations after Stop | **Withdrawal/craft-entry case closed; equip continuation reopened.** | On `5497099` and the base, Stop in withdrawal closes the window and starts no craft/equip. Stop during the first armour equip still starts torso, legs, feet, off-hand and sword equips. Details and acceptance below. |
+| R2-4, P2 optional supplies abort essential equipment | **Closed for the tested cases.** | Exact `dd10896` and base suites assert full inventory, a spare/log disappearing before withdrawal, failed or ineffective plank crafting, 0/1/2 versus >2 logs, food ordering, and two bots competing for one spare. Carried equipment is equipped, failures are reported, windows close, no spare is duplicated. Keep these gates and cancellation separate from tolerated capacity errors. Real inventory transactions and combat overlap were not exercised. |
+| R2-5, P2 wrong-axis double-chest partner | **Closed.** | Exact `dd10896` and base suites exercise all four facings and both halves, wrong-axis neighbours, adjacent parallel pairs, missing partner, singles, trapped-chest mismatch and barrels. Only the coordinate selected by facing plus half is cleared. Retain those cases plus Stop between covers. |
+| R2-6, P2 worker credential steals other workers' names | **Reopened.** | Actual `Hub.hello()` on `dd10896` and the base: two connection stand-ins for authenticated workers with the same seed-derived `wid`, different host labels and `bot16` announced twice close the first socket with 4001 and transfer the runner to the second. Both current lab containers receive the same seed/token file, so their identities are equal. Details and acceptance below. |
+
+### Must fix
+
+1. **R2-2 — P1: dig authorization forgets the cancelled path.**
+   `app/bots.js:337-345`, `363-413`, `693-704`; pinned
+   `mineflayer-pathfinder` 2.4.5 `index.js:123-140`, `482-511`.
+   The new guard reads `runner.current`, not the job/path that started equip.
+   After Stop clears the goto and the pump clears current, the old equip's
+   continuation is allowed to dig; a subsequent job masks the cancellation too.
+   Path resets without job cancellation also lack an invalidation check.
+   The fixture combines the actual pinned executor branch, pump, cancel and
+   dig wrapper; it starts one dig after Stop. This remains a terrain-mutation
+   risk, especially with the new GoalY ascent. The wrapper also compares only
+   block names and rejects only the fluid subset of `unsafeDig` results.
+   Fix: invalidate pending path mutations on Stop/reset, bind authorization to
+   that path/job generation, and recheck current block state and safety before
+   digging. Regression: hold equip, Stop/reset, allow pump cleanup or a new job,
+   release equip; zero old digs. Also test same-name state changes, water/lava,
+   newly falling blocks, support removal and protected targets during equip.
+
+2. **R2-3 — P1: Stop during armour equip starts more equips.**
+   `app/bots.js:1477-1489`.
+   The single guard before the armour loop does not cover its awaits.
+   With carried helmet, chestplate, leggings, boots, totem and sword, cancelling
+   inside the helmet equip still starts five more equips. The real rearm
+   method reproduces this on the fix and the base; it can even return success
+   internally when no supply chest is set. The pump's eventual stopped status
+   does not undo those inventory actions. Fix: guard before every equip and
+   after each awaited action; use the existing inventory-busy discipline for
+   rearm crafting. Regression: Stop in every withdrawal/craft/equip position
+   starts no subsequent mutation, closes every window, and releases inventory
+   ownership even when combat or a transaction error overlaps.
+
+3. **R3-1 — P1: excavation's walking can destroy placed walls.**
+   `app/bots.js:515-534`, `693-704`, `717`, `1498-1535`;
+   contrast the build-area movement veto at `app/build.js:181`.
+   `NATURAL` filters only the explicit excavation targets. Its normal pathfinder
+   may still dig cobblestone/planks to reach those targets or climb toward them.
+   Fixture: excavate a two-cell room containing placed cobblestone and natural
+   dirt; actual pinned `Movements.safeToBreak` and `guardDigs` both permit the
+   cobblestone. A walking callback executing that legal planned dig removes
+   cobblestone before `digAt` removes dirt. This is a movement-policy fixture,
+   not proof of a particular live route. Fix: constrain excavation path digs
+   to its allowed natural targets and preserve placed structures/scaffolding
+   while walking, including paths outside the box. Regression: an obstructing
+   placed wall/torch/plank stays through ordinary walking and GoalY ascent;
+   unreachable natural targets fail without destroying the obstruction.
+
+4. **R3-2 — P1: auxiliary placement continues after Stop.**
+   `app/crafting.js:47-89`, called by `app/bots.js:1575` and excavation upkeep;
+   pinned pathfinder `index.js:515-577`, reached through `goNear`.
+   The final `JOBS.place` equip guard works, but crafting a missing chest can
+   first place a crafting table through `placeNear`, which receives no job.
+   Actual helper fixture: Stop during its equip still places the table.
+   Separately, hold the pinned pathfinder's scaffold equip, cancel its goto
+   through actual pump/cancel, then release equip: one scaffold placement starts
+   after Stop. `guardDigs` cannot protect placements. Fix: carry cancellation
+   into station placement and invalidate pending pathfinder placement on
+   Stop/reset, with a fresh target/protection check immediately before placing.
+   Regression: Stop during table/furnace/scaffold equip starts zero placements
+   and no later craft; cleanup or a new job must not revive the old operation.
+
+### Should fix
+
+5. **R2-6 — P2: both lab workers have the same ownership identity.**
+   `app/hub.js:378-402`, `app/hubclient.js:142-143`, `172`;
+   `mcbots/default.nix:48-63`, `179-185`.
+   `wid` is derived only from the login seed. Both containers use the same
+   `/run/mcbots/worker.env`, so a compromised worker can derive the other one's
+   identity and replace its bots. The fixture transfers bot16 and closes its
+   legitimate socket with 4001. Different labels do not help; after a hub
+   restart even a different identity can claim a remote name first.
+   Fix: authenticate per-worker credentials against server-owned name sets
+   before replacement, independent of client-supplied `wid`/host and first
+   arrival. Regression: worker-2 cannot register/replace bot16-18, worker-1
+   cannot register/replace bot2-4 or laptop names, including immediately after
+   hub restart; the authorized worker can reconnect and resume its own names.
+
+6. **R3-3 — P2: the two agents can spend the entire budget replying to each other.**
+   `tools/mcagents/agent.js:106`, `146-148`, `500-505`, `681-700`.
+   Every `!startConversation` enqueues another model-triggering message and
+   returns before repeated-command guards. Foremen are not offered/allowed
+   `!endConversation`; no duplicate or exchange bound exists. Fake model fixture:
+   alternate bot1/bot2 sending the same `done` message 12 times. The actual
+   decision/message code spends all 12 shared calls, starts zero jobs, and
+   leaves the next inbox message ready for the following window. This shows an
+   allowed loop, not a claim that the real model always chooses it.
+   Fix: suppress repeated outgoing messages for the same exchange and provide
+   a deterministic way to finish it; prevent self-conversation too. Regression:
+   identical two-agent acknowledgements and self-messages terminate, useful new
+   requests still arrive, queued messages survive budget waits, and idle crews
+   receive work while conversations are active. The aggregate budget itself
+   remained enforced in the fixture; the failure is wasted capacity.
+
+7. **R3-4 — P2: completed-room protection is skipped for worker assignments.**
+   `tools/mcagents/agent.js:507-528`, `572-577`.
+   The completion guard is below the early-returning `!assign` branch.
+   Fixture: record `finished: excavate 0 60 0 1 60 1 - already complete`, then
+   have bot2 assign bot3 that exact room again. The actual decision method posts
+   another excavate despite the room being in `agent.done`. Each successful
+   no-op wakes the foreman again, and the failure-rest guard never applies.
+   Fix: apply the existing completed-part check before worker submission too.
+   Regression: completed and already-complete rooms are refused for self and
+   worker assignments; failed/stopped rooms and different rooms remain eligible.
+
+### Checks, coverage and limits
+
+- `rtk git fetch origin`; `rtk git rebase origin/main`: clean success at the
+  recorded base. No push or remote host/bot command.
+- Base bot suite: `rtk proxy env NODE_PATH=/home/vino/src/bandit-nix/hosts/bandit-lab/services/mcbots/app/node_modules node hosts/bandit-lab/services/mcbots/app/test.js`.
+  Base agent suite: `rtk proxy node tools/mcagents/agent.test.js`. Both exit 0.
+- `rtk proxy node test.js` in the exact `5497099` and `dd10896` scratch app
+  directories: both exit 0. Dependencies reused from the existing local install;
+  pathfinder package version is the pinned 2.4.5. No install/lockfile change.
+- `rtk proxy node /tmp/minecraft-r3-review-9czxqdhq/repro.cjs`: all assertions
+  pass, reproducing the findings as well as fixed cases. This local scratch
+  artifact is not part of the commit. It source-loads actual modules/helpers;
+  the two pinned executor branches run with fake world/equip promises. It does
+  not start real bots. The regression sequences above describe how to recreate
+  the cases without depending on that temporary path.
+- `d3003b7`: five levels down under a roof selects GoalY before GoalNear; open
+  sky selects only GoalNear. Two identical worker failures suppress idle wakeups
+  for five minutes and then allow them again. Climb safety remains subject to
+  R2-2, R3-1 and R3-2.
+- `04ce21f`: configured crews are disjoint and agent names are filtered from
+  workers. No same-worker assignment collision reproduced with those settings.
+  `workersOf` does not reject overlapping custom crew lists; this is not a claim
+  of exclusive ownership for arbitrary configurations.
+- `9962c56` / `1e7555f`: persistent missing chest plus hostile mobs over 24
+  five-second checks produces one chest and one mob alert; at 120 seconds there
+  is one further mob alert. Existing tests cover night/morning transitions and
+  foreman delivery. Correct `m.type` gives named mobs, not `undefined`.
+- `1e7555f`: actual crafting helper with one oak plank, one spruce plank and an
+  oak log makes more single-kind planks before sticks and releases its inventory
+  lock. Agent suite covers `raw_logs`/generic tool translation; harvest-tool
+  names were source-reviewed. `4048a72`: a sparse scratch log over 50 MB rotates
+  once and both agent lines append to the new file.
+- Single-target place protection and Stop in its final equip pass. An excavation
+  box enclosing a protected island with all corners outside still refuses the
+  interior dig through `guardDigs`; no protected-terrain bypass was reproduced.
+  Multi-block placement footprints/orientation were not exercised against a
+  server, so this is not universal placement-safety certification.
+- Documentation whitespace/scope checked with `rtk git diff --check` and the
+  staged diff. No dedicated Markdown gate found. No Nix build/flake check for
+  this documentation-only patch. HTTP/WebSocket tests used local fixtures only;
+  no bandit-lab sockets, real world physics/inventory transactions, deployment,
+  activation or live runtime probes were used.
+
+Verdict: fix the reopened R2 findings and R3-1 through R3-4 before acceptance.
+
 ## Second review round, 2026-10-10
 
 Claude, 2026-10-10: R2-1, R2-2 and R2-3 fixed in `5497099` (live): the Tailscale
