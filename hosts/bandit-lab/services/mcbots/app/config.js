@@ -99,6 +99,11 @@ function loadConfig(env = process.env) {
   const slayerUrl = (env.SLAYER_URL || '').replace(/\/+$/, '');
   if (slayerUrl && !/^http:\/\/[\w.-]+(:\d+)?$/.test(slayerUrl)) throw new Error('SLAYER_URL must be http://host:port');
   const slayerStatusCmd = require('./slayer').parseCmd(env.SLAYER_STATUS_CMD);
+  // Server administration over RCON (admin.js): host on the internal Docker network, password from the environment file.
+  const rconHost = (env.RCON_HOST || '').trim(), rconPassword = env.RCON_PASSWORD || '', rconPort = Number(env.RCON_PORT || 25575);
+  if (rconHost && !/^[\w.-]{1,64}$/.test(rconHost)) throw new Error('RCON_HOST must be a host name');
+  if (!Number.isInteger(rconPort) || rconPort < 1 || rconPort > 65535) throw new Error('RCON_PORT must be a port');
+  if (!!rconHost !== !!rconPassword) throw new Error('RCON_HOST and RCON_PASSWORD must be set together');
   const host = env.DASHBOARD_HOST || '127.0.0.1';
   if (!allowed.length && host !== '127.0.0.1') {
     throw new Error('DASHBOARD_HOST other than 127.0.0.1 requires ALLOWED_TS_LOGINS');
@@ -124,6 +129,7 @@ function loadConfig(env = process.env) {
     agentToken,
     agentBots,
     slayerUrl,
+    rcon: rconHost ? {host: rconHost, port: rconPort, password: rconPassword} : null,
     slayerStatusCmd,
     workerPort,
     workerHost: env.WORKER_HOST || '127.0.0.1',

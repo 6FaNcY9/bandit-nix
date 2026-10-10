@@ -4313,3 +4313,64 @@ require('./crafting');
   assert.deepStrictEqual(due({protectedAt: (x) => x === 10}), ['30,66,20'], 'never in a protected area');
   assert.strictEqual(cells.size, 1);
 }
+{ // server admin (admin.js): RCON packets, validation, restart, no agent access (2026-10-10)
+  const AD = require('./admin');
+  const net = require('node:net');
+  const p = AD.encode(7, 2, 'list');
+  assert.strictEqual(p.readInt32LE(0), 14); assert.strictEqual(p.length, 18);
+  const dec = AD.decode(Buffer.concat([p, AD.encode(8, 0, 'hi'), Buffer.from([1, 2])]));
+  assert.deepStrictEqual(dec.packets, [{id: 7, type: 2, body: 'list'}, {id: 8, type: 0, body: 'hi'}]);
+  assert.strictEqual(dec.rest.length, 2, 'a partial packet stays buffered');
+  assert.throws(() => AD.decode(Buffer.from([0xff, 0xff, 0xff, 0x7f, 0, 0, 0, 0])), /length/);
+  for (const n of ['Steve_1', 'a'.repeat(16)]) assert.strictEqual(AD.build('kick', {name: n}), `minecraft:kick ${n}`);
+  for (const n of ['', 'a'.repeat(17), 'a b', 'a\nop', 'x;y', 5, undefined]) assert.throws(() => AD.build('op', {name: n}), /name/);
+  assert.strictEqual(AD.build('ban', {name: 'Bob', reason: 'griefing'}), 'minecraft:ban Bob griefing');
+  assert.throws(() => AD.build('ban', {name: 'Bob', reason: 'a\nb'}), /reason/);
+  assert.throws(() => AD.build('command', {cmd: 'say hi\nstop'}), /command/);
+  assert.throws(() => AD.build('command', {cmd: 'x'.repeat(201)}), /command/);
+  assert.strictEqual(AD.build('command', {cmd: '/list'}), 'list');
+  assert.throws(() => AD.build('time', {value: 'noon'}), /day or night/);
+  assert.throws(() => AD.build('rm', {}), /unknown/);
+  assert.deepStrictEqual(AD.parse.players('There are 3 of a max of 12 players online: bot1, Steve, bot2'), ['bot1', 'Steve', 'bot2']);
+  assert.deepStrictEqual(AD.parse.players('There are 0 of a max of 12 players online: '), []);
+  assert.deepStrictEqual(AD.parse.bans('Bob was banned by Console: x\nAl was banned by Console: y'), ['Bob', 'Al']);
+  const t = AD.parse.tps('§6TPS from last 1m, 5m, 15m: §a19.98, §a20.0, §a*20.0\nCurrent Memory Usage: 3,459/8,192 mb (Max: 8192 mb)');
+  assert.deepStrictEqual([t.tps, t.memUsedMb, t.memTotalMb], [[19.98, 20, 20], 3459, 8192]);
+  // the client against a fake server (auth, a reply split in two packets, the probe)
+  const srv = net.createServer((s) => {
+    let buf = Buffer.alloc(0);
+    s.on('data', (d) => {
+      const r = AD.decode(Buffer.concat([buf, d])); buf = r.rest;
+      for (const q of r.packets) {
+        if (q.type === 3) s.write(AD.encode(q.body === 'pw' ? q.id : -1, 2, ''));
+        else if (q.type === 2) { s.write(AD.encode(q.id, 0, 'ec')); s.write(AD.encode(q.id, 0, `ho ${q.body}`)); }
+        else s.write(AD.encode(q.id, 0, 'Unknown request 64'));
+      }
+    });
+  });
+  srv.listen(0, '127.0.0.1', async () => {
+    const o = {host: '127.0.0.1', port: srv.address().port, password: 'pw'};
+    const call = AD.queued(o);
+    assert.deepStrictEqual(await call(['a', 'b']), ['echo a', 'echo b']);
+    await assert.rejects(AD.rcon({...o, password: 'bad'}, ['a']), /refused the password/);
+    // the Admin actions: events log, restart countdown and cancel
+    const sent = [], timers = [];
+    const events = new (require('./events').EventLog)();
+    const ad = new AD.Admin({call: async (c) => { sent.push(...c); return c.map(() => 'ok'); }, events, botNames: ['bot1'], setTimer: (f, ms) => timers.push({f, ms}) && timers.length, clearTimer: () => {}});
+    assert.ok(ad.isBot('bot1') && ad.isBot('bot17') && !ad.isBot('Steve'));
+    await ad.act('kick', {name: 'Steve', reason: 'afk'});
+    assert.ok(events.since(0).some((e) => e.bot === 'admin' && /admin: kick Steve/.test(e.text)));
+    await assert.rejects(ad.act('kick', {name: 'a b'}), /name/);
+    await ad.act('restart');
+    assert.deepStrictEqual(timers.map((x) => x.ms), [0, 30000, 50000, 60000]);
+    await assert.rejects(ad.act('restart'), /already/);
+    await ad.act('restart-cancel');
+    await ad.act('restart');
+    srv.close();
+  });
+  const A2 = require('./agentauth');
+  for (const [m, u] of [['GET', '/api/admin/status'], ['GET', '/api/admin/query'], ['GET', '/api/admin/console'], ['POST', '/api/admin/action']]) assert.ok(!A2.agentEndpoint(m, u), `agent token must not reach ${u}`);
+  const cfgAdmin = require('./config').loadConfig;
+  assert.throws(() => cfgAdmin({BOT_NAMES: 'bot1', RCON_HOST: 'minecraft'}), /RCON_HOST and RCON_PASSWORD/);
+  assert.deepStrictEqual(cfgAdmin({BOT_NAMES: 'bot1', RCON_HOST: 'minecraft', RCON_PASSWORD: 'x', BOT_PASSWORD_SEED: 's'}).rcon, {host: 'minecraft', port: 25575, password: 'x'});
+}

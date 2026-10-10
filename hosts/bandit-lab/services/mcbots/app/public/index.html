@@ -119,6 +119,23 @@
   <div id="zlist" class="mut"></div>
   <div id="vjob" class="mut"></div><div id="vmsg" class="mut"></div>
 </details>
+<details class="bar" id="adminbar"><summary>Server <span class="mut">(players, console, restart, world; owner only, through RCON)</span></summary>
+  <div class="row"><span id="asrv" class="mut">...</span><button id="arefresh" type="button" class="ghost">Refresh</button><span id="amsg" class="mut"></span></div>
+  <h3>Players</h3><div id="aplayers"></div>
+  <div class="row"><input id="aname" maxlength="16" placeholder="player name" style="width:11em"><input id="areason" maxlength="100" placeholder="reason (optional)" style="width:14em">
+    <button type="button" data-a="kick">Kick</button><button type="button" data-a="ban">Ban</button><button type="button" data-a="unban" class="ghost">Unban</button>
+    <button type="button" data-a="whitelist-add" class="ghost">Whitelist +</button><button type="button" data-a="whitelist-remove" class="ghost">Whitelist -</button>
+    <button type="button" data-a="op" class="ghost">Op</button><button type="button" data-a="deop" class="ghost">Deop</button></div>
+  <div class="row"><button type="button" data-q="whitelist" class="ghost">Show whitelist</button><button type="button" data-q="bans" class="ghost">Show bans</button><button type="button" data-q="plugins" class="ghost">Plugins</button><button type="button" data-q="imageframe" class="ghost">ImageFrame list</button></div>
+  <pre id="aq" class="mut" style="white-space:pre-wrap;max-height:14em;overflow:auto"></pre>
+  <h3>World</h3>
+  <div class="row"><button type="button" data-a="time" data-v="day">Day</button><button type="button" data-a="time" data-v="night">Night</button><button type="button" data-a="weather-clear">Clear weather</button><button type="button" data-a="save" class="ghost">Save world</button><a id="amap" href="#" target="_blank" rel="noopener">BlueMap</a></div>
+  <h3>Restart</h3>
+  <div class="row"><button type="button" id="arestart" class="stop">Restart with warning</button><button type="button" id="acancel" class="ghost">Cancel</button><span id="arinfo" class="mut">chat warnings at 60, 30 and 10 s, then save and stop; the server comes back by itself</span></div>
+  <h3>Console <span class="mut">(commands you send and the server's replies; the server log itself is not reachable from here)</span></h3>
+  <div class="row"><input id="acmd" maxlength="200" placeholder="command, e.g. list" style="flex:1;min-width:14em"><button id="asend" type="button">Send</button></div>
+  <pre id="aout" style="white-space:pre-wrap;max-height:18em;overflow:auto"></pre>
+</details>
 <div id="bots" class="grid"></div>
 <div class="bar" id="allbar"><h3>Give the same job to several bots</h3><div id="allcomposer"></div></div>
 <div class="bar"><h3>Events <select id="evbot"></select></h3><div id="events"></div></div>
@@ -1162,6 +1179,51 @@ $('vbar').addEventListener('toggle', async () => {
     $('varea').onchange(); vBots(); vPreview(); zoneUi();
   } catch (e) { $('vinfo').textContent = 'areas: ' + e.message; }
 });
+// ---- Server admin (owner only; /api/admin/*) ----
+const A = { last: 0, timer: null, log: [] };
+const amsg = (t, bad) => { $('amsg').textContent = t; $('amsg').className = bad ? 'err' : 'mut'; };
+async function aget(u) { const r = await fetch(u, { cache: 'no-store' }), j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || r.status); return j; }
+async function aact(action, extra) {
+  try { const j = await post('/api/admin/action', { action, ...extra }); amsg(j.reply ? action + ': ' + j.reply.slice(0, 200) : action + ': done'); } catch (e) { amsg(e.message, true); }
+  aRefresh();
+}
+async function aRefresh() {
+  try {
+    const s = await aget('/api/admin/status');
+    $('asrv').textContent = `TPS ${s.tps.join(' / ') || '?'} | memory ${s.memUsedMb ?? '?'} / ${s.memTotalMb ?? '?'} MB | ${s.mspt || 'mspt ?'}${s.restartAt ? ' | restarting in ' + Math.max(0, Math.round((s.restartAt - Date.now()) / 1000)) + ' s' : ''}`;
+    $('aplayers').replaceChildren(...(s.players.length ? s.players : [{ name: '(nobody online)' }]).map((p) => {
+      const d = el('div', 'row', p.name + (p.bot ? ' (bot)' : ''));
+      if (p.bot !== undefined) { d.append(button('Kick', 'kick ' + p.name, () => aact('kick', { name: p.name })), button('Ban', 'ban ' + p.name, () => confirm('Ban ' + p.name + '?') && aact('ban', { name: p.name }))); }
+      return d;
+    }));
+  } catch (e) { $('asrv').textContent = e.message; }
+  try {
+    const c = await aget('/api/admin/console?since=' + A.last);
+    if (c.lastId < A.last) A.log = [];
+    A.last = c.lastId;
+    if (c.entries.length) { A.log = A.log.concat(c.entries).slice(-100); $('aout').textContent = A.log.map((e) => `${new Date(e.t).toLocaleTimeString()} > ${e.cmd}\n${e.reply}`).join('\n'); $('aout').scrollTop = 1e9; }
+  } catch {}
+}
+$('adminbar').addEventListener('toggle', () => {
+  clearInterval(A.timer);
+  if (!$('adminbar').open) return;
+  $('amap').href = location.protocol + '//' + location.hostname + ':8443/';
+  aRefresh();
+  A.timer = setInterval(aRefresh, 3000);
+});
+$('arefresh').onclick = aRefresh;
+for (const b of $('adminbar').querySelectorAll('button[data-a]')) b.onclick = () => {
+  const a = b.dataset.a, x = { name: $('aname').value.trim(), reason: $('areason').value.trim(), value: b.dataset.v };
+  if (a === 'ban' && !confirm('Ban ' + x.name + '?')) return;
+  aact(a, x);
+};
+for (const b of $('adminbar').querySelectorAll('button[data-q]')) b.onclick = async () => {
+  try { $('aq').textContent = (await aget('/api/admin/query?what=' + b.dataset.q)).text; } catch (e) { $('aq').textContent = e.message; }
+};
+$('arestart').onclick = () => confirm('Restart the server? Players get warnings for 60 s, then the world is saved and the server stops.') && aact('restart');
+$('acancel').onclick = () => aact('restart-cancel');
+$('asend').onclick = () => { const c = $('acmd').value.trim(); if (c) { $('acmd').value = ''; aact('command', { cmd: c }); } };
+$('acmd').onkeydown = (e) => { if (e.key === 'Enter') $('asend').onclick(); };
 </script>
 </body>
 </html>

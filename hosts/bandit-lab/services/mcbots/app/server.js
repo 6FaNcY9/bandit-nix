@@ -25,6 +25,7 @@ const agentauth = require('./agentauth');
 const voxels = require('./voxels');
 let voxelBusy = false; // one /api/voxels read at a time
 const {Slayer} = require('./slayer');
+const {Admin, queued} = require('./admin');
 
 const cfg = loadConfig();
 const log = (who, msg) => console.log(`${new Date().toISOString()} [${who}] ${msg}`);
@@ -36,6 +37,8 @@ const events = new EventLog({onAdd: (e) => notifier.event(e)});
 // they never push job events out of the 200-entry event log.
 const decisions = new EventLog();
 const slayer = new Slayer({url: cfg.slayerUrl, cmd: cfg.slayerStatusCmd, decisions});
+// Owner-only server administration (RCON); not wired when RCON_HOST is unset.
+const admin = cfg.rcon ? new Admin({call: queued(cfg.rcon), events, botNames: [...cfg.names, ...cfg.agentBots, ...cfg.planRoster, ...Object.values(cfg.hubWorkers).flat()]}) : null;
 const agentStatuses = new Map(); // agent -> its last POST /api/agentstatus (goal, workers, role, t)
 const stopBlueMap = startBlueMap(world, cfg.bluemapUrl, log);
 const runners = new Map(cfg.names.map((n) => [n, new BotRunner(n, {host: cfg.mcHost, port: cfg.mcPort, log, world, protectedAreas: cfg.protectedAreas, supplyChest: cfg.supplyChest, loginSeed: cfg.loginSeed, hostLabel: cfg.hostLabel, onEvent: (b, k, t) => events.add(b, k, t)})]));
@@ -334,6 +337,24 @@ const server = http.createServer(async (req, res) => {
       for (const k of ['granted', 'refused', 'timedOut']) w[k] += b.claims[k];
     }
     return json(200, {generatedAt: new Date().toISOString(), generatedAtMs: Date.now(), windowS: WINDOW_MS / 1000, bots, workers});
+  }
+  // Server admin: human path only (agentEndpoint never lists these, so a bearer is refused above).
+  if (url.pathname.startsWith('/api/admin/')) {
+    const post = req.method === 'POST';
+    if (!admin) return json(503, {error: 'server admin is not configured (RCON_HOST, RCON_PASSWORD)'});
+    if (post && (!sameOrigin(req) || !String(req.headers['content-type']).startsWith('application/json'))) return json(403, {error: 'bad origin'});
+    try {
+      if (req.method === 'GET' && url.pathname === '/api/admin/status') return json(200, await admin.status());
+      if (req.method === 'GET' && url.pathname === '/api/admin/query') return json(200, await admin.query(url.searchParams.get('what')));
+      if (req.method === 'GET' && url.pathname === '/api/admin/console') return json(200, admin.consoleSince(Number(url.searchParams.get('since')) || 0));
+      if (post && url.pathname === '/api/admin/action') {
+        const {action, ...rest} = await readJson(req);
+        return json(200, await admin.act(action, rest));
+      }
+    } catch (e) {
+      return json(400, {error: e.message});
+    }
+    return json(404, {error: 'not found'});
   }
   if (req.method === 'GET' && url.pathname === '/api/keeper') return json(200, keeper ? keeper.state() : {available: false});
   if (req.method === 'POST' && url.pathname === '/api/keeper') {

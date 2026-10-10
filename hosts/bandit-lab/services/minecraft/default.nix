@@ -231,6 +231,26 @@ in {
         };
       };
 
+      # RCON password: random, made once on this host (root-only), handed to the
+      # Minecraft container and the dashboard (mcbots-seed) as environment files.
+      # Delete /var/lib/minecraft-rcon/password and restart both to rotate it.
+      minecraft-rcon-seed = {
+        description = "Generate the Minecraft RCON password and its environment file";
+        before = ["docker-minecraft.service"];
+        requiredBy = ["docker-minecraft.service"];
+        path = [pkgs.coreutils];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          UMask = "0077";
+        };
+        script = ''
+          install -d -m 0700 /var/lib/minecraft-rcon /run/minecraft-rcon
+          [ -s /var/lib/minecraft-rcon/password ] || head -c 32 /dev/urandom | sha256sum | cut -c1-64 > /var/lib/minecraft-rcon/password
+          printf 'RCON_PASSWORD=%s\n' "$(cat /var/lib/minecraft-rcon/password)" > /run/minecraft-rcon/rcon.env
+        '';
+      };
+
       # The tailnet address must exist before Docker can publish on it (now the
       # proxy's job, see docker-velocity). tailscaled being "started" does not
       # guarantee the address is assigned yet, so retry indefinitely instead of
@@ -407,11 +427,16 @@ in {
       # Velocity forwarding secret is what keeps everyone else out of Paper.
       ONLINE_MODE = "FALSE";
       PATCH_DEFINITIONS = "/data/nix-patches";
-      # Administer through the local console without exposing RCON.
+      # RCON for the bots dashboard's Server panel (mcbots/app/admin.js): port 25575 is
+      # never published, only containers on the `minecraft` network reach it, and the
+      # password (RCON_PASSWORD) comes from the generated env file below, not from here.
       CREATE_CONSOLE_IN_PIPE = "true";
-      ENABLE_RCON = "false";
+      ENABLE_RCON = "true";
     };
-    environmentFiles = [config.sops.templates."minecraft-velocity.env".path];
+    environmentFiles = [
+      config.sops.templates."minecraft-velocity.env".path
+      "/run/minecraft-rcon/rcon.env"
+    ];
     # Panel and map listen on loopback only; tailscale serve (above) is their
     # sole network path. The game port is published by the proxy, not here.
     ports = [

@@ -3,7 +3,7 @@
 Verified live on 2026-09-22 after activation. Existing server and worlds preserved.
 
 > **Prepared, not deployed (2026-10-06):** browser administration (VoxelDash panel,
-> BlueMap map), pinned Paper build, consistent backups and a plugin-ownership change
+> since retired in favour of the dashboard's Server panel; BlueMap map), pinned Paper build, consistent backups and a plugin-ownership change
 > are in the working tree. They change several statements below once activated
 > (plugin versions become panel-owned, `minecraft-plugins` seeds once instead of
 > enforcing every start, `MOTD` is no longer an environment variable). See
@@ -13,6 +13,29 @@ Verified live on 2026-09-22 after activation. Existing server and worlds preserv
 > Read-only check on 2026-10-06: production runs Paper **26.2 build 130** (itzg floats
 > to the newest build on each start), not 127; `ops.json` also lists `MidariBread`
 > at level 4.
+
+## Server panel in the bots dashboard (RCON)
+
+The dashboard (`https://<lab>:8445/`, owner's Tailscale login only) has a **Server** panel:
+players (bots marked), kick / ban / unban, whitelist, op / deop, TPS and memory, plugin list,
+time and weather, the ImageFrame list, a command console and "restart with warning".
+
+- Path: the `mcbots` container talks RCON to `minecraft:25575` over the internal `minecraft`
+  Docker network. The port is not published (the `lab-minecraft` check forbids it). The password
+  is random, made once by `minecraft-rcon-seed` (`/var/lib/minecraft-rcon/password`, root only),
+  and reaches Paper (`/run/minecraft-rcon/rcon.env`) and the dashboard (`mcbots-seed`) as
+  environment files. Rotate: delete the file, restart `docker-minecraft` and `docker-mcbots`.
+- Access: `/api/admin/*` is human-only. The agent bearer token is refused (deny-by-default list in
+  `agentauth.js`), POSTs need same origin and JSON like every other dashboard POST, names must
+  match `[A-Za-z0-9_]{1,16}`, commands are at most 200 characters on one line, and every
+  action is written to the events feed (`admin: kick X`).
+- Console shows the commands you send and Paper's replies only. `latest.log` is not mounted into
+  the dashboard container, so the live server log is not available there (use `docker logs`).
+- Restart: warnings at 60, 30 and 10 s, then `save-all flush` and `stop`; `docker-minecraft` has
+  `Restart=always`, so systemd brings it back (about 10 s). Cancel works until the stop. The
+  countdown lives in the dashboard process: restarting `docker-mcbots` during it cancels it.
+- Not available through RCON: ping per player, uptime (the panel shows TPS, MSPT and memory
+  as Paper prints them), restarting the host or the other containers.
 
 ## Server and backup
 
@@ -248,7 +271,7 @@ operation after all gates below pass:
 This procedure does not authorize deployment, restart, or live-world mutation;
 those require a separate maintenance action.
 
-Console (SSH as vino; no public RCON):
+Console (SSH as vino; RCON is on but unpublished, see the next section):
 
 ```sh
 docker exec --user 1000 minecraft mc-send-to-console 'plugins'
