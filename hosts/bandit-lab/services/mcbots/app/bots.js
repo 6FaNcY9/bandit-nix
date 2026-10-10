@@ -967,6 +967,26 @@ const LEASH = 64; // blocks a shift may work from its chest (128 for logs: fores
 const WOOD_LEASH = 128;
 const EXPLORE_MAX = 6;
 
+// Torches need wood (2 planks, or a log). A deep miner carries coal but never chops, so it runs dry.
+const needsWood = (items) => {
+  const sum = (re) => items.filter((i) => re.test(i.name)).reduce((n, i) => n + i.count, 0);
+  return sum(/_log$/) < 2 && sum(/_planks$/) < 8;
+};
+// Take 4 logs from the supply chest when short; a chest without logs is an info event, not a failure.
+// `force` skips the retry timer (rearm is already at the chest).
+async function fetchWood(r, job, force) {
+  if (!r.supplyChest || !needsWood(r.bot.inventory.items())) return;
+  if (!force && Date.now() - (r.woodTriedAt || 0) < FOOD_RETRY_MS) return;
+  if (!force) r.woodTriedAt = Date.now();
+  try {
+    await JOBS.withdraw(r, child(job, {type: 'withdraw', args: {item: 'logs', count: 4, ...r.supplyChest}}));
+    r.emit('info', 'took logs from the supply chest for torches');
+  } catch (e) {
+    guard(job);
+    r.emit('info', `no logs fetched for torches: ${e.message.slice(0, 80)}`);
+  }
+}
+
 async function collect(r, job, matching, count, what) {
   const {bot} = r;
   // An ore below Y 0 is the deepslate variant: mining iron_ore also takes deepslate_iron_ore.
@@ -979,6 +999,7 @@ async function collect(r, job, matching, count, what) {
   const range = ore || wood ? 128 : 64; // the bot sees every block within its view distance (no anti-xray)
   const band = bot.game?.dimension?.endsWith('overworld') !== false ? ORE_BAND[matching.find((n) => ORE_BAND[n])] : null;
   let explored = 0, descents = 0;
+  if (names.some((n) => ORE_BAND[n.replace(/^deepslate_/, '')])) await fetchWood(r, job);
   let got = job.collected || 0; // survives a combat interruption + resume
   let misses = 0;
   if (!job.t.open) Object.assign(job.t, {done: got, total: count});
@@ -1318,6 +1339,7 @@ const JOBS = {
     if (sword) await bot.equip(sword, 'hand').catch(() => {});
     const worn = ['head', 'torso', 'legs', 'feet'].filter((s) => bot.inventory.slots[bot.getEquipmentDestSlot(s)]).length;
     const off = bot.inventory.slots[bot.getEquipmentDestSlot('off-hand')]?.name;
+    await fetchWood(r, job, true);
     job.progress = `armour ${worn}/4, ${sword?.name || 'no sword'}, off-hand ${off || 'empty'}, food ${foodCount()}`;
   },
 
@@ -1380,4 +1402,4 @@ const JOBS = {
   },
 };
 
-module.exports = {BotRunner, NAME_RE, VALIDATE, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled};
+module.exports = {BotRunner, NAME_RE, VALIDATE, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood};

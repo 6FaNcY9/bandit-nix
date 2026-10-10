@@ -88,6 +88,16 @@ assert.throws(() => loadConfig({BOT_NAMES: 'bot1', PROTECTED_AREAS: '1,2,3'}));
 // ---- shared world / combat logic ----
 const W = require('./world');
 const {weaponScore, wantsToEat, deathCause} = require('./combat');
+{
+  // Deep miners with coal but no wood cannot make torches (bot2 at y -55, 2026-10-10).
+  const {needsWood} = require('./bots');
+  assert.equal(needsWood([{name: 'coal', count: 8}]), true);
+  assert.equal(needsWood([]), true);
+  assert.equal(needsWood([{name: 'oak_log', count: 1}, {name: 'oak_planks', count: 7}]), true);
+  assert.equal(needsWood([{name: 'oak_log', count: 2}]), false);
+  assert.equal(needsWood([{name: 'birch_planks', count: 8}]), false);
+  assert.equal(needsWood([{name: 'oak_log', count: 1}, {name: 'spruce_log', count: 1}]), false);
+}
 // Hurt bots eat at food 15-17 so they regenerate (bot1 sat at 6.7 health with food 17, 2026-10-10).
 assert.equal(wantsToEat(17, 6.7, 15), true);
 assert.equal(wantsToEat(17, 20, 15), false);

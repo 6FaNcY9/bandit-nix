@@ -297,6 +297,11 @@ in `app/bots.js`, checked before every block):
 - **Hunger**: food below 14, none in the inventory and a supply chest set: walk
   there and take food (the `rearm` routine), at most once per 10 min. The
   existing combat loop eats from the inventory below 15 (below 18 while hurt).
+- **No wood for torches**: a `mine` or `shift` on an ore, with a supply chest set and
+  fewer than 2 logs and fewer than 8 planks in the inventory, first takes 4 logs from the
+  chest (at most once per 10 min; `rearm` does it every time, at its end). No logs in the
+  chest is an info event, not a failure. Live (bot6, `mine iron_ore 5` from the surface):
+  `took logs from the supply chest for torches`, then 3 torches placed underground.
 - **Full inventory** (fewer than 2 free slots) in a job that is not a `shift`:
   deposit into the supply chest and carry on. A `shift` deposits into its own
   chest. Without a chest the job fails with a clear message.
