@@ -16,6 +16,7 @@ const {normDim, deadlineMs, insideAreas, shouldFight} = require('./world');
 const buildJob = require('./build');
 const huntJob = require('./hunt');
 const gravesJob = require('./graves');
+const homebedJob = require('./homebed');
 
 const NAME_RE = /^bot[0-9]{1,2}$/; // BotGate's pattern (Velocity plugin)
 const LOGIN_GAP_MS = 4500; // Velocity rate-limits logins
@@ -28,9 +29,9 @@ const NATURAL = /^(stone|deepslate|dirt|grass_block|coarse_dirt|rooted_dirt|podz
 const KEEP_RE = /^(stick|[a-z_]+_planks|coal|charcoal|torch|crafting_table|furnace)$/;
 const FOOD_BELOW = 14; // fetch food from the supply chest when hungry and carrying none
 const FOOD_RETRY_MS = 600000; // an empty chest is not worth a walk every minute
-const RESUMABLE = new Set(['mine', 'chop', 'shift', 'goto', 'deposit', 'follow', 'come', 'guard', 'build', 'excavate', 'shaft', 'hunt', 'bed']);
+const RESUMABLE = new Set(['mine', 'chop', 'shift', 'goto', 'deposit', 'follow', 'come', 'guard', 'build', 'excavate', 'shaft', 'hunt', 'bed', 'homebed']);
 // Long jobs that survive a restart (see keptOf, saved by server.js, reported by workers).
-const KEEP = new Set(['shift', 'guard', 'mine', 'chop', 'build', 'excavate', 'shaft', 'hunt']); // a resumed build/excavate skips what is done
+const KEEP = new Set(['shift', 'guard', 'mine', 'chop', 'build', 'excavate', 'shaft', 'hunt', 'homebed']); // a resumed build/excavate skips what is done
 const MAX_INTERRUPTIONS = 3; // deaths/disconnects of one job before it is given up
 const TOOL_RE = /_(pickaxe|axe|shovel|hoe|sword)$|^(shears|bow|crossbow|fishing_rod|shield|trident|flint_and_steel|elytra)$/;
 
@@ -140,6 +141,15 @@ const VALIDATE = {
   bed: (a) => {
     if (!Object.hasOwn(huntJob.FACING, a.facing)) throw new Error('facing must be north, south, east or west');
     return {...xyz(a), facing: a.facing};
+  },
+  // The bot's own bed slot in the storage rooms: `slot` 0..13, else x,y,z(,facing), else its place in the crew.
+  homebed: (a) => {
+    if (a.x !== undefined) {
+      const facing = a.facing ?? 'north';
+      if (!Object.hasOwn(huntJob.FACING, facing)) throw new Error('facing must be north, south, east or west');
+      return {...xyz(a), facing};
+    }
+    return a.slot === undefined ? {} : {slot: num(a.slot, 0, homebedJob.SLOTS - 1, 'slot')};
   },
   say: (a) => {
     const text = String(a.text ?? '').trim();
@@ -921,7 +931,7 @@ function depositList(byName) {
   return [...all.slice(0, 4).map(([n, c]) => `${c} ${n}`), ...(all.length > 4 ? [`${all.length - 4} more kinds`] : [])].join(', ');
 }
 // "logs" stands for every kind of log; anything else is an exact item name.
-const itemMatcher = (what) => (what === 'logs' ? (n) => n.endsWith('_log') : what === 'coal' ? (n) => n === 'coal' || n === 'charcoal' : (n) => n === what);
+const itemMatcher = (what) => (what === 'logs' ? (n) => n.endsWith('_log') : what === 'wool' ? (n) => n.endsWith('_wool') : what === 'coal' ? (n) => n === 'coal' || n === 'charcoal' : (n) => n === what);
 
 // A chest cannot be opened with a solid block on top. The pathfinder builds with
 // dirt (which grows grass)/cobblestone/stone/netherrack, and a chest it bridged over stayed shut
@@ -1443,8 +1453,11 @@ const build = buildJob.makeBuild({goNear, guard, sleep, goals, digAt, withdraw: 
 const {grave} = gravesJob.makeGraves({goNear, guard, sleep, deposit: (r, job) => JOBS.deposit(r, child(job, {type: 'deposit', args: r.supplyChest}))});
 const {hunt, bed} = huntJob.makeHunt({goNear, guard, sleep, goals, waitCalm, crafting, at});
 
+const {homebed} = homebedJob.makeHomebed({goNear, guard, sleep, goals, crafting, run: buildRunJob, at});
+
 const JOBS = {
   grave,
+  homebed,
   hunt,
   bed,
   goto: (r, job) => goNear(r, job, job.args.x, job.args.y, job.args.z, 1),

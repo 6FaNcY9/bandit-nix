@@ -95,6 +95,7 @@ const DOCS = {
   digRoom: ['Dig out a room (natural ground only, placed blocks stay) from corner x, y, z: width along x, length along z, height up. At most 9 x 9 x 5. Use it for an underground base.', {x: ['number', 'The x coordinate of the corner.'], y: ['number', 'The floor y.'], z: ['number', 'The z coordinate of the corner.'], width: ['number', 'Blocks along x, 1-9.'], length: ['number', 'Blocks along z, 1-9.'], height: ['number', 'Blocks up, 1-5.']}],
   placeBlockAt: ['Place one block (for example a chest) at x, y, z; it needs a solid block below.', {type: ['string', 'The block type to place.'], x: ['number', 'The x coordinate.'], y: ['number', 'The y coordinate.'], z: ['number', 'The z coordinate.']}],
   huntAnimals: ['Hunt animals near where you stand and collect the drops (a sheep is sheared when you have shears). Use it for wool: a bed needs 3 wool of one colour.', {type: ['string', 'sheep, cow, pig or chicken.'], num: ['number', 'How many animals, 1-32.']}],
+  setHomeBed: ['Get your own bed so every death sends you back to the base: you take your slot in the storage room, fetch 3 wool (base chest, else sheep nearby) and logs if you lack them, craft the bed, place it and sleep or click it. Give it once, it needs no arguments.', {}],
   placeBed: ['Make a bed from 3 wool of one colour and 3 planks if you have none, place it with its foot at x, y, z and its head one block towards the facing, and sleep or click it so your respawn point is there. It needs 2 free blocks with solid ground below.', {x: ['number', 'The x coordinate of the foot.'], y: ['number', 'The y coordinate.'], z: ['number', 'The z coordinate of the foot.'], facing: ['string', 'north, south, east or west: where the head of the bed points.']}],
   collectGrave: ['Fetch the loot of a grave (the items a bot dropped by dying) at x, y, z, where the bot died: walks there, sneaks and right-clicks the grave, then puts everything except tools, armour and food into the base chest. Only the owner of a grave can take it.', {x: ['number', 'The x coordinate of the death.'], y: ['number', 'The y coordinate.'], z: ['number', 'The z coordinate.']}],
   buildBlueprint: ['Build a saved blueprint with its origin at x, y, z (one above the ground). Use this for every structure.', {name: ['string', 'The blueprint name.'], x: ['number', 'The x coordinate.'], y: ['number', 'The y coordinate.'], z: ['number', 'The z coordinate.']}],
@@ -104,12 +105,12 @@ const DOCS = {
   endGoal: ['Call when you have accomplished your goal. It will stop self-prompting and the current action.', {}],
 };
 
-const ASSIGN_DOC = ['Give one of your workers (a bot that cannot think) ONE command, for example !assign("bot12", "!collectBlocks(\\"cobblestone\\", 32)"). It reports back when done. Commands a worker understands: !startShift("coal") (keeps collecting into the base chest; one of logs, cobblestone, coal, raw_iron, raw_gold), !collectBlocks("iron_ore", 32), !putInChest("coal", 20), !craftRecipe("stick", 4), !smeltItem("raw_iron", 8), !huntAnimals("sheep", 6), !placeBed(x, y, z, "north"), !digRoom(...), !digShaft(...), !goToCoordinates(...).', {bot_name: ['string', 'The worker to command.'], command: ['string', 'The command for the worker, in quotes.']}];
+const ASSIGN_DOC = ['Give one of your workers (a bot that cannot think) ONE command, for example !assign("bot12", "!collectBlocks(\\"cobblestone\\", 32)"). It reports back when done. Commands a worker understands: !startShift("coal") (keeps collecting into the base chest; one of logs, cobblestone, coal, raw_iron, raw_gold), !collectBlocks("iron_ore", 32), !putInChest("coal", 20), !craftRecipe("stick", 4), !smeltItem("raw_iron", 8), !huntAnimals("sheep", 6), !placeBed(x, y, z, "north"), !setHomeBed, !digRoom(...), !digShaft(...), !goToCoordinates(...).', {bot_name: ['string', 'The worker to command.'], command: ['string', 'The command for the worker, in quotes.']}];
 
 const BASE_DOC = ['Get the state of the base: each worker with its job and last result, what the base chest held when last counted, and what is already built or dug.', {}];
 
 // A foreman (an agent with workers) gets few commands: the workers do the gathering, crafting and smelting.
-const FOREMAN = new Set(['assign', 'baseStatus', 'buildBlueprint', 'digRoom', 'digShaft', 'huntAnimals', 'placeBed', 'placeBlockAt', 'viewChest', 'stats', 'inventory', 'goToCoordinates', 'stop', 'startConversation']);
+const FOREMAN = new Set(['assign', 'baseStatus', 'buildBlueprint', 'digRoom', 'digShaft', 'huntAnimals', 'placeBed', 'setHomeBed', 'placeBlockAt', 'viewChest', 'stats', 'inventory', 'goToCoordinates', 'stop', 'startConversation']);
 const GATHERING = new Set(['collectBlocks', 'collectBlock', 'startShift']);
 // Project jobs run until done; the owner decides who works on them (lab 2026-10-10: the lead pulled a worker off the shaft).
 const PROJECTS = {shaft: 'digging the shaft', excavate: 'digging a room', build: 'building', grave: 'collecting its grave'};
@@ -251,6 +252,7 @@ function translate(cmd, ctx) {
       if (![a[0], a[1], a[2]].every((v) => Number.isFinite(Number(v))) || !['north', 'south', 'east', 'west'].includes(facing)) return {refuse: 'Use !placeBed(x, y, z, facing) with facing north, south, east or west.'};
       return {job: ['bed', {x: Number(a[0]), y: Number(a[1]), z: Number(a[2]), facing}]};
     }
+    case 'setHomeBed': return {job: ['homebed', {}]};
     case 'collectGrave':
       if (![a[0], a[1], a[2]].every((v) => Number.isFinite(Number(v)))) return {refuse: 'Use !collectGrave(x, y, z) with the coordinates where the bot died.'};
       return {job: ['grave', {x: Math.round(a[0]), y: Math.round(a[1]), z: Math.round(a[2])}]};

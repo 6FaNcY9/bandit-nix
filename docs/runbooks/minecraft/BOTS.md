@@ -325,6 +325,7 @@ Each bot runs its queue one job at a time. Chat is never read as a command.
 | `place` | item, x y z | puts one block (chest, crafting table, ...) on top of the solid block under x y z; crafts it first when missing; refused inside protected areas |
 | `hunt` | animal, count, x y z, optional radius | kills `count` (1-32) sheep, cows, pigs or chickens within `radius` (4-64, default 24) of x y z and picks the drops up; with shears a sheep is sheared instead (the sheep lives, one that gives no wool does not count); never named or baby animals, never in protected areas; a sword sweep that kills a neighbour counts too; fails with how many it got when none are left in range |
 | `bed` | x y z, facing | a bed with its foot at x y z and its head towards `facing` (north/south/east/west): both cells must be free with solid ground below and outside protected areas; crafts it from 3 wool of one colour and 3 planks when the bot holds none (`need 3 wool of one colour` otherwise: hunt first); a bed already lying there is not placed again; then clicks it (at night sleeps in it for a moment), which sets the spawn point; the event `spawn set at x y z` says so |
+| `homebed` | optional `slot` 0-13, or x y z (+ `facing`) | the bot's own bed in the storage rooms (`app/homebed.js`, agents: `!setHomeBed`). Slot = foot at z -213 (room 1, x -272..-266, y 58) or z -205 (room 2, slots 7-13), head towards north; without `slot` the crew order bot1 bot2 bot3 bot4 bot16 bot17 bot18 gives slots 0-6. Walks there, refuses protected cells, only clicks when a bed already lies there. Otherwise gets 3 wool of one colour (supply chest first; else `hunt` sheep here, then at 8 stops on a ring 70/140 blocks around the chest), planks (a log from the chest, else `chop`), crafts the bed, stands in the head cell facing north, places it and hands the click to `bed` (spawn set). |
 | `grave` | x y z | walks to where a bot died, finds AxGraves' grave entity within 3 blocks, sneaks, right-clicks it (only the owner can), checks the inventory grew, puts on better armour, then deposits everything except tools, food and `KEEP_RE` into the supply chest; event `grave at x y z: N items back`; refused inside protected areas; fails `gave nothing` when it is not the bot's grave or already taken |
 | `say` | text | up to 200 characters; text starting with `/` is rejected |
 | `stop` | | clears the queue and stops walking/digging |
@@ -341,6 +342,14 @@ a sword sweeps and kills the sheep beside the target (counted now); the bed's he
 moment after the foot, so the job waits for both before it judges the facing; with wool but no planks `ensureItem` picked the "any bed + dye" recipe and failed (`need 1 more bone`), so `bed` makes the 3 planks first and says `need 3 more planks and have no logs (chop first)`; a bed whose head cell hangs over a
 pit is refused beforehand (`nothing solid under ...`). The night path (`bot.sleep`, refused near monsters or when
 too far) falls back to the plain click; it was not run live (the stage was in daylight).
+
+`homebed` is the one-per-bot version: each bot sleeps in its own slot so a death respawns at the base. The
+slots are the south row of the rooms because `bed` stands behind the foot, which is the wall there; `homebed`
+stands in the head cell instead (mineflayer's `placeBlock` would turn the bot towards the block, so the job sets the
+yaw itself and places with `forceLook: 'ignore'`). Animals are sent to a client only within ~48 blocks, so a
+search that sees no sheep from the base finds none: on 2026-10-10 neither the base, nor a ring of 8 stops up to 140
+blocks out, had sheep, so wool has to come from the supply chest. Not run live yet: placing the bed (needs 3 wool:
+`/give bot14 white_wool 3` on the stage).
 
 ### Graves (AxGraves)
 

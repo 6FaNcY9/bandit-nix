@@ -62,7 +62,7 @@ bed from 3 wool of one colour and 3 planks if it holds none, places it with the 
 towards `facing`, and clicks or sleeps in it so the spawn point is there). A foreman may assign both.
 
 A foreman sees a short command list: `!assign`, `!baseStatus`, `!buildBlueprint`, `!digRoom`,
-`!huntAnimals`, `!placeBed`, `!placeBlockAt`, `!viewChest`, `!stats`, `!inventory`, `!goToCoordinates`, `!stop`, `!startConversation`
+`!huntAnimals`, `!placeBed`, `!setHomeBed`, `!placeBlockAt`, `!viewChest`, `!stats`, `!inventory`, `!goToCoordinates`, `!stop`, `!startConversation`
 (anything else is refused with a one-line hint; workers and agents without workers keep the full set). Its
 prompt carries one `BASE:` line (the base chest as last counted, lowest first, from `/api/state`
 `world.stock`, and which builds and rooms it saw finish), each worker's last result (`STUCK` after two

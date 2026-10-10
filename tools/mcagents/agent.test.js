@@ -44,6 +44,9 @@ assert.strictEqual(tr('!huntAnimals("sheep")').job[1].count, 1);
 assert.ok(tr('!huntAnimals("wolf", 2)').refuse && tr('!huntAnimals("player", 2)').refuse, 'only the four farm animals');
 assert.ok(translate(parseCommand('!huntAnimals("sheep", 2)'), {pos: null, supplyChest: null}).refuse, 'no position, no hunt');
 assert.deepStrictEqual(tr('!placeBed(-272, 58, -219, "North")'), {job: ['bed', {x: -272, y: 58, z: -219, facing: 'north'}]});
+assert.deepStrictEqual(tr('!setHomeBed'), {job: ['homebed', {}]});
+assert.deepStrictEqual(tr('!setHomeBed()'), {job: ['homebed', {}]});
+assert.ok(commandDocs([], []).includes('!setHomeBed:') && commandDocs([], ['bot12']).includes('!setHomeBed:') && commandDocs([], ["bot12"]).includes("!setHomeBed, "), 'foremen use it and may assign it');
 assert.deepStrictEqual(tr('!collectGrave(-272.4, 58, -219)'), {job: ['grave', {x: -272, y: 58, z: -219}]});
 assert.ok(tr('!collectGrave(1, 2)').refuse && tr('!collectGrave("a", 2, 3)').refuse, 'needs three numbers');
 assert.ok(commandDocs([], []).includes('!collectGrave:') && !commandDocs([], ['bot12']).includes('!collectGrave:'), 'workers run it, the foreman only assigns it');
@@ -167,7 +170,7 @@ assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}
 { // a foreman's command docs list only its few commands; workers and lone agents keep the full set
   const docs = commandDocs([], ['bot2']);
   const listed = [...docs.matchAll(/^!(\w+):/gm)].map((m) => m[1]).sort();
-  assert.deepStrictEqual(listed, ['assign', 'baseStatus', 'buildBlueprint', 'digRoom', 'digShaft', 'goToCoordinates', 'huntAnimals', 'inventory', 'placeBed', 'placeBlockAt', 'startConversation', 'stats', 'stop', 'viewChest']);
+  assert.deepStrictEqual(listed, ['assign', 'baseStatus', 'buildBlueprint', 'digRoom', 'digShaft', 'goToCoordinates', 'huntAnimals', 'inventory', 'placeBed', 'placeBlockAt', 'setHomeBed', 'startConversation', 'stats', 'stop', 'viewChest']);
   assert.ok([...commandDocs().matchAll(/^!(\w+):/gm)].length > 20 && commandDocs().includes('!collectBlocks:'), 'no workers: the full set');
   assert.deepStrictEqual(tr('!collectBlocks("stone", 3)'), {job: ['mine', {block: 'stone', count: 3}]}, 'translate() is unchanged for workers');
 }
