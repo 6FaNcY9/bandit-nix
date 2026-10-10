@@ -285,6 +285,66 @@ The package build from MC-3 covers existing dashboard/hub tests. No live model,
 dashboard, inventory or world operations. Security findings need Claude fixes
 and negative tests before unattended H5 operation.
 
+### CX-5: H5 host-agent design
+
+State: design reviewed / ready for Claude implementation, 2026-10-10.
+Base: `50cf46ae8b5f26f6651f0d53acd3ab6a7b1746bd`; scope: design only here,
+following NEXT-GOALS section 3b. CX-6 implements only the Ollama body of H5.
+
+Recommend **(a), a dedicated dashboard bearer token**, distinct from the worker
+token. The brain runs as its own unprivileged host service, uses
+`http://127.0.0.1:8095`, and calls Ollama at `127.0.0.1:11434`. Model output
+never sees the token or controls URLs/headers. The dashboard authenticates the
+machine principal and then applies a fixed endpoint/job/bot policy before
+calling the same job validators. No forged `Tailscale-User-Login` header.
+
+Threat model: hostile model replies, player/world text, a compromised agent
+process or MCP client, unrelated local users, a browser on the tailnet, and a
+stolen machine token. Treat the token as permission to issue jobs, not just to
+read state. Limit it to configured agent bots and approved supply chests;
+deny `bots: "all"`, unmanaged bots, `say`, keeper/settings/places mutation,
+worker registration, debug/view endpoints and arbitrary job types. Allow
+GET state/events and POST job only, with the current translator's projected
+job set and Stop. The brain can still spend supplies, move/fight and reshape
+unprotected terrain through allowed jobs; protected areas are not complete
+resource isolation. MC-3/MC-4 mutation and failed-Stop findings must be fixed
+before unattended operation. Root, Docker-daemon compromise and the trusted
+Tailscale proxy remain outside this credential boundary.
+
+Option (b) removes HTTP authentication between brain and body but puts model
+orchestration, logs and failures in the bot process and exposes Ollama to a
+container network. A loopback listener cannot be reached from a separate
+Docker namespace without a proxy/bind change. A dedicated network alone does
+not authenticate the Ollama API. It also couples GPU/request failures to the
+body and makes per-agent revocation harder. This is unnecessary for H5.
+
+Exact implementation handoff (no changes to these files in CX-5):
+
+| Owner / file | Required change |
+| --- | --- |
+| Claude: `hosts/bandit-lab/services/mcbots/app/config.js` | Read agent token file, agent bot allowlist and approved chest policy; missing token disables machine access; reject empty/invalid policy. Keep worker credentials separate. |
+| Claude: `hosts/bandit-lab/services/mcbots/app/server.js` | Resolve human vs machine principal; constant-time exact bearer verification with length check. Enforce machine endpoint, bot, job and inventory policy before mutation. Human Tailscale path stays independent. Reject invalid supplied bearer rather than falling back. Preserve Origin checks for browsers; CLI bearer calls use no Origin or correct URL.origin. Never log authorization headers. |
+| Claude: `hosts/bandit-lab/services/mcbots/app/test.js` | Real HTTP negative cases: wrong/missing/worker token, other Origin, unmanaged bot, all, chat/admin/worker endpoints, nonapproved chest; permitted jobs and Stop succeed. Auth checks precede partial multi-bot enqueue. |
+| Claude: `hosts/bandit-lab/services/mcbots/default.nix` | Read-only mount only the dashboard token file; add token-file/policy env wiring and unit ordering. Do not expose Ollama to the container. No plaintext token in Nix environment/store. |
+| Claude: `tools/mcagents/agent.js` | Read token from a credential file; attach bearer only to dashboard requests, never Ollama. Use URL.origin or omit Origin for CLI. Separate bounded dashboard/model timeouts; failed Stops retain pending intent, retries use backoff, requests consume inference budget. |
+| Claude: `tools/mcagents/agent.test.js` | Mock HTTP failures and recovery, exact header destination checks and budget across query rounds; retain unknown/code-writing refusals. |
+| Claude: `tools/mcagents/README.md`, `docs/NEXT-GOALS.md` | Document scoped authority, outages, secret installation and H5 source/build/runtime status. |
+| Codex follow-up: `hosts/bandit-lab/services/mcagents/default.nix`, `hosts/bandit-lab/default.nix` | Separate dedicated user and hardened service after Claude's auth patch; package script plus read-only blueprints, StateDirectory for logs, LoadCredential for token, Restart on failure, NoNewPrivileges, filesystem protection, no shell/Docker/world credentials. Network limited to host loopback; allow Ollama's devices only in Ollama service, not the brain. |
+| Owner: `secrets/lab.yaml`, SOPS wiring | Generate a separate random agent token and install with restrictive access. Owner handles secret changes and deployment GO. Final module wiring must be evaluated after the actual key exists. |
+| Codex CX-6: `hosts/bandit-lab/services/ollama/default.nix`, `Modelfile`, `hosts/bandit-lab/default.nix`, `lib/repository.nix`, `ci/lab-surface.nix` | Native CUDA Ollama, loopback-only API and verified model provisioning; no agent service yet. |
+
+Operations: stopping/restarting the brain does not cancel body jobs; operator
+Stop remains separate. Revoking token blocks future orders but does not undo
+existing ones. A systemd restart alone must not recreate a lost Stop intent.
+Bind loopback is local exposure, not local-user authentication for Ollama;
+unrelated host users can consume inference capacity. No remote route/proxy to
+Ollama is added. Stop temporary `mcagents-ollama` before activating CX-6 because
+it owns the same port; owner GO and runtime CUDA/model checks remain mandatory.
+
+Checks: traced dashboard auth, worker auth separation, translator jobs and Nix
+container/network wiring; reviewed NEXT-GOALS 3b. No executable/configuration
+change, so no new build gate for this design-only commit.
+
 ### CX-1: commit this handoff
 
 State: committed (docs only): `def21854df89015f4aa6ec0737b593d864c8338f`.
