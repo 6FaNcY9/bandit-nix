@@ -116,6 +116,12 @@ const VALIDATE = {
     if (box.x2 - box.x1 > 15 || box.z2 - box.z1 > 15 || box.x2 - box.x1 < 2 || box.z2 - box.z1 < 2) throw new Error('a shaft is 3 x 3 to 16 x 16 blocks');
     return box;
   },
+  // A wall around a shaft (the box of the shaft job), one block outside it on the ground.
+  rim: (a) => {
+    const box = VALIDATE.shaft(a);
+    if (!/^[a-z_]{1,48}$/.test(a.item ?? 'cobblestone_wall')) throw new Error('item must be a block name');
+    return {x1: box.x1, z1: box.z1, x2: box.x2, z2: box.z2, top: box.top, item: a.item ?? 'cobblestone_wall'};
+  },
   // Blueprint {origin, blocks: [{x,y,z,block}], remove?}; protected areas are
   // checked again when the job runs (the hub and workers may differ).
   build: (a) => {
@@ -909,6 +915,22 @@ const canHarvest = (bot, id) => {
   return !tools || bot.inventory.items().some((i) => tools[i.type]);
 };
 // A child job: shares cancellation with `job`, has its own counters and arguments.
+// A shaft's stair step must hold: gravel or sand would fall once the layer below is dug, and air,
+// water or lava is no step. Replace it with cobblestone while the block under it still stands.
+const LOOSE = /^(air|cave_air|gravel|sand|red_sand|water|lava)$/;
+async function fixStep(r, job, x, y, z) {
+  const Vec3 = require('vec3').Vec3;
+  const b = r.bot.blockAt(new Vec3(x, y, z));
+  if (!b || !LOOSE.test(b.name)) return;
+  try {
+    if (/sand|gravel/.test(b.name)) await digAt(r, job, b.position, (n) => n === b.name);
+    await JOBS.place(r, child(job, {type: 'place', args: {item: 'cobblestone', x, y, z}}));
+  } catch (e) {
+    guard(job);
+    r.emit('info', `stair step at ${x} ${y} ${z} not fixed: ${e.message.slice(0, 80)}`);
+  }
+}
+
 // The edge cells of a box in walking order; layer k of a shaft keeps cell k (mod the ring) as its step.
 function stairRing(x1, z1, x2, z2) {
   const ring = [];
@@ -1632,9 +1654,50 @@ const JOBS = {
           await sleep(2000);
         }
       }
+      await fixStep(r, job, keep.x, y, keep.z);
       Object.assign(job.t, {total: top - bottom + 1, done: top - y + 1}); // excavate borrowed the counters
       job.progress = `shaft ${x1} ${z1}: down to y ${y}${skipped ? `, ${skipped} blocks left (unsafe or unreachable)` : ''}`;
     }
+  },
+
+  // A wall on the ground around a shaft so nobody walks into it, with a gap where the stairs meet
+  // the ground. Cells that are blocked, unsupported or protected are left out.
+  async rim(r, job) {
+    const {bot} = r;
+    const {x1, z1, x2, z2, top, item} = job.args;
+    const Vec3 = require('vec3').Vec3;
+    await goNear(r, job, (x1 + x2) >> 1, Math.floor(bot.entity.position.y), z1 - 2, 3, {doing: 'walking to the shaft'});
+    const ground = (x, z) => {
+      for (let y = Math.floor(bot.entity.position.y) + 12; y > -60; y--) {
+        const b = bot.blockAt(new Vec3(x, y, z));
+        if (!b) return null;
+        if (b.boundingBox === 'block' && !b.name.endsWith('_leaves') && !b.name.endsWith('_log')) return y;
+      }
+      return null;
+    };
+    const cells = stairRing(x1 - 1, z1 - 1, x2 + 1, z2 + 1).map((c) => ({...c, y: ground(c.x, c.z)}));
+    const ys = cells.map((c) => c.y).filter((y) => y !== null).sort((a, b) => a - b);
+    if (!ys.length) throw new Error('the ground around the shaft is not loaded');
+    // ponytail: the stair step at the median ground height marks the entrance; uneven ground may move it a block.
+    const steps = stairRing(x1, z1, x2, z2);
+    const k = (top - ys[ys.length >> 1]) % steps.length;
+    const near = (c, s) => Math.abs(c.x - s.x) <= 1 && Math.abs(c.z - s.z) <= 1;
+    const gap = (c) => near(c, steps[k]) || near(c, steps[(k + 1) % steps.length]);
+    let placed = 0, skipped = 0;
+    job.t.total = cells.length;
+    for (const [i, c] of cells.entries()) {
+      guard(job);
+      job.t.done = i;
+      if (c.y === null || gap(c)) continue;
+      try {
+        await JOBS.place(r, child(job, {type: 'place', args: {item, x: c.x, y: c.y + 1, z: c.z}}));
+        placed++;
+      } catch (e) {
+        guard(job);
+        skipped++;
+      }
+    }
+    job.progress = `wall around the shaft: ${placed} placed, ${skipped} left out`;
   },
 
   craft: (r, job) => crafting.ensureItem(r, job, job.args.item, crafting.count(r.bot, job.args.item) + job.args.count),

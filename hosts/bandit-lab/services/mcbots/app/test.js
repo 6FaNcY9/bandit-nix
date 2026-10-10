@@ -2103,11 +2103,45 @@ require('./crafting');
     await JOBS.shaft({name: 'bot18', bot, world: {hostilesNear: () => [], claim: async () => true, release() {}}, emit() {}, protectedAreas: [], supplyChest: null, combat: null}, job);
     assert.strictEqual(dug[0], '0,1', 'bot18 starts at the first corner (its step 0,0 stays)');
     assert.deepStrictEqual([...blocks.keys()].sort(), ['0,60,0', '1,59,0', '2,58,0'], 'one step left per layer, each one further along');
+    { // a gravel step is replaced with cobblestone before the layer below goes
+      const {JOBS: J} = require('./bots');
+      const place0 = J.place, fixed = [];
+      J.place = async (r2, j) => { fixed.push(j.args); blocks.set(`${j.args.x},${j.args.y},${j.args.z}`, 'cobblestone'); };
+      for (let y = 58; y <= 60; y++) for (let x = 0; x <= 2; x++) for (let z = 0; z <= 2; z++) blocks.set(`${x},${y},${z}`, 'stone');
+      blocks.set('1,59,0', 'gravel');
+      const name0 = bot.blockAt;
+      bot.blockAt = (p) => { const n = blocks.get(`${p.x},${p.y},${p.z}`); return n ? {name: n, type: 1, position: p, boundingBox: 'block', getProperties: () => ({})} : null; };
+      try {
+        await JOBS.shaft({name: 'bot18', bot, world: {hostilesNear: () => [], claim: async () => true, release() {}}, emit() {}, protectedAreas: [], supplyChest: null, combat: null}, {...job, t: {}});
+      } finally { J.place = place0; bot.blockAt = name0; }
+      assert.deepStrictEqual(fixed.map((a) => [a.item, a.x, a.y, a.z]), [['cobblestone', 1, 59, 0]]);
+    }
     assert.deepStrictEqual([job.t.done, job.t.total], [3, 3]);
     for (let y = 58; y <= 60; y++) for (let x = 0; x <= 2; x++) for (let z = 0; z <= 2; z++) blocks.set(`${x},${y},${z}`, 'stone');
     dug.length = 0;
     await JOBS.shaft({name: 'bot17', bot, world: {hostilesNear: () => [], claim: async () => true, release() {}}, emit() {}, protectedAreas: [], supplyChest: null, combat: null}, {...job, t: {}});
     assert.strictEqual(dug[0], '2,2', 'bot17 starts at the opposite corner');
+  }
+  { // rim: a wall one block outside the shaft on the ground, with a gap at the stair entrance
+    const {JOBS, VALIDATE} = require('./bots');
+    const {Vec3} = require('vec3');
+    const bot = {
+      blockAt: (p) => (p.y <= 64 ? {name: 'grass_block', boundingBox: 'block'} : {name: 'air', boundingBox: 'empty'}),
+      entity: {position: new Vec3(0, 65, -3), onGround: true}, game: {dimension: 'overworld'}, entities: {},
+      pathfinder: {goto: async () => {}, stop() {}, setGoal() {}},
+    };
+    const placed = [];
+    const place0 = JOBS.place;
+    JOBS.place = async (r, j) => { placed.push(j.args); };
+    try {
+      const job = {t: {}, cancelled: false, type: 'rim', args: VALIDATE.rim({x1: 0, z1: 0, x2: 2, z2: 2, top: 80})};
+      await JOBS.rim({bot, name: 'bot16', world: {hostilesNear: () => []}, emit() {}, protectedAreas: []}, job);
+      assert.ok(placed.every((p) => p.y === 65 && p.item === 'cobblestone_wall'), 'on the ground');
+      assert.ok(placed.length > 0 && placed.length < 16, 'the ring of 16 has a gap');
+      assert.ok(placed.every((p) => p.x < 0 || p.x > 2 || p.z < 0 || p.z > 2), 'never inside the shaft');
+    } finally {
+      JOBS.place = place0;
+    }
   }
   { // digAt rechecks the block after every walk and equip: a Stop or a swapped block means no dig
     const {digAt, Cancelled} = require('./bots');
