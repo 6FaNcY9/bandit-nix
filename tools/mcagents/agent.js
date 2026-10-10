@@ -650,6 +650,13 @@ async function main() {
       await new Promise((r) => setTimeout(r, 10000));
     }
   }
+  // Tell the dashboard's Agents section who we are and whom we lead; failures only logged.
+  const postStatus = () => {
+    if (!TOKEN) return;
+    for (const a of agents.values()) http('POST', `${API}/api/agentstatus`, {agent: a.name, goal: a.goal, workers: [...a.workers].slice(0, 12), role: a.workers.size ? 'foreman' : 'solo'}).catch((e) => console.error(`agentstatus failed: ${e.message}`));
+  };
+  postStatus();
+  setInterval(postStatus, 30000).unref();
   const getState = () => http('GET', `${API}/api/state`);
   const busy = new Set();
   const budget = new Budget(MAX_DECISIONS_PER_MIN);
