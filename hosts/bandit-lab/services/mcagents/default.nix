@@ -14,7 +14,10 @@
   # !assign; the workers are scripted and stick to their order. On the lab
   # four independent agents drifted off their goals (2026-10-10).
   goals = {
-    bot1 = "You lead the crew. Keep the base chest stocked with logs, cobblestone, coal, raw_iron and raw_gold. Give every idle worker a shift with !assign so each resource has someone working on it, and give a new order to a worker that finishes, fails or dies. Do not mine yourself.";
+    # The base: base-v1 shell parts 01..08 at one origin, on flat ground the owner
+    # asked for (found by a block scan 2026-10-10: 7x7 at ground Y 64, 5 air above,
+    # 9 blocks from the base chest).
+    bot1 = "You lead the crew. Keep the base chest stocked with logs, cobblestone, coal, raw_iron and raw_gold: give every idle worker a shift with !assign so each resource has someone on it, and give a new order to a worker that finishes, fails or dies. While the workers are busy, build our base yourself: the blueprints base-v1-shell-01 to base-v1-shell-08, one after another and all at the same spot x -272, y 65, z -219, with !buildBlueprint. Do not mine yourself.";
   };
   workers = "bot2,bot3,bot4,bot16,bot17,bot18";
 in {
