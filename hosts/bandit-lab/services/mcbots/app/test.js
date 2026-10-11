@@ -4608,3 +4608,10 @@ require('./crafting');
   assert.throws(() => VALIDATE.smelt({item: 'coal_ore', count: 4}), /mine the ore/);
   assert.doesNotThrow(() => VALIDATE.smelt({item: 'beef', count: 4}));
 }
+
+{ // the model's plain words: crafted items are not mined, and craft takes the real item name
+  const {VALIDATE} = require('./bots');
+  assert.throws(() => VALIDATE.mine({block: 'torches', count: 10}), /crafted, not mined/);
+  assert.deepStrictEqual(VALIDATE.mine({block: 'iron_ore', count: 3}), {block: 'iron_ore', count: 3});
+  assert.deepStrictEqual(VALIDATE.craft({item: 'planks', count: 4}), {item: 'oak_planks', count: 4});
+}

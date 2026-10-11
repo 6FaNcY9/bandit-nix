@@ -94,6 +94,8 @@ const VALIDATE = {
     // Placed blocks are never "collected": an agent's !collectBlocks("torch") dug the base and shaft
     // torches and let mobs spawn (2026-10-10). Craft them, or take them from a chest.
     if (BUILT_RE.test(a.block)) throw new Error(`${a.block} is a placed block, not something to mine: craft it or take it from a chest`);
+    // Items the model asked to mine (lab: "torches", 2026-10-11): they are crafted.
+    if (/^(torches|sticks?|planks|[a-z]+_planks|[a-z]+_ingot|charcoal)$/.test(a.block)) throw new Error(`${a.block} is crafted, not mined: craft it or take it from a chest`);
     return {block: a.block, count: num(a.count ?? 1, 1, 2048, 'count')};
   },
   chop: (a) => ({count: num(a.count ?? 1, 1, 2048, 'count')}),
@@ -109,7 +111,9 @@ const VALIDATE = {
   grave: xyz, // where the bot died; AxGraves keeps the loot in a grave there
   craft: (a) => {
     if (!/^[a-z_]{1,48}$/.test(a.item || '')) throw new Error('item must be an item name like stone_pickaxe');
-    return {item: a.item, count: num(a.count ?? 1, 1, 64, 'count')};
+    // Plain words the model uses for real item names ("unknown item: planks", lab 2026-10-10).
+    const item = {planks: 'oak_planks', sticks: 'stick', torches: 'torch', chests: 'chest'}[a.item] || a.item;
+    return {item, count: num(a.count ?? 1, 1, 64, 'count')};
   },
   smelt: (a) => {
     if (!/^[a-z_]{1,48}$/.test(a.item || '')) throw new Error('item must be what goes in, like raw_iron');
