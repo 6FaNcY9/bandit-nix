@@ -699,18 +699,29 @@ async function goNear(r, job, x, y, z, dist, opts = {}) {
     for (let dy = 2; dy <= Math.min(20, y - p.y); dy++) if (r.bot.blockAt(p.offset(0, dy, 0))?.boundingBox === 'block') return true;
     return false;
   };
-  for (let i = 0; i < 8 && r.bot?.entity && y - r.bot.entity.position.y > 4 && covered(); i++) {
-    const p = r.bot.entity.position;
-    const up = Math.min(Math.floor(y), Math.floor(p.y) + 16);
-    await goLeg(r, job, p.x, up, p.z, 2, {...opts, goal: new goals.GoalY(up), doing: `climbing to Y ${up} towards ${at({x, y, z})}`});
-  }
+  const climb = async (roofed) => {
+    for (let i = 0; i < 8 && r.bot?.entity && y - r.bot.entity.position.y > 4 && roofed(); i++) {
+      const p = r.bot.entity.position;
+      const up = Math.min(Math.floor(y), Math.floor(p.y) + 16);
+      await goLeg(r, job, p.x, up, p.z, 2, {...opts, goal: new goals.GoalY(up), doing: `climbing to Y ${up} towards ${at({x, y, z})}`});
+    }
+  };
+  await climb(covered);
   for (let i = 0; i < 20 && !opts.goal && r.bot?.entity; i++) {
     const p = r.bot.entity.position, d = Math.hypot(x - p.x, z - p.z);
     if (d <= LEG + 16) break;
     const lx = p.x + ((x - p.x) * LEG) / d, lz = p.z + ((z - p.z) * LEG) / d;
     await goLeg(r, job, lx, y, lz, 4, {...opts, goal: new goals.GoalNearXZ(lx, lz, 4), doing: opts.doing || `walking to ${at({x, y, z})}`});
   }
-  return goLeg(r, job, x, y, z, dist, opts);
+  try {
+    return await goLeg(r, job, x, y, z, dist, opts);
+  } catch (e) {
+    // Down an open shaft nothing is overhead, so the climb above was skipped: a goal far above with no
+    // path climbs anyway, then walks once more (bot4 stuck at Y 36 under the base chest, 2026-10-11).
+    if (opts.goal || !/No path|Took to long/.test(e.message) || !r.bot?.entity || y - r.bot.entity.position.y <= 4) throw e;
+    await climb(() => true);
+    return goLeg(r, job, x, y, z, dist, opts);
+  }
 }
 
 async function goLeg(r, job, x, y, z, dist, {brave = false, goal = null, doing = null} = {}) {
@@ -730,7 +741,18 @@ async function goLeg(r, job, x, y, z, dist, {brave = false, goal = null, doing =
     for (let tries = 0; ; tries++) {
       try {
         if (!brave) await waitSafe(r, job, x, z);
-        await r.bot.pathfinder.goto(goal || new goals.GoalNear(x, y, z, dist));
+        // pathfinder 2.4.5 resolves goto() on any search that finds an empty path, "noPath" included: the
+        // bot never moved and the job went on as if it had arrived (bot4 opened the base chest from 30
+        // blocks away, windowOpen timeouts for an hour, 2026-10-11).
+        let empty = null;
+        const onPath = (res) => { if (!res.path?.length && res.status !== 'success') empty = res.status; };
+        r.bot.on?.('path_update', onPath);
+        try {
+          await r.bot.pathfinder.goto(goal || new goals.GoalNear(x, y, z, dist));
+        } finally {
+          r.bot.removeListener?.('path_update', onPath);
+        }
+        if (empty) throw new Error(empty === 'timeout' ? 'Took to long to decide path to goal!' : 'No path to the goal!');
         return;
       } catch (e) {
         guard(job);
@@ -2247,4 +2269,4 @@ const JOBS = {
   },
 };
 
-module.exports = {tailFrom, lightUp, shaftTorchDue, rimTorchDue, explore, layerOrder, stairRing, BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest, guardDigs, safeMovements, tossJunk, NATURAL, partnerOf, depositList};
+module.exports = {goNear, tailFrom, lightUp, shaftTorchDue, rimTorchDue, explore, layerOrder, stairRing, BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest, guardDigs, safeMovements, tossJunk, NATURAL, partnerOf, depositList};

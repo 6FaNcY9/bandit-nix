@@ -4561,3 +4561,22 @@ require('./crafting');
     {x: 1.5, y: 2, z: 3, from: 'air', to: 'stone'}, {x: 1, y: 2, z: 3, from: 'a b', to: 'stone'}, 'junk']});
   assert.deepStrictEqual(seen.map((c) => c.by), ['bot3', 'world'], 'bad frames dropped, foreign bot names become "world"');
 }
+
+(async () => { // a walk whose path search comes back empty is a failure, not an arrival (pathfinder 2.4.5 resolves goto)
+  const {EventEmitter} = require('node:events');
+  const {Vec3} = require('vec3');
+  const {goNear} = require('./bots'); // not JOBS.goto: another test swaps that one out meanwhile
+  const walk = async (status) => {
+    let calls = 0;
+    const bot = Object.assign(new EventEmitter(), {entity: {position: new Vec3(0, 64, 0)}, game: {dimension: 'overworld'},
+      pathfinder: {goto: async () => { calls++; bot.emit('path_update', {status, path: []}); }, stop() {}, setGoal() {}}});
+    const r = {bot, world: {hostilesNear: () => []}, emit() {}, protectedAreas: []};
+    const job = {t: {}, cancelled: false, args: {x: 10, y: 64, z: 0}};
+    return {go: goNear(r, job, 10, 64, 0, 1), calls: () => calls, bot};
+  };
+  const bad = await walk('noPath');
+  await assert.rejects(bad.go, /No path to the goal/);
+  assert.strictEqual(bad.calls(), 4, 'retried before giving up');
+  assert.strictEqual(bad.bot.listenerCount('path_update'), 0, 'no listener left behind');
+  await (await walk('success')).go; // an empty "success" path: already there
+})();
