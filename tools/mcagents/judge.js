@@ -61,10 +61,13 @@ function parseVerdict(text) {
 }
 
 // Unknown-outcome decisions with a valid command, newest first, not judged yet, no repeated situation. -> [{id, messages, reply}]
-function candidates(records, judged, n) {
+// Newest first; `oldest` takes the other end, so two judges running side by side (slayer beside albert's
+// replay) grade different decisions.
+function candidates(records, judged, n, oldest = false) {
   const {labels} = buildDataset(records);
   const seen = new Set(), out = [];
-  for (const l of labels.filter((x) => x.label === 'unknown').reverse()) {
+  const unknown = labels.filter((x) => x.label === 'unknown');
+  for (const l of oldest ? unknown : unknown.reverse()) {
     const r = records[l.source.line - 1];
     if (!r?.id || judged.has(r.id) || typeof r.reply !== 'string') continue;
     const cmd = parseCommand(r.reply);
@@ -113,7 +116,7 @@ async function main() {
   const lines = [];
   let live = targets;
   while (live.length && Date.now() < deadline) {
-    const items = candidates(readRecords(log).records, judgedRefs(file), n * live.length);
+    const items = candidates(readRecords(log).records, judgedRefs(file), n * live.length, env.JUDGE_FROM === 'oldest');
     if (!items.length) { lines.push('nothing left to judge'); break; }
     const parts = slices(items, live.length);
     const runs = await Promise.all(live.map(({url}, i) => (parts[i].length ? runJudge(url, parts[i], docs) : Promise.resolve({grades: [], stopped: 'nothing to judge'}))));

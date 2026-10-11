@@ -137,8 +137,8 @@ in {
         offlineEnv
         // {
           JUDGE_BATCH = "200";
-          # slayer grades too (it sat idle: the lab GPU takes the live calls first); 200 per PC per pass.
-          JUDGE_NAMES = "albert,slayer";
+          # albert replays, then grades; slayer grades meanwhile in mcagents-judge-slayer (below).
+          JUDGE_NAMES = "albert";
           # grade batch after batch for up to 20 min per pass (replay first, all inside the 1 h start timeout)
           JUDGE_PASS_MS = "1200000"; # owner: use the idle PCs as much as possible (2026-10-11)
           LOG = "/var/lib/mcagents/decisions.jsonl";
@@ -179,6 +179,26 @@ in {
         SystemCallFilter = "@system-service";
         MemoryMax = "512M";
       };
+    };
+    # slayer grades from the oldest end while albert replays (it sat at 0 % through every replay, owner
+    # 2026-10-11); the two judges never pick the same decisions. Same sandbox as the idle replay.
+    systemd.services.mcagents-judge-slayer = lib.mkIf (offlineNames != [] && inferenceHosts ? slayer) {
+      description = "Grade logged Minecraft agent decisions on slayer";
+      environment =
+        config.systemd.services.mcagents-idle-replay.environment
+        // {
+          JUDGE_NAMES = "slayer";
+          JUDGE_FROM = "oldest";
+        };
+      serviceConfig =
+        config.systemd.services.mcagents-idle-replay.serviceConfig
+        // {
+          ExecStart = ["-${pkgs.nodejs}/bin/node ${../../../../tools/mcagents}/judge.js"];
+        };
+    };
+    systemd.timers.mcagents-judge-slayer = lib.mkIf (offlineNames != [] && inferenceHosts ? slayer) {
+      wantedBy = ["timers.target"];
+      timerConfig = config.systemd.timers.mcagents-idle-replay.timerConfig;
     };
     systemd.timers.mcagents-idle-replay = lib.mkIf (offlineNames != []) {
       wantedBy = ["timers.target"];
