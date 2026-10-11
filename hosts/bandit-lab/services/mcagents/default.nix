@@ -127,7 +127,7 @@ in {
       environment =
         offlineEnv
         // {
-          JUDGE_BATCH = "40";
+          JUDGE_BATCH = "200"; # owner: use the idle PCs as much as possible (2026-10-11)
           LOG = "/var/lib/mcagents/decisions.jsonl";
           REPLAYS = "/var/lib/mcagents/replays";
           VARIANTS = "${../../../../tools/mcagents/variants.json}";
@@ -172,7 +172,7 @@ in {
       timerConfig = {
         # A calendar time, not OnBootSec: a timer whose boot delay has long passed fires the
         # moment a deploy starts it, and a failed run then rolls the whole deploy back (2026-10-10).
-        OnCalendar = "*-*-* 00/2:15:00";
+        OnCalendar = "*-*-* *:15,45:00"; # every 30 min; a run still going simply skips the next start
         RandomizedDelaySec = "10min";
       };
     };

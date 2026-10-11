@@ -15,7 +15,9 @@ const path = require('node:path');
 const {createHash} = require('node:crypto');
 const {buildDataset} = require('./dataset');
 const {sanitize} = require('./replay');
-const {ctxKey, excludedContexts} = require('./eval-set');
+// A module reference, not destructured: eval-set.js requires this file back (circular), so its
+// functions are read at call time, not at load time.
+const evalSet = require('./eval-set');
 
 function readRecords(file) {
   let text = '';
@@ -89,7 +91,7 @@ function judgedRows(records, judgments, max, taken) {
 // exclude: context hashes of the frozen eval set (eval-set.js); no training row may share one.
 function exportSft(records, {judgments = [], demoRatio = 3, judged = false, judgedMax = 200, exclude = new Set()} = {}) {
   const data = buildDataset(records);
-  const free = (r) => !exclude.has(ctxKey(r.messages));
+  const free = (r) => !exclude.has(evalSet.ctxKey(r.messages));
   const rows = [];
   for (const [split, list] of Object.entries(data.splits)) for (const {messages} of list) rows.push({messages, source: 'decision', split});
   const decisionAll = rows.length;
@@ -114,7 +116,7 @@ function main() {
   const [older, current] = [readRecords(`${file}.1`), readRecords(file)];
   const records = [...older.records, ...current.records], torn = older.torn + current.torn;
   const judgments = readRecords(process.env.JUDGMENTS || path.join(path.dirname(file), 'judgments.jsonl')).records;
-  const {rows, stats} = exportSft(records, {judgments, demoRatio: process.env.DEMO_RATIO === undefined ? 3 : Number(process.env.DEMO_RATIO), judged: process.env.JUDGED === '1', exclude: excludedContexts(process.env.EVALS || path.join(path.dirname(file), 'eval')), judgedMax: Number(process.env.JUDGED_MAX) || 200});
+  const {rows, stats} = exportSft(records, {judgments, demoRatio: process.env.DEMO_RATIO === undefined ? 3 : Number(process.env.DEMO_RATIO), judged: process.env.JUDGED === '1', exclude: evalSet.excludedContexts(process.env.EVALS || path.join(path.dirname(file), 'eval')), judgedMax: Number(process.env.JUDGED_MAX) || 200});
   stats.torn_lines = torn;
   fs.mkdirSync(out, {recursive: true});
   // Rename keeps a reader from ever seeing half a file.
