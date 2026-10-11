@@ -6,6 +6,7 @@ const net = require('node:net');
 
 const NAME_RE = /^[A-Za-z0-9_]{1,16}$/;
 const T_AUTH = 3, T_CMD = 2;
+const T_PROBE = 100; // an invalid packet type: the server answers it ("Unknown request 64") with the same id
 const PIECE = 4096; // the server splits a reply into pieces of this many bytes
 
 // [len][id][type][body]\0\0 - len counts everything after itself.
@@ -35,7 +36,8 @@ function decode(buf) {
 
 // One connection: authenticate, run the commands in order, return the replies. Minecraft reads one packet
 // per socket read and drops the client when a read holds two (live 2026-10-10: "RCON closed the
-// connection"), so each command goes alone. A long reply comes in 4096-byte pieces; a shorter piece ends it.
+// connection"), so each command goes alone. A long reply comes in 4096-byte pieces; a shorter piece ends it, and after a full piece
+// a separate probe packet (its own write) marks the end, since the reply may be exactly 4096 bytes.
 function rcon({host, port, password, timeoutMs = 5000}, commands) {
   return new Promise((resolve, reject) => {
     const sock = net.connect({host, port});
@@ -47,7 +49,9 @@ function rcon({host, port, password, timeoutMs = 5000}, commands) {
       err ? reject(err) : resolve(replies);
     };
     const timer = setTimeout(() => done(new Error('RCON timed out')), timeoutMs);
+    let probe = 0;
     const next = () => {
+      probe = 0;
       step++;
       if (step >= commands.length) return done();
       text = '';
@@ -65,13 +69,19 @@ function rcon({host, port, password, timeoutMs = 5000}, commands) {
           if (step === -1) {
             if (p.id === -1) return done(new Error('RCON refused the password'));
             if (p.type === T_CMD) next();
-          } else if (p.id === id) {
+          } else if (probe && p.id === probe) {
+            replies.push(text); // the probe's answer comes after every piece of the reply
+            next();
+          } else if (p.id === id && !probe) {
             text += p.body;
             if (Buffer.byteLength(p.body) < PIECE) {
               replies.push(text);
               next();
+            } else if (!probe) { // a full piece may be the end (exactly 4096 bytes): ask something else, alone, and wait for that answer
+              probe = id + 1;
+              sock.write(encode(probe, T_PROBE, ''));
             }
-          }
+          } else if (p.id === id) text += p.body;
         }
       } catch (e) {
         done(e);

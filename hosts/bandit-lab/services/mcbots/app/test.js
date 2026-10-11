@@ -67,6 +67,9 @@ for (const bad of ['bot', 'bot100', 'Bot1', 'steve', 'bot1,x']) assert.throws(()
   for (const [type, args] of Object.entries(ok)) { limiter = mk(); assert.strictEqual(s({type, args}), null, type); }
   // not on the menu
   for (const type of ['say', 'build', 'excavate', 'place', 'shaft', 'stop', 'shift', 'stock', 'hunt']) { limiter = mk(); assert.match(s({type, args: {}}), /not on the solver menu/, type); }
+  limiter = mk(); assert.match(s({type: 'mine', args: {block: 'iron_block', count: 1}}), /natural mining list/);
+  for (const block of ['cobblestone', 'chest', 'stone_bricks']) { limiter = mk(); assert.match(s({type: 'mine', args: {block, count: 1}}), /natural mining list/, block); }
+  for (const block of ['iron_ore', 'deepslate_iron_ore', 'stone', 'gravel']) { limiter = mk(); assert.strictEqual(s({type: 'mine', args: {block, count: 4}}), null, block); }
   // who: roster only, never agent bots through the solver door, one bot
   limiter = mk();
   assert.match(s({type: 'chop', args: {count: 1}}, 'bot9'), /not a plan roster bot/);
@@ -191,6 +194,13 @@ assert.throws(() => loadConfig({BOT_NAMES: 'bot1', PROTECTED_AREAS: '1,2,3'}));
   assert.strictEqual(sent.at(-1).body.length, 300);
   for (const overrides of [{url: ''}, {token: ''}, {url: 'http://ntfy.example'}]) {
     assert.strictEqual(new NtfyNotifier({...options, ...overrides}).send('bot1', 'x', 'off'), false);
+  }
+  { // the configured gateway (ntfy/default.nix) is plain http inside the Docker subnet (Codex R7-3)
+    const sent = [];
+    const g = new NtfyNotifier({...options, url: 'http://10.250.77.1:2586', fetcher: (u) => { sent.push(u); return Promise.resolve({}); }});
+    assert.strictEqual(g.send('bot1', 'x', 'hi'), true);
+    assert.strictEqual(sent[0], 'http://10.250.77.1:2586/' + encodeURIComponent(options.topic || 'mcbots'));
+    for (const url of ['http://10.250.77.9:2586', 'http://10.250.78.1:2586', 'http://10.250.77.1.evil.example']) assert.strictEqual(new NtfyNotifier({...options, url}).send('bot1', 'x', 'off'), false, url);
   }
   assert.doesNotThrow(() => new NtfyNotifier({...options, fetcher: () => { throw Error('offline'); }}).send('bot1', 'x', 'x'));
   assert.doesNotThrow(() => new NtfyNotifier({...options, fetcher: () => Promise.reject(Error('offline'))}).send('bot1', 'x', 'x'));
@@ -1142,6 +1152,17 @@ require('./crafting');
     client.handle({t: 'settings', bot: 'bot6', settings: {evil: 1, fightRange: 4}});
     assert.deepStrictEqual([stub.getSettings().eatBelow, stub.getSettings().fightRange, client.settings.get('bot7').eatBelow], [10, 4, 15], 'refused values and foreign bots change nothing, unknown keys are dropped');
     assert.ok(logs.some((l) => /bot6: settings from hub rejected/.test(l)));
+    { // protected zones and the supply chest reach a runner that already exists (Codex R7-2): policy frame and every welcome
+      const box = {x1: 1, z1: 1, x2: 5, z2: 5};
+      client.handle({t: 'policy', protectedAreas: [box], supplyChest: {x: 7, y: 8, z: 9}});
+      assert.deepStrictEqual([stub.protectedAreas, stub.supplyChest], [[box], {x: 7, y: 8, z: 9}]);
+      client.handle({t: 'welcome', protectedAreas: [], supplyChest: null, settings: {}});
+      assert.deepStrictEqual([stub.protectedAreas, stub.supplyChest], [[], null], 'a reconnect repairs it too');
+      hub.protectedAreas.push(box); hub.broadcastPolicy();
+      await until(() => stub.protectedAreas.length === 2, 'the hub broadcast reaches the connected worker');
+      hub.protectedAreas.pop(); hub.broadcastPolicy();
+      await until(() => stub.protectedAreas.length === 1, 'and the removal too');
+    }
     // kept jobs: the worker reports its own list, the hub keeps it; Stop empties it at once
     stub.current = {type: 'shift', args: {block: 'logs', x: 1, y: 64, z: 1}};
     stub.queue = [{type: 'mine', args: {block: 'stone', count: 5}, collected: 2}, {type: 'say', args: {text: 'x'}}, {type: 'chop', args: {count: 4}, cancelled: true}];
@@ -4208,7 +4229,9 @@ require('./crafting');
   assert.deepStrictEqual(w.findItems('nothing'), []);
   const order = L.withdrawOrder({item: 'iron_ingot', match: (n) => n === 'iron_ingot', chests: w.chests, wall: pc.BASE.roomChests, exists: () => true, from: {x: -250, y: 58, z: -214}});
   assert.deepStrictEqual(order.slice(0, 2).map(L.keyOf), ['-251,59,-214', '-263,58,-219'], 'holders first, nearest first');
-  assert.strictEqual(order.length, 2 + 3 + pc.BASE.roomChests.length, 'holders, the rest of the ore run, the wall: never all 64');
+  const miscKeys = L.BY_CAT.misc.map(L.keyOf);
+  assert.ok(miscKeys.every((k) => order.map(L.keyOf).includes(k)), 'the misc overflow chests are searched too (R7-5)');
+  assert.ok(order.length < 2 + 3 + 4 + pc.BASE.roomChests.length + 1, 'holders, the ore run, misc, the wall: never all 64');
   assert.strictEqual(L.keyOf(L.order('ore', ['iron_ingot'], w.chests)[0]), '-263,58,-219');
   w.noteChest('-263,58,-219', {coal: 2}, 20); // flush path: the debounce timer is unref'd, so write now via a second instance
   const w2 = new WorldModel();
@@ -4367,6 +4390,16 @@ require('./crafting');
   assert.deepStrictEqual(due({target: {x: 11, z: 20}}), ['30,66,20'], 'the ones near the next log stay');
   assert.strictEqual(cells.size, 3, 'a changed block is forgotten, not dug (10,68 was dirt, 10,69 is planks)');
   assert.deepStrictEqual(due({}), ['10,67,20', '10,66,20', '30,66,20'].sort((a, b) => b.split(',')[1] - a.split(',')[1]), 'tallest first');
+  { // removal followed by a same-type replacement (Codex R7-4)
+    const w2 = new Map([['5,60,5', 'cobblestone']]), c2 = new Map();
+    P.record(c2, 5, 60, 5, 'cobblestone');
+    P.changed(c2, 5, 60, 5, 'air', 'cobblestone'); // the bot's own placement arriving
+    assert.strictEqual(c2.size, 1, 'own placement keeps the record');
+    P.changed(c2, 5, 60, 5, 'cobblestone', 'air'); // a player removes it ...
+    P.changed(c2, 5, 60, 5, 'air', 'cobblestone'); // ... and places their own
+    assert.strictEqual(c2.size, 0);
+    assert.deepStrictEqual(P.due(c2, {blockAt: (x, y, z) => ({name: w2.get(`${x},${y},${z}`)})}), [], 'the replacement is not dug');
+  }
   assert.deepStrictEqual(due({protectedAt: (x) => x === 10}), ['30,66,20'], 'never in a protected area');
   assert.strictEqual(cells.size, 1);
 }
@@ -4402,6 +4435,7 @@ require('./crafting');
       if (r.packets.length !== 1 || r.rest.length) return s.destroy();
       const q = r.packets[0];
       if (q.type === 3) s.write(AD.encode(q.body === 'pw' ? q.id : -1, 2, ''));
+      else if (q.type === 2 && q.body === 'exact') s.write(AD.encode(q.id, 0, piece)); // exactly one full piece
       else if (q.type === 2) { s.write(AD.encode(q.id, 0, piece)); s.write(AD.encode(q.id, 0, `echo ${q.body}`)); }
       else s.write(AD.encode(q.id, 0, 'Unknown request 64'));
     });
@@ -4410,6 +4444,7 @@ require('./crafting');
     const o = {host: '127.0.0.1', port: srv.address().port, password: 'pw'};
     const call = AD.queued(o);
     assert.deepStrictEqual(await call(['a', 'b']), [`${piece}echo a`, `${piece}echo b`]);
+    assert.deepStrictEqual(await call(['exact', 'b']), [piece, `${piece}echo b`], 'a reply of exactly 4096 bytes ends too (R7-7)');
     await assert.rejects(AD.rcon({...o, password: 'bad'}, ['a']), /refused the password/);
     // the Admin actions: events log, restart countdown and cancel
     const sent = [], timers = [];
@@ -4502,6 +4537,18 @@ require('./crafting');
     bot.game.dimension = 'minecraft:the_nether';
     bot.emit('blockUpdate', blk('stone', 1, 2, 3), blk('air', 1, 2, 3));
     assert.deepStrictEqual(seen.map((c) => c.by), ['bot7', 'bot7', 'world', 'world']);
+  }
+  { // mineflayer installs dig/placeBlock after createBot: wrapping must still attribute (the log said "world" for every bot)
+    const bot = new EventEmitter();
+    bot.game = {dimension: 'minecraft:overworld'};
+    const seen = [];
+    B.watchBlocks(bot, 'bot8', (c) => seen.push(c), () => clock);
+    bot.dig = async () => {}; bot.placeBlock = async () => {}; // the plugin, after the hook
+    bot.emit('spawn');
+    const blk = (name, x, y, z) => ({name, position: {x, y, z}});
+    bot.dig(blk('stone', 1, 2, 3));
+    bot.emit('blockUpdate', blk('stone', 1, 2, 3), blk('air', 1, 2, 3));
+    assert.deepStrictEqual(seen.map((c) => c.by), ['bot8']);
   }
   fs.rmSync(dir, {recursive: true});
 }

@@ -82,7 +82,7 @@ function applyPlaces() {
   const s = places.first('supply'), site = places.first('site');
   supplyChest = s ? {x: s.x, y: s.y, z: s.z} : cfg.supplyChest;
   for (const r of runners.values()) if (!(r instanceof RemoteRunner)) r.supplyChest = supplyChest;
-  if (hub) hub.supplyChest = supplyChest;
+  if (hub) { hub.supplyChest = supplyChest; hub.broadcastPolicy(); }
   if (keeper) {
     keeper.chest = supplyChest;
     keeper.site = site ? {x: site.x, y: site.y, z: site.z} : cfg.keeperSite;

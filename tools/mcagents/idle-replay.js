@@ -62,7 +62,7 @@ function score(results, variant) {
 // (health not 200, any request error) and keeps what it has.
 async function runBackend(base, rows, variants, {timeoutMs = 60000, healthMs = 3000} = {}) {
   base = backendBase(base);
-  const healthy = () => fetch(`${base}/health`, {signal: AbortSignal.timeout(healthMs)}).then((r) => r.status === 200, () => false);
+  const healthy = () => fetch(`${base}/health`, {redirect: 'error', signal: AbortSignal.timeout(healthMs)}).then((r) => r.status === 200, () => false);
   const out = {alias: null, results: [], stopped: null};
   if (!await healthy()) { out.stopped = 'not free (health)'; return out; }
   for (const variant of variants) for (const row of rows) {

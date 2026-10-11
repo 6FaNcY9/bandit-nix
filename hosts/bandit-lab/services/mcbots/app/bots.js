@@ -373,7 +373,10 @@ class BotRunner {
       this.log(this.name, this.lastError);
       if (/too fast|throttl/i.test(this.lastError)) this.backoff = Math.max(this.backoff, 30000);
     });
+    bot.on('blockUpdate', (o, n) => { if (this.pillars.size && n) pillars.changed(this.pillars, n.position.x, n.position.y, n.position.z, o?.name, n.name); });
+    bot.on('respawn', () => this.pillars.clear()); // another dimension or a new life: the old cells are not ours to dig any more
     bot.once('end', (why) => {
+      this.pillars.clear();
       this.online = false;
       this.dead = false;
       if (spawnedAt) this.emit('disconnect', `left the game (${why})`); // failed connection attempts are not news

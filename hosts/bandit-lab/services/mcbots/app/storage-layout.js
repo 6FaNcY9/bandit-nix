@@ -38,7 +38,7 @@ function order(cat, items, chests) {
 }
 
 // Which chests to open for `item` (a name predicate), in order: those the index says hold it (nearest
-// `from` first), then the item's category run, then the old wall; only chests that `exists`. Never all 64.
+// `from` first), then the item's category run, the misc overflow chests, then the old wall; only chests that `exists`. Never all 64.
 const GENERIC = {logs: 'oak_log', wool: 'white_wool', coal: 'coal'};
 function withdrawOrder({item, match, chests, wall, exists, from}) {
   const holds = (c) => Object.keys(chests.get(keyOf(c))?.items || {}).some(match);
@@ -47,6 +47,7 @@ function withdrawOrder({item, match, chests, wall, exists, from}) {
   const add = (list) => list.forEach((c) => { if (!seen.has(keyOf(c)) && exists(c)) { seen.add(keyOf(c)); out.push(c); } });
   add([...SLOTS, ...wall].filter(holds).sort((a, b) => dist(a) - dist(b)));
   add(chestsFor(categoryOf(GENERIC[item] || item)));
+  add(BY_CAT.misc); // full category chests overflow into misc (Codex R7-5)
   add(wall);
   return out;
 }

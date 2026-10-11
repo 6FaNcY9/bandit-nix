@@ -11,7 +11,9 @@ class NtfyNotifier {
     let base = null;
     try {
       const parsed = new URL(String(url));
-      if (parsed.protocol === 'https:') base = String(url).replace(/\/$/, '');
+      // http only for the ntfy gateway on the mcbots Docker subnet 10.250.77.0/29 (Codex R7-3); https anywhere
+      const gateway = /^10\.250\.77\.[0-7]$/.test(parsed.hostname);
+      if (parsed.protocol === 'https:' || (parsed.protocol === 'http:' && gateway)) base = String(url).replace(/\/$/, '');
     } catch {}
     this.url = base && token ? `${base}/${encodeURIComponent(topic)}` : null;
     this.token = token;

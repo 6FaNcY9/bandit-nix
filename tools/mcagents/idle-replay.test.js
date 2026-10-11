@@ -33,5 +33,14 @@ const {backendBase, sample, score, runBackend, withVariant} = require('./idle-re
   server.close();
   const gone = await runBackend(base, rows, [{name: 'baseline'}]);
   assert.equal(gone.results.length, 0); assert.match(gone.stopped, /not free/);
+  // a /health that redirects (to Ollama, say) counts as not free, and is never followed (Codex R7-6)
+  let followed = false;
+  const target = http.createServer((req, res) => { followed = true; res.end('{}'); });
+  await new Promise((ok) => target.listen(0, '127.0.0.1', ok));
+  const redir = http.createServer((req, res) => { res.statusCode = 302; res.setHeader('Location', `http://127.0.0.1:${target.address().port}/`); res.end(); });
+  await new Promise((ok) => redir.listen(0, '127.0.0.1', ok));
+  const red = await runBackend(`http://127.0.0.1:${redir.address().port}`, rows, [{name: 'baseline'}]);
+  assert.equal(red.results.length, 0); assert.match(red.stopped, /not free/); assert.equal(followed, false);
+  redir.close(); target.close();
   console.log('idle-replay tests passed');
 })().catch((e) => { console.error(e); process.exitCode = 1; });

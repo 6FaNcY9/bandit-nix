@@ -128,16 +128,22 @@ function watchBlocks(bot, name, sink, now = Date.now) {
     if (own.size > 200) for (const [k, t] of own) if (t < now()) own.delete(k);
     own.set(`${x},${y},${z}`, now() + OWN_MS);
   };
-  const dig = bot.dig;
-  bot.dig = function (block, ...a) {
-    if (block?.position) mark(block.position.x, block.position.y, block.position.z);
-    return dig.call(this, block, ...a);
+  // mineflayer installs dig/placeBlock after createBot returns and overwrites earlier wrappers (live 2026-10-11: every
+  // bot change was "world"): wrap once they exist, at spawn.
+  const wrap = () => {
+    const dig = bot.dig;
+    bot.dig = function (block, ...a) {
+      if (block?.position) mark(block.position.x, block.position.y, block.position.z);
+      return dig.call(this, block, ...a);
+    };
+    const place = bot.placeBlock;
+    bot.placeBlock = function (ref, face, ...a) {
+      if (ref?.position && face) mark(ref.position.x + face.x, ref.position.y + face.y, ref.position.z + face.z);
+      return place.call(this, ref, face, ...a);
+    };
   };
-  const place = bot.placeBlock;
-  bot.placeBlock = function (ref, face, ...a) {
-    if (ref?.position && face) mark(ref.position.x + face.x, ref.position.y + face.y, ref.position.z + face.z);
-    return place.call(this, ref, face, ...a);
-  };
+  if (bot.dig && bot.placeBlock) wrap();
+  else bot.once('spawn', wrap);
   bot.on('blockUpdate', (o, n) => {
     if (!o || !n?.position || !classify(o.name, n.name) || !/overworld/.test(bot.game?.dimension || '')) return;
     const {x, y, z} = n.position;

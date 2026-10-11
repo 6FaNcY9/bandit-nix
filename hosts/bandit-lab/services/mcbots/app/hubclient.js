@@ -161,6 +161,8 @@ class HubClient {
     };
     this.makeRunner = makeRunner || ((name, {protectedAreas, supplyChest}) => new BotRunner(name, {host: mcHost, port: mcPort, log, world: this.world, protectedAreas, supplyChest, loginSeed, hostLabel, onEvent}));
     this.runners = [];
+    this.protectedAreas = []; // one array every runner holds; the hub's policy is spliced into it
+    this.supplyChest = null;
     this.ws = null;
     this.stopped = false;
     this.backoff = BACKOFF_START;
@@ -219,8 +221,9 @@ class HubClient {
         this.backoff = BACKOFF_START;
         this.world.attach((msg) => this.send(msg));
         for (const n of this.names) this.setSettings(n, m.settings?.[n]);
+        this.applyPolicy(m);
         if (!this.runners.length) {
-          const opts = {protectedAreas: Array.isArray(m.protectedAreas) ? m.protectedAreas : [], supplyChest: m.supplyChest || null};
+          const opts = {protectedAreas: this.protectedAreas, supplyChest: this.supplyChest};
           this.runners = this.names.map((n) => this.makeRunner(n, opts));
           for (const r of this.runners) r.getSettings = () => this.settings.get(r.name);
           for (const r of this.runners) r.start();
@@ -230,6 +233,8 @@ class HubClient {
         this.report();
         this.log('hub', `connected as ${this.hostLabel}: ${this.names.join(', ')}`);
         return;
+      case 'policy':
+        return this.applyPolicy(m);
       case 'error':
         this.log('hub', `hub says: ${m.message}`);
         return;
@@ -272,6 +277,13 @@ class HubClient {
       }
       default:
     }
+  }
+
+  // Protected areas and the supply chest from the hub, for runners that already exist too (Codex R7-2).
+  applyPolicy(m) {
+    this.protectedAreas.splice(0, this.protectedAreas.length, ...(Array.isArray(m.protectedAreas) ? m.protectedAreas : []));
+    this.supplyChest = m.supplyChest || null;
+    for (const r of this.runners) { r.protectedAreas = this.protectedAreas; r.supplyChest = this.supplyChest; }
   }
 
   // Same rules as the hub's (settings.clean): a bad value is refused, the old settings stay.

@@ -508,6 +508,12 @@ class Hub {
     for (const c of live) c.ws.send(msg);
   }
 
+  // Zones or the supply chest changed (server.js applyPlaces): connected workers must follow, not only new ones.
+  broadcastPolicy() {
+    const msg = JSON.stringify({t: 'policy', protectedAreas: this.protectedAreas, supplyChest: this.supplyChest});
+    for (const c of this.conns) if (c.hello && c.ws.readyState === 1) c.ws.send(msg);
+  }
+
   heartbeat() {
     const t = this.now();
     // A remote bot whose worker has been away for an hour leaves the list (and frees its name slot).
