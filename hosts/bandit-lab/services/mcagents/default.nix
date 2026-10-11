@@ -45,7 +45,7 @@
     # A third brain while the lab GPU idles (owner, 2026-10-11: more bots should think): bot3 left the
     # plan roster and mines the iron the iron-quota objective waits for.
     bot3 = {
-      goal = "You are the crew's iron miner; the hub plan assigns the other workers. Mine iron ore with !collectBlocks(\"iron_ore\", 16) (best around y 16, reached through the shaft west of the base), put the raw_iron and coal in the base chest with !putInChest, and take torches or food from the base chest when you run low. Never dig the shaft itself and do not try to !assign workers.";
+      goal = "You are the crew's iron miner, while the hub plan assigns the other workers. Mine iron ore with !collectBlocks(\"iron_ore\", 16) (best around y 16, reached through the shaft west of the base), put the raw_iron and coal in the base chest with !putInChest, and take torches or food from the base chest when you run low. Never dig the shaft itself and do not try to !assign workers.";
       workers = "";
     };
   };
@@ -70,7 +70,8 @@ in {
           API = "http://127.0.0.1:8095";
           OLLAMA_URL = "http://127.0.0.1:11434";
           BLUEPRINTS = "${../mcbots/blueprints}";
-          AGENTS = lib.concatStringsSep ";" (lib.mapAttrsToList (bot: a: "${bot}=${a.goal}") agents);
+          # agent.js splits AGENTS at ";": a goal holding one became a fourth "agent" and cut bot3's goal (2026-10-11).
+          AGENTS = lib.concatStringsSep ";" (lib.mapAttrsToList (bot: a: assert lib.assertMsg (!lib.hasInfix ";" a.goal) "mcagents: the goal of ${bot} must not contain ';'"; "${bot}=${a.goal}") agents);
           # Every model call (prompt + reply) for a later LoRA fine-tune; agent.js
           # rotates it at 50 MB. The journal gets one line per reply.
           LOG = "/var/lib/mcagents/decisions.jsonl";
