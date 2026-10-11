@@ -52,8 +52,8 @@
       cmd = ["${app}/bin/mcbots-worker"] ++ lib.splitString "," w.bots;
       environment = {
         HUB_URL = "ws://127.0.0.1:${workerPort}/worker";
-        MC_HOST = "minecraft-sandbox"; # sandbox Paper (../minecraft/sandbox.nix), reached through mcbots' minecraft-network DNS
-        BOT_AUTH = "none";
+        MC_HOST = "10.250.77.2"; # Velocity on the mcbots network (see --add-host above)
+        MC_VHOST = "sandbox.bots"; # Velocity's forced host: straight into the sandbox world (../minecraft/sandbox.nix)
         GRAVES = "none"; # no AxGraves in the sandbox: death loot lies on the ground
         MC_PORT = "25565";
         HOST_LABEL = w.label;
@@ -82,8 +82,8 @@ in {
           imageFile = image;
           environment = {
             BOT_NAMES = "bot1,bot10"; # bot1 the lead agent, bot10 AFK at the gold farm; its workers run in the mcbots-worker containers; bot5 is the local test bot. A new name must never have been registered in VeloAuth (local stages used bot5-9, bot11-15, bot50-59)
-            MC_HOST = "minecraft-sandbox"; # bots live in the sandbox world (../minecraft/sandbox.nix); the real server is bot-free
-            BOT_AUTH = "none"; # the sandbox has no VeloAuth
+            MC_HOST = "velocity";
+            MC_VHOST = "sandbox.bots"; # Velocity's forced host: the bots live in the sandbox world (../minecraft/sandbox.nix), the real server is bot-free
             GRAVES = "none"; # ... and no AxGraves: a bot picks its death loot up from the ground
             MC_PORT = "25565";
             DASHBOARD_HOST = "0.0.0.0"; # inside the container; published on loopback only

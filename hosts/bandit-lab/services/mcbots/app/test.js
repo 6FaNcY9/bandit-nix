@@ -6,6 +6,8 @@ const {VALIDATE} = require('./bots');
 assert.throws(() => loadConfig({BOT_NAMES: 'bot1', BOT_AUTH: 'x'}), /BOT_AUTH/);
 loadConfig({BOT_NAMES: 'bot1', BOT_AUTH: 'none'});
 assert.throws(() => require('./config').loadWorkerConfig({HUB_URL: 'ws://127.0.0.1:1/worker', HUB_TOKEN: 't'.repeat(40), MC_HOST: 'h', BOT_AUTH: 'x'}, ['bot2']), /BOT_AUTH/);
+assert.throws(() => loadConfig({BOT_NAMES: 'bot1', MC_VHOST: 'bad host'}), /MC_VHOST/);
+loadConfig({BOT_NAMES: 'bot1', MC_VHOST: 'sandbox.bots'});
 assert.deepStrictEqual(loadConfig({BOT_NAMES: 'bot1, bot22'}).names, ['bot1', 'bot22']);
 for (const bad of ['bot', 'bot100', 'Bot1', 'steve', 'bot1,x']) assert.throws(() => loadConfig({BOT_NAMES: bad}), bad);
 { // agent bearer (H5): config pairs token and bots; the policy limits endpoints, bots, jobs and chests

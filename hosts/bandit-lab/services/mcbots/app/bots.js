@@ -290,7 +290,7 @@ class BotRunner {
   connect() {
     if (this.stopped) return;
     this.log(this.name, `connecting to ${this.host}:${this.port}`);
-    const bot = mineflayer.createBot({host: this.host, port: this.port, username: this.name, auth: 'offline', version: '26.1', hideErrors: true});
+    const bot = mineflayer.createBot({host: this.host, port: this.port, username: this.name, auth: 'offline', version: '26.1', hideErrors: true, fakeHost: process.env.MC_VHOST || undefined}); // MC_VHOST: Velocity forced host (the sandbox)
     this.bot = bot;
     require('./blocklog').watchBlocks(bot, this.name, (c) => this.world.noteChange?.(c));
     bot.once('spawn', () => guardDigs(this, bot)); // bot.dig exists only once the plugins loaded

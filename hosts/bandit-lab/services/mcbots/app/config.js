@@ -149,9 +149,11 @@ function readToken(inline, file) {
 }
 
 // `mcbots-worker bot5 [bot6 ...]`: bots on this machine, driven by the hub.
-// BOT_AUTH=none: the server has no login plugin (sandbox); bots.js then skips the VeloAuth chat login.
+// BOT_AUTH=none: the server has no login plugin; bots.js then skips the VeloAuth chat login. MC_VHOST: the
+// virtual host sent in the handshake (Velocity's forced host for the sandbox).
 function checkBotAuth(env) {
   if (env.BOT_AUTH && env.BOT_AUTH !== 'none') throw new Error('BOT_AUTH must be unset or "none"');
+  if (env.MC_VHOST && !/^[a-z0-9.-]{1,64}$/.test(env.MC_VHOST)) throw new Error('MC_VHOST must be a host name');
 }
 
 function loadWorkerConfig(env = process.env, argv = []) {

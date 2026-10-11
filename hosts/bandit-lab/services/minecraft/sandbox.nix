@@ -1,7 +1,7 @@
-# Sandbox Paper server for the bots: a copy of the real world on the same
-# internal `minecraft` network, no published port, no proxy; only the ViaVersion pair as plugins.
-# The bots join it directly (MC_HOST=minecraft-sandbox, BOT_AUTH=none), so
-# whatever they try there never touches the real base. Velocity does not list it.
+# Sandbox Paper server for the bots: a copy of the real world on the same internal `minecraft` network,
+# no published port; only the ViaVersion pair as plugins. Behind Velocity like the real server (modern
+# forwarding, same secret): the bots join with the virtual host sandbox.bots (Velocity's forced host),
+# players with /server sandbox. Whatever the bots try there never touches the real base.
 # Reset: `systemctl stop docker-minecraft-sandbox`, remove
 # /srv/containers/minecraft-sandbox/data/world, start it (re-copies the real world).
 {
@@ -108,17 +108,25 @@ in {
       TZ = config.time.timeZone;
       MEMORY = "4G";
       USE_AIKAR_FLAGS = "true";
-      # No auth, no proxy: reachable only from containers on the internal
-      # `minecraft` network (nothing is published).
+      # Authentication happens at the proxy; the forwarding secret keeps everyone else out.
       ONLINE_MODE = "FALSE";
       SPAWN_PROTECTION = "0";
       DIFFICULTY = "normal";
       MODE = "survival";
       VIEW_DISTANCE = "8";
       ENABLE_RCON = "true";
+      PATCH_DEFINITIONS = "/nix-patches";
+      # The owner watches the bots in spectator mode (/gamemode spectator); Velocity's modern forwarding
+      # makes this the real, Mojang-checked account.
+      OPS = "fancy8869";
     };
-    environmentFiles = ["/run/minecraft-sandbox-rcon/rcon.env"];
-    volumes = ["${data}:/data"] ++ lib.mapAttrsToList (name: jar: "${jar}:/plugins/${name}:ro") via;
+    environmentFiles = [
+      config.sops.templates."minecraft-velocity.env".path # CFG_VELOCITY_SECRET for the patch below
+      "/run/minecraft-sandbox-rcon/rcon.env"
+    ];
+    volumes =
+      ["${data}:/data" "${import ./velocity-patch.nix {inherit pkgs;}}:/nix-patches/velocity.json:ro"]
+      ++ lib.mapAttrsToList (name: jar: "${jar}:/plugins/${name}:ro") via;
     extraOptions = [
       "--network=minecraft"
       "--memory=6g"

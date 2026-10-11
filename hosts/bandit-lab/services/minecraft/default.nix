@@ -112,36 +112,7 @@
   # `minecraft` network, the default bridge or the lab's own tailnet address.
   botgateSources = "${repoConfig.lab.workstationTailscaleIp}/32,${mcbotsSubnet}";
 
-  # Applied by itzg to Paper's config at every start (PATCH_DEFINITIONS); the
-  # secret is resolved from the environment file, never written to the store.
-  # PATCH_DEFINITIONS points at a directory, and itzg reads every file there as
-  # one patch definition ({file, ops}); a {patches = [...]} patch set is only
-  # accepted as a single file and made Paper fail to start (2026-10-08).
-  velocityPatch = pkgs.writeText "velocity-patch.json" (builtins.toJSON {
-    file = "/data/config/paper-global.yml";
-    ops = [
-      {
-        "$set" = {
-          path = "$.proxies.velocity.enabled";
-          value = true;
-          value-type = "bool";
-        };
-      }
-      {
-        "$set" = {
-          path = "$.proxies.velocity.online-mode";
-          value = true;
-          value-type = "bool";
-        };
-      }
-      {
-        "$set" = {
-          path = "$.proxies.velocity.secret";
-          value = "\${CFG_VELOCITY_SECRET}";
-        };
-      }
-    ];
-  });
+  velocityPatch = import ./velocity-patch.nix {inherit pkgs;};
 
   velocityToml = pkgs.writeText "velocity.toml" ''
     config-version = "2.8"
@@ -155,9 +126,13 @@
 
     [servers]
     main = "minecraft:25565"
+    # The bots' sandbox world (sandbox.nix): players reach it with /server sandbox; the bots connect
+    # with the virtual host sandbox.bots and land there directly, never on main.
+    sandbox = "minecraft-sandbox:25565"
     try = ["main"]
 
     [forced-hosts]
+    "sandbox.bots" = ["sandbox"]
 
     # Players come from Docker/Tailscale, not from a PROXY-protocol balancer.
     [advanced]
