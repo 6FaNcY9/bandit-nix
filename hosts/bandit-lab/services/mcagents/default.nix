@@ -127,7 +127,9 @@ in {
       environment =
         offlineEnv
         // {
-          JUDGE_BATCH = "200"; # owner: use the idle PCs as much as possible (2026-10-11)
+          JUDGE_BATCH = "200";
+          # slayer grades too (it sat idle: the lab GPU takes the live calls first); 200 per PC per pass.
+          JUDGE_NAMES = "albert,slayer"; # owner: use the idle PCs as much as possible (2026-10-11)
           LOG = "/var/lib/mcagents/decisions.jsonl";
           REPLAYS = "/var/lib/mcagents/replays";
           VARIANTS = "${../../../../tools/mcagents/variants.json}";

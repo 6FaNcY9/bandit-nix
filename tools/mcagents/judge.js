@@ -12,7 +12,18 @@ const path = require('node:path');
 const {createHash} = require('node:crypto');
 const {parseCommand, knownCommand, commandNames} = require('./agent');
 const {modelRequest, modelReply} = require('./model-protocol');
-const {offlineTargets} = require('./routing');
+const {offlineTargets, pcs, backendBase} = require('./routing');
+
+// The PCs the judge may use: JUDGE_NAMES (owner, 2026-10-11: slayer sat idle, so it grades too), else the
+// offline ones. Still loopback llama-server ports only, never Ollama (backendBase refuses 11434).
+function judgeTargets(env = process.env) {
+  const names = String(env.JUDGE_NAMES || '').split(',').map((s) => s.trim()).filter(Boolean);
+  if (!names.length) return offlineTargets(env);
+  return pcs(env).filter((p) => names.includes(p.name)).map((p) => ({...p, url: backendBase(p.url)}));
+}
+
+// Round-robin slices, so every PC grades different decisions at the same time.
+const slices = (items, k) => Array.from({length: k}, (_, i) => items.filter((_, j) => j % k === i));
 const {buildDataset} = require('./dataset');
 const {readRecords} = require('./export-sft');
 
@@ -94,19 +105,20 @@ async function main() {
   const log = env.LOG || '/var/lib/mcagents/decisions.jsonl';
   const file = env.JUDGMENTS || path.join(path.dirname(log), 'judgments.jsonl');
   const n = Math.min(Number(env.JUDGE_BATCH) || 40, 200);
-  let items = candidates(readRecords(log).records, judgedRefs(file), n);
+  const targets = judgeTargets(env);
+  const items = candidates(readRecords(log).records, judgedRefs(file), n * Math.max(1, targets.length));
+  const docs = commandNames.map((c) => `!${c}`).join(' ');
+  const parts = slices(items, targets.length);
+  const runs = await Promise.all(targets.map(({url}, i) => (parts[i].length ? runJudge(url, parts[i], docs) : Promise.resolve({grades: [], stopped: 'nothing to judge'}))));
   const lines = [];
-  for (const {name, url} of offlineTargets(env)) {
-    if (!items.length) break;
-    const run = await runJudge(url, items, commandNames.map((c) => `!${c}`).join(' '));
-    if (!run.grades.length) { lines.push(`${name}: ${run.stopped || 'no verdicts'}`); continue; }
+  runs.forEach((run, i) => {
+    const {name} = targets[i];
+    if (!run.grades.length) { lines.push(`${name}: ${run.stopped || 'no verdicts'}`); return; }
     const t = new Date().toISOString();
     fs.appendFileSync(file, run.grades.map((g) => JSON.stringify({kind: 'judge', t, ...g, model: run.alias, backend: name}) + '\n').join(''));
-    const done = new Set(run.grades.map((g) => g.ref));
-    items = items.filter((i) => !done.has(i.id));
     lines.push(`${name} (${run.alias}): judged ${run.grades.length} (${run.grades.filter((g) => g.verdict === 'good').length} good)${run.stopped ? `, stopped: ${run.stopped}` : ''}`);
-  }
+  });
   console.log(lines.join('\n') || 'nothing to judge or no offline PC configured');
 }
 if (require.main === module) main().catch((e) => { console.error(e.message); process.exitCode = 1; });
-module.exports = {RUBRIC, condense, judgeMessages, parseVerdict, candidates, runJudge, judgedRefs};
+module.exports = {RUBRIC, condense, judgeMessages, parseVerdict, candidates, runJudge, judgedRefs, judgeTargets, slices};

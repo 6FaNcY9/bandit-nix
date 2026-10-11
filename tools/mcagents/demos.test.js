@@ -165,3 +165,13 @@ const ev = (bot, kind, text) => ({id: ++id, t: Date.now(), bot, kind, text});
   assert.equal(noteIdle(ag, bot('bot1', {dead: true}), 5), false);
   console.log('demos, export, judge, routing tests passed');
 })().catch((e) => { console.error(e); process.exitCode = 1; });
+
+{ // the judge may use slayer too (JUDGE_NAMES), never Ollama, and splits the work into disjoint slices
+  const J = require('./judge');
+  const env = {ANDY_URLS: 'http://127.0.0.1:18081,http://127.0.0.1:18082', ANDY_BACKEND_NAMES: 'slayer,albert', ANDY_OFFLINE_NAMES: 'albert', JUDGE_NAMES: 'albert,slayer'};
+  assert.deepStrictEqual(J.judgeTargets(env).map((x) => x.name), ['slayer', 'albert']);
+  assert.deepStrictEqual(J.judgeTargets({...env, JUDGE_NAMES: ''}).map((x) => x.name), ['albert']);
+  assert.throws(() => J.judgeTargets({ANDY_URLS: 'http://127.0.0.1:11434', ANDY_BACKEND_NAMES: 'lab', JUDGE_NAMES: 'lab'}), /never Ollama/);
+  assert.deepStrictEqual(J.slices([1, 2, 3, 4, 5], 2), [[1, 3, 5], [2, 4]]);
+  console.log('ok judge targets');
+}
