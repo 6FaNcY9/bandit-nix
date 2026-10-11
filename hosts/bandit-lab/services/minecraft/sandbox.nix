@@ -1,5 +1,5 @@
 # Sandbox Paper server for the bots: a copy of the real world on the same
-# internal `minecraft` network, no published port, no proxy and no plugins.
+# internal `minecraft` network, no published port, no proxy; only the ViaVersion pair as plugins.
 # The bots join it directly (MC_HOST=minecraft-sandbox, BOT_AUTH=none), so
 # whatever they try there never touches the real base. Velocity does not list it.
 # Reset: `systemctl stop docker-minecraft-sandbox`, remove
@@ -13,6 +13,18 @@
   real = config.virtualisation.oci-containers.containers.minecraft;
   docker = "${pkgs.docker}/bin/docker";
   data = "/srv/containers/minecraft-sandbox/data";
+  # The bots speak 26.1 (mineflayer); ViaBackwards (on ViaVersion) lets them join 26.2, as on the real
+  # server (same pinned jars as its seedPlugins). Mounted read-only into /plugins, which itzg copies.
+  via = {
+    "ViaVersion.jar" = pkgs.fetchurl {
+      url = "https://hangarcdn.papermc.io/plugins/ViaVersion/ViaVersion/versions/5.12.0/PAPER/ViaVersion-5.12.0.jar";
+      hash = "sha256-xNUS+pdg+kHRerrt3hKqH0yb3pINCpkv4PwBaWLxJr4=";
+    };
+    "ViaBackwards.jar" = pkgs.fetchurl {
+      url = "https://hangarcdn.papermc.io/plugins/ViaVersion/ViaBackwards/versions/5.12.0/PAPER/ViaBackwards-5.12.0.jar";
+      hash = "sha256-+QL32n65nov69GH4AoPE4nULfZcn5rUI6ku5Fj9Vsds=";
+    };
+  };
 in {
   systemd = {
     tmpfiles.rules = ["d ${data} 0750 1000 1000 -"];
@@ -106,7 +118,7 @@ in {
       ENABLE_RCON = "true";
     };
     environmentFiles = ["/run/minecraft-sandbox-rcon/rcon.env"];
-    volumes = ["${data}:/data"];
+    volumes = ["${data}:/data"] ++ lib.mapAttrsToList (name: jar: "${jar}:/plugins/${name}:ro") via;
     extraOptions = [
       "--network=minecraft"
       "--memory=6g"
