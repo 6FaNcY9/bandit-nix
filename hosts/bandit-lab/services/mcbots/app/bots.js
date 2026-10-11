@@ -295,7 +295,7 @@ class BotRunner {
     require('./blocklog').watchBlocks(bot, this.name, (c) => this.world.noteChange?.(c));
     bot.once('spawn', () => guardDigs(this, bot)); // bot.dig exists only once the plugins loaded
     bot.loadPlugin(pathfinder);
-    if (bot.pathfinder) bot.pathfinder.goto = (goal) => settledGoto(bot, goal); // test doubles load no plugin
+    useSettledGoto(bot);
     bot.loadPlugin(collectBlock);
     require('./crafting').fixCraftTiming(bot);
     unwedge(bot);
@@ -741,6 +741,12 @@ async function goNear(r, job, x, y, z, dist, opts = {}) {
 // ('noPath') and one still running ('partial', its per-tick budget spent before it got anywhere). The bot
 // never moved and the job went on as if it had arrived (bot4 opened the base chest from 30 blocks away,
 // an hour of windowOpen timeouts, 2026-10-11). This one resolves only on goal_reached.
+// mineflayer loads plugins only once the connection allows it (inject_allowed), so right after loadPlugin
+// bot.pathfinder does not exist yet: swap goto in at spawn (a first fix did it there and never took effect).
+function useSettledGoto(bot) {
+  bot.on('spawn', () => { if (bot.pathfinder) bot.pathfinder.goto = (goal) => settledGoto(bot, goal); });
+}
+
 function settledGoto(bot, goal) {
   return new Promise((resolve, reject) => {
     const done = (err) => {
@@ -2312,4 +2318,4 @@ const JOBS = {
   },
 };
 
-module.exports = {goNear, settledGoto, tailFrom, lightUp, shaftTorchDue, rimTorchDue, explore, layerOrder, stairRing, BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest, guardDigs, safeMovements, tossJunk, NATURAL, partnerOf, depositList};
+module.exports = {goNear, settledGoto, useSettledGoto, tailFrom, lightUp, shaftTorchDue, rimTorchDue, explore, layerOrder, stairRing, BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest, guardDigs, safeMovements, tossJunk, NATURAL, partnerOf, depositList};

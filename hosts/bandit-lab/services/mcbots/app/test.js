@@ -4593,6 +4593,15 @@ require('./crafting');
     act(bot);
     await assert.rejects(p, want);
   }
+  { // the pathfinder plugin arrives after createBot: goto is swapped at spawn
+    const {useSettledGoto} = require('./bots');
+    const b = new EventEmitter();
+    useSettledGoto(b);
+    const upstream = async () => {};
+    b.pathfinder = {goto: upstream}; // what loadPlugin installs later
+    b.emit('spawn');
+    assert.notStrictEqual(b.pathfinder.goto, upstream);
+  }
   // goNear: a walk interrupted by a fight waits for it and is not a failed try
   const {Vec3} = require('vec3');
   let calls = 0, busy = false;
