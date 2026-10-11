@@ -106,18 +106,29 @@ async function main() {
   const file = env.JUDGMENTS || path.join(path.dirname(log), 'judgments.jsonl');
   const n = Math.min(Number(env.JUDGE_BATCH) || 40, 200);
   const targets = judgeTargets(env);
-  const items = candidates(readRecords(log).records, judgedRefs(file), n * Math.max(1, targets.length));
   const docs = commandNames.map((c) => `!${c}`).join(' ');
-  const parts = slices(items, targets.length);
-  const runs = await Promise.all(targets.map(({url}, i) => (parts[i].length ? runJudge(url, parts[i], docs) : Promise.resolve({grades: [], stopped: 'nothing to judge'}))));
+  // Keep the PCs busy (owner, 2026-10-11): batch after batch until nothing is left to grade, a PC stops
+  // (game started, error) or the pass deadline is near; the timer starts the next pass at :15/:45.
+  const deadline = Date.now() + (Number(env.JUDGE_PASS_MS) || 25 * 60000);
   const lines = [];
-  runs.forEach((run, i) => {
-    const {name} = targets[i];
-    if (!run.grades.length) { lines.push(`${name}: ${run.stopped || 'no verdicts'}`); return; }
-    const t = new Date().toISOString();
-    fs.appendFileSync(file, run.grades.map((g) => JSON.stringify({kind: 'judge', t, ...g, model: run.alias, backend: name}) + '\n').join(''));
-    lines.push(`${name} (${run.alias}): judged ${run.grades.length} (${run.grades.filter((g) => g.verdict === 'good').length} good)${run.stopped ? `, stopped: ${run.stopped}` : ''}`);
-  });
+  let live = targets;
+  while (live.length && Date.now() < deadline) {
+    const items = candidates(readRecords(log).records, judgedRefs(file), n * live.length);
+    if (!items.length) { lines.push('nothing left to judge'); break; }
+    const parts = slices(items, live.length);
+    const runs = await Promise.all(live.map(({url}, i) => (parts[i].length ? runJudge(url, parts[i], docs) : Promise.resolve({grades: [], stopped: 'nothing to judge'}))));
+    const next = [];
+    runs.forEach((run, i) => {
+      const {name} = live[i];
+      if (run.grades.length) {
+        const t = new Date().toISOString();
+        fs.appendFileSync(file, run.grades.map((g) => JSON.stringify({kind: 'judge', t, ...g, model: run.alias, backend: name}) + '\n').join(''));
+        lines.push(`${name} (${run.alias}): judged ${run.grades.length} (${run.grades.filter((g) => g.verdict === 'good').length} good)${run.stopped ? `, stopped: ${run.stopped}` : ''}`);
+      } else lines.push(`${name}: ${run.stopped || 'no verdicts'}`);
+      if (!run.stopped && run.grades.length) next.push(live[i]); // a PC that stopped (busy, error) sits out this pass
+    });
+    live = next;
+  }
   console.log(lines.join('\n') || 'nothing to judge or no offline PC configured');
 }
 if (require.main === module) main().catch((e) => { console.error(e.message); process.exitCode = 1; });
