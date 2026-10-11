@@ -134,6 +134,8 @@ in {
             # Server panel (admin.js): RCON to Paper over the minecraft network; the password
             # (RCON_PASSWORD) arrives in seed.env, and only the human dashboard path can use it.
             RCON_HOST = "minecraft";
+            # Rescue of stranded bots (app/rescue.js) over the sandbox's own console; password in seed.env.
+            SANDBOX_RCON_HOST = "minecraft-sandbox";
             # Block log overlay export (app/blocklog.js, BLOCKLOG_EXPORT_DIR=/bluemap-overlay) is off while the
             # bots play in the sandbox: its changes must not show on the real BlueMap. The mount stays.
           };
@@ -192,8 +194,8 @@ in {
       // {
         mcbots-seed = {
           description = "Derive the bots' login password seed and hand over the hub, agent and RCON credentials";
-          after = ["minecraft-rcon-seed.service"];
-          requires = ["minecraft-rcon-seed.service"];
+          after = ["minecraft-rcon-seed.service" "minecraft-sandbox-rcon-seed.service"];
+          requires = ["minecraft-rcon-seed.service" "minecraft-sandbox-rcon-seed.service"];
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
@@ -207,7 +209,7 @@ in {
             # reads it as a systemd credential. Delete the file and restart both to rotate.
             install -d -m 0700 /var/lib/mcbots
             [ -s /var/lib/mcbots/agent-token ] || head -c 32 /dev/urandom | sha256sum | cut -c1-64 > /var/lib/mcbots/agent-token
-            printf 'BOT_PASSWORD_SEED=%s\nWORKER_TOKEN=%s\nAGENT_TOKEN=%s\nRCON_PASSWORD=%s\n' "$seed" "$(tr -d '\n' < ${config.sops.secrets."mcbots-worker-token".path})" "$(cat /var/lib/mcbots/agent-token)" "$(cat /var/lib/minecraft-rcon/password)" > /run/mcbots/seed.env
+            printf 'BOT_PASSWORD_SEED=%s\nWORKER_TOKEN=%s\nAGENT_TOKEN=%s\nRCON_PASSWORD=%s\nSANDBOX_RCON_PASSWORD=%s\n' "$seed" "$(tr -d '\n' < ${config.sops.secrets."mcbots-worker-token".path})" "$(cat /var/lib/mcbots/agent-token)" "$(cat /var/lib/minecraft-rcon/password)" "$(cat /var/lib/minecraft-sandbox-rcon/password)" > /run/mcbots/seed.env
             # One hub credential per worker container, derived from the shared token and the container's label
             # (the hub derives the same, hub.js workerToken), so a compromised worker cannot act as another.
             shared=$(tr -d '\n' < ${config.sops.secrets."mcbots-worker-token".path})

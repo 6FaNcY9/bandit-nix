@@ -104,6 +104,10 @@ function loadConfig(env = process.env) {
   if (rconHost && !/^[\w.-]{1,64}$/.test(rconHost)) throw new Error('RCON_HOST must be a host name');
   if (!Number.isInteger(rconPort) || rconPort < 1 || rconPort > 65535) throw new Error('RCON_PORT must be a port');
   if (!!rconHost !== !!rconPassword) throw new Error('RCON_HOST and RCON_PASSWORD must be set together');
+  // The bots' sandbox console (rescue.js): never the real server's.
+  const sbHost = (env.SANDBOX_RCON_HOST || '').trim(), sbPassword = env.SANDBOX_RCON_PASSWORD || '';
+  if (sbHost && (!/^[\w.-]{1,64}$/.test(sbHost) || sbHost === rconHost)) throw new Error('SANDBOX_RCON_HOST must be a host name other than RCON_HOST');
+  if (!!sbHost !== !!sbPassword) throw new Error('SANDBOX_RCON_HOST and SANDBOX_RCON_PASSWORD must be set together');
   checkBotAuth(env);
   const host = env.DASHBOARD_HOST || '127.0.0.1';
   if (!allowed.length && host !== '127.0.0.1') {
@@ -131,6 +135,7 @@ function loadConfig(env = process.env) {
     agentBots,
     slayerUrl,
     rcon: rconHost ? {host: rconHost, port: rconPort, password: rconPassword} : null,
+    sandboxRcon: sbHost ? {host: sbHost, port: 25575, password: sbPassword} : null,
     slayerStatusCmd,
     workerPort,
     workerHost: env.WORKER_HOST || '127.0.0.1',

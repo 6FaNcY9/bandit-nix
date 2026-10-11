@@ -33,7 +33,8 @@ const log = (who, msg) => console.log(`${new Date().toISOString()} [${who}] ${ms
 const world = new WorldModel();
 if (process.env.STATE_DIR) world.persistChests(path.join(process.env.STATE_DIR, 'chests.json')); // the storage index
 const notifier = new NtfyNotifier();
-const events = new EventLog({onAdd: (e) => notifier.event(e)});
+let rescue = null; // set below, once the supply chest is known
+const events = new EventLog({onAdd: (e) => { notifier.event(e); rescue?.event(e); }});
 // What the LLM agents said and chose (POST /api/decision from the agent service), kept apart so
 // they never push job events out of the 200-entry event log.
 const decisions = new EventLog();
@@ -74,6 +75,9 @@ world.blocklog = blocklog;
 const overlay = process.env.BLOCKLOG_EXPORT_DIR ? new Exporter({log: blocklog, places: () => places.list, dir: process.env.BLOCKLOG_EXPORT_DIR, say: (m) => log('blocklog', m)}) : null;
 const blocklogTimer = setInterval(() => (overlay ? overlay.tick() : blocklog.flush()), 15000);
 let supplyChest = cfg.supplyChest;
+// Stranded bots go back to the base over the sandbox console (rescue.js); off without SANDBOX_RCON_HOST.
+// ponytail: they land one block east and two north of the supply chest, on the base floor; a landing place if that ever moves.
+if (cfg.sandboxRcon) rescue = new (require('./rescue').Rescue)({call: queued(cfg.sandboxRcon), events, target: () => supplyChest && {x: supplyChest.x + 1, y: supplyChest.y, z: supplyChest.z - 2}});
 const supplyStock = () => (supplyChest ? world.stockAt(supplyChest) : world.stock); // the supply chest's numbers, not the plan's base chest's
 const staticAreas = cfg.protectedAreas.slice();
 function applyPlaces() {

@@ -4655,3 +4655,28 @@ require('./crafting');
   c.r.current = {type: 'mine'};
   assert.strictEqual(c.settings().defend, false);
 }
+
+(async () => { // rescue: three no-path failures in a row teleport the bot to the base, once per 10 min
+  const {Rescue} = require('./rescue');
+  const sent = [], said = [];
+  let t = 0;
+  const r = new Rescue({call: async (c) => { sent.push(...c); return ['']; }, events: {add: (b, k, x) => said.push(x)}, target: () => ({x: -270, y: 66, z: -216}), now: () => t});
+  const fail = (bot, why = 'could not reach 1 2 3: No path to the goal!') => r.event({bot, kind: 'fail', text: `failed: goto 1 2 3 - ${why}`});
+  fail('bot4'); fail('bot4');
+  r.event({bot: 'bot4', kind: 'done', text: 'finished: mine stone 2'}); // a success in between resets
+  fail('bot4'); fail('bot4');
+  fail('bot4', 'chest full'); // another failure too
+  fail('bot4'); fail('bot4'); fail('bot4');
+  await new Promise((res) => setImmediate(res));
+  assert.deepStrictEqual(sent, ['minecraft:tp bot4 -270 66 -216']);
+  assert.match(said[0], /rescued: no path 3 times/);
+  fail('bot4'); fail('bot4'); fail('bot4'); // within 10 min: not again
+  await new Promise((res) => setImmediate(res));
+  assert.strictEqual(sent.length, 1);
+  t += 600000; fail('bot4'); fail('bot4'); fail('bot4');
+  await new Promise((res) => setImmediate(res));
+  assert.strictEqual(sent.length, 2);
+  r.event({bot: 'bad name;op x', kind: 'fail', text: 'No path to the goal'}); r.event({bot: 'bad name;op x', kind: 'fail', text: 'No path to the goal'}); r.event({bot: 'bad name;op x', kind: 'fail', text: 'No path to the goal'});
+  await new Promise((res) => setImmediate(res));
+  assert.strictEqual(sent.length, 2, 'only bot names reach the console');
+})();
