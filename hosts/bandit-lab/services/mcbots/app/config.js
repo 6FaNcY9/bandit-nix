@@ -104,6 +104,7 @@ function loadConfig(env = process.env) {
   if (rconHost && !/^[\w.-]{1,64}$/.test(rconHost)) throw new Error('RCON_HOST must be a host name');
   if (!Number.isInteger(rconPort) || rconPort < 1 || rconPort > 65535) throw new Error('RCON_PORT must be a port');
   if (!!rconHost !== !!rconPassword) throw new Error('RCON_HOST and RCON_PASSWORD must be set together');
+  checkBotAuth(env);
   const host = env.DASHBOARD_HOST || '127.0.0.1';
   if (!allowed.length && host !== '127.0.0.1') {
     throw new Error('DASHBOARD_HOST other than 127.0.0.1 requires ALLOWED_TS_LOGINS');
@@ -148,6 +149,11 @@ function readToken(inline, file) {
 }
 
 // `mcbots-worker bot5 [bot6 ...]`: bots on this machine, driven by the hub.
+// BOT_AUTH=none: the server has no login plugin (sandbox); bots.js then skips the VeloAuth chat login.
+function checkBotAuth(env) {
+  if (env.BOT_AUTH && env.BOT_AUTH !== 'none') throw new Error('BOT_AUTH must be unset or "none"');
+}
+
 function loadWorkerConfig(env = process.env, argv = []) {
   const flags = argv.filter((a) => a.startsWith('-'));
   const names = argv.filter((a) => !a.startsWith('-'));
@@ -161,6 +167,7 @@ function loadWorkerConfig(env = process.env, argv = []) {
   }
   const token = readToken(env.HUB_TOKEN, env.HUB_TOKEN_FILE);
   if (!token) throw new Error('no hub token: set HUB_TOKEN_FILE (sops secret mcbots-worker-token) or HUB_TOKEN');
+  checkBotAuth(env);
   const mcPort = Number(env.MC_PORT || 25565);
   if (!env.MC_HOST) throw new Error('MC_HOST is required (the Velocity address bots join)');
   return {names, hubUrl, token, mcHost: env.MC_HOST, mcPort, loginSeed: env.BOT_PASSWORD_SEED || localSeed(env), hostLabel: (env.HOST_LABEL || require('node:os').hostname()).replace(/[^\w.-]/g, '-').slice(0, 40) || 'worker'};

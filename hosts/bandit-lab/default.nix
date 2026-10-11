@@ -14,6 +14,7 @@
     ./services/beszel
     ./services/vaultwarden
     ./services/minecraft
+    ./services/minecraft/sandbox.nix
     ./services/mcbots
     ./services/ntfy
     ./services/ollama

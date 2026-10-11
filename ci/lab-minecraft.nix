@@ -13,6 +13,7 @@
   tailnet = repoConfig.lab.tailscaleIp;
   scripts = import ../hosts/bandit-lab/services/minecraft/scripts.nix {inherit pkgs;};
   units = lab.systemd.services;
+  sb = lab.virtualisation.oci-containers.containers.minecraft-sandbox;
   extra = lib.concatStringsSep " " c.extraOptions;
   vExtra = lib.concatStringsSep " " v.extraOptions;
   dummyJar = name: pkgs.writeText name "jar";
@@ -39,6 +40,9 @@ in
   assert lib.assertMsg (units.docker-minecraft.serviceConfig.Restart == "always") "docker-minecraft must restart after a clean stop (panel Stop = restart)";
   assert lib.assertMsg (lib.hasInfix "tailscale serve" units.minecraft-panel-https.script && !(lib.hasInfix "funnel" units.minecraft-panel-https.script)) "map HTTPS is Tailscale Serve (tailnet only), never Funnel";
   assert lib.assertMsg (!(lib.hasInfix "serve 443" units.minecraft-panel-https.script) && !(lib.any (lib.hasInfix "7867") c.ports)) "the retired VoxelDash panel stays unpublished (no port 7867, no serve on 443)";
+  assert lib.assertMsg (sb.ports == [] && sb.volumes == ["/srv/containers/minecraft-sandbox/data:/data"] && sb.image == c.image && lib.elem "--network=minecraft" sb.extraOptions && !(lib.hasInfix "privileged" (toString sb.extraOptions))) "the sandbox publishes no port, mounts only its own data, uses the real image on the minecraft network";
+  assert lib.assertMsg (!(lib.hasInfix "minecraft-sandbox" v.environment.BOTGATE_SOURCES) && !(lib.hasInfix "minecraft-sandbox" (builtins.readFile ../hosts/bandit-lab/services/minecraft/default.nix))) "Velocity must not route to the sandbox";
+  assert lib.assertMsg (lab.virtualisation.oci-containers.containers.mcbots.environment.MC_HOST == "minecraft-sandbox" && lab.virtualisation.oci-containers.containers.mcbots.environment.RCON_HOST == "minecraft") "bots play in the sandbox while the Server panel keeps the real server";
   assert lib.assertMsg (lab.systemd.timers ? minecraft-backup) "the consistent Minecraft backup timer must exist";
     pkgs.runCommand "lab-minecraft" {} ''
       export PATH=${lib.makeBinPath [pkgs.coreutils pkgs.gnugrep pkgs.gnused]}:$PATH

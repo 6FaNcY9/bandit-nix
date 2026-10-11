@@ -113,6 +113,10 @@ const VALIDATE = {
   },
   smelt: (a) => {
     if (!/^[a-z_]{1,48}$/.test(a.item || '')) throw new Error('item must be what goes in, like raw_iron');
+    // What the model mixed up on the lab (40 failed smelts, 2026-10-10/11): the result, or an ore that drops its item.
+    const out = /^(iron|gold|copper)_ingot$/.exec(a.item);
+    if (out) throw new Error(`${a.item} is what comes out: smelt raw_${out[1]}`);
+    if (/^(coal|diamond|emerald|lapis|redstone|nether_quartz|deepslate_[a-z]+)_ore$|^(coal|charcoal|diamond|emerald)$/.test(a.item)) throw new Error(`${a.item} is not smelted: mine the ore, it drops the item`);
     return {item: a.item, count: num(a.count ?? 1, 1, 64, 'count')};
   },
   // Work shift: mine a block (or "logs") until stopped, depositing into the
@@ -287,6 +291,7 @@ class BotRunner {
     require('./blocklog').watchBlocks(bot, this.name, (c) => this.world.noteChange?.(c));
     bot.once('spawn', () => guardDigs(this, bot)); // bot.dig exists only once the plugins loaded
     bot.loadPlugin(pathfinder);
+    if (bot.pathfinder) bot.pathfinder.goto = (goal) => settledGoto(bot, goal); // test doubles load no plugin
     bot.loadPlugin(collectBlock);
     require('./crafting').fixCraftTiming(bot);
     unwedge(bot);
@@ -323,7 +328,7 @@ class BotRunner {
     });
     // VeloAuth holds players without a Minecraft account until /login (or
     // /register the first time). Prompts are matched in English.
-    let authed = false;
+    let authed = process.env.BOT_AUTH === 'none'; // validated in config.js
     bot.on('spawn', () => {
       if (!authed && this.password) setTimeout(() => !authed && bot.chat(`/login ${this.password}`), 1500);
     });
@@ -362,7 +367,9 @@ class BotRunner {
       if (this.supplyChest) this.queue.unshift({id: ++this.jobSeq, type: 'rearm', args: this.supplyChest, status: 'queued'});
       // ... and then fetch the loot from the grave AxGraves made, before the interrupted job goes on.
       const spot = gravesJob.graveAfterDeath({pos: p, dim: bot.game?.dimension, chest: this.supplyChest, areas: this.protectedAreas, jobType: this.current?.type, queued: this.queue});
-      if (spot) this.queue.splice(1, 0, {id: ++this.jobSeq, type: 'grave', args: spot, status: 'queued'});
+      // GRAVES=none (the sandbox has no AxGraves): the loot lies on the ground there, so pick it up instead.
+      if (spot && process.env.GRAVES === 'none') this.queue.splice(1, 0, {id: ++this.jobSeq, type: 'tidy', args: {x: spot.x, y: spot.y, z: spot.z, radius: 8}, status: 'queued'});
+      else if (spot) this.queue.splice(1, 0, {id: ++this.jobSeq, type: 'grave', args: spot, status: 'queued'});
     });
     bot.on('error', (e) => {
       this.lastError = String(e.message || e);
@@ -724,6 +731,34 @@ async function goNear(r, job, x, y, z, dist, opts = {}) {
   }
 }
 
+// pathfinder 2.4.5's goto() resolves on ANY path update with an empty path: a search that found nothing
+// ('noPath') and one still running ('partial', its per-tick budget spent before it got anywhere). The bot
+// never moved and the job went on as if it had arrived (bot4 opened the base chest from 30 blocks away,
+// an hour of windowOpen timeouts, 2026-10-11). This one resolves only on goal_reached.
+function settledGoto(bot, goal) {
+  return new Promise((resolve, reject) => {
+    const done = (err) => {
+      bot.removeListener('goal_reached', reached);
+      bot.removeListener('path_update', update);
+      bot.removeListener('goal_updated', changed);
+      bot.removeListener('path_stop', stopped);
+      setTimeout(() => (err ? reject(err) : resolve()), 0); // next tick, as upstream: the pathfinder cleans up first
+    };
+    const reached = () => done();
+    const update = (res) => {
+      if (res.status === 'noPath') done(new Error('No path to the goal!'));
+      else if (res.status === 'timeout') done(new Error('Took to long to decide path to goal!'));
+    };
+    const changed = (g) => { if (g !== goal) done(new Error('The goal was changed before it could be completed!')); };
+    const stopped = () => done(new Error('Path was stopped before it could be completed! Thus, the desired goal was not reached.'));
+    bot.on('goal_reached', reached);
+    bot.on('path_update', update);
+    bot.on('goal_updated', changed);
+    bot.on('path_stop', stopped);
+    bot.pathfinder.setGoal(goal);
+  });
+}
+
 async function goLeg(r, job, x, y, z, dist, {brave = false, goal = null, doing = null} = {}) {
   guard(job);
   if (job.t) job.t.doing = doing || `walking to ${at({x, y, z})}`;
@@ -741,25 +776,19 @@ async function goLeg(r, job, x, y, z, dist, {brave = false, goal = null, doing =
     for (let tries = 0; ; tries++) {
       try {
         if (!brave) await waitSafe(r, job, x, z);
-        // pathfinder 2.4.5 resolves goto() on any search that finds an empty path, "noPath" included: the
-        // bot never moved and the job went on as if it had arrived (bot4 opened the base chest from 30
-        // blocks away, windowOpen timeouts for an hour, 2026-10-11).
-        let empty = null;
-        const onPath = (res) => { if (!res.path?.length && res.status !== 'success') empty = res.status; };
-        r.bot.on?.('path_update', onPath);
-        try {
-          await r.bot.pathfinder.goto(goal || new goals.GoalNear(x, y, z, dist));
-        } finally {
-          r.bot.removeListener?.('path_update', onPath);
-        }
-        if (empty) throw new Error(empty === 'timeout' ? 'Took to long to decide path to goal!' : 'No path to the goal!');
+        await r.bot.pathfinder.goto(goal || new goals.GoalNear(x, y, z, dist)); // settledGoto on a live bot
         return;
       } catch (e) {
         guard(job);
-        if (timedOut || tries >= 3) {
-          throw new Error(`could not reach ${Math.round(x)} ${Math.round(y)} ${Math.round(z)}: ${e.message}`);
-        }
-        await sleep(1000);
+        const fail = () => new Error(`could not reach ${Math.round(x)} ${Math.round(y)} ${Math.round(z)}: ${e.message}`);
+        // A fight takes the pathfinder over ("The goal was changed", 67 failed walks in 4 days): wait it
+        // out, it is no failed try; the deadline still bounds the walk.
+        if (!timedOut && r.combat?.busy) {
+          await waitCalm(r, job);
+          tries--;
+        } else if (timedOut || tries >= 3) throw fail();
+        else await sleep(1000);
+        if (timedOut) throw fail();
       }
     }
   } finally {
@@ -1305,7 +1334,7 @@ async function upkeep(r, job, ids) {
     await wearArmour(r);
     for (const kind of new Set(ids.map((id) => toolFor(bot, id)).filter(Boolean))) await getTool(r, job, kind);
     const need = ids.find((id) => !canHarvest(bot, id));
-    if (need !== undefined) await replacePickaxe(r, job);
+    if (need !== undefined) await replacePickaxe(r, job, need);
     if (bot.food < FOOD_BELOW && r.supplyChest && !bot.inventory.items().some((i) => edible(bot, i)) && Date.now() - (r.foodTriedAt || 0) > FOOD_RETRY_MS) {
       r.foodTriedAt = Date.now();
       r.emit('info', `hungry (food ${bot.food}) and no food: fetching some from the supply chest`);
@@ -1349,15 +1378,18 @@ async function huntFood(r, job) {
   if (n && fuel(meat, n)) await crafting.smelt(r, child(job, {type: 'smelt'}), meat, n).catch((e) => { guard(job); r.emit('info', `could not cook the ${meat}: ${e.message.slice(0, 80)}`); });
 }
 
-// No tool that can harvest: craft a stone pickaxe, else a wooden one (chopping
-// logs first when there is no wood), else take one from the supply chest.
-async function replacePickaxe(r, job) {
+// No tool that can harvest block id `need`: craft a stone pickaxe, else a wooden one (chopping logs first
+// when there is no wood), else take one from the supply chest. Done only when the new pickaxe can harvest
+// `need`: a wooden one already held is no answer to iron ore (68 "needs a tool" fails in 4 days, 2026-10-11).
+async function replacePickaxe(r, job, need) {
   const {bot} = r;
   job.t.doing = 'replacing the pickaxe';
-  r.emit('info', 'no pickaxe left: making a new one');
-  const has = () => bot.inventory.items().some((i) => i.name.endsWith('_pickaxe'));
+  const name = bot.registry.blocks[need]?.name || 'the ore';
+  r.emit('info', `no pickaxe for ${name}: making a new one`);
+  const has = () => canHarvest(bot, need);
+  const enough = (item) => { const t = bot.registry.blocks[need]?.harvestTools; return !t || !!t[bot.registry.itemsByName[item]?.id]; };
   let why = '';
-  for (const item of ['stone_pickaxe', 'wooden_pickaxe']) {
+  for (const item of ['stone_pickaxe', 'iron_pickaxe', 'wooden_pickaxe'].filter(enough)) {
     try {
       await crafting.ensureItem(r, child(job), item, 1);
       if (has()) return;
@@ -1367,7 +1399,7 @@ async function replacePickaxe(r, job) {
     }
   }
   const logs = Object.keys(bot.registry.blocksByName).filter((n) => n.endsWith('_log'));
-  if (!bot.inventory.items().some((i) => /_log$/.test(i.name))) { // planks alone (2 of the 3 needed) are no reason to stay without a pickaxe
+  if (enough('wooden_pickaxe') && !bot.inventory.items().some((i) => /_log$/.test(i.name))) { // planks alone (2 of the 3 needed) are no reason to stay without a pickaxe
     try {
       await collect(r, child(job), logs, 3, 'logs');
       await crafting.ensureItem(r, child(job), 'wooden_pickaxe', 1);
@@ -1386,7 +1418,7 @@ async function replacePickaxe(r, job) {
     }
     if (has()) return;
   }
-  throw new Error(`no pickaxe and could not make one: ${why}`);
+  throw new Error(`no pickaxe for ${name} and could not make or fetch one: ${why}`);
 }
 
 // Dig down (or climb) into the ore's Y band, 16 levels per walk so every leg
@@ -2213,7 +2245,12 @@ const JOBS = {
 
   craft: (r, job) => crafting.ensureItem(r, job, job.args.item, crafting.count(r.bot, job.args.item) + job.args.count),
 
-  smelt: (r, job) => crafting.smelt(r, job, job.args.item, job.args.count),
+  // The input may sit in the base chest (the plan's iron goes there): fetch what is missing first.
+  async smelt(r, job) {
+    const {item, count} = job.args, have = crafting.count(r.bot, item);
+    if (have < count && r.supplyChest) await JOBS.withdraw(r, child(job, {type: 'withdraw', args: {item, count: count - have, ...r.supplyChest}})).catch((e) => { guard(job); r.emit('info', `smelt: could not fetch ${item}: ${e.message.slice(0, 80)}`); });
+    return crafting.smelt(r, job, item, count);
+  },
 
   async shift(r, job) {
     const {bot} = r;
@@ -2269,4 +2306,4 @@ const JOBS = {
   },
 };
 
-module.exports = {goNear, tailFrom, lightUp, shaftTorchDue, rimTorchDue, explore, layerOrder, stairRing, BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest, guardDigs, safeMovements, tossJunk, NATURAL, partnerOf, depositList};
+module.exports = {goNear, settledGoto, tailFrom, lightUp, shaftTorchDue, rimTorchDue, explore, layerOrder, stairRing, BotRunner, NAME_RE, VALIDATE, KEEP, keptOf, TOOL_RE, JOBS, unsafeDig, sealFluids, Cancelled, needsWood, digAt, openChest, guardDigs, safeMovements, tossJunk, NATURAL, partnerOf, depositList};

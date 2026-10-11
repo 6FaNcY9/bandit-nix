@@ -52,7 +52,9 @@
       cmd = ["${app}/bin/mcbots-worker"] ++ lib.splitString "," w.bots;
       environment = {
         HUB_URL = "ws://127.0.0.1:${workerPort}/worker";
-        MC_HOST = "10.250.77.2"; # Velocity on the mcbots network (see --add-host above)
+        MC_HOST = "minecraft-sandbox"; # sandbox Paper (../minecraft/sandbox.nix), reached through mcbots' minecraft-network DNS
+        BOT_AUTH = "none";
+        GRAVES = "none"; # no AxGraves in the sandbox: death loot lies on the ground
         MC_PORT = "25565";
         HOST_LABEL = w.label;
         NODE_OPTIONS = "--max-old-space-size=768";
@@ -80,7 +82,9 @@ in {
           imageFile = image;
           environment = {
             BOT_NAMES = "bot1,bot10"; # bot1 the lead agent, bot10 AFK at the gold farm; its workers run in the mcbots-worker containers; bot5 is the local test bot. A new name must never have been registered in VeloAuth (local stages used bot5-9, bot11-15, bot50-59)
-            MC_HOST = "velocity";
+            MC_HOST = "minecraft-sandbox"; # bots live in the sandbox world (../minecraft/sandbox.nix); the real server is bot-free
+            BOT_AUTH = "none"; # the sandbox has no VeloAuth
+            GRAVES = "none"; # ... and no AxGraves: a bot picks its death loot up from the ground
             MC_PORT = "25565";
             DASHBOARD_HOST = "0.0.0.0"; # inside the container; published on loopback only
             DASHBOARD_PORT = dashboardPort;
@@ -130,9 +134,8 @@ in {
             # Server panel (admin.js): RCON to Paper over the minecraft network; the password
             # (RCON_PASSWORD) arrives in seed.env, and only the human dashboard path can use it.
             RCON_HOST = "minecraft";
-            # Block log (app/blocklog.js): changes.json and zones.json for the BlueMap overlay are written
-            # here every 15 s; this is BlueMap's webroot directory mcbots/ in the minecraft container.
-            BLOCKLOG_EXPORT_DIR = "/bluemap-overlay";
+            # Block log overlay export (app/blocklog.js, BLOCKLOG_EXPORT_DIR=/bluemap-overlay) is off while the
+            # bots play in the sandbox: its changes must not show on the real BlueMap. The mount stays.
           };
           # Named state volume, plus BlueMap's mcbots/ web directory (owner 1000, made by minecraft-plugins,
           # readable by the minecraft container) for the block-log overlay.
@@ -212,7 +215,7 @@ in {
           '';
         };
         docker-mcbots = {
-          after = ["docker-network-mcbots.service" "docker-network-minecraft.service" "docker-velocity.service" "mcbots-seed.service" "minecraft-plugins.service"]; # the last one makes the overlay directory
+          after = ["docker-network-mcbots.service" "docker-network-minecraft.service" "docker-velocity.service" "mcbots-seed.service" "minecraft-plugins.service" "docker-minecraft-sandbox.service"]; # minecraft-plugins makes the overlay directory; the sandbox is where the bots play
           requires = ["docker-network-mcbots.service" "docker-network-minecraft.service" "mcbots-seed.service"];
           unitConfig.StartLimitIntervalSec = 0;
           serviceConfig = {

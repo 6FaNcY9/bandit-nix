@@ -3,6 +3,9 @@
 const assert = require('node:assert');
 const {loadConfig} = require('./config');
 const {VALIDATE} = require('./bots');
+assert.throws(() => loadConfig({BOT_NAMES: 'bot1', BOT_AUTH: 'x'}), /BOT_AUTH/);
+loadConfig({BOT_NAMES: 'bot1', BOT_AUTH: 'none'});
+assert.throws(() => require('./config').loadWorkerConfig({HUB_URL: 'ws://127.0.0.1:1/worker', HUB_TOKEN: 't'.repeat(40), MC_HOST: 'h', BOT_AUTH: 'x'}, ['bot2']), /BOT_AUTH/);
 assert.deepStrictEqual(loadConfig({BOT_NAMES: 'bot1, bot22'}).names, ['bot1', 'bot22']);
 for (const bad of ['bot', 'bot100', 'Bot1', 'steve', 'bot1,x']) assert.throws(() => loadConfig({BOT_NAMES: bad}), bad);
 { // agent bearer (H5): config pairs token and bots; the policy limits endpoints, bots, jobs and chests
@@ -4562,21 +4565,46 @@ require('./crafting');
   assert.deepStrictEqual(seen.map((c) => c.by), ['bot3', 'world'], 'bad frames dropped, foreign bot names become "world"');
 }
 
-(async () => { // a walk whose path search comes back empty is a failure, not an arrival (pathfinder 2.4.5 resolves goto)
+(async () => { // settledGoto: only goal_reached is an arrival (pathfinder 2.4.5 resolves goto on any empty path)
   const {EventEmitter} = require('node:events');
-  const {Vec3} = require('vec3');
-  const {goNear} = require('./bots'); // not JOBS.goto: another test swaps that one out meanwhile
-  const walk = async (status) => {
-    let calls = 0;
-    const bot = Object.assign(new EventEmitter(), {entity: {position: new Vec3(0, 64, 0)}, game: {dimension: 'overworld'},
-      pathfinder: {goto: async () => { calls++; bot.emit('path_update', {status, path: []}); }, stop() {}, setGoal() {}}});
-    const r = {bot, world: {hostilesNear: () => []}, emit() {}, protectedAreas: []};
-    const job = {t: {}, cancelled: false, args: {x: 10, y: 64, z: 0}};
-    return {go: goNear(r, job, 10, 64, 0, 1), calls: () => calls, bot};
+  const {settledGoto, goNear} = require('./bots');
+  const mk = () => {
+    const bot = new EventEmitter();
+    bot.pathfinder = {setGoal: (g) => bot.emit('goal_updated', g, false)};
+    return bot;
   };
-  const bad = await walk('noPath');
-  await assert.rejects(bad.go, /No path to the goal/);
-  assert.strictEqual(bad.calls(), 4, 'retried before giving up');
-  assert.strictEqual(bad.bot.listenerCount('path_update'), 0, 'no listener left behind');
-  await (await walk('success')).go; // an empty "success" path: already there
+  const tick = () => new Promise((res) => setTimeout(res, 5));
+  const goal = {};
+  let bot = mk(), settled = null;
+  settledGoto(bot, goal).then(() => (settled = 'ok'), (e) => (settled = e.message));
+  bot.emit('path_update', {status: 'partial', path: []}); // still searching: no arrival
+  await tick();
+  assert.strictEqual(settled, null, 'a partial empty path is no arrival');
+  bot.emit('goal_reached', goal);
+  await tick();
+  assert.strictEqual(settled, 'ok');
+  assert.strictEqual(bot.listenerCount('path_update') + bot.listenerCount('goal_reached') + bot.listenerCount('goal_updated') + bot.listenerCount('path_stop'), 0, 'no listener left behind');
+  for (const [act, want] of [[(b) => b.emit('path_update', {status: 'noPath', path: []}), /No path/], [(b) => b.emit('path_update', {status: 'timeout', path: [1]}), /Took to long/],
+    [(b) => b.pathfinder.setGoal(null), /goal was changed/], [(b) => b.emit('path_stop'), /stopped/]]) {
+    bot = mk();
+    const p = settledGoto(bot, goal);
+    act(bot);
+    await assert.rejects(p, want);
+  }
+  // goNear: a walk interrupted by a fight waits for it and is not a failed try
+  const {Vec3} = require('vec3');
+  let calls = 0, busy = false;
+  const b2 = Object.assign(new EventEmitter(), {entity: {position: new Vec3(0, 64, 0)}, game: {dimension: 'overworld'},
+    pathfinder: {goto: async () => { calls++; if (calls <= 5) { busy = true; setTimeout(() => (busy = false), 10); throw new Error('The goal was changed before it could be completed!'); } }, stop() {}, setGoal() {}}});
+  const r = {bot: b2, world: {hostilesNear: () => []}, emit() {}, protectedAreas: [], combat: {get busy() { return busy; }}};
+  await goNear(r, {t: {}, cancelled: false}, 10, 64, 0, 1);
+  assert.strictEqual(calls, 6, 'five fight interruptions, then the walk');
 })();
+
+{ // smelt takes what goes in, not what comes out nor an ore that drops its item
+  const {VALIDATE} = require('./bots');
+  assert.deepStrictEqual(VALIDATE.smelt({item: 'raw_iron', count: 8}), {item: 'raw_iron', count: 8});
+  assert.throws(() => VALIDATE.smelt({item: 'iron_ingot', count: 9}), /what comes out: smelt raw_iron/);
+  assert.throws(() => VALIDATE.smelt({item: 'coal_ore', count: 4}), /mine the ore/);
+  assert.doesNotThrow(() => VALIDATE.smelt({item: 'beef', count: 4}));
+}
