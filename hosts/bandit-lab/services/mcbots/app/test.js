@@ -4646,3 +4646,12 @@ require('./crafting');
   const none = makeCrafting({goNear: async () => {}, guard() {}, fetch: async () => {}});
   await assert.rejects(none.ensureItem({bot}, {}, 'cobblestone', 9), /need 6 more cobblestone/);
 })();
+
+{ // a guard job fights even with the defend setting off
+  const {Combat} = require('./combat');
+  const c = Object.create(Combat.prototype);
+  c.r = {getSettings: () => ({defend: false, fightRange: 8}), current: {type: 'guard'}};
+  assert.strictEqual(c.settings().defend, true);
+  c.r.current = {type: 'mine'};
+  assert.strictEqual(c.settings().defend, false);
+}

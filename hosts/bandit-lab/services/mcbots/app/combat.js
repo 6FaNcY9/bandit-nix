@@ -53,11 +53,18 @@ class Combat {
     clearInterval(this.timer);
   }
 
+  // The dashboard settings; a guard job fights whatever the defend setting says (it only walked up to the
+  // mob and stood there with defend off, self-test 2026-10-11).
+  settings() {
+    const s = this.r.getSettings?.() || DEFAULTS;
+    return this.r.current?.type === 'guard' && !s.defend ? {...s, defend: true} : s;
+  }
+
   // True when this bot should clear a nearby hostile itself rather than wait for it (see fightReady).
   fit() {
     const bot = this.r.bot;
     const armour = ['head', 'torso', 'legs', 'feet'].filter((s) => bot.inventory.slots[bot.getEquipmentDestSlot(s)]).length;
-    return (this.r.getSettings?.() || DEFAULTS).defend && fightReady(bot.inventory.items().map((i) => i.name), armour, bot.health);
+    return this.settings().defend && fightReady(bot.inventory.items().map((i) => i.name), armour, bot.health);
   }
 
   takeover(mode, target, dist) {
@@ -107,7 +114,7 @@ class Combat {
     if (this.ticks % SCAN_EVERY === 0) this.scanBlocks(dim);
     // Only mobs that actually threaten the bot drive retreat/back-off/attack;
     // endermen, piglins and the like are seen and shared but left alone.
-    const s = this.r.getSettings?.() || DEFAULTS;
+    const s = this.settings();
     const near = seen.filter(shouldFight).sort((a, b) => a.position.distanceTo(me) - b.position.distanceTo(me))[0];
     const dist = near ? near.position.distanceTo(me) : Infinity;
 

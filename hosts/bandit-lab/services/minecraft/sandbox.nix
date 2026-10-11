@@ -116,6 +116,9 @@ in {
       VIEW_DISTANCE = "8";
       ENABLE_RCON = "true";
       PATCH_DEFINITIONS = "/nix-patches";
+      # Offline bots have no chat signing key: with the default (true) their chat is dropped ("Chat disabled
+      # due to missing profile public key", self-test 2026-10-11), so the say job did nothing.
+      ENFORCE_SECURE_PROFILE = "FALSE";
       # The owner watches the bots in spectator mode (/gamemode spectator); Velocity's modern forwarding
       # makes this the real, Mojang-checked account.
       OPS = "fancy8869";
