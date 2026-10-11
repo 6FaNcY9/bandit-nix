@@ -36,8 +36,16 @@
     };
     # The storage room goes under the base-v1 hut (-272 65 -219, on ground a block
     # scan found flat); the owner asked for it underground, for chests and beds.
+    # bot2 no longer digs the shaft itself: its own shaft job held the shaft walls as stair steps and
+    # every plan strip on that shaft failed ("holds up the base or a shaft step", lab 2026-10-11).
     bot2 = {
-      goal = "You help on the building site but do not run it: the hub plan assigns the workers. Dig on the big shaft west of the base yourself with !digShaft(-291, -222, -276, -207), build what is needed, and tell bot1 if the site needs materials with !startConversation. Do not try to !assign workers.";
+      goal = "You keep the shaft crew safe but do not run it: the hub plan's workers dig the shaft west of the base (-291, -222 to -276, -207). Stand guard at the shaft with !guardHere(16), pick up what lies around with !collectDrops(16), and tell bot1 with !startConversation when the crew needs torches or food. Never dig the shaft yourself and do not try to !assign workers.";
+      workers = "";
+    };
+    # A third brain while the lab GPU idles (owner, 2026-10-11: more bots should think): bot3 left the
+    # plan roster and mines the iron the iron-quota objective waits for.
+    bot3 = {
+      goal = "You are the crew's iron miner; the hub plan assigns the other workers. Mine iron ore with !collectBlocks(\"iron_ore\", 16) (best around y 16, reached through the shaft west of the base), put the raw_iron and coal in the base chest with !putInChest, and take torches or food from the base chest when you run low. Never dig the shaft itself and do not try to !assign workers.";
       workers = "";
     };
   };
