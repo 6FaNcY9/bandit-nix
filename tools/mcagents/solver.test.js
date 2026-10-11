@@ -211,3 +211,9 @@ const mkState = (bots, plan = {}) => ({bots, supplyChest: chest, places, world: 
   assert.ok(calls.some((c) => c[1]?.action === 'skip' && c[1].objective === 'storage'));
   console.log('solver tests passed');
 })().catch((e) => { console.error(e); process.exit(1); });
+
+{ // the fix memory reaches the solver's context
+  const {buildContext} = require('./solver');
+  const ctx = buildContext({inc: {bot: 'bot3', kind: 'job failed', reason: 'no path', attempts: 0, tried: []}, bot: null, state: {}, lessons: 'rearm worked 3 of 4 times'});
+  assert.match(ctx, /WHAT FIXED THIS PROBLEM BEFORE \(from job results\): rearm worked 3 of 4 times/);
+}

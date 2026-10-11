@@ -274,6 +274,8 @@
         lab = self.nixosConfigurations.bandit-lab.config;
       };
 
+      mcagents-tests = import ./ci/mcagents-tests.nix {inherit pkgs;};
+
       lab-surface = import ./ci/lab-surface.nix {
         inherit pkgs repoConfig;
         inherit (nixpkgs) lib;

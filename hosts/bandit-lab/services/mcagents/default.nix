@@ -77,6 +77,9 @@ in {
           # Every model call (prompt + reply) for a later LoRA fine-tune; agent.js
           # rotates it at 50 MB. The journal gets one line per reply.
           LOG = "/var/lib/mcagents/decisions.jsonl";
+          # Fix memory (tools/mcagents/lessons.js): which fix followed which kind of failure and whether it
+          # worked, from job results; the solver and the agents see it when the problem comes back.
+          LESSONS = "/var/lib/mcagents/lessons.json";
           # Problem solver for the plan's roster bots (tools/mcagents/solver.js): a failed job,
           # an idle bot with an error, repeated deaths or a parked objective gets one fix from a
           # safe menu; 30 model calls/hour of its own. Set to 0 for no change in behaviour.

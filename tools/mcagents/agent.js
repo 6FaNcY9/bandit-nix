@@ -16,6 +16,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {modelRequest, modelReply} = require('./model-protocol');
 const {Solver} = require('./solver');
+const {Lessons, Follow} = require('./lessons');
 const {offlineNames} = require('./routing');
 const {DemoRecorder, commandFor} = require('./demos');
 
@@ -888,7 +889,8 @@ async function decide(agent, agents, getState, budget) {
 }
 
 // One dashboard event: job results become "Code output" lines, as Mindcraft reports them, and wake the brain.
-function onEvent(agents, e) {
+// hint: what earlier fixed this kind of failure (lessons.js), '' when nothing is known.
+function onEvent(agents, e, hint = '') {
   outcomeEvent(e);
   // Alerts (mcbots alerts.js: supply chest gone, night, mobs at the base) go to every foreman.
   if (e.kind === 'alert') {
@@ -922,6 +924,7 @@ function onEvent(agents, e) {
   }
   if (!/^(finished|failed|gave up|stopped)/.test(e.text)) return;
   a.push('system', `Code output:\n${e.text}`);
+  if (hint) a.push('system', `What fixed this before (from job results): ${hint}`);
   noteFinished(a, e.text);
   a.failures = /^failed/.test(e.text) ? a.failures + 1 : 0;
   if (a.failures) a.lastFailure = e.text.replace(/^failed: /, '').slice(0, 160);
@@ -965,8 +968,11 @@ async function main() {
   setInterval(postStatus, 30000).unref();
   const getState = () => http('GET', `${API}/api/state`);
   // The problem solver for the plan's roster bots (solver.js); SOLVER_ENABLE=1 switches it on.
+  // The fix memory (lessons.js): every bot's job results; LESSONS keeps it across restarts.
+  const lessons = new Lessons(process.env.LESSONS || null);
+  const follow = new Follow(lessons);
   const solver = process.env.SOLVER_ENABLE === '1' && TOKEN
-    ? new Solver({http, API, callModel, fetchScan, translate, logCall: (line) => LOG && logCall(line), awaitJob, settle, agents: new Set(agents.keys()), cap: Number(process.env.SOLVER_MAX_PER_HOUR) || 30})
+    ? new Solver({http, API, callModel, fetchScan, translate, logCall: (line) => LOG && logCall(line), awaitJob, settle, agents: new Set(agents.keys()), cap: Number(process.env.SOLVER_MAX_PER_HOUR) || 30, lessons})
     : null;
   // Demonstrations from the deterministic crew (demos.js): off with DEMOS=0.
   const demos = process.env.DEMOS !== '0' && TOKEN && LOG
@@ -985,7 +991,7 @@ async function main() {
       // Job results become "Code output" lines, as Mindcraft reports them, and wake the brain.
       const ev = await http('GET', `${API}/api/events?since=${lastEventId}`);
       lastEventId = ev.lastId;
-      for (const e of ev.events) onEvent(agents, e);
+      for (const e of ev.events) onEvent(agents, e, e.bot && (e.kind === 'done' || e.kind === 'fail') ? follow.result(e.bot, e.text) : '');
       solver?.feed(ev.events);
       const state = await getState();
       const now = Date.now();
