@@ -15,6 +15,7 @@ const path = require('node:path');
 const {createHash} = require('node:crypto');
 const {buildDataset} = require('./dataset');
 const {sanitize} = require('./replay');
+const {ctxKey, excludedContexts} = require('./eval-set');
 
 function readRecords(file) {
   let text = '';
@@ -85,20 +86,24 @@ function judgedRows(records, judgments, max, taken) {
   return rows.slice(0, max);
 }
 
-function exportSft(records, {judgments = [], demoRatio = 3, judged = false, judgedMax = 200} = {}) {
+// exclude: context hashes of the frozen eval set (eval-set.js); no training row may share one.
+function exportSft(records, {judgments = [], demoRatio = 3, judged = false, judgedMax = 200, exclude = new Set()} = {}) {
   const data = buildDataset(records);
+  const free = (r) => !exclude.has(ctxKey(r.messages));
   const rows = [];
   for (const [split, list] of Object.entries(data.splits)) for (const {messages} of list) rows.push({messages, source: 'decision', split});
+  const decisionAll = rows.length;
+  rows.splice(0, rows.length, ...rows.filter(free));
   const decisionRows = rows.length;
-  const solver = solverRows(records);
+  const solver = solverRows(records).filter(free);
   rows.push(...solver);
   const demo = demoRows(records, Math.floor(demoRatio * Math.max(decisionRows, 10)));
   rows.push(...demo.rows);
   const taken = new Set(rows.map((r) => JSON.stringify(r.messages)));
-  const judgedList = judged ? judgedRows(records, judgments, judgedMax, taken) : [];
+  const judgedList = judged ? judgedRows(records, judgments, judgedMax, taken).filter(free) : [];
   rows.push(...judgedList);
   const sources = {decision: decisionRows, solver: solver.length, demo: demo.rows.length, judged: judgedList.length};
-  const stats = {date: new Date().toISOString(), rows: rows.length, decision_rows: decisionRows, solver_rows: solver.length, demo_rows: demo.rows.length, judged_rows: judgedList.length, sources, demo_available: demo.total, judged_enabled: judged, good: data.stats.labels.good, bad: data.stats.labels.bad, neutral: data.stats.labels.neutral, unknown: data.stats.labels.unknown, input: records.length};
+  const stats = {date: new Date().toISOString(), rows: rows.length, decision_rows: decisionRows, solver_rows: solver.length, demo_rows: demo.rows.length, judged_rows: judgedList.length, sources, demo_available: demo.total, judged_enabled: judged, eval_excluded: decisionAll - decisionRows, good: data.stats.labels.good, bad: data.stats.labels.bad, neutral: data.stats.labels.neutral, unknown: data.stats.labels.unknown, input: records.length};
   return {rows, stats};
 }
 
@@ -109,7 +114,7 @@ function main() {
   const [older, current] = [readRecords(`${file}.1`), readRecords(file)];
   const records = [...older.records, ...current.records], torn = older.torn + current.torn;
   const judgments = readRecords(process.env.JUDGMENTS || path.join(path.dirname(file), 'judgments.jsonl')).records;
-  const {rows, stats} = exportSft(records, {judgments, demoRatio: process.env.DEMO_RATIO === undefined ? 3 : Number(process.env.DEMO_RATIO), judged: process.env.JUDGED === '1', judgedMax: Number(process.env.JUDGED_MAX) || 200});
+  const {rows, stats} = exportSft(records, {judgments, demoRatio: process.env.DEMO_RATIO === undefined ? 3 : Number(process.env.DEMO_RATIO), judged: process.env.JUDGED === '1', exclude: excludedContexts(process.env.EVALS || path.join(path.dirname(file), 'eval')), judgedMax: Number(process.env.JUDGED_MAX) || 200});
   stats.torn_lines = torn;
   fs.mkdirSync(out, {recursive: true});
   // Rename keeps a reader from ever seeing half a file.

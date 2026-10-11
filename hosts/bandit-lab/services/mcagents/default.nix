@@ -194,7 +194,11 @@ in {
       };
       serviceConfig = {
         Type = "oneshot";
-        ExecStart = "${pkgs.nodejs}/bin/node ${../../../../tools/mcagents}/export-sft.js /var/lib/mcagents/decisions.jsonl /var/lib/mcagents/export";
+        # The frozen eval set first (built once, then kept), so the export can leave its situations out.
+        ExecStart = [
+          "${pkgs.nodejs}/bin/node ${../../../../tools/mcagents}/eval-set.js /var/lib/mcagents/decisions.jsonl /var/lib/mcagents/eval"
+          "${pkgs.nodejs}/bin/node ${../../../../tools/mcagents}/export-sft.js /var/lib/mcagents/decisions.jsonl /var/lib/mcagents/export"
+        ];
         ExecStartPost = "+${pkgs.coreutils}/bin/install -m 0644 /var/lib/mcagents/export/sft.jsonl /var/lib/mcagents/export/stats.json /var/lib/mcagents-export/";
         # Same dynamic user as mcagents.service, so the log is readable.
         DynamicUser = true;

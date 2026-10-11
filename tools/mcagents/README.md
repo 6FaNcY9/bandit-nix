@@ -146,7 +146,18 @@ good/bad first, newest first) per prompt variant in `variants.json` (`baseline` 
 It re-checks `/health` before every request and stops that PC on the first failure, keeping partial
 results; it refuses Ollama (11434) and non-loopback URLs. Results: `/var/lib/mcagents/replays/<UTC>-<pc>.json`
 plus one line per run in `summary.jsonl` (valid-command rate, agreement with logged `good`,
-disagreement with `bad`, mean/p95 ms), and a short ntfy message. Test: `node tools/mcagents/idle-replay.test.js`.
+disagreement with `bad`, a combined score, 95% Wilson intervals, mean/p95 ms), and a short ntfy message.
+Test: `node tools/mcagents/idle-replay.test.js`.
+
+Frozen eval set (`eval-set.js`, built by the `mcagents-dataset` unit before the export): once, up to 150 good + 150 bad
+outcome-labelled agent/solver decisions, round-robin over the command types, one per situation (context hash), stored in
+`/var/lib/mcagents/eval/eval-v1.jsonl` + `eval-v1.manifest.json` (ids, context hashes, sha256, date). Never rebuilt; a new
+version only with `EVAL_VERSION=v2` (older manifests keep excluding). `export-sft.js` drops every decision, solver and judged
+row whose context hash is in a manifest, so training and evaluation are disjoint (`eval_excluded` in `stats.json`). Not built
+while fewer than 20 good or bad rows exist (the export then runs unrestricted until it is). `idle-replay.js` replays this set
+(old sampling if missing): greedy (temperature 0, seed 11) for every variant plus `SEEDS` (default 1,2,3) sampled runs for the
+baseline, stopping at `DEADLINE_MS` (45 min); `summary.jsonl` lines carry `eval` and `alias`. Compare models at a glance:
+`node tools/mcagents/compare.js [summary.jsonl]` (latest run per alias on eval v1, best first). Test: `eval-set.test.js`.
 
 Export de-duplicates sanitized message arrays, strips credential fields/redacts common
 credential patterns, and skips `/api/decision` bodies (only truncated `bot`/`text`, no

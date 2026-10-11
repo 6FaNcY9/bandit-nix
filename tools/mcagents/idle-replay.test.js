@@ -1,7 +1,7 @@
 'use strict';
 const assert = require('node:assert/strict');
 const http = require('node:http');
-const {backendBase, sample, score, runBackend, withVariant} = require('./idle-replay');
+const {backendBase, sample, score, scoreAll, wilson, samplingFor, runBackend, withVariant} = require('./idle-replay');
 
 (async () => {
   for (const bad of ['http://127.0.0.1:11434', 'http://localhost:11434/v1', 'http://10.0.0.5:18081', 'https://127.0.0.1:18081', 'http://127.0.0.1']) assert.throws(() => backendBase(bad), /Refusing/, bad);
@@ -18,6 +18,16 @@ const {backendBase, sample, score, runBackend, withVariant} = require('./idle-re
   assert.equal(s.valid_command_rate, 0.75); assert.equal(s.agree_good, 0.5); assert.equal(s.disagree_bad, 0.5);
   assert.equal(s.mean_ms, 250); assert.equal(s.p95_ms, 400);
 
+  const [lo, hi] = wilson(50, 100);
+  assert.ok(Math.abs(lo - .4038) < .001 && Math.abs(hi - .5962) < .001, 'Wilson 50/100'); assert.equal(wilson(0, 0), null);
+  assert.deepEqual(wilson(10, 10).map((x) => +x.toFixed(3)), [.722, 1]);
+  assert.equal(s.agree_good_ci.length, 2); assert.ok(s.score === 0.5);
+  const g = samplingFor({});
+  assert.equal(g.temperature, 0); assert.equal(g.top_k, 1); assert.equal(g.seed, 11);
+  assert.equal(samplingFor({seed: 2}).seed, 2); assert.equal(samplingFor({seed: 2}).temperature, 0.6);
+  const all = scoreAll([{...r('v', 'good', '!stop', '!stop', 1), run: 'greedy'}, {...r('v', 'good', '!stop', '!stop', 1), run: 'seed1'}, {...r('v', 'good', '!stop', '!inventory', 1), run: 'seed2'}], ['v'], [1, 2]);
+  assert.deepEqual(all.map((x) => x.run), ['greedy', 'sampled']); assert.equal(all[1].agree_good, 0.5);
+
   // fake server: healthy, answers 2 requests, then dies like llama-server killed by the watcher
   let served = 0;
   const server = http.createServer((req, res) => {
@@ -28,6 +38,7 @@ const {backendBase, sample, score, runBackend, withVariant} = require('./idle-re
   const base = `http://127.0.0.1:${server.address().port}`;
   const rows = ['a', 'b', 'c'].map((id) => ({...d(id), label: null}));
   const run = await runBackend(base, rows, [{name: 'baseline'}]);
+  assert.equal(run.results[0].run, 'greedy');
   assert.equal(run.results.length, 2, 'partial results kept');
   assert.equal(run.alias, 'fake-alias'); assert.match(run.stopped, /health lost/);
   server.close();
