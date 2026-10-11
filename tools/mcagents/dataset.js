@@ -84,12 +84,12 @@ function buildDataset(records, events = [], {cap = 3} = {}) {
   }
   stats.outcomes = {records: outcomes.size, labelled: 0};
   for (const [i, r] of records.entries()) {
-    if (r?.kind === 'outcome' || r?.kind === 'solver') continue; // solver prompts are not Mindcraft decisions
+    if (['outcome', 'solver', 'demo', 'demo-bad', 'judge'].includes(r?.kind)) continue; // solver, demo and judge rows are not Mindcraft decisions
     const drop = (why) => count(stats.dropped, why);
     if (!r || !Array.isArray(r.messages) || !r.messages.length || typeof r.reply !== 'string' || typeof r.agent !== 'string' || !Number.isFinite(time(r.t)) || (r.ms !== undefined && (!Number.isFinite(r.ms) || r.ms < 0)) || r.messages.some((m) => !m || !['system', 'user', 'assistant'].includes(m.role) || typeof m.content !== 'string') || r.messages[0].role !== 'system') { drop('invalid'); continue; }
     if (JSON.stringify(sanitize(r)) !== JSON.stringify(r)) { drop('secrets'); continue; }
     // Human chat must not survive as copied context, including in thinking/replies.
-    if (r.messages.some((m) => m.role === 'user' && !/^SYSTEM:|^bot\d+: \(FROM OTHER BOT\)/.test(m.content)) || /\(FROM (?:PLAYER|HUMAN)\)|(?:player|human) chat\s*:|https?:\/\/|\/(?:home|run|var)\//i.test(JSON.stringify(r)) || r.messages.some((m) => /Nearby Human Players:/.test(m.content) && m.content.split('\n').some((line) => /Nearby Human Players:/.test(line) && line.split(':').slice(1).join(':').split(',').some((name) => name.trim() && !/^bot\d+$/.test(name.trim()) && name.trim() !== 'none')))) { drop('privacy'); continue; }
+    if (r.messages.some((m) => m.role === 'user' && !/^SYSTEM:|^bot\d+: \(FROM OTHER BOT\)/.test(m.content)) || /\(FROM (?:PLAYER|HUMAN)\)|(?:player|human) chat\s*:|https?:\/\/|\/(?:home|run|var)\//i.test(JSON.stringify(r)) || r.messages.some((m) => /Nearby Human Players:/.test(m.content) && m.content.split('\n').some((line) => /Nearby Human Players:/.test(line) && line.split(':').slice(1).join(':').split(',').some((name) => name.trim() && !/^bot\d+$/.test(name.trim()) && !/^none\.?$/i.test(name.trim()))))) { drop('privacy'); continue; }
     const rawKey = hash([r.agent, r.t, r.messages, r.reply]);
     if (exact.has(rawKey)) { drop('raw_duplicate'); continue; }
     exact.add(rawKey);

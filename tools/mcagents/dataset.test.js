@@ -59,6 +59,11 @@ for (const extra of [{password: 'hidden'}, {thinking: 'Bearer abcdef'}, {reply: 
   assert.equal(data.labels.length, 0, 'secret rows dropped, not redacted into training');
 }
 for (const content of ['Steve: private chat', 'SYSTEM: (FROM PLAYER) hi', 'SYSTEM: https://private.test/']) assert.equal(buildDataset([row(100, goto, {messages: [{role: 'system', content: system}, user(content)]})]).stats.dropped.privacy, 1);
+// "Nearby Human Players: None." is what agent.js prints with nobody near: it is not a name (it dropped such rows as privacy).
+const withPlayers = (names) => buildDataset([row(100, goto, {messages: [{role: 'system', content: `${system}\n- Nearby Human Players: ${names}\n- Nearby Bot Players: bot2`}, user('SYSTEM: Idle')]})], [event(1, 110, 'bot1', 'finished: goto 1 64 2')]).stats;
+assert.equal(withPlayers('None.').sft, 1);
+assert.equal(withPlayers('Steve').dropped.privacy, 1);
+assert.equal(withPlayers('bot2, Steve').dropped.privacy, 1);
 assert.equal(buildDataset([row(100, goto), row(100, goto)]).stats.dropped.raw_duplicate, 1);
 assert.equal(buildDataset([{}]).stats.dropped.invalid, 1);
 const hostile = buildDataset([row(100, '!__proto__', {agent: '__proto__'})]);

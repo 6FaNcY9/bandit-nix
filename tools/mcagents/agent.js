@@ -16,6 +16,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {modelRequest, modelReply} = require('./model-protocol');
 const {Solver} = require('./solver');
+const {offlineNames} = require('./routing');
+const {DemoRecorder, commandFor} = require('./demos');
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
 const ANDY_URL_2 = process.env.ANDY_URL_2 || '';
@@ -34,8 +36,8 @@ const BLUEPRINTS = process.env.BLUEPRINTS || path.join(__dirname, '../../hosts/b
 const THINK = process.env.THINK === '1';
 const TICK_MS = 3000;
 // The brain thinks rarely: only on an event, a message, or this check-in while a routine runs / the bot idles.
-const CHECKIN_MS = Number(process.env.CHECKIN_MS) || 600000;
-const MAX_DECISIONS_PER_MIN = Number(process.env.MAX_DECISIONS_PER_MIN) || 12; // model calls per minute, all agents together
+const CHECKIN_MS = Number(process.env.CHECKIN_MS) || 60000;
+const MAX_DECISIONS_PER_MIN = Number(process.env.MAX_DECISIONS_PER_MIN) || 30; // model calls per minute, all agents together
 const STATS_MS = Number(process.env.STATS_MS) || 600000;
 const MAX_QUERIES = 4; // query rounds (!stats, !inventory ...) before the model must act
 const HISTORY = 24; // messages kept per agent
@@ -176,6 +178,16 @@ function promptReason(a, bot, now, checkinMs = CHECKIN_MS, idle = 0) {
   if (!free) return null;
   if (a.wake) return 'event';
   return now - a.lastDecisionAt >= checkinMs ? 'checkin' : null;
+}
+
+// A bot whose job or queue has just run out is asked at once, whatever ended it (a stop from the dashboard
+// sends no result the brain sees); the check-in only covers bots that stay idle. Returns true when it woke `a`.
+function noteIdle(a, bot, now = Date.now()) {
+  const busy = !!bot?.online && (!!bot.job || !!bot.queue?.length);
+  const woke = !!a.wasBusy && !busy && !!bot?.online && !bot.dead && !a.wake;
+  a.wasBusy = busy;
+  if (woke) Object.assign(a, {wake: true, wakeAt: a.wakeAt || now});
+  return woke;
 }
 
 // Jobs that never end by themselves. A bot running one is busy, not "needs a prompt".
@@ -485,6 +497,15 @@ const DEPOSIT_RE = /^\w+ put .+ into the base chest$/;
 const WORKER_RULES = 'Rules: when you carry items for your goal, put them into the base chest with !putInChest before you start something else. Smelting needs fuel (coal). For gathering, prefer !startShift: it keeps going and fills the base chest by itself.';
 const FOREMAN_RULES = 'Rules: you lead, your workers do the work. Give gathering, crafting and smelting to workers with !assign (for gathering prefer !startShift); you only build, dig and place. The BASE line shows the chest and what is already done: never build or dig a finished part again, and when a result says "already complete" move on to the next part. A STUCK worker needs a different job, not the same order. Smelting needs coal.';
 
+// The prompt of a demonstration (demos.js): what an agent would be shown when its bot is idle, built with the
+// same Agent.system(); the objective is the goal, the base chest's numbers come as the check-in's news.
+function demoContext({bot, state, objective, scan}) {
+  const a = new Agent(bot.name, objective?.label || '', null);
+  a.around = scan;
+  const items = state.world?.stock?.items && Object.entries(state.world.stock.items).sort((x, y) => x[1] - y[1]).slice(0, 10).map(([k, c]) => `${k} ${c}`);
+  return {system: a.system(state, bot), user: `SYSTEM: Check-in: you are idle. Continue your goal: "${a.goal}".${items ? ` Base chest (lowest first): ${items.join(', ') || 'empty'}.` : ''}`};
+}
+
 // ---- one agent per bot -----------------------------------------------------------
 class Agent {
   constructor(name, goal, team) {
@@ -546,7 +567,10 @@ function backends() {
   const andyUrl2 = process.env.ANDY_URL_2 || ANDY_URL_2;
   const offloads = [...new Set((process.env.ANDY_URLS || andyUrl2).split(',').map((url) => url.trim()).filter(Boolean))];
   const names = (process.env.ANDY_BACKEND_NAMES || '').split(',').map((name) => name.trim());
-  const urls = [[ollamaUrl, 'ollama', 'lab'], ...offloads.map((url, i) => [url, 'openai', names[i] || (url === andyUrl2 ? 'slayer' : new URL(url).host)])];
+  // ANDY_OFFLINE_NAMES (albert) never serve live traffic: they are for the idle replay, the judge and training.
+  const offline = offlineNames();
+  const urls = [[ollamaUrl, 'ollama', 'lab'], ...offloads.map((url, i) => [url, 'openai', names[i] || (url === andyUrl2 ? 'slayer' : new URL(url).host)])]
+    .filter(([, api, name]) => api === 'ollama' || !offline.has(name));
   return urls.map(([url, api, name], index) => {
     const key = `${api}:${url}`;
     if (!modelBackends.has(key)) modelBackends.set(key, {url, api, inflight: 0, health: null});
@@ -944,6 +968,10 @@ async function main() {
   const solver = process.env.SOLVER_ENABLE === '1' && TOKEN
     ? new Solver({http, API, callModel, fetchScan, translate, logCall: (line) => LOG && logCall(line), awaitJob, settle, agents: new Set(agents.keys()), cap: Number(process.env.SOLVER_MAX_PER_HOUR) || 30})
     : null;
+  // Demonstrations from the deterministic crew (demos.js): off with DEMOS=0.
+  const demos = process.env.DEMOS !== '0' && TOKEN && LOG
+    ? new DemoRecorder({fetchScan, makeContext: demoContext, verify: (job, ctx) => commandFor(job, ctx, {translate, parseCommand}), logCall, agents: new Set(agents.keys()), isSolverJob: (bot, now) => !!solver?.actedRecently(bot, now)})
+    : null;
   const busy = new Set();
   const budget = new Budget(MAX_DECISIONS_PER_MIN);
   const t0 = Date.now();
@@ -961,6 +989,7 @@ async function main() {
       solver?.feed(ev.events);
       const state = await getState();
       const now = Date.now();
+      demos?.feed(ev.events, state, now).catch((e) => console.error(`[demos] ${e.message}`)); // scans and log lines run beside the tick
       solver?.tick(state, now).catch((e) => console.error(`[solver] ${e.message}`)); // a model call may take a while: the loop goes on
       expireOutcomes(now);
       const ready = [];
@@ -972,6 +1001,7 @@ async function main() {
           agent.wake = true;
           agent.wakeAt ||= now;
         }
+        noteIdle(agent, bot, now);
         const why = promptReason(agent, bot, now, CHECKIN_MS, idle.length);
         if (why) ready.push([agent, why, bot]);
       }
@@ -1004,4 +1034,4 @@ if (require.main === module) main().catch((e) => {
   process.exit(1);
 });
 
-module.exports = {applyCrews, SCAN_MAX, WORKER_SCAN_MAX, fetchScan, SAMPLING, decide, Agent, workersOf, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished, alreadyDone, callModel, healthy, awaitJob, awaiting, outcomeEvent, expireOutcomes, order, OUTCOME_MAX};
+module.exports = {commandNames: [...Object.keys(DOCS), 'assign', 'baseStatus'], knownCommand: (name) => Object.hasOwn(DOCS, name) || name === 'assign' || name === 'baseStatus', demoContext, noteIdle, backends, applyCrews, SCAN_MAX, WORKER_SCAN_MAX, fetchScan, SAMPLING, decide, Agent, workersOf, idleWorkers, noteWorker, trackError, parseCommand, translate, commandDocs, statsText, inventoryText, repeatHint, isRoutine, Budget, promptReason, assignJob, workersText, assigner, onEvent, baseStatusText, baseLine, noteSent, noteFinished, alreadyDone, callModel, healthy, awaitJob, awaiting, outcomeEvent, expireOutcomes, order, OUTCOME_MAX};

@@ -2,19 +2,13 @@
 'use strict';
 // Gives idle gaming PCs useful work: replays logged decisions against each PC's llama-server
 // (only while its /health answers, i.e. nobody is gaming) and records how the model does.
-// Never talks to Ollama (11434, the lab GPU) or to anything but loopback.
+// Only the offline backends (ANDY_OFFLINE_NAMES, albert): never Ollama (11434) or anything but loopback.
 const fs = require('node:fs');
 const path = require('node:path');
 const {performance} = require('node:perf_hooks');
 const {parseCommand, SAMPLING} = require('./agent');
 const {modelRequest, modelReply} = require('./model-protocol');
-
-const OLLAMA_PORT = '11434';
-function backendBase(url) {
-  const u = new URL(url);
-  if (u.protocol !== 'http:' || !['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname) || u.port === OLLAMA_PORT || !u.port) throw new Error(`Refusing backend ${url}: only loopback llama-server ports, never Ollama (${OLLAMA_PORT})`);
-  return `http://${u.host}`;
-}
+const {backendBase, offlineTargets} = require('./routing');
 
 // Labeled decisions first (newest first), then the newest unlabeled ones, up to n.
 function sample(decisions, outcomes, n) {
@@ -30,7 +24,7 @@ function readLog(file) {
   const decisions = [], outcomes = [];
   for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
     let r; try { r = JSON.parse(line); } catch { continue; }
-    if (r.kind === 'solver') continue; // problem-solver prompts are not Mindcraft decisions
+    if (['solver', 'demo', 'demo-bad', 'judge'].includes(r.kind)) continue; // not Mindcraft decisions
     (r.kind === 'outcome' ? outcomes : decisions).push(r);
   }
   return {decisions, outcomes};
@@ -91,7 +85,7 @@ async function notify(text) {
 
 async function main() {
   const env = process.env;
-  const names = (env.ANDY_BACKEND_NAMES || '').split(',').filter(Boolean), urls = (env.ANDY_URLS || '').split(',').filter(Boolean);
+  const targets = offlineTargets(env); // ANDY_OFFLINE_NAMES only (albert); never the live backends or Ollama
   const dir = env.REPLAYS || '/var/lib/mcagents/replays';
   const n = Number(env.BATCH || 100);
   const variants = JSON.parse(fs.readFileSync(env.VARIANTS || path.join(__dirname, 'variants.json'), 'utf8'));
@@ -99,8 +93,8 @@ async function main() {
   const rows = sample(decisions, outcomes, n);
   fs.mkdirSync(dir, {recursive: true});
   const lines = [];
-  for (const [i, name] of names.entries()) {
-    const run = await runBackend(urls[i], rows, variants);
+  for (const {name, url} of targets) {
+    const run = await runBackend(url, rows, variants);
     if (!run.results.length) { console.log(`${name}: ${run.stopped}`); continue; }
     const t = new Date().toISOString().replace(/\.\d+Z$/, 'Z').replace(/:/g, '');
     const summary = {t: new Date().toISOString(), backend: name, alias: run.alias, stopped: run.stopped, variants: variants.map((v) => score(run.results, v.name))};

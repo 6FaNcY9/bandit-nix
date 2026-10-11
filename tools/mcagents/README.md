@@ -25,10 +25,9 @@ never ends by itself; the agent loop only prompts a bot that has no job (or got 
 routine is never re-prompted. End one with `!stop`.
 
 When the brain is asked (H2): only (1) after a job result (finished, failed, gave up, stopped),
-(2) after a death or respawn, (3) when a message arrived, and (4) every `CHECKIN_MS` (default 10
-min) while a routine runs or the bot idles. A bot that is busy with a plain job is not
+(2) after a death or respawn, (3) when a message arrived, and (4) every `CHECKIN_MS` (default 60 s; 10 min before 2026-10-11) while a routine runs or the bot idles. A bot whose job or queue just ran out is also asked at once (`noteIdle`). A bot that is busy with a plain job is not
 interrupted, and `!afkHere` silences it until a message. All agents together make at most
-`MAX_DECISIONS_PER_MIN` (default 12) model calls per minute (each query round of a decision counts); the rest wait for a later tick, longest
+`MAX_DECISIONS_PER_MIN` (default 30; 12 before) model calls per minute (each query round of a decision counts); the rest wait for a later tick, longest
 waiting first. The agent prints `stats [botN] ... decisions (x/h), model time ...` every
 `STATS_MS` (default 10 min).
 
@@ -118,7 +117,30 @@ node tools/mcagents/replay.js compare ollama-11.jsonl openai-11.jsonl
 node tools/mcagents/replay.test.js
 ```
 
-Idle replay (`idle-replay.js`, timer `mcagents-idle-replay` every 2 h): for each gaming-PC
+Routing (owner, 2026-10-11): the lab GPU (Ollama) and slayer serve the live agents and the solver
+(`ANDY_PREFER=lab`); `ANDY_OFFLINE_NAMES` (Nix `bandit-lab.mcagents.offlineHosts`, default `albert`) names the hosts kept for
+idle replay, the judge and training. `routing.js` splits the one `ANDY_URLS`/`ANDY_BACKEND_NAMES` list: `agent.js` never
+selects an offline name, the offline tools only select them (and never Ollama, 11434).
+
+Demonstrations (`demos.js`): a roster bot's job (plan, keeper or solver) that FINISHES becomes a
+`{kind: 'demo', source: plan|keeper|solver, messages: [system, user, assistant]}` line in the decision log. The prompt is the
+agents' own system prompt (stats, inventory, `Around you` scan, the plan objective as goal; no human names) taken when the job
+started (one scan per bot per 30 s), the reply is the inverse of `translate()`, accepted only if `translate()` turns it back into
+the same job: mine/chop -> `!collectBlocks`, deposit -> `!putInChest`, withdraw -> `!takeFromChest`, craft -> `!craftRecipe`,
+smelt -> `!smeltItem`, shaft -> `!digShaft`, treefarm -> `!tendTreeFarm`, seal -> `!sealArea`, shift -> `!startShift`, homebed ->
+`!setHomeBed`, goto a named place -> `!goToRememberedPlace`, tidy where the bot stands -> `!collectDrops`. No command: rearm,
+wheatfarm, stock, place, filechests, a deposit of everything, a goto to bare coordinates. Failed or stopped jobs write nothing;
+the same command in the same coarse state (inventory kinds and count buckets, objective) is written once. `DEMOS=0` switches it off.
+`export-sft.js` adds them as source `demo` (at most `DEMO_RATIO` x the decision rows, default 3, floor 10 decisions, balanced over
+the commands) and counts every source in `stats.json`. It also reads `decisions.jsonl.1`.
+
+Judge (`judge.js`, run by the same timer after the replay): on an offline backend that is free it grades up to `JUDGE_BATCH` (40)
+decisions with an unknown outcome and a valid command good/bad against the logged situation (strict rubric, "when unsure: bad"),
+appending `{kind: 'judge', ref, verdict, reason, model, backend}` to `judgments.jsonl` next to the log. `JUDGED=1` (Nix
+`bandit-lab.mcagents.exportJudged`, off) lets the export add judged-good rows as source `judged` (at most `JUDGED_MAX`, 200); a real
+outcome always wins over a grade. Tests: `node tools/mcagents/demos.test.js` (inverse round trips, recorder, export ratios, judge, routing).
+
+Idle replay (`idle-replay.js`, timer `mcagents-idle-replay` every 2 h): for each offline gaming-PC
 backend whose `/health` is 200 (nobody gaming) it replays up to 100 logged decisions (outcome-labelled
 good/bad first, newest first) per prompt variant in `variants.json` (`baseline` = prompt as logged).
 It re-checks `/health` before every request and stops that PC on the first failure, keeping partial

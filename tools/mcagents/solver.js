@@ -206,7 +206,7 @@ const idle = (b) => !!b && b.online && !b.dead && !b.job && !(b.queue || []).len
 class Solver {
   // deps: {http, API, callModel, fetchScan, translate, logCall, awaitJob, settle, agents: Set of agent bot names, cap, now}
   constructor(deps) {
-    Object.assign(this, {deps, incidents: new Incidents(), cap: new HourCap(deps.cap ?? 30), recent: new Map(), deaths: new Map(), pending: [], busy: false, seq: 0, run: Date.now().toString(36)});
+    Object.assign(this, {deps, incidents: new Incidents(), cap: new HourCap(deps.cap ?? 30), recent: new Map(), deaths: new Map(), pending: [], acted: new Map(), busy: false, seq: 0, run: Date.now().toString(36)});
   }
 
   feed(events) {
@@ -274,6 +274,11 @@ class Solver {
     }
   }
 
+  // Did the solver send this bot a job lately? (demos.js tags such a finished job as a solver demonstration)
+  actedRecently(bot, now = Date.now()) {
+    return now - (this.acted.get(bot) || 0) < WAIT_RESULT_MS;
+  }
+
   async post(path, body) {
     return this.deps.http('POST', `${this.deps.API}${path}`, body);
   }
@@ -335,6 +340,7 @@ class Solver {
       return;
     }
     deps.awaitJob(d, actor, action.job[0]);
+    this.acted.set(actor, now);
     inc.status = 'waiting';
     inc.actedAt = now;
     await say(`${actor} ${label} — ${why}`);

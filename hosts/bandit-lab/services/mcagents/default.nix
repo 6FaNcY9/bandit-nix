@@ -12,7 +12,19 @@
   cfg = config.bandit-lab.mcagents;
   inferenceHosts = lib.filterAttrs (_: host: host.enable) config.bandit-lab.inferenceHosts;
   inferenceNames = lib.optional (inferenceHosts ? slayer) "slayer" ++ lib.filter (name: name != "slayer") (builtins.attrNames inferenceHosts);
-  inferenceUrls = map (name: "http://127.0.0.1:${toString inferenceHosts.${name}.localPort}") inferenceNames;
+  urlOf = name: "http://127.0.0.1:${toString inferenceHosts.${name}.localPort}";
+  # Owner's split (2026-10-11): the lab GPU and slayer serve the live agents and the solver; the offline
+  # hosts (albert) only get idle replays, the judge and training, never live traffic.
+  offlineNames = lib.filter (name: inferenceHosts ? ${name}) cfg.offlineHosts;
+  liveNames = lib.filter (name: !(lib.elem name offlineNames)) inferenceNames;
+  liveUrls = map urlOf liveNames;
+  # The offline services get the same name/url lists plus ANDY_OFFLINE_NAMES; routing.js keeps each side to its own.
+  allUrls = map urlOf inferenceNames;
+  offlineEnv = {
+    ANDY_URLS = lib.concatStringsSep "," allUrls;
+    ANDY_BACKEND_NAMES = lib.concatStringsSep "," inferenceNames;
+    ANDY_OFFLINE_NAMES = lib.concatStringsSep "," offlineNames;
+  };
   # Two Andy-4.2 brains, each with its own scripted crew (lead mode, H4):
   # bot1 keeps the base chest stocked, bot2 builds; they talk with
   # !startConversation. One lead with four independent goals drifted, and one
@@ -31,6 +43,12 @@
   };
 in {
   options.bandit-lab.mcagents.enable = lib.mkEnableOption "the Andy-4.2 lead agent and its workers" // {default = true;};
+  options.bandit-lab.mcagents.offlineHosts = lib.mkOption {
+    type = lib.types.listOf lib.types.str;
+    default = ["albert"];
+    description = "Inference hosts kept for idle replays, the judge and training; they never get live agent or solver traffic.";
+  };
+  options.bandit-lab.mcagents.exportJudged = lib.mkEnableOption "judge-graded decisions (source judged) in the daily SFT export";
 
   config = lib.mkIf cfg.enable {
     systemd.services.mcagents = {
@@ -52,15 +70,23 @@ in {
           # an idle bot with an error, repeated deaths or a parked objective gets one fix from a
           # safe menu; 30 model calls/hour of its own. Set to 0 for no change in behaviour.
           SOLVER_ENABLE = "1";
+          # The agents think far more often (owner, 2026-10-11): a check-in every minute, an immediate prompt
+          # when a bot goes idle or a job fails, and a cap of 30 model calls a minute for the lab GPU and
+          # slayer together. Orders still stick for 60 s (agent.js assignJob), so they do not flip-flop.
+          CHECKIN_MS = "60000";
+          MAX_DECISIONS_PER_MIN = "30";
+          # Jobs of the scripted crew that finish become training rows (tools/mcagents/demos.js); DEMOS=0 switches it off.
+          DEMOS = "1";
+          ANDY_OFFLINE_NAMES = lib.concatStringsSep "," offlineNames;
         }
-        // lib.optionalAttrs (inferenceNames != []) {
-          ANDY_URLS = lib.concatStringsSep "," inferenceUrls;
-          ANDY_BACKEND_NAMES = lib.concatStringsSep "," inferenceNames;
+        // lib.optionalAttrs (liveNames != []) {
+          ANDY_URLS = lib.concatStringsSep "," liveUrls;
+          ANDY_BACKEND_NAMES = lib.concatStringsSep "," liveNames;
           # The lab's RTX 4090 thinks first; the gaming PCs only take the overflow and
           # are otherwise free for replays and training (owner, 2026-10-10).
           ANDY_PREFER = "lab";
         }
-        // lib.optionalAttrs (inferenceHosts ? slayer) {
+        // lib.optionalAttrs (inferenceHosts ? slayer && !(lib.elem "slayer" offlineNames)) {
           ANDY_URL_2 = "http://127.0.0.1:${toString inferenceHosts.slayer.localPort}";
         };
       serviceConfig = {
@@ -92,22 +118,28 @@ in {
         MemoryMax = "512M";
       };
     };
-    # Idle replay (owner, 2026-10-10): while a gaming PC's llama-server answers /health
-    # (nobody is gaming), replay logged decisions against it and record the scores in
-    # /var/lib/mcagents/replays. Never touches Ollama; loopback and ntfy only.
-    systemd.services.mcagents-idle-replay = lib.mkIf (inferenceNames != []) {
-      description = "Replay logged Minecraft agent decisions on idle gaming PCs";
-      environment = {
-        ANDY_URLS = lib.concatStringsSep "," inferenceUrls;
-        ANDY_BACKEND_NAMES = lib.concatStringsSep "," inferenceNames;
-        LOG = "/var/lib/mcagents/decisions.jsonl";
-        REPLAYS = "/var/lib/mcagents/replays";
-        VARIANTS = "${../../../../tools/mcagents/variants.json}";
-        NTFY_URL = "http://127.0.0.1:2586/mcbots";
-      };
+    # Idle replay and judge (owner, 2026-10-10/11): while an offline gaming PC's llama-server (albert)
+    # answers /health (nobody is gaming), replay logged decisions against it and record the scores in
+    # /var/lib/mcagents/replays, then let it grade decisions with an unknown outcome (judge.js, appended
+    # to judgments.jsonl). Never touches Ollama or the live backends; loopback and ntfy only.
+    systemd.services.mcagents-idle-replay = lib.mkIf (offlineNames != []) {
+      description = "Replay and judge logged Minecraft agent decisions on idle gaming PCs";
+      environment =
+        offlineEnv
+        // {
+          JUDGE_BATCH = "40";
+          LOG = "/var/lib/mcagents/decisions.jsonl";
+          REPLAYS = "/var/lib/mcagents/replays";
+          VARIANTS = "${../../../../tools/mcagents/variants.json}";
+          NTFY_URL = "http://127.0.0.1:2586/mcbots";
+        };
       serviceConfig = {
         Type = "oneshot";
-        ExecStart = "${pkgs.nodejs}/bin/node ${../../../../tools/mcagents}/idle-replay.js";
+        # Both steps run even when the first fails (a PC that went back to gaming ends it early, not badly).
+        ExecStart = [
+          "-${pkgs.nodejs}/bin/node ${../../../../tools/mcagents}/idle-replay.js"
+          "-${pkgs.nodejs}/bin/node ${../../../../tools/mcagents}/judge.js"
+        ];
         LoadCredential = "ntfy:/var/lib/mcbots/ntfy/publisher.env";
         # Same dynamic user as mcagents.service, so the state directory is shared.
         DynamicUser = true;
@@ -135,7 +167,7 @@ in {
         MemoryMax = "512M";
       };
     };
-    systemd.timers.mcagents-idle-replay = lib.mkIf (inferenceNames != []) {
+    systemd.timers.mcagents-idle-replay = lib.mkIf (offlineNames != []) {
       wantedBy = ["timers.target"];
       timerConfig = {
         # A calendar time, not OnBootSec: a timer whose boot delay has long passed fires the
@@ -144,7 +176,7 @@ in {
         RandomizedDelaySec = "10min";
       };
     };
-    # Daily training export (owner, 2026-10-11): good decisions and solver calls from the log as
+    # Daily training export (owner, 2026-10-11): good decisions, solver calls and crew demonstrations from the log as
     # sft.jsonl + stats.json for the LoRA run on the gaming PC (tools/slayer/train). The data is bot
     # prompts and state only (dataset.js drops secret-shaped and human-chat rows). The dynamic user's
     # state directory is private, so a root ExecStartPost publishes the result world-readable under
@@ -152,7 +184,14 @@ in {
     systemd.tmpfiles.rules = ["d /var/lib/mcagents-export 0755 root root -"];
     systemd.services.mcagents-dataset = {
       description = "Export logged Minecraft agent decisions as an SFT dataset";
-      environment.LOG = "/var/lib/mcagents/decisions.jsonl";
+      environment = {
+        LOG = "/var/lib/mcagents/decisions.jsonl";
+        DEMO_RATIO = "3"; # demonstrations of the scripted crew: at most 3 x the agent rows
+        JUDGED =
+          if cfg.exportJudged
+          then "1"
+          else "0";
+      };
       serviceConfig = {
         Type = "oneshot";
         ExecStart = "${pkgs.nodejs}/bin/node ${../../../../tools/mcagents}/export-sft.js /var/lib/mcagents/decisions.jsonl /var/lib/mcagents/export";
