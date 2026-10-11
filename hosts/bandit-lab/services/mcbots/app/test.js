@@ -4625,3 +4625,15 @@ require('./crafting');
   assert.deepStrictEqual(await a.evictBots(), ['bot3', 'bot17']);
   assert.deepStrictEqual(sent.slice(1), ['minecraft:kick bot3 bots play in the sandbox', 'minecraft:kick bot17 bots play in the sandbox']);
 })();
+
+(async () => { // ensureItem: an ingredient that cannot be crafted comes from the base chest before giving up
+  const {makeCrafting} = require('./crafting');
+  const items = [{name: 'cobblestone', count: 1}];
+  const bot = {registry: {itemsByName: {cobblestone: {id: 1}}}, inventory: {items: () => items}, recipesAll: () => []};
+  const asked = [];
+  const c = makeCrafting({goNear: async () => {}, guard() {}, fetch: async (r, job, item, n) => { asked.push([item, n]); items[0].count += n; }});
+  await c.ensureItem({bot}, {}, 'cobblestone', 3);
+  assert.deepStrictEqual(asked, [['cobblestone', 2]]);
+  const none = makeCrafting({goNear: async () => {}, guard() {}, fetch: async () => {}});
+  await assert.rejects(none.ensureItem({bot}, {}, 'cobblestone', 9), /need 6 more cobblestone/);
+})();

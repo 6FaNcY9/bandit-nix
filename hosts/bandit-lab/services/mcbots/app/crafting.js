@@ -70,7 +70,8 @@ async function placeNear(bot, itemName, areas = [], check = () => {}) {
   throw new Error(`no free spot next to the bot to place ${itemName}`);
 }
 
-function makeCrafting({goNear, guard}) {
+// fetch(r, job, item, n) (optional): take an item that cannot be crafted from the base chest.
+function makeCrafting({goNear, guard, fetch = null}) {
   // Get or place a station block (crafting_table, furnace) near the bot.
   // Get or place a station block (crafting_table, furnace) near the bot. A
   // known one out of reach is walked to; if that fails (bot down a pit), a new
@@ -133,7 +134,11 @@ function makeCrafting({goNear, guard}) {
     if (!item) throw new Error(`unknown item: ${name}`);
     if (depth > MAX_DEPTH) throw new Error(`need ${want - have} more ${name}`);
     const all = bot.recipesAll(item.id, null, true);
-    if (!all.length) throw new Error(`need ${want - have} more ${name}: it cannot be crafted (gather or smelt it)`);
+    if (!all.length && fetch) { // cobblestone, coal, ingots: the base chest usually has them (bot3 sat on 1 cobblestone, lab 2026-10-11)
+      await fetch(r, job, name, want - have).catch(() => guard(job));
+      if (count(bot, name) >= want) return;
+    }
+    if (!all.length) throw new Error(`need ${want - count(bot, name)} more ${name}: it cannot be crafted (gather or smelt it)`);
     const missing = (recipe, times) => recipe.delta.filter((d) => d.count < 0).reduce((n, d) => {
       const ing = bot.registry.items[d.id].name;
       const held = isPlanks(ing) ? planksHeld(bot) : count(bot, ing);

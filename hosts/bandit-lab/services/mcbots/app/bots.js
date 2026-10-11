@@ -1401,7 +1401,7 @@ async function replacePickaxe(r, job, need) {
       if (has()) return;
     } catch (e) {
       guard(job);
-      why = e.message;
+      why ||= e.message; // the cheapest pickaxe's reason, not the iron one's ("need 9 more iron_ingot")
     }
   }
   const logs = Object.keys(bot.registry.blocksByName).filter((n) => n.endsWith('_log'));
@@ -1662,7 +1662,7 @@ async function chase(r, job, follow) {
 }
 
 const craftingLib = require('./crafting');
-const crafting = craftingLib.makeCrafting({goNear, guard});
+const crafting = craftingLib.makeCrafting({goNear, guard, fetch: (r, job, item, count) => (r.supplyChest ? JOBS.withdraw(r, child(job, {type: 'withdraw', args: {item, count, ...r.supplyChest}})) : Promise.resolve())});
 // A build takes what it lacks from the supply chest (the withdraw job, with the chest's position).
 const buildWithdraw = (r, job, item, count) => JOBS.withdraw(r, child(job, {type: 'withdraw', args: {item, count, ...r.supplyChest}}));
 // ... and gathers the rest itself (mine, chop, smelt jobs as children of the build).
