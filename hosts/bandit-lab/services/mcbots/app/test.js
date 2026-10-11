@@ -4617,3 +4617,11 @@ require('./crafting');
   assert.deepStrictEqual(VALIDATE.mine({block: 'iron_ore', count: 3}), {block: 'iron_ore', count: 3});
   assert.deepStrictEqual(VALIDATE.craft({item: 'planks', count: 4}), {item: 'oak_planks', count: 4});
 }
+
+(async () => { // evictBots: bots on the real server are kicked (Velocity moves them to the sandbox), players stay
+  const {Admin} = require('./admin');
+  const sent = [];
+  const a = new Admin({call: async (cmds) => { sent.push(...cmds); return cmds.map((c) => (c === 'minecraft:list' ? 'There are 3 of a max of 12 players online: bot3, MidariBread, bot17' : '')); }, events: {add() {}}});
+  assert.deepStrictEqual(await a.evictBots(), ['bot3', 'bot17']);
+  assert.deepStrictEqual(sent.slice(1), ['minecraft:kick bot3 bots play in the sandbox', 'minecraft:kick bot17 bots play in the sandbox']);
+})();

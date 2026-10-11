@@ -347,6 +347,8 @@ class BotRunner {
       else if (/logged in successfully|registered successfully|already logged in/i.test(msg)) {
         authed = true;
         this.log(this.name, 'logged in to VeloAuth');
+        // VeloAuth picks main when the sandbox is down; ask Velocity for it once on the backend (harmless if there).
+        if (process.env.MC_VHOST) setTimeout(() => this.bot === bot && bot.chat('/server sandbox'), 5000);
       } else if (/incorrect password/i.test(msg)) {
         // Retrying cannot fix a wrong password, and VeloAuth then blocks the source IP, which every
         // bot of this container shares (2026-10-10: bot6, registered once by a local stage, locked

@@ -182,6 +182,15 @@ class Admin {
     return {what, names: what === 'whitelist' ? parse.whitelist(t) : what === 'bans' ? parse.bans(t) : undefined, text: t.slice(0, 4000)};
   }
 
+  // Bots that ended up on this (the real) server while they belong in the sandbox: VeloAuth sends a login to
+  // main when the sandbox is down (lab 2026-10-11, a deploy). A kick makes Velocity move them to the sandbox.
+  async evictBots() {
+    const [list] = await this.call(['minecraft:list']);
+    const bots = parse.players(list).filter((n) => this.isBot(n));
+    for (const n of bots) await this.call([`minecraft:kick ${n} bots play in the sandbox`]);
+    return bots;
+  }
+
   consoleSince(since = 0) { return {lastId: this.nextId, entries: this.console.filter((e) => e.id > since)}; }
 
   async act(action, b = {}) {

@@ -572,6 +572,11 @@ const keeperTick = setInterval(() => {
     log('keeper', `error: ${e.message}`);
   }
 }, 5000);
+// MC_VHOST (the bots play in the sandbox): keep the real server, which the Server panel's RCON reaches, bot-free.
+const evictTick = admin && process.env.MC_VHOST ? setInterval(() => {
+  admin.evictBots().then((names) => names.length && events.add('admin', 'info', `moved ${names.join(', ')} off the real server to the sandbox`), () => {});
+}, 30000) : null;
+
 // Alerts for the lead agent (alerts.js), from what a local bot in the overworld sees.
 const alerts = new Alerts({events});
 const alertTick = setInterval(() => {
@@ -607,6 +612,7 @@ function shutdown() {
   clearInterval(tick);
   clearInterval(keeperTick);
   clearInterval(alertTick);
+  clearInterval(evictTick);
   slayer.stop();
   clearInterval(blocklogTimer);
   blocklog.flush();
