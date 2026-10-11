@@ -53,7 +53,9 @@ in {
   options.bandit-lab.mcagents.enable = lib.mkEnableOption "the Andy-4.2 lead agent and its workers" // {default = true;};
   options.bandit-lab.mcagents.offlineHosts = lib.mkOption {
     type = lib.types.listOf lib.types.str;
-    default = ["albert"];
+    # albert is away for now (owner, 2026-10-11): slayer takes the replays and the judge, the lab GPU alone
+    # thinks for the live agents (it ran under 1 % with three of them). Back to ["albert"] when albert returns.
+    default = ["albert" "slayer"];
     description = "Inference hosts kept for idle replays, the judge and training; they never get live agent or solver traffic.";
   };
   options.bandit-lab.mcagents.exportJudged = lib.mkEnableOption "judge-graded decisions (source judged) in the daily SFT export";
@@ -137,8 +139,8 @@ in {
         offlineEnv
         // {
           JUDGE_BATCH = "200";
-          # albert replays, then grades; slayer grades meanwhile in mcagents-judge-slayer (below).
-          JUDGE_NAMES = "albert";
+          # The offline PCs replay, then grade; a live slayer grades meanwhile in mcagents-judge-slayer (below).
+          JUDGE_NAMES = lib.concatStringsSep "," offlineNames;
           # grade batch after batch for up to 20 min per pass (replay first, all inside the 1 h start timeout)
           JUDGE_PASS_MS = "1200000"; # owner: use the idle PCs as much as possible (2026-10-11)
           LOG = "/var/lib/mcagents/decisions.jsonl";
@@ -182,7 +184,7 @@ in {
     };
     # slayer grades from the oldest end while albert replays (it sat at 0 % through every replay, owner
     # 2026-10-11); the two judges never pick the same decisions. Same sandbox as the idle replay.
-    systemd.services.mcagents-judge-slayer = lib.mkIf (offlineNames != [] && inferenceHosts ? slayer) {
+    systemd.services.mcagents-judge-slayer = lib.mkIf (offlineNames != [] && inferenceHosts ? slayer && !(lib.elem "slayer" offlineNames)) {
       description = "Grade logged Minecraft agent decisions on slayer";
       environment =
         config.systemd.services.mcagents-idle-replay.environment
@@ -196,7 +198,7 @@ in {
           ExecStart = ["-${pkgs.nodejs}/bin/node ${../../../../tools/mcagents}/judge.js"];
         };
     };
-    systemd.timers.mcagents-judge-slayer = lib.mkIf (offlineNames != [] && inferenceHosts ? slayer) {
+    systemd.timers.mcagents-judge-slayer = lib.mkIf (offlineNames != [] && inferenceHosts ? slayer && !(lib.elem "slayer" offlineNames)) {
       wantedBy = ["timers.target"];
       timerConfig = config.systemd.timers.mcagents-idle-replay.timerConfig;
     };
