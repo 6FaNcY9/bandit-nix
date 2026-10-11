@@ -11,6 +11,8 @@ const CHEST_JOBS = new Set(['deposit', 'withdraw', 'stock', 'shift']);
 // (mirrored in tools/mcagents/solver.js MENU_JOBS and tested). Chest jobs use the supply chest; goto and seal
 // only a place or zone of the map, never a coordinate of the model's own.
 const SOLVER_JOBS = new Set(['rearm', 'deposit', 'withdraw', 'craft', 'smelt', 'mine', 'chop', 'tidy', 'goto', 'seal']);
+// Natural blocks only: a bare blacklist let `mine iron_block` take a player's build (Codex R7-1). No cobblestone: bots and players place it.
+const SOLVER_MINE = /^((coal|iron|copper|gold|redstone|lapis|diamond|emerald|nether_gold|nether_quartz)_ore|(deepslate_(coal|iron|copper|gold|redstone|lapis|diamond|emerald)_ore)|stone|deepslate|andesite|diorite|granite|tuff|dirt|gravel|sand|red_sand|clay)$/;
 const SOLVER_CHEST = new Set(['rearm', 'deposit', 'withdraw', 'tidy']);
 const SOLVER_JOB_GAP_MS = 3 * 60000, SOLVER_JOBS_PER_HOUR = 10, SOLVER_FRESH_S = 60, SOLVER_SKIPS_PER_HOUR = 3;
 
@@ -58,6 +60,7 @@ function solverRefusal({bots, type, args, replace}, {agentBots, supplyChest, ros
   if (!SOLVER_JOBS.has(type)) return `solver: job ${type} is not on the solver menu`;
   const a = args || {};
   if (SOLVER_CHEST.has(type) && (!supplyChest || (type !== 'tidy' || a.x !== undefined) && (a.x !== supplyChest.x || a.y !== supplyChest.y || a.z !== supplyChest.z))) return 'solver: chest jobs use the supply chest';
+  if (type === 'mine' && !SOLVER_MINE.test(String(a.block))) return `solver: ${a.block} is not on the natural mining list`;
   if (type === 'goto' && !places.some((p) => p.x === Number(a.x) && p.y === Number(a.y) && p.z === Number(a.z))) return 'solver: goto only to a named place';
   if (type === 'seal' && !places.some((p) => p.box && sameBox(p.box, {x1: a.x1, y1: a.y1, z1: a.z1, x2: a.x2, y2: a.y2, z2: a.z2}))) return 'solver: seal only a named zone';
   if (replace === true && jobOf(bot)?.runningS < SOLVER_FRESH_S) return `solver: ${bot} got its job less than ${SOLVER_FRESH_S} s ago, no replace`;
