@@ -138,6 +138,9 @@ in {
     # to judgments.jsonl). Never touches Ollama or the live backends; loopback and ntfy only.
     systemd.services.mcagents-idle-replay = lib.mkIf (offlineNames != []) {
       description = "Replay and judge logged Minecraft agent decisions on idle gaming PCs";
+      # A deploy must not stop a running pass and then wait up to its 1 h start timeout for the new
+      # one (lab-update apply sat 30 min on it, 2026-10-12); the next timer run picks up new code.
+      restartIfChanged = false;
       environment =
         offlineEnv
         // {
@@ -189,6 +192,7 @@ in {
     # 2026-10-11); the two judges never pick the same decisions. Same sandbox as the idle replay.
     systemd.services.mcagents-judge-slayer = lib.mkIf (offlineNames != [] && inferenceHosts ? slayer && !(lib.elem "slayer" offlineNames)) {
       description = "Grade logged Minecraft agent decisions on slayer";
+      restartIfChanged = false;
       environment =
         config.systemd.services.mcagents-idle-replay.environment
         // {
