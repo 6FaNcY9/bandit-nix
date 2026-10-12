@@ -58,7 +58,15 @@ in {
       after = ["network-online.target" "tailscaled.service"];
       wants = ["network-online.target" "tailscaled.service"];
       serviceConfig = {
-        ExecStart = "${pkgs.openssh}/bin/ssh -NT -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/etc/ssh/ssh_known_hosts -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i %d/${name}-tunnel-key -L 127.0.0.1:${toString host.localPort}:127.0.0.1:8081 ${host.user}@${host.address}";
+        # A gaming PC that is off is normal, so the retry lives here and the unit stays up: a unit
+        # that fails or waits in auto-restart fails switch-to-configuration, and lab-update then
+        # rolls the whole deploy back (albert offline, 2026-10-12).
+        ExecStart = pkgs.writeShellScript "${name}-tunnel" ''
+          while :; do
+            ${pkgs.openssh}/bin/ssh -NT -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/etc/ssh/ssh_known_hosts -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$CREDENTIALS_DIRECTORY/${name}-tunnel-key" -L 127.0.0.1:${toString host.localPort}:127.0.0.1:8081 ${host.user}@${host.address}
+            ${pkgs.coreutils}/bin/sleep 30
+          done
+        '';
         LoadCredential = "${name}-tunnel-key:${config.sops.secrets."${name}-tunnel-key".path}";
         # ssh needs a passwd entry (getpwuid); DynamicUser broke authentication.
         User = "${name}-tunnel";
