@@ -67,10 +67,10 @@ const OBJECTIVES = [
   // One bot, one run (the slot closing is "done"): the old wall's stock moves into the hall's categories.
   {id: 'file-storage', label: 'file the old storage room wall into the storage hall', needs: ['storage-room'], onBlocked: 'skip',
     roles: [{count: 1, jobs: [['filechests', {}]]}]},
-  {id: 'tree-farm', label: 'start the tree farm', needs: ['stock-basics'], onBlocked: 'skip',
+  {id: 'tree-farm', label: 'start the tree farm', needs: ['stock-basics'], onBlocked: 'skip', standing: 'treefarm',
     roles: [{count: 1, get jobs() { return [['treefarm', BASE.farm]]; }}],
     done: (ctx) => running(ctx, 'treefarm', 120)}, // the job never ends: planting for two minutes counts
-  {id: 'wheat-farm', label: 'start the wheat farm', needs: ['stock-basics'], onBlocked: 'skip',
+  {id: 'wheat-farm', label: 'start the wheat farm', needs: ['stock-basics'], onBlocked: 'skip', standing: 'wheatfarm',
     roles: [{count: 1, get jobs() { return [['wheatfarm', BASE.wheat]]; }}],
     done: (ctx) => running(ctx, 'wheatfarm', 120)}, // never ends either
   {id: 'iron-quota', label: 'raw iron for a full kit in the chest', needs: ['shaft-to-ore'], onBlocked: 'park',

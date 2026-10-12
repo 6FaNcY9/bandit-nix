@@ -164,6 +164,7 @@ class Plan {
     this.assigned = new Map(); // id -> Map<slotKey, entry>
     this.results = new Map(); // `${id}#${slotKey}` -> {ok, at, bot}
     this.idleSince = new Map();
+    this.standingAt = new Map(); // id -> when a bot was last put back on a standing objective
     this.borrowed = null; // what the keeper had before the plan took it
     this.stockFrom = 0; // chest numbers older than this are about another chest
     this.cur = null;
@@ -314,6 +315,7 @@ class Plan {
     this.collect(snaps, t);
     this.recheck(snaps, t);
     this.advance(snaps, t);
+    this.keepStanding(snaps, t);
     const o = this.cur;
     if (o?.keeper && this.keeper) this.driveKeeper(o);
     else if (o) this.assign(o, snaps, t);
@@ -366,6 +368,29 @@ class Plan {
     this.fails.set(o.id, (this.fails.get(o.id) || 0) + 1);
     this.dirty = true;
     this.say(`${o.id}: every part reported done but it is not; trying again in ${RETRY_MS / 60000} min`);
+  }
+
+  // Farms never end, but a done objective is not looked at again: once the farmer died or a deploy dropped
+  // its job nobody farmed, and the chest had no bread for days (2026-10-12). A done objective with
+  // `standing` (its job type) gets an idle roster bot back on it whenever no roster bot runs that job;
+  // this runs beside the current objective, before it takes the idle bots.
+  keepStanding(snaps, t) {
+    const roster = [...snaps.keys()];
+    for (const o of this.objectives) {
+      if (!o.standing || !this.completed.has(o.id) || t - (this.standingAt.get(o.id) ?? 0) < MIN_HOLD_MS) continue;
+      if ([...snaps.values()].some((s) => s?.job?.type === o.standing || (s?.queue || []).some((q) => String(q).split(' ')[0] === o.standing))) continue;
+      const bot = [...roster].sort().find((b) => idle(snaps.get(b)) && t - (this.idleSince.get(b) ?? t) >= IDLE_MS);
+      if (!bot) continue;
+      try {
+        for (const [type, args] of chainOf(slotsOf(o, roster)[0], bot, roster)) this.runners.get(bot).enqueue(type, args, {replace: false});
+      } catch (e) {
+        this.say(`could not put ${bot} back on ${o.id}: ${e.message}`);
+        continue;
+      }
+      this.standingAt.set(o.id, t);
+      snaps.set(bot, {...snaps.get(bot), queue: [o.standing]}); // taken for the rest of this tick
+      this.say(`${bot}: back on ${o.id}, nobody ran ${o.standing}`);
+    }
   }
 
   // Is the current objective stuck? Then it is blocked (parked or skipped by nextIndex).

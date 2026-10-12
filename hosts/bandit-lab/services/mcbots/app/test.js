@@ -4385,6 +4385,36 @@ require('./crafting');
     p4.tick(); now += 2 * HOUR; p4.tick();
     assert.strictEqual(p4.skipped.has('later'), true, 'only parked steps come back');
   }
+  { // 2026-10-12: the wheat farm counted as done after 2 min, then nobody farmed and the chest had no bread for days
+    const {Plan} = require('./plan');
+    const {IDLE_MS} = require('./keeper');
+    let now = 1e6;
+    const snap = (o = {}) => ({online: true, dead: false, job: null, queue: [], inventory: [], lastError: '', lastErrorAgoS: null, ...o});
+    const fake = (name) => ({name, sent: [], job: null, snapshot() { return snap({job: this.job}); }, enqueue(type) { this.sent.push(type); this.job = {type, runningS: 0}; }});
+    const bots = ['bot11', 'bot12'].map(fake);
+    const running = (ctx, type, s) => [...ctx.snaps.values()].some((x) => x?.job?.type === type && x.job.runningS >= s);
+    const objectives = [
+      {id: 'farm', label: 'farm', needs: [], onBlocked: 'skip', standing: 'wheatfarm', roles: [{count: 1, jobs: [['wheatfarm', {}]]}], done: (ctx) => running(ctx, 'wheatfarm', 120)},
+      {id: 'dig', label: 'dig', needs: ['farm'], onBlocked: 'park', roles: [{count: 1, jobs: [['shaft', {}]]}], done: () => false},
+    ];
+    const plan = new Plan({runners: new Map(bots.map((b) => [b.name, b])), world: new WorldModel({now: () => now}), objectives, roster: ['bot11', 'bot12'], chest: {x: 1, y: 2, z: 3}, now: () => now});
+    plan.setEnabled(true);
+    plan.tick(); now += IDLE_MS; plan.tick();
+    assert.deepStrictEqual(bots.map((b) => b.sent), [['wheatfarm'], []]);
+    bots[0].job.runningS = 200;
+    now += 6000; plan.tick(); now += IDLE_MS; plan.tick();
+    assert.strictEqual(plan.completed.has('farm'), true);
+    assert.deepStrictEqual(bots.map((b) => b.sent), [['wheatfarm'], ['shaft']], 'the next objective runs beside the farm');
+    now += 3600 * 1000; plan.tick();
+    assert.strictEqual(bots[0].sent.length, 1, 'a running farm is left alone');
+    bots[0].job = null; // the farmer died, or a deploy dropped its job
+    plan.tick();
+    assert.strictEqual(bots[0].sent.length, 1, 'idle for IDLE_MS first');
+    now += IDLE_MS; plan.tick();
+    assert.deepStrictEqual(bots[0].sent, ['wheatfarm', 'wheatfarm'], 'an idle roster bot farms again');
+    now += 1000; plan.tick();
+    assert.strictEqual(bots.flatMap((b) => b.sent).filter((x) => x === 'wheatfarm').length, 2, 'once, not on every tick');
+  }
   { // R6-2 + R6-3: smelting honours Stop after every await, and one bot at a time uses a furnace
     const {makeCrafting} = require('./crafting');
     const {Cancelled} = require('./bots');
