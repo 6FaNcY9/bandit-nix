@@ -41,7 +41,6 @@
       label = "bandit-lab-worker-2";
     };
   };
-  workerBots = lib.concatStringsSep "," (lib.mapAttrsToList (_: w: w.bots) workers);
   # Worker processes: each shares mcbots' network namespace, so it reaches the
   # hub on 127.0.0.1 (plain ws:// is accepted only there) and Velocity from
   # mcbots' address, which BotGate admits.
