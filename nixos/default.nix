@@ -1,10 +1,12 @@
-_: {
+{inputs, ...}: {
   imports = [
     ./sops.nix
     ./secrets-workstation.nix
     ./restic-peer-server.nix
     ./backup-peer.nix
     ./lab-apply.nix
+    # pc-admin: admin on the gaming PCs only with the finger (bandit-craft tools/winpc/README.md)
+    inputs.bandit-craft.nixosModules.pc-admin
     ./mcp.nix
     ./cli-tools.nix
     ./core.nix
