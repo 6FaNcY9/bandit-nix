@@ -1589,6 +1589,12 @@ require('./crafting');
   assert.strictEqual(objectiveDone(OBJECTIVES.find((o) => o.id === 'shaft-to-ore'), air('cave_air')), true);
   assert.strictEqual(objectiveDone(OBJECTIVES.find((o) => o.id === 'shaft-to-ore'), air('stone')), false);
   assert.strictEqual(objectiveDone(OBJECTIVES.find((o) => o.id === 'shaft-to-ore'), air(null)), false, 'chunk not loaded');
+  { // Codex R8-2: done() is authoritative now, so it may only ask for what the chain builds (two of the eight chests)
+    const seeded = new Set(BASE.roomChests.slice(0, 2).map((c) => `${c.x},${c.y},${c.z}`));
+    const room = OBJECTIVES.find((o) => o.id === 'storage-room');
+    assert.strictEqual(objectiveDone(room, dctx({blockAt: (x, y, z) => (seeded.has(`${x},${y},${z}`) ? 'chest' : 'air')})), true, 'the two seeded chests');
+    assert.strictEqual(objectiveDone(room, dctx({blockAt: () => 'air'})), false);
+  }
   const farm = (runningS) => dctx({snaps: new Map([['a', snap({job: {type: 'treefarm', runningS}})]])});
   assert.strictEqual(objectiveDone(OBJECTIVES.find((o) => o.id === 'tree-farm'), farm(200)), true);
   assert.strictEqual(objectiveDone(OBJECTIVES.find((o) => o.id === 'tree-farm'), farm(10)), false);
@@ -4415,6 +4421,34 @@ require('./crafting');
     bots[1].err = '';
     now += 11 * 60 * 1000; plan.tick(); now += IDLE_MS; plan.tick();
     assert.deepStrictEqual(bots.map((b) => b.sent.length), [2, 2], 'both strips are dug again');
+  }
+  { // Codex R8-1: a bot waiting for its slot's retry is not put on the farm: its farm job would hold that strip for good
+    const {Plan} = require('./plan');
+    const {IDLE_MS} = require('./keeper');
+    let now = 1e6;
+    const snap = (o = {}) => ({online: true, dead: false, job: null, queue: [], inventory: [], lastError: '', lastErrorAgoS: null, ...o});
+    const fake = (name) => ({name, sent: [], job: null, err: '', snapshot() { return snap({job: this.job, lastError: this.err, lastErrorAgoS: this.err ? 1 : null}); }, enqueue(type) { this.sent.push(type); this.job = {type, runningS: 0}; }});
+    const [a1, b2, c3] = ['a1', 'b2', 'c3'].map(fake);
+    const running = (ctx, type, s) => [...ctx.snaps.values()].some((x) => x?.job?.type === type && x.job.runningS >= s);
+    const objectives = [
+      {id: 'farm', label: 'farm', needs: [], onBlocked: 'skip', standing: 'wheatfarm', roles: [{count: 1, jobs: [['wheatfarm', {}]]}], done: (ctx) => running(ctx, 'wheatfarm', 120)},
+      {id: 'shaft', label: 'shaft', needs: ['farm'], onBlocked: 'park', roles: [{count: 2, jobs: [['shaft', {}]]}], done: () => false},
+    ];
+    const plan = new Plan({runners: new Map([a1, b2, c3].map((b) => [b.name, b])), world: new WorldModel({now: () => now}), objectives, roster: ['a1', 'b2', 'c3'], chest: {x: 1, y: 2, z: 3}, now: () => now});
+    plan.setEnabled(true);
+    plan.tick(); now += IDLE_MS; plan.tick();
+    a1.job.runningS = 200;
+    now += 6000; plan.tick(); now += IDLE_MS; plan.tick();
+    assert.deepStrictEqual([a1, b2, c3].map((b) => b.sent), [['wheatfarm'], ['shaft'], ['shaft']]);
+    now += 6000; plan.tick(); // the strips are seen busy
+    c3.job = null; // c3's strip fails and waits for its retry
+    c3.err = 'the shaft reached y -54 but 2 blocks were left';
+    a1.job = {type: 'mine', runningS: 5}; // the owner took the farmer for something else
+    now += 6000; plan.tick(); now += IDLE_MS; plan.tick(); now += IDLE_MS; plan.tick();
+    assert.ok(!c3.sent.includes('wheatfarm'), 'c3 holds a strip waiting for its retry');
+    c3.err = '';
+    now += 11 * 60 * 1000; plan.tick(); now += IDLE_MS; plan.tick();
+    assert.deepStrictEqual(c3.sent, ['shaft', 'shaft'], 'c3 digs its strip again after the wait');
   }
   { // 2026-10-12: the wheat farm counted as done after 2 min, then nobody farmed and the chest had no bread for days
     const {Plan} = require('./plan');

@@ -379,10 +379,13 @@ class Plan {
   // this runs beside the current objective, before it takes the idle bots.
   keepStanding(snaps, t) {
     const roster = [...snaps.keys()];
+    // A bot whose slot of the current objective waits for its retry looks idle, but a farm job never ends,
+    // and a busy bot keeps its slot (holds), so that strip would never be dug again (Codex R8-1).
+    const reserved = new Set([...(this.assigned.get(this.cur?.id)?.values() || [])].filter((e) => e.bot && !e.done).map((e) => e.bot));
     for (const o of this.objectives) {
       if (!o.standing || !this.completed.has(o.id) || t - (this.standingAt.get(o.id) ?? 0) < MIN_HOLD_MS) continue;
       if ([...snaps.values()].some((s) => s?.job?.type === o.standing || (s?.queue || []).some((q) => String(q).split(' ')[0] === o.standing))) continue;
-      const bot = [...roster].sort().find((b) => idle(snaps.get(b)) && t - (this.idleSince.get(b) ?? t) >= IDLE_MS);
+      const bot = [...roster].sort().find((b) => !reserved.has(b) && idle(snaps.get(b)) && t - (this.idleSince.get(b) ?? t) >= IDLE_MS);
       if (!bot) continue;
       try {
         for (const [type, args] of chainOf(slotsOf(o, roster)[0], bot, roster)) this.runners.get(bot).enqueue(type, args, {replace: false});

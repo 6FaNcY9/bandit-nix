@@ -63,7 +63,8 @@ const OBJECTIVES = [
       ['craft', {item: 'chest', count: 2}], // the wall is built by hand; the plan only seeds the first two
       ...BASE.roomChests.slice(0, 2).map((c) => ['place', {item: 'chest', ...c}]),
     ]}],
-    done: (ctx) => BASE.roomChests.every((c) => ctx.blockAt?.(c.x, c.y, c.z) === 'chest')},
+    // only the two chests the chain places: done() outranks the slots, and the rest of the wall is built by hand
+    done: (ctx) => BASE.roomChests.slice(0, 2).every((c) => ctx.blockAt?.(c.x, c.y, c.z) === 'chest')},
   // One bot, one run (the slot closing is "done"): the old wall's stock moves into the hall's categories.
   {id: 'file-storage', label: 'file the old storage room wall into the storage hall', needs: ['storage-room'], onBlocked: 'skip',
     roles: [{count: 1, jobs: [['filechests', {}]]}]},
