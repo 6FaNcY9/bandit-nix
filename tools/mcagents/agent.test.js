@@ -344,6 +344,26 @@ assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}
       await decide(agent, new Map([['bot1', agent]]), async () => state, {take: () => true});
       assert.strictEqual(sent.replace, false, 'a plain job finishes first');
     }
+    { // bot1, 2026-10-12: its coal shift was replaced by itself every few seconds; the stop of the replacement woke it
+      const agent = new Agent('bot1', 'mine coal', null);
+      const agents = new Map([['bot1', agent]]);
+      const jobs = [];
+      globalThis.fetch = async (url, opt = {}) => ({ok: true, status: 200, json: async () => (url.endsWith('/api/chat') ? {message: {content: '!startShift("coal")'}} : (url.endsWith('/api/job') && jobs.push(JSON.parse(opt.body)), {}))});
+      const state = {bots: [{name: 'bot1', online: true, pos: [0, 64, 0], inventory: [], queue: [], job: {type: 'shift', label: 'shift stone'}}], places: [], supplyChest: {x: 1, y: 64, z: 1}};
+      await decide(agent, agents, async () => state, {take: () => true});
+      assert.deepStrictEqual(jobs.map((j) => [j.type, j.replace]), [['shift', true]], 'another shift is replaced');
+      Object.assign(agent, {wake: false});
+      onEvent(agents, {bot: 'bot1', kind: 'stop', text: 'stopped: shift stone (40 s)'});
+      assert.strictEqual(agent.wake, false, 'the stop of our own replacement is no news');
+      assert.ok(!agent.history.some((m) => /stopped: shift stone/.test(m.content)));
+      state.bots[0].job = {type: 'shift', label: 'shift coal_ore'};
+      await decide(agent, agents, async () => state, {take: () => true});
+      assert.strictEqual(jobs.length, 1, 'the shift it already runs is not sent again');
+      assert.match(agent.history.at(-1).content, /Already running/);
+      const other = new Agent('bot2', '', null);
+      onEvent(new Map([['bot2', other]]), {bot: 'bot2', kind: 'stop', text: 'stopped: shift stone (40 s)'});
+      assert.strictEqual(other.wake, true, 'a stop from the owner still wakes the agent');
+    }
     { // same job type failing with the same reason twice: a different command of that type is refused too
       const a = {};
       trackError(a, 'failed: build at -272 65 -219 22 blocks false - could not reach -260 63 -213: No path to the goal!');

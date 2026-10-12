@@ -649,6 +649,8 @@ const OUTCOME_MS = Number(process.env.OUTCOME_MS) || 900000; // a job with no re
 const OUTCOME_MAX = 400; // jobs awaiting a result; beyond this the oldest ends neutral
 const awaiting = []; // {d, bot, type}: decisions whose job has not reported yet, oldest first
 const ownStops = new Map(); // bot -> when we last stopped or replaced its jobs: their "stopped:" events are not news
+const OWN_STOP_MS = 60000;
+const ownStop = (e, now = Date.now()) => /^stopped/.test(e.text || '') && now - (ownStops.get(e.bot) || 0) <= OWN_STOP_MS;
 
 function settle(d, result, reason, now = Date.now()) {
   if (LOG && d) logCall(JSON.stringify({kind: 'outcome', t: new Date(now).toISOString(), id: d.id, agent: d.agent, result, reason: String(reason).slice(0, 160), ms: now - d.at}) + '\n');
@@ -676,7 +678,7 @@ function outcomeEvent(e, now = Date.now()) {
   if (!m) return;
   const [, status, type] = m;
   if (status === 'stopped') { // a stop we sent already settled its jobs; this one came from the owner or the dashboard
-    if (now - (ownStops.get(e.bot) || 0) > 60000) settleBot(e.bot, 'neutral', 'stopped', type, now);
+    if (!ownStop(e, now)) settleBot(e.bot, 'neutral', 'stopped', type, now);
     return;
   }
   settleBot(e.bot, status === 'finished' ? 'good' : 'bad', status === 'finished' ? 'finished' : status === 'gave up' ? 'gave up' : `failed: ${e.text.replace(/^failed: \w+ .* - /, '')}`, type, now);
@@ -873,6 +875,11 @@ async function decide(agent, agents, getState, budget) {
       settle(d, 'bad', 'refused');
       continue;
     }
+    // Replacing a routine by itself only restarts it (bot1's coal shift, 2026-10-12).
+    if (isRoutine(bot.job) && bot.job.type === t.job[0] && agent.routine === JSON.stringify(t.job)) {
+      agent.push('system', `Already running: ${same}. Let it work, or do something else.`);
+      return settle(d, 'neutral', 'already running');
+    }
     agent.lastCommand = same;
     try {
       // A routine never ends, so a job queued behind it would never start (bot2 had two stone shifts
@@ -883,6 +890,7 @@ async function decide(agent, agents, getState, budget) {
       settle(d, 'bad', `send failed: ${e.message}`);
       continue;
     }
+    agent.routine = ROUTINES.has(t.job[0]) ? JSON.stringify(t.job) : '';
     noteSent(agent, t.job, String(cmd.args[0]));
     return;
   }
@@ -903,6 +911,8 @@ function onEvent(agents, e, hint = '') {
     }
     return;
   }
+  // The stop of our own replacement woke the agent, which sent the same shift again (bot1, 2026-10-12).
+  if (ownStop(e)) return;
   const boss = agents.get(assigner.get(e.bot));
   const put = boss && e.kind === 'deposit' && /^deposited (.+) at the supply chest$/.exec(e.text);
   if (put) boss.pushDeposit(`${e.bot} put ${put[1]} into the base chest`); // news, not a reason to wake
