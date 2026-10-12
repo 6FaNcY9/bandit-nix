@@ -41,7 +41,8 @@ else
   echo "$sig"
   [[ $(grep -c "Good signature" <<<"$sig") -eq $# ]] || { echo "every commit needs a good signature" >&2; exit 1; }
   rev=$(git -C "$wt" rev-parse HEAD)
-  nix build "git+file://$wt?rev=$rev#nixosConfigurations.bandit-lab.config.system.build.toplevel" --no-link --no-update-lock-file
+  # ref: the worktree is detached, and without one Nix warns that it cannot read HEAD; rev decides what is built
+  nix build "git+file://$wt?rev=$rev&ref=main#nixosConfigurations.bandit-lab.config.system.build.toplevel" --no-link --no-update-lock-file
 fi
 
 # shellcheck disable=SC2034 # read by the EXIT trap

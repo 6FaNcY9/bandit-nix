@@ -95,6 +95,9 @@ in {
         };
 
       initContent = lib.mkAfter ''
+        # you-should-use: typing git in full is fine, no reminder of the `g` alias
+        YSU_IGNORED_ALIASES=("g")
+
         # ── Extra completions (~150 tools) ───────────────────
         fpath+=(${pkgs.zsh-completions}/share/zsh/site-functions)
 
