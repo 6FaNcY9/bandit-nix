@@ -153,6 +153,12 @@ native `Warn` custom punishment is registered as `smod.warn`; `/modlogs <player>
 shows the player's moderation history. `fancy8869` passes the menu permission checks;
 `Kirafunk` has no `bandit.admin.menu` grant.
 
+`/kit` (the survival kits) also opens with `bandit.admin.menu`. `/owner` (unbreakable
+over-max gear, buffs, the three owner boxes) needs `bandit.owner`, for the owner only.
+It was not granted when the panel shipped (found 2026-10-12: the LuckPerms database
+held no `bandit.owner`); the owner grants it in game once:
+`/lp user fancy8869 permission set bandit.owner true`.
+
 Whitelist entries verified live: `CringeLord21`, `Kirafunk`.
 
 ## In-game commands
