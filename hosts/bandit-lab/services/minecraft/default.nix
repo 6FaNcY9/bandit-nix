@@ -7,6 +7,18 @@
 }: let
   scripts = import ./scripts.nix {inherit pkgs;};
 
+  # CommandPanels menus: the hand-written ones plus the generated /kit menus (kits.nix, JSON is YAML).
+  panels = pkgs.linkFarm "minecraft-panels" (
+    map (f: {
+      name = f;
+      path = ./commandpanels + "/${f}";
+    }) (builtins.attrNames (builtins.readDir ./commandpanels))
+    ++ lib.mapAttrsToList (name: panel: {
+      name = "${name}.yml";
+      path = pkgs.writeText "${name}.yml" (builtins.toJSON panel);
+    }) (import ./kits.nix {inherit lib;})
+  );
+
   # Map, pinned and owned by Nix (see stage.sh for the ownership split).
   # BlueMap (MIT) is the live map, reachable only through the loopback port
   # published below and the tailnet HTTPS proxy. Administration is the bots
@@ -186,7 +198,6 @@ in {
           STAGE_IMAGEFRAME_VERSION = imageFrameVersion;
           STAGE_IMAGEFRAME_CONFIG = ./imageframe-config.yml;
           STAGE_OVERLAY = ./overlay.js;
-          STAGE_PANELS = ./commandpanels;
           STAGE_PATCHES = velocityPatch;
           STAGE_SEED = pkgs.linkFarm "minecraft-seed-plugins" seedPlugins;
           STAGE_EXPANSIONS = pkgs.linkFarm "minecraft-seed-expansions" seedExpansions;
@@ -196,6 +207,34 @@ in {
           RemainAfterExit = true;
           ExecStart = "${scripts.stage}/bin/minecraft-stage";
         };
+      };
+
+      # The menus go in while the server runs and are reloaded in place (/pa reload, as the console),
+      # so a menu change never restarts Minecraft; a server still starting reads the new files itself.
+      minecraft-panels = {
+        description = "Install the CommandPanels menus and reload them";
+        after = ["docker-minecraft.service"];
+        wantedBy = ["docker-minecraft.service"];
+        partOf = ["docker-minecraft.service"];
+        path = [pkgs.coreutils pkgs.docker];
+        environment.PANELS = panels;
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          TimeoutStartSec = "10min";
+        };
+        script = ''
+          d=/srv/containers/minecraft/data/plugins/CommandPanels
+          install -d -o 1000 -g 1000 -m 0750 "$d" "$d/panels"
+          for panel in "$PANELS"/*.yml; do
+            install -o 1000 -g 1000 -m 0644 "$panel" "$d/panels/$(basename "$panel")"
+          done
+          for _ in $(seq 30); do
+            timeout 20 docker exec -u 1000 minecraft mc-send-to-console pa reload 2>/dev/null && exit 0
+            sleep 10
+          done
+          echo "Minecraft is not running; it reads the menus when it starts" >&2
+        '';
       };
 
       # RCON password: random, made once on this host (root-only), handed to the

@@ -24,7 +24,6 @@
   };
   expansions = pkgs.linkFarm "seed-expansions" {"PAPI-Expansion-Player_R5xV754.jar" = dummyJar "papi";};
   overlay = dummyJar "overlay.js";
-  panels = pkgs.linkFarm "panels" {"admin.yml" = pkgs.writeText "admin.yml" "title: admin\n";};
 in
   assert lib.assertMsg (c.volumes == ["/srv/containers/minecraft/data:/data"]) "the Minecraft container may mount only its data directory (no docker.sock, no unrelated paths)";
   assert lib.assertMsg (!(lib.hasInfix "privileged" extra) && !(lib.hasInfix "cap-add" extra) && !(lib.hasInfix "docker.sock" extra)) "the Minecraft container must stay unprivileged: ${extra}";
@@ -38,6 +37,7 @@ in
   assert lib.assertMsg (c.environment.ENABLE_RCON == "true" && !(c.environment ? RCON_PASSWORD) && !(lib.any (lib.hasInfix "25575") c.ports) && lib.elem "/run/minecraft-rcon/rcon.env" c.environmentFiles) "RCON is on for the internal network only: no published RCON port, password only from the generated env file";
   assert lib.assertMsg (lib.hasInfix "--memory=12g" extra && lib.hasInfix "--cpus=4" extra && c.environment.MEMORY == "8G") "resource caps (12 GiB, 4 CPUs, 8 GiB heap) are part of the contract";
   assert lib.assertMsg (c.environment.PAPER_BUILD != "" && !(c.environment ? MOTD)) "the Paper build is pinned and server.properties keys owned by the panel (MOTD) have no environment variable";
+  assert lib.assertMsg (!(units.minecraft-plugins.environment ? STAGE_PANELS) && units.minecraft-panels.partOf == ["docker-minecraft.service"]) "menus are reloaded in place (minecraft-panels), never staged before the start, so a menu change does not restart Minecraft";
   assert lib.assertMsg (units.docker-minecraft.serviceConfig.Restart == "always") "docker-minecraft must restart after a clean stop (panel Stop = restart)";
   assert lib.assertMsg (lib.hasInfix "tailscale serve" units.minecraft-panel-https.script && !(lib.hasInfix "funnel" units.minecraft-panel-https.script)) "map HTTPS is Tailscale Serve (tailnet only), never Funnel";
   assert lib.assertMsg (!(lib.hasInfix "serve 443" units.minecraft-panel-https.script) && !(lib.any (lib.hasInfix "7867") c.ports)) "the retired VoxelDash panel stays unpublished (no port 7867, no serve on 443)";
@@ -59,7 +59,7 @@ in
         MC_DATA=$data MC_OWNER= \
           STAGE_BLUEMAP=${dummyJar "bluemap"} STAGE_BLUEMAP_VERSION=2.0 \
           STAGE_IMAGEFRAME=${dummyJar "imageframe"} STAGE_IMAGEFRAME_VERSION=1.0 STAGE_IMAGEFRAME_CONFIG=${dummyJar "ifcfg"} \
-          STAGE_BLUEMAP_CORE=${dummyJar "core"} STAGE_OVERLAY=${overlay} STAGE_PANELS=${panels} STAGE_PATCHES=${dummyJar "patch"} \
+          STAGE_BLUEMAP_CORE=${dummyJar "core"} STAGE_OVERLAY=${overlay} STAGE_PATCHES=${dummyJar "patch"} \
           STAGE_SEED=${seeds} STAGE_EXPANSIONS=${expansions} \
           ${scripts.stage}/bin/minecraft-stage
       }

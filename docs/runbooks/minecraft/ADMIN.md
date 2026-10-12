@@ -153,8 +153,18 @@ native `Warn` custom punishment is registered as `smod.warn`; `/modlogs <player>
 shows the player's moderation history. `fancy8869` passes the menu permission checks;
 `Kirafunk` has no `bandit.admin.menu` grant.
 
-`/kit` (the survival kits) also opens with `bandit.admin.menu`. `/owner` (unbreakable
-over-max gear, buffs, the three owner boxes) needs `bandit.owner`, for the owner only.
+`/kit` also opens with `bandit.admin.menu`: categories Survival (Start, Eisen, Diamant,
+the Netherite kits), Bauen (blocks and build tools only), Situationen (Bergbau, Nether,
+Ende, Farm, Reise, Redstone, Unterwasser, Brauen, Verzaubern, Kampf, Bogen, Angeln,
+Notfall), Bots (boxes for the bot chest) and OP. Left click puts a kit in the
+inventory, right click gives it as one named shulker box; the lore lists the contents.
+The menus are generated from `hosts/bandit-lab/services/minecraft/kits.nix`; after an
+edit, `tools/minecraft-kit-check` tries every give command on the server against a name
+nobody has and prints what does not parse. `minecraft-panels` installs the menus while
+the server runs and reloads them (`/pa reload`), so a menu change needs no restart.
+The OP category is hidden and locked without `bandit.owner`; it holds the admin build
+kit and opens `/owner`. `/owner` (unbreakable over-max gear, buffs, the three owner
+boxes) needs `bandit.owner`, for the owner only.
 It was not granted when the panel shipped (found 2026-10-12: the LuckPerms database
 held no `bandit.owner`); the owner grants it in game once:
 `/lp user fancy8869 permission set bandit.owner true`.

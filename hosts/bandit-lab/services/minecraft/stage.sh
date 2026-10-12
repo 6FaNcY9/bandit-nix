@@ -2,8 +2,9 @@
 #
 # File ownership, one writer per file:
 #   Nix   - the map (BlueMap) and ImageFrame jars, BlueMap's core.conf
-#           when it does not exist yet, and the CommandPanels menu YAML files.
-#           Replaced on every start. Also nix-patches/ (itzg config patch set).
+#           when it does not exist yet. Replaced on every start. Also
+#           nix-patches/ (itzg config patch set). The CommandPanels menus are
+#           Nix's too, installed by minecraft-panels while the server runs.
 #   Panel - every other plugin jar and all runtime settings once the one-time
 #           seed below has run. The panel (or an operator) installs, updates and
 #           removes them; Nix never deletes or overwrites them again.
@@ -169,12 +170,6 @@ if [ -f "$webapp" ]; then
     echo "WARNING: unexpected scripts entry in $webapp, overlay not registered" >&2
   fi
 fi
-
-# CommandPanels menus are repository-owned.
-install -d "${own[@]}" -m 0750 "$plugins/CommandPanels" "$plugins/CommandPanels/panels"
-for panel in "$STAGE_PANELS"/*.yml; do
-  install "${own[@]}" -m 0644 "$panel" "$plugins/CommandPanels/panels/$(basename "$panel")"
-done
 
 # Velocity forwarding patch set (PATCH_DEFINITIONS=/data/nix-patches). The
 # secret stays a ${CFG_VELOCITY_SECRET} placeholder resolved by itzg at start.
