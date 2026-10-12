@@ -153,6 +153,7 @@ in {
           REPLAYS = "/var/lib/mcagents/replays";
           VARIANTS = "${../../../../tools/mcagents/variants.json}";
           NTFY_URL = "http://127.0.0.1:2586/mcbots";
+          BUSY_FILE = "/run/mcagents-busy/players";
         };
       serviceConfig = {
         Type = "oneshot";
@@ -186,6 +187,30 @@ in {
         IPAddressDeny = "any";
         SystemCallFilter = "@system-service";
         MemoryMax = "512M";
+      };
+    };
+    # No batch pass while people play Minecraft (main or sandbox): the file lists who is online but the
+    # bots, and replay/judge treat every PC as busy while it exists (routing.js peoplePlaying). A replay
+    # pass kept slayer's GPU at 100 % and the owner's Minecraft on slayer stuttered (2026-10-12).
+    systemd.services.mcagents-players = lib.mkIf (offlineNames != []) {
+      description = "Note who plays Minecraft, so batch passes leave the gaming PCs alone";
+      path = [pkgs.docker pkgs.coreutils pkgs.gnugrep pkgs.gnused];
+      serviceConfig = {
+        Type = "oneshot";
+        RuntimeDirectory = "mcagents-busy";
+        RuntimeDirectoryPreserve = true;
+      };
+      script = ''
+        people=$(for c in minecraft minecraft-sandbox; do docker exec "$c" rcon-cli list 2>/dev/null; done |
+          sed -n 's/\x1b\[[0-9;]*m//g; s/.*online: *//p' | tr ',' '\n' | tr -d ' \r' | grep -Evx 'bot[0-9]+|' || true)
+        if [ -n "$people" ]; then echo "$people" > /run/mcagents-busy/players; else rm -f /run/mcagents-busy/players; fi
+      '';
+    };
+    systemd.timers.mcagents-players = lib.mkIf (offlineNames != []) {
+      wantedBy = ["timers.target"];
+      timerConfig = {
+        OnBootSec = "1min";
+        OnUnitActiveSec = "1min";
       };
     };
     # slayer grades from the oldest end while albert replays (it sat at 0 % through every replay, owner

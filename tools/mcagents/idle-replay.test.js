@@ -44,6 +44,15 @@ const {backendBase, sample, score, scoreAll, wilson, samplingFor, runBackend, wi
   server.close();
   const gone = await runBackend(base, rows, [{name: 'baseline'}]);
   assert.equal(gone.results.length, 0); assert.match(gone.stopped, /not free/);
+  // while people play Minecraft (BUSY_FILE exists) a free PC is left alone, before any request
+  const busy = require('node:path').join(require('node:os').tmpdir(), `busy-${process.pid}`);
+  require('node:fs').writeFileSync(busy, 'fancy8869\n');
+  process.env.BUSY_FILE = busy;
+  const up = http.createServer((req, res) => { res.statusCode = 200; res.end('{}'); });
+  await new Promise((ok) => up.listen(0, '127.0.0.1', ok));
+  const played = await runBackend(`http://127.0.0.1:${up.address().port}`, rows, [{name: 'baseline'}]);
+  assert.equal(played.results.length, 0); assert.match(played.stopped, /people are playing/);
+  require('node:fs').unlinkSync(busy); delete process.env.BUSY_FILE; up.close();
   // a /health that redirects (to Ollama, say) counts as not free, and is never followed (Codex R7-6)
   let followed = false;
   const target = http.createServer((req, res) => { followed = true; res.end('{}'); });

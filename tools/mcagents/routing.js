@@ -3,6 +3,7 @@
 // "slayer" serve the live agents and the solver; "albert" (ANDY_OFFLINE_NAMES) is reserved for the idle
 // replay, the judge and training. The same ANDY_URLS / ANDY_BACKEND_NAMES lists feed both paths; this
 // file splits them, and both paths refuse the other's backends.
+const fs = require('node:fs');
 const OLLAMA_PORT = '11434';
 
 // Offline work only ever talks to a loopback llama-server port, never Ollama.
@@ -27,4 +28,9 @@ function offlineTargets(env = process.env) {
   return pcs(env).filter((p) => !off.size || off.has(p.name)).map((p) => ({...p, url: backendBase(p.url)}));
 }
 
-module.exports = {OLLAMA_PORT, backendBase, offlineNames, offlineTargets, pcs};
+// Batch work (replay, judge) leaves every PC alone while people play Minecraft: mcagents-players keeps
+// BUSY_FILE while anyone but the bots is online (owner 2026-10-12: Minecraft on slayer stuttered under a
+// replay pass). The live agents never look at it.
+const peoplePlaying = (file = process.env.BUSY_FILE) => !!file && fs.existsSync(file);
+
+module.exports = {OLLAMA_PORT, backendBase, offlineNames, offlineTargets, pcs, peoplePlaying};

@@ -8,7 +8,7 @@ const path = require('node:path');
 const {performance} = require('node:perf_hooks');
 const {parseCommand, SAMPLING} = require('./agent');
 const {modelRequest, modelReply} = require('./model-protocol');
-const {backendBase, offlineTargets} = require('./routing');
+const {backendBase, offlineTargets, peoplePlaying} = require('./routing');
 const {loadEval} = require('./eval-set');
 
 // Labeled decisions first (newest first), then the newest unlabeled ones, up to n.
@@ -93,9 +93,9 @@ function scoreAll(results, variants, seeds = SEEDS) {
 // and keeps what it has.
 async function runBackend(base, rows, variants, {timeoutMs = 60000, healthMs = 3000, seeds = [], deadline = Infinity} = {}) {
   base = backendBase(base);
-  const healthy = () => fetch(`${base}/health`, {redirect: 'error', signal: AbortSignal.timeout(healthMs)}).then((r) => r.status === 200, () => false);
+  const healthy = () => !peoplePlaying() && fetch(`${base}/health`, {redirect: 'error', signal: AbortSignal.timeout(healthMs)}).then((r) => r.status === 200, () => false);
   const out = {alias: null, results: [], stopped: null};
-  if (!await healthy()) { out.stopped = 'not free (health)'; return out; }
+  if (!await healthy()) { out.stopped = peoplePlaying() ? 'not free (people are playing)' : 'not free (health)'; return out; }
   const plan = variants.flatMap((variant, i) => [{variant, run: 'greedy'}, ...(i === 0 ? seeds.map((seed) => ({variant, run: `seed${seed}`, seed})) : [])]);
   for (const {variant, run, seed} of plan) for (const row of rows) {
     if (Date.now() > deadline) { out.stopped = 'deadline'; return out; }
