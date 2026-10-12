@@ -77,8 +77,10 @@ in {
 
     openssh.settings = {
       # Only the vino account holds authorized keys; refuse everyone else
-      # outright instead of relying on per-account key checks.
-      AllowUsers = [repoConfig.workstation.username];
+      # outright instead of relying on per-account key checks. root only from the
+      # laptop's tailnet address, for lab-apply's forced-command key
+      # (services/auto-rebuild; ci/local-privilege.nix keeps root address-bound).
+      AllowUsers = [repoConfig.workstation.username "root@${repoConfig.lab.workstationTailscaleIp}"];
     };
   };
 

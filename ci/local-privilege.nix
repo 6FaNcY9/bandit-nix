@@ -35,6 +35,8 @@
     "${name}: nix trusted-users must be [\"root\"] (a trusted Nix user is root-equivalent)";
     assert lib.assertMsg (!config.services.openssh.enable || lib.elem config.services.openssh.settings.PermitRootLogin ["no" "forced-commands-only"])
     "${name}: sshd PermitRootLogin must be \"no\" or \"forced-commands-only\"";
+    assert lib.assertMsg (config.services.openssh.settings.AllowUsers == null || !(lib.elem "root" config.services.openssh.settings.AllowUsers))
+    "${name}: sshd AllowUsers may name root only with an address (root@<ip>), never bare";
     assert lib.assertMsg (config.users.users.root.openssh.authorizedKeys.keyFiles == [] && lib.all rootKeyIsBound config.users.users.root.openssh.authorizedKeys.keys)
     "${name}: every root SSH key must be bound to one forced command, the laptop's address and restrict (from=, command=, restrict)"; true;
   mcpNames = ["context7-mcp" "firecrawl-mcp"];
