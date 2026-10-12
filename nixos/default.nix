@@ -4,6 +4,7 @@ _: {
     ./secrets-workstation.nix
     ./restic-peer-server.nix
     ./backup-peer.nix
+    ./lab-apply.nix
     ./mcp.nix
     ./cli-tools.nix
     ./core.nix
