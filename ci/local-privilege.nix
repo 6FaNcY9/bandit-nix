@@ -19,6 +19,9 @@
     == 1
     || lib.hasInfix "AUTH_ADMIN" (lib.head (lib.splitString "Result.YES" (lib.elemAt mentions 1)));
 
+  # A root key may only run its forced command, from a pinned address, without terminal or forwarding.
+  rootKeyIsBound = key: lib.all (opt: lib.hasInfix opt key) [''from="'' ''command="'' "restrict"];
+
   checkHost = name: config:
     assert lib.assertMsg (!(lib.hasInfix "NOPASSWD" config.security.sudo.extraConfig))
     "${name}: security.sudo.extraConfig must not grant NOPASSWD (a NOPASSWD nixos-rebuild is passwordless root via --flake /tmp/x)";
@@ -29,7 +32,11 @@
     assert lib.assertMsg (libvirtRequiresAuth config.security.polkit.extraConfig)
     "${name}: the first polkit rule mentioning org.libvirt.unix.manage must demand authentication (NixOS's own libvirtd rule auto-approves it; ours must come first)";
     assert lib.assertMsg (lib.unique config.nix.settings.trusted-users == ["root"])
-    "${name}: nix trusted-users must be [\"root\"] (a trusted Nix user is root-equivalent)"; true;
+    "${name}: nix trusted-users must be [\"root\"] (a trusted Nix user is root-equivalent)";
+    assert lib.assertMsg (!config.services.openssh.enable || lib.elem config.services.openssh.settings.PermitRootLogin ["no" "forced-commands-only"])
+    "${name}: sshd PermitRootLogin must be \"no\" or \"forced-commands-only\"";
+    assert lib.assertMsg (config.users.users.root.openssh.authorizedKeys.keyFiles == [] && lib.all rootKeyIsBound config.users.users.root.openssh.authorizedKeys.keys)
+    "${name}: every root SSH key must be bound to one forced command, the laptop's address and restrict (from=, command=, restrict)"; true;
   mcpNames = ["context7-mcp" "firecrawl-mcp"];
   mcpIn = host: lib.filter (p: lib.elem (lib.getName p) mcpNames) hosts.${host}.config.environment.systemPackages;
 in

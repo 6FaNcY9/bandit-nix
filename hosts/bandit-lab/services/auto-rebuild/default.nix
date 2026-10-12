@@ -1,4 +1,8 @@
-{pkgs, ...}: let
+{
+  pkgs,
+  repoConfig,
+  ...
+}: let
   repoDir = "/etc/nixos/bandit-nix";
   repositoryUrl = "https://github.com/6FaNcY9/bandit-nix.git";
   signingKeyFingerprint = "4D8770567A65FE1369E2BCC1611871842A8C1619";
@@ -197,8 +201,28 @@
     rollback_needed=0
     echo "bandit-lab activated and recorded at $after"
   '';
+
+  # Forced command for the laptop's lab-apply key (nixos/lab-apply.nix: laptop sudo with the finger
+  # unlocks a root-only key). It runs the deploy as its systemd unit, so a dropped connection cannot
+  # abort it and roll it back (2026-10-12), and shows the unit's log meanwhile. A run already going
+  # (the hourly timer) is joined, not doubled.
+  labApplyRemote = pkgs.writeShellScript "lab-apply-remote" ''
+    ${pkgs.systemd}/bin/journalctl -fu lab-update-apply.service -n0 -o cat &
+    follow=$!
+    status=0
+    ${pkgs.systemd}/bin/systemctl start lab-update-apply.service || status=$?
+    sleep 1
+    kill "$follow" 2>/dev/null || true
+    exit "$status"
+  '';
 in {
   environment.systemPackages = [labUpdate];
+
+  # Root takes this one key, from the laptop's tailnet address only, for this one command, with no
+  # terminal or forwarding; ci/local-privilege.nix holds every root key to that.
+  users.users.root.openssh.authorizedKeys.keys = [
+    ''from="${repoConfig.lab.workstationTailscaleIp}",command="${labApplyRemote}",restrict ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPuSCP6BRdqISR16YQCK0b3b4sYxlGC2AiJRtPB8cO8B lab-apply@bandit''
+  ];
 
   systemd = {
     services = {

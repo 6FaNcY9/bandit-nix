@@ -60,7 +60,8 @@
       settings = {
         PasswordAuthentication = false;
         KbdInteractiveAuthentication = false;
-        PermitRootLogin = "no";
+        # Root only with a forced-command key (lab-apply, hosts/bandit-lab/services/auto-rebuild).
+        PermitRootLogin = "forced-commands-only";
       };
     };
 
