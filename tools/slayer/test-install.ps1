@@ -65,7 +65,7 @@ Assert ($installer -match "light-games.txt' -and \(Test-Path") 'Existing allowli
 $watchAst = [Management.Automation.Language.Parser]::ParseInput($watcher, [ref]$tokens, [ref]$errors)
 $definition = $watchAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'ModelVerified' }, $true)
 . ([scriptblock]::Create($definition.Extent.Text))
-$model = 'fixture-model'; $modelSha256 = 'good'; $script:modelCheck = $null; $script:hashCalls = 0
+$model = 'fixture-model'; $modelSha256 = 'good'; $script:modelChecks = @{}; $script:hashCalls = 0
 $script:item = [pscustomobject]@{ Length = 10; LastWriteTimeUtc = [datetime]'2026-10-10'; PSIsContainer = $false }
 function Get-Item { param($Path, $ErrorAction) $script:item }
 function Get-FileHash { param($Path, $Algorithm) $script:hashCalls++; @{ Hash = $script:hashResult } }
@@ -83,10 +83,21 @@ $block = $start.Parent
 while ($block -isnot [Management.Automation.Language.StatementBlockAst]) { $block = $block.Parent }
 $launch = $block.Extent.Text.Trim()
 $launch = [scriptblock]::Create($launch.Substring(1, $launch.Length - 2))
-$script:starts = 0
-function Start-Process { $script:starts++; throw 'Must not launch during a game' }
-function Busy { 'game appeared' }
+$definition = $watchAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'PickMode' }, $true)
+. ([scriptblock]::Create($definition.Extent.Text))
+$serving = @{ Path = 'fixture-model'; Alias = 'andy' }; $layers = 99; $TestPort = 0; $port = 8081
+$script:starts = @()
+function Start-Process { param($FilePath, $ArgumentList, $WorkingDirectory, $WindowStyle, [switch]$PassThru, $RedirectStandardOutput, $RedirectStandardError) $script:starts += $ArgumentList; throw 'launched' }
+function Training { 'training' }
+function Busy { $null }
+$mode = 'full'
 $deferred = $false
 try { & $launch } catch { $deferred = $_.Exception.Message -match 'launch deferred' }
-Assert ($deferred -and $script:starts -eq 0) 'Game appearing during hashing must prevent launch'
+Assert ($deferred -and -not $script:starts.Count) 'Training starting during hashing must prevent launch'
+# A game no longer stops Andy: one appearing during hashing gets the shared server instead of the full one.
+function Training { $null }
+function Busy { 'game appeared' }
+$mode = 'full'
+try { & $launch } catch { }
+Assert ($script:starts.Count -eq 1 -and $script:starts[0] -match '--n-gpu-layers 0 --no-op-offload' -and $script:starts[0] -match '--prio -1') 'Game appearing during hashing must launch the shared server'
 'PASS: payload parity, key migration, retry checksums, verification cache and game-start race'

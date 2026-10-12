@@ -10,6 +10,7 @@ if (-not (Test-Path $runtime)) { $null = New-Item -ItemType Directory $runtime }
 $model = "$base\models\andy.gguf"
 $modelSha256 = '3cfccaa17be8d2ded998fab8bd4b7032f91f2a916ac2aa03a412908342228eb1'
 $script:modelFailureLogged = $false
+$script:freeSince = $null
 $port = 8081
 $layers = 99
 # A CPU-only second server lets checks leave the replay's GPU server alone.
@@ -44,6 +45,17 @@ function Servers($listeners) {
           $_.CreationDate.ToString('o') -eq $record.CreationDate))
     })
 }
+# Games leave the GPU to the game but not to Andy: 'shared' serves on the VRAM they leave free
+# (CPU only, low priority), 'full' is the normal all-layers server. $null stops the server (training,
+# another console session, probe failures). Back to full only after 5 min of a free PC, so
+# alt-tabbing does not restart the server.
+function PickMode($reason, $current) {
+    if ($reason -and $reason -notmatch '^(fullscreen window|game |non-llama GPU)') { return $null }
+    if (-not $reason -and $current -eq 'shared' -and $script:freeSince -and ((Get-Date) - $script:freeSince).TotalMinutes -lt 5) { return 'shared' }
+    if ($reason) { return 'shared' }
+    return 'full'
+}
+function ServerMode($server) { if ($server.CommandLine -match '--prio\s+-1(?:\s|$)') { 'shared' } else { 'full' } }
 # train\run-guarded.ps1 holds C:\bandit-ai\training.lock while it trains: the GPU is its, so the
 # server is stopped and not started. A lock older than 24 h is a crash leftover and ignored.
 function Training {
@@ -81,13 +93,15 @@ try {
     do {
         $cycle = [Diagnostics.Stopwatch]::StartNew()
         try {
-            $reason = Busy
-            if (-not $reason) { $reason = Training }
+            $reason = Training
+            if (-not $reason) { $reason = Busy }
         } catch { $reason = "probe failed: $($_.Exception.Message)" }
+        if ($reason) { $script:freeSince = $null } elseif (-not $script:freeSince) { $script:freeSince = Get-Date }
         try {
             $listeners = @(Listeners)
             $servers = @(Servers $listeners)
-            if ($reason) {
+            $mode = PickMode $reason $(if ($servers.Count) { ServerMode $servers[0] })
+            if (-not $mode) {
                 foreach ($server in $servers) {
                     Stop-Process -Id $server.ProcessId -ErrorAction Stop
                     Write-Log "stopped PID $($server.ProcessId): $reason"
@@ -97,16 +111,29 @@ try {
                         Write-Log "left listener PID $($listener.OwningProcess): not ours to stop ($reason)"
                     }
                 }
+            } elseif ($servers | Where-Object { (ServerMode $_) -ne $mode }) {
+                foreach ($server in $servers) {
+                    Stop-Process -Id $server.ProcessId -ErrorAction Stop
+                    Write-Log "switching to ${mode}: $(if ($reason) { $reason } else { 'PC free for 5 min' })"
+                }
             } elseif (-not $listeners.Count -and -not $servers.Count -and ($serving = Serving)) {
                 # Verification can take seconds; a game may have started during hashing.
-                if ((Busy) -or (Training)) { throw 'Game appeared during model verification; launch deferred' }
+                if (Training) { throw 'Training started during model verification; launch deferred' }
+                if ($mode -eq 'full' -and ($again = Busy)) {
+                    $mode = PickMode $again $null
+                    if (-not $mode) { throw "$again during model verification; launch deferred" }
+                }
+                $gpu = "--n-gpu-layers $layers"
+                # Shared: CPU only (no layers, no op offload), 4 of 8 cores, low priority. --fit sized the offload
+                # once at the start and still left the game 99 MiB and the GPU at 100 % (2026-10-12).
+                if ($mode -eq 'shared') { $gpu = '--n-gpu-layers 0 --no-op-offload --threads 4 --prio -1' }
                 $env:LLAMA_ARG_CHAT_TEMPLATE_KWARGS = '{"enable_thinking":false}'
-                $arguments = "--model $($serving.Path) --alias $($serving.Alias) --host 127.0.0.1 --port $port --jinja --ctx-size 8192 --parallel 1 --n-gpu-layers $layers --temp 0.6 --top-k 20 --top-p 0.95 --min-p 0 --repeat-penalty 1.0"
+                $arguments = "--model $($serving.Path) --alias $($serving.Alias) --host 127.0.0.1 --port $port --jinja --ctx-size 8192 --parallel 1 $gpu --temp 0.6 --top-k 20 --top-p 0.95 --min-p 0 --repeat-penalty 1.0"
                 $server = Start-Process "$base\llama\llama-server.exe" -ArgumentList $arguments -WorkingDirectory "$base\llama" -WindowStyle Hidden -PassThru -RedirectStandardOutput "$runtime\watch-$port.out.log" -RedirectStandardError "$runtime\watch-$port.err.log"
                 # Creation time prevents a stale PID file from authorizing a reused PID.
                 $started = Get-CimInstance Win32_Process -Filter "ProcessId=$($server.Id)"
                 @{ ProcessId = $server.Id; CreationDate = $started.CreationDate.ToString('o') } | ConvertTo-Json | Set-Content $pidFile
-                Write-Log "started PID $($server.Id)"
+                Write-Log "started PID $($server.Id) ($mode)"
             } elseif (-not $listeners.Count -and -not $servers.Count) {
                 if (-not $script:modelFailureLogged) { Write-Log "model missing or checksum mismatch; inference disabled"; $script:modelFailureLogged = $true }
             }

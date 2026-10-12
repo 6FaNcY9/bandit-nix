@@ -1,10 +1,16 @@
 # Slayer idle inference
 
-`watch.ps1` lives at `C:\bandit-ai\watch.ps1`. Every 15 seconds it yields to
+`watch.ps1` lives at `C:\bandit-ai\watch.ps1`. Every 15 seconds it checks for
 any foreground fullscreen window, the listed game processes, or >=20% GPU engine
-use from processes other than llama-server. GPU/window probe errors also stop
-inference. A different active console session also pauses inference, so another
-Windows user cannot game alongside yassi's watcher. Idle launchers (Steam, Epic,
+use from processes other than llama-server. In that case Andy keeps answering in
+*shared* mode: llama-server restarts CPU only (`--n-gpu-layers 0 --no-op-offload
+--threads 4 --prio -1`), so the game keeps the whole GPU and four of the eight cores
+come first for it. Andy answers slower then. (`--fit` was tried first: it sizes the
+offload once at the start and left the game 99 MiB of VRAM with the GPU at 100 %.) The server returns to full GPU
+mode only after the PC has been free for 5 minutes, so alt-tabbing does not
+restart it. Training (`training.lock`), GPU/window probe errors and a different
+active console session (so another Windows user cannot game alongside yassi's
+watcher) still stop inference. Idle launchers (Steam, Epic,
 Battle.net, Riot) do not stop inference; their installed games do, by name or
 `steamapps\common`/`Epic Games`/`Riot Games` path. Extend the process list for
 games installed outside those paths.
@@ -102,7 +108,7 @@ CPU server, then the same command with `-GpuPercent 99` to stop it. For an SSH
 check, execute both in the same remote session (Windows SSH cleans up child
 processes at session end). `TestPort` cannot be 8081. The fake GPU value does not
 bypass the game/fullscreen checks. Without test parameters the server uses GPU
-layers 99, exactly as run.bat does. Interactive fullscreen checks require the
+layers 99, exactly as run.bat does (shared mode while busy). With `-TestPort` both modes stay CPU-only. Interactive fullscreen checks require the
 interactive logon task; an SSH one-shot cannot validate another desktop session.
 
 `test-watch.ps1` checks listener and process ownership with mocked CIM results.
