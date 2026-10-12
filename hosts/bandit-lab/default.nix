@@ -94,7 +94,7 @@ in {
   bandit-lab.slayerTunnel.enable = true;
   bandit-lab.inferenceHosts.albert = {
     enable = true;
-    address = "100.116.70.114";
+    address = "100.98.68.118";
     user = "alber";
     hostKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINaR7hAH5s8eJlUaiDoSmqwkhNKvzyBMjVtgsgxx315v";
     localPort = 18082;
