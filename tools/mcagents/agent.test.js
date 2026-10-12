@@ -349,19 +349,26 @@ assert.ok(!new Agent('bot1', 'g', null).system({bots: [], places: [], world: {}}
       const agents = new Map([['bot1', agent]]);
       const jobs = [];
       globalThis.fetch = async (url, opt = {}) => ({ok: true, status: 200, json: async () => (url.endsWith('/api/chat') ? {message: {content: '!startShift("coal")'}} : (url.endsWith('/api/job') && jobs.push(JSON.parse(opt.body)), {}))});
-      const state = {bots: [{name: 'bot1', online: true, pos: [0, 64, 0], inventory: [], queue: [], job: {type: 'shift', label: 'shift stone'}}], places: [], supplyChest: {x: 1, y: 64, z: 1}};
+      const state = {bots: [{name: 'bot1', online: true, pos: [0, 64, 0], inventory: [], queue: [], job: {type: 'shift', label: 'shift stone 1 64 1'}}], places: [], supplyChest: {x: 1, y: 64, z: 1}};
       await decide(agent, agents, async () => state, {take: () => true});
       assert.deepStrictEqual(jobs.map((j) => [j.type, j.replace]), [['shift', true]], 'another shift is replaced');
       Object.assign(agent, {wake: false});
-      onEvent(agents, {bot: 'bot1', kind: 'stop', text: 'stopped: shift stone (40 s)'});
+      onEvent(agents, {bot: 'bot1', kind: 'stop', text: 'stopped: shift stone 1 64 1'}); // mcbots: `stopped: ${jobLabel(job)}`
       assert.strictEqual(agent.wake, false, 'the stop of our own replacement is no news');
       assert.ok(!agent.history.some((m) => /stopped: shift stone/.test(m.content)));
-      state.bots[0].job = {type: 'shift', label: 'shift coal_ore'};
+      state.bots[0].job = {type: 'shift', label: 'shift coal_ore 1 64 1'};
       await decide(agent, agents, async () => state, {take: () => true});
       assert.strictEqual(jobs.length, 1, 'the shift it already runs is not sent again');
       assert.match(agent.history.at(-1).content, /Already running/);
+      // Codex R8-3: the owner stops the coal shift seconds later; only the echo of our own replacement was swallowed
+      onEvent(agents, {bot: 'bot1', kind: 'stop', text: 'stopped: shift coal_ore 1 64 1'});
+      assert.strictEqual(agent.wake, true, "the owner's Stop of the new job wakes the agent");
+      // Codex R8-4: someone else replaced the coal shift with stone; the agent's coal order is sent, not "already running"
+      state.bots[0].job = {type: 'shift', label: 'shift stone 1 64 1'};
+      await decide(agent, agents, async () => state, {take: () => true});
+      assert.deepStrictEqual(jobs.map((j) => j.args.block), ['coal_ore', 'coal_ore'], 'coal again, over the stone shift');
       const other = new Agent('bot2', '', null);
-      onEvent(new Map([['bot2', other]]), {bot: 'bot2', kind: 'stop', text: 'stopped: shift stone (40 s)'});
+      onEvent(new Map([['bot2', other]]), {bot: 'bot2', kind: 'stop', text: 'stopped: shift stone 1 64 1'});
       assert.strictEqual(other.wake, true, 'a stop from the owner still wakes the agent');
     }
     { // same job type failing with the same reason twice: a different command of that type is refused too

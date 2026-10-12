@@ -648,9 +648,18 @@ const RUN = Date.now().toString(36); // ids restart with the process; the run st
 const OUTCOME_MS = Number(process.env.OUTCOME_MS) || 900000; // a job with no result by then ends neutral
 const OUTCOME_MAX = 400; // jobs awaiting a result; beyond this the oldest ends neutral
 const awaiting = []; // {d, bot, type}: decisions whose job has not reported yet, oldest first
-const ownStops = new Map(); // bot -> when we last stopped or replaced its jobs: their "stopped:" events are not news
+const ownStops = new Map(); // bot -> {at, text}: the "stopped:" echo of the job we last stopped or replaced (no news)
 const OWN_STOP_MS = 60000;
-const ownStop = (e, now = Date.now()) => /^stopped/.test(e.text || '') && now - (ownStops.get(e.bot) || 0) <= OWN_STOP_MS;
+// Only that one echo (mcbots emits `stopped: ${jobLabel(job)}`), and only once: an owner's Stop of the job we
+// started right after must still reach the agent (Codex R8-3).
+function ownStop(e, now = Date.now()) {
+  const o = ownStops.get(e.bot);
+  if (!o || now - o.at > OWN_STOP_MS || e.text !== o.text) return false;
+  ownStops.delete(e.bot);
+  return true;
+}
+// mcbots' job label (bots.js jobLabel): how the state names a running job.
+const jobLabelOf = ([type, a]) => `${type} ${Object.values(a || {}).map((v) => (Array.isArray(v) ? `${v.length} blocks` : v && typeof v === 'object' ? `at ${Math.round(v.x)} ${Math.round(v.y)} ${Math.round(v.z)}` : v)).join(' ')}`;
 
 function settle(d, result, reason, now = Date.now()) {
   if (LOG && d) logCall(JSON.stringify({kind: 'outcome', t: new Date(now).toISOString(), id: d.id, agent: d.agent, result, reason: String(reason).slice(0, 160), ms: now - d.at}) + '\n');
@@ -672,23 +681,24 @@ function expireOutcomes(now = Date.now()) {
 }
 // A dashboard event for a bot that may have a decision's job: finished/failed/gave up/died. Jobs of one bot
 // run in order, so the oldest waiting job of that type is the one. ponytail: the type is matched, not the full label.
-function outcomeEvent(e, now = Date.now()) {
+function outcomeEvent(e, now = Date.now(), own = ownStop(e, now)) {
   if (e.kind === 'death') return settleBot(e.bot, 'bad', 'died', undefined, now);
   const m = /^(finished|failed|gave up|stopped): (\w+)/.exec(e.text || '');
   if (!m) return;
   const [, status, type] = m;
   if (status === 'stopped') { // a stop we sent already settled its jobs; this one came from the owner or the dashboard
-    if (!ownStop(e, now)) settleBot(e.bot, 'neutral', 'stopped', type, now);
+    if (!own) settleBot(e.bot, 'neutral', 'stopped', type, now);
     return;
   }
   settleBot(e.bot, status === 'finished' ? 'good' : 'bad', status === 'finished' ? 'finished' : status === 'gave up' ? 'gave up' : `failed: ${e.text.replace(/^failed: \w+ .* - /, '')}`, type, now);
 }
 // Send a job and book its outcome: a stop or replacement settles what it cuts off; a stop settles itself.
-async function order(d, bot, job, replace = false) {
+// cut: the label of the bot's running job (state), whose "stopped:" echo is then expected.
+async function order(d, bot, job, replace = false, cut = null) {
   await sendJob(bot, ...job, replace);
   if (job[0] === 'stop' || replace) {
     settleBot(bot, 'neutral', job[0] === 'stop' ? 'stopped' : 'replaced');
-    ownStops.set(bot, Date.now());
+    if (cut) ownStops.set(bot, {at: Date.now(), text: `stopped: ${cut}`});
   }
   if (job[0] === 'stop') settle(d, 'neutral', 'stop sent');
   else awaitJob(d, bot, job[0]);
@@ -801,7 +811,7 @@ async function decide(agent, agents, getState, budget) {
           continue;
         }
         try {
-          await order(d, as.worker, as.job, as.replace);
+          await order(d, as.worker, as.job, as.replace, state.bots.find((b) => b.name === as.worker)?.job?.label);
         } catch (e) {
           agent.push('system', `Code output: Assignment to ${as.worker} failed. ${e.message}`);
           settle(d, 'bad', `send failed: ${e.message}`);
@@ -821,7 +831,7 @@ async function decide(agent, agents, getState, budget) {
         // Go quiet only once the bot has really stopped (MC-4): a failed Stop would leave a shift
         // running with nobody watching. Instead the brain is asked again.
         try {
-          await order(d, agent.name, ['stop', {}]);
+          await order(d, agent.name, ['stop', {}], false, bot.job?.label);
         } catch (e) {
           agent.push('system', `Code output: Stop failed (${e.message}); your current action is still running. Try again.`);
           settle(d, 'bad', `send failed: ${e.message}`);
@@ -875,8 +885,9 @@ async function decide(agent, agents, getState, budget) {
       settle(d, 'bad', 'refused');
       continue;
     }
-    // Replacing a routine by itself only restarts it (bot1's coal shift, 2026-10-12).
-    if (isRoutine(bot.job) && bot.job.type === t.job[0] && agent.routine === JSON.stringify(t.job)) {
+    // Replacing a routine by itself only restarts it (bot1's coal shift, 2026-10-12). The live job is compared,
+    // not what we sent last: another controller may have replaced it since (Codex R8-4).
+    if (isRoutine(bot.job) && bot.job.label === jobLabelOf(t.job)) {
       agent.push('system', `Already running: ${same}. Let it work, or do something else.`);
       return settle(d, 'neutral', 'already running');
     }
@@ -884,13 +895,12 @@ async function decide(agent, agents, getState, budget) {
     try {
       // A routine never ends, so a job queued behind it would never start (bot2 had two stone shifts
       // queued, live 2026-10-10): the new order replaces it, as !assign does for workers.
-      await order(d, agent.name, t.job, isRoutine(bot.job) || (bot.queue || []).some((label) => ROUTINES.has(String(label).split(" ")[0])));
+      await order(d, agent.name, t.job, isRoutine(bot.job) || (bot.queue || []).some((label) => ROUTINES.has(String(label).split(" ")[0])), bot.job?.label);
     } catch (e) {
       agent.push('system', `Code output: Action failed. ${e.message}`);
       settle(d, 'bad', `send failed: ${e.message}`);
       continue;
     }
-    agent.routine = ROUTINES.has(t.job[0]) ? JSON.stringify(t.job) : '';
     noteSent(agent, t.job, String(cmd.args[0]));
     return;
   }
@@ -899,7 +909,8 @@ async function decide(agent, agents, getState, budget) {
 // One dashboard event: job results become "Code output" lines, as Mindcraft reports them, and wake the brain.
 // hint: what earlier fixed this kind of failure (lessons.js), '' when nothing is known.
 function onEvent(agents, e, hint = '') {
-  outcomeEvent(e);
+  const own = ownStop(e);
+  outcomeEvent(e, Date.now(), own);
   // Alerts (mcbots alerts.js: supply chest gone, night, mobs at the base) go to every foreman.
   if (e.kind === 'alert') {
     if (/^solver:/.test(e.text)) return; // the solver's escalation is for the owner's phone, not a prompt
@@ -912,7 +923,7 @@ function onEvent(agents, e, hint = '') {
     return;
   }
   // The stop of our own replacement woke the agent, which sent the same shift again (bot1, 2026-10-12).
-  if (ownStop(e)) return;
+  if (own) return;
   const boss = agents.get(assigner.get(e.bot));
   const put = boss && e.kind === 'deposit' && /^deposited (.+) at the supply chest$/.exec(e.text);
   if (put) boss.pushDeposit(`${e.bot} put ${put[1]} into the base chest`); // news, not a reason to wake
