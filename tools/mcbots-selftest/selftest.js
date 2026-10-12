@@ -9,7 +9,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const B = process.env.MCBOTS_URL || 'https://bandit-lab.tail7facc9.ts.net:8445';
-const BOT = 'bot10';
+const BOT = process.env.MCBOTS_BOT || 'bot10'; // MCBOTS_BOT=bot5 with MCBOTS_URL=http://127.0.0.1:8095 for a laptop bot running new code
 const CONTAINER = 'minecraft-sandbox'; // never anything else: `minecraft` is the real server
 const CX = 3000, CZ = 3000, FLOOR = 64, R = 20; // test site: stone slab y 30..64, air above, x/z CX/CZ +- R
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -137,10 +137,11 @@ test('goto_up_shaft', async (t) => {
     // 3x3 open shaft, walls of stone around it up to y 90; bot at its bottom, target 15 above
     await box(CX - 2, 65, CZ - 2, CX + 2, 90, CZ + 2, 'minecraft:stone');
     await box(CX - 1, 65, CZ - 1, CX + 1, 90, CZ + 1, 'minecraft:air');
+    await rcon(`setblock ${CX + 1} 79 ${CZ} minecraft:stone`); // a ledge: in mid-air the bot digs its pillar down and drops
   }});
-  t.job = await job('goto', {x: CX, y: 80, z: CZ});
+  t.job = await job('goto', {x: CX + 1, y: 80, z: CZ});
   const p = await pos();
-  t.check('bot at y~80 inside the shaft', near(p, CX, 80, CZ, 2.5, 1.5), `end ${fmt(p)}`);
+  t.check('bot on the ledge at y 80 inside the shaft', near(p, CX + 1, 80, CZ, 1.5, 0.6), `end ${fmt(p)}`);
 });
 
 test('mine_stone', async (t) => {
@@ -321,10 +322,10 @@ test('excavate', {timeout: 300000}, async (t) => {
   t.check('room 5x5x3 is all air (75)', air === 75, `air blocks=${air}/75`);
 });
 
-test('shaft', {timeout: 420000}, async (t) => {
+test('shaft', {timeout: 660000}, async (t) => { // a laptop bot (round trips over the tailnet) needs ~8 min
   await t.prep({inv: [['iron_pickaxe', 1], ['cobblestone', 64]], at: [CX, 65, CZ - 4]});
   const b = {x1: CX - 2, z1: CZ - 2, x2: CX + 1, z2: CZ + 1, top: 64, bottom: 52};
-  t.job = await job('shaft', b, {timeout: 420000});
+  t.job = await job('shaft', b, {timeout: 600000});
   const bottom = await countBlocks(b.x1, 52, b.z1, b.x2, 52, b.z2, 'minecraft:air');
   const all = await countBlocks(b.x1, 53, b.z1, b.x2, 64, b.z2, 'minecraft:air');
   t.check('bottom layer (y52) dug (>=12 of 16 air; one stair step may remain)', bottom >= 12, `bottom air=${bottom}/16`);

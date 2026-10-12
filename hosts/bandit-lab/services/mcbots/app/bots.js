@@ -961,6 +961,10 @@ function guardDigs(runner, bot) {
   };
 }
 
+const DIG_REACH = 5;
+// Eyes (1.62 above the feet) to the block's centre.
+const withinReach = (bot, pos) => bot.entity.position.offset(0, 1.62, 0).distanceTo(pos.offset(0.5, 0.5, 0.5)) <= DIG_REACH;
+
 // true only when this bot dug the block; false when it was gone already, changed, or the dig got
 // no answer. expect(name) says which block may be dug (default: the one there now); it is checked
 // again after every walk and equip, so a block swapped meanwhile (a player's torch) stays.
@@ -977,7 +981,15 @@ async function digAt(r, job, pos, expect = null) {
     const names = tools.map((t) => bot.registry.items[t]?.name).filter(Boolean).sort();
     throw new Error(`needs a tool that can harvest ${block.name}: ${names.join(', ') || 'a pickaxe'}`);
   }
-  await goNear(r, job, pos.x, pos.y, pos.z, 4, {goal: new goals.GoalLookAtBlock(pos, bot.world, {reach: 4}), doing: `walking to ${block.name} near ${at(pos)}${tally(job)}`});
+  try {
+    await goNear(r, job, pos.x, pos.y, pos.z, 4, {goal: new goals.GoalLookAtBlock(pos, bot.world, {reach: 4}), doing: `walking to ${block.name} near ${at(pos)}${tally(job)}`});
+  } catch (e) {
+    // No spot within 4 (the last cells of a shaft layer, seen from its stair step): the server takes a dig
+    // up to its interaction range (4.5) plus a margin, so a block within DIG_REACH of the eyes is dug from
+    // here. The walk's false arrivals hid this until settledGoto (self-test shaft, 2026-10-11).
+    guard(job);
+    if (!/could not reach/.test(e.message) || !withinReach(bot, pos)) throw e;
+  }
   guard(job);
   block = bot.blockAt(pos);
   if (!block || block.name.endsWith('air') || !want(block.name)) return false;
