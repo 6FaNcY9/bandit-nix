@@ -1,11 +1,14 @@
 # Data and consistent-snapshot logic shared by the Backblaze job (default.nix)
 # and the peer job (peer.nix), so both back up exactly the same thing. Each job
 # gets its own staging directory so they can never clobber each other.
-{pkgs}: let
+{
+  pkgs,
+  inputs,
+}: let
   docker = "${pkgs.docker}/bin/docker";
   sqlite = "${pkgs.sqlite}/bin/sqlite3";
   rsync = "${pkgs.rsync}/bin/rsync";
-  minecraftSnapshot = "${(import ../minecraft/scripts.nix {inherit pkgs;}).snapshot}/bin/minecraft-snapshot";
+  minecraftSnapshot = "${(import "${inputs.bandit-craft}/hosts/bandit-lab/services/minecraft/scripts.nix" {inherit pkgs;}).snapshot}/bin/minecraft-snapshot";
 in {
   # Run after the containers whose databases are dumped.
   after = ["docker-aiia-mysql.service" "docker-vaultwarden.service" "docker-minecraft.service"];

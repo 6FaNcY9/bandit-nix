@@ -10,11 +10,12 @@
   lib,
   pkgs,
   repoConfig,
+  inputs,
   ...
 }: let
   cfg = config.bandit-lab.backups;
   staging = "/var/backup/restic-staging";
-  shared = import ./shared.nix {inherit pkgs;};
+  shared = import ./shared.nix {inherit pkgs inputs;};
   repositoryFile = config.sops.secrets."restic-repository".path;
   passwordFile = config.sops.secrets."restic-password".path;
   environmentFile = config.sops.templates."restic-b2.env".path;

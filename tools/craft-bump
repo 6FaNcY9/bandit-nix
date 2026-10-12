@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Bump the bandit-craft input (the game and AI half, github:6FaNcY9/bandit-craft) and get it ready to ship.
+#   tools/craft-bump [REV]   (default: bandit-craft's main on GitHub)
+# In a fresh detached worktree on origin/main: moves the input, lists the bandit-craft commits that come
+# in, commits the flake.lock change (unsigned), builds that committed bandit-lab revision and prints the
+# tools/ship-claude line. It never pushes: a push to main deploys (lab-update).
+set -euo pipefail
+
+repo=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)
+git -C "$repo" fetch -q origin
+wt=$(mktemp -d /tmp/craft-bump-XXXX)
+git -C "$repo" worktree add -q --detach "$wt" origin/main
+cd "$wt"
+
+rev() { jq -r '.nodes["bandit-craft"].locked.rev' flake.lock; }
+old=$(rev)
+if [[ $# -ge 1 ]]; then
+  nix flake lock --override-input bandit-craft "github:6FaNcY9/bandit-craft/$1"
+else
+  nix flake update bandit-craft
+fi
+new=$(rev)
+if [[ $old == "$new" ]]; then
+  echo "bandit-craft is already at ${new:0:7}; nothing to do (remove $wt with: git -C $repo worktree remove $wt)"
+  exit 0
+fi
+
+echo "bandit-craft ${old:0:7} -> ${new:0:7}:"
+gh api "repos/6FaNcY9/bandit-craft/compare/$old...$new" \
+  -q '.commits[] | "  " + .sha[0:7] + " " + (.commit.message | split("\n")[0])'
+
+git commit -q --no-gpg-sign -m "chore(flake): bandit-craft ${old:0:7} -> ${new:0:7}" -- flake.lock
+sha=$(git rev-parse HEAD)
+nix build --no-link "git+file://$wt?rev=$sha#nixosConfigurations.bandit-lab.config.system.build.toplevel"
+
+echo "ready: ${sha:0:7} in $wt (bandit-lab builds). Ship it with:"
+echo "  tools/ship-claude ${sha:0:7}"
+echo "afterwards: git -C $repo worktree remove $wt"

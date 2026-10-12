@@ -11,7 +11,7 @@ service definitions.
 - [Mrija archive runbook](../runbooks/mrija-archive.md)
 - [Portainer retirement](../runbooks/portainer-retirement.md)
 - [Wazuh runbook](../runbooks/wazuh.md)
-- [Minecraft administration](../runbooks/minecraft/ADMIN.md)
+- [Minecraft administration](https://github.com/6FaNcY9/bandit-craft/blob/main/docs/runbooks/minecraft/ADMIN.md) (bandit-craft)
 - [Cloudflare access boundaries](../runbooks/cloudflare-access.md)
 - [Bandit-lab audit evidence](../runbooks/bandit-lab-audit-2026-09-21.md)
 - [Obsidian infrastructure notes](obsidian/README.md)

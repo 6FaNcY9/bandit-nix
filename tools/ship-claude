@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prepare a ship to bandit-lab (docs/runbooks/minecraft/BOTS.md, "Shipping").
+# Prepare a ship to bandit-lab (bandit-craft docs/runbooks/minecraft/BOTS.md, "Shipping").
 #   tools/ship-claude [--dry-run] [--repo DIR] [--remote NAME] SHA...
 # Builds a clean detached worktree on <remote>/main, cherry-picks the SHAs
 # (re-signed with your GPG key), checks the signature, builds the committed

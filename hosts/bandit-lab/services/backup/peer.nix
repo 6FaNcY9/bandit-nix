@@ -6,9 +6,10 @@
   config,
   pkgs,
   repoConfig,
+  inputs,
   ...
 }: let
-  shared = import ./shared.nix {inherit pkgs;};
+  shared = import ./shared.nix {inherit pkgs inputs;};
   staging = "/var/backup/restic-staging-peer";
   secret = name: config.sops.secrets.${name}.path;
 in {

@@ -1,5 +1,5 @@
 # Minecraft contract: what the container may touch, how the panel is exposed,
-# and the staging ownership rules (hosts/bandit-lab/services/minecraft/stage.sh)
+# and the staging ownership rules (bandit-craft hosts/bandit-lab/services/minecraft/stage.sh)
 # exercised on a fixture data directory. Evaluation-time assertions plus one
 # sandboxed run of the real staging script; nothing is started or contacted.
 {
@@ -7,12 +7,13 @@
   lib,
   repoConfig,
   lab,
+  craft, # the bandit-craft input, where the Minecraft module lives
 }: let
   c = lab.virtualisation.oci-containers.containers.minecraft;
   v = lab.virtualisation.oci-containers.containers.velocity;
-  toml = builtins.readFile ../hosts/bandit-lab/services/minecraft/default.nix; # velocity.toml is written there
+  toml = builtins.readFile "${craft}/hosts/bandit-lab/services/minecraft/default.nix"; # velocity.toml is written there
   tailnet = repoConfig.lab.tailscaleIp;
-  scripts = import ../hosts/bandit-lab/services/minecraft/scripts.nix {inherit pkgs;};
+  scripts = import "${craft}/hosts/bandit-lab/services/minecraft/scripts.nix" {inherit pkgs;};
   units = lab.systemd.services;
   sb = lab.virtualisation.oci-containers.containers.minecraft-sandbox;
   extra = lib.concatStringsSep " " c.extraOptions;

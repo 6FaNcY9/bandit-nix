@@ -40,6 +40,13 @@
       url = "github:r-pletnev/pdfreader.nvim/v0.1.7";
       flake = false;
     };
+
+    # The game and AI half (Minecraft, bots, Andy, the gaming PCs' tooling), split out 2026-10-12.
+    # bandit-lab imports its modules (hosts/bandit-lab/default.nix); hosts, secrets and deployment stay here.
+    bandit-craft = {
+      url = "github:6FaNcY9/bandit-craft";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = {
@@ -264,6 +271,7 @@
 
       lab-minecraft = import ./ci/lab-minecraft.nix {
         inherit pkgs repoConfig;
+        craft = inputs.bandit-craft;
         inherit (nixpkgs) lib;
         lab = self.nixosConfigurations.bandit-lab.config;
       };
@@ -274,7 +282,7 @@
         lab = self.nixosConfigurations.bandit-lab.config;
       };
 
-      mcagents-tests = import ./ci/mcagents-tests.nix {inherit pkgs;};
+      inherit (inputs.bandit-craft.checks.${system}) mcagents-tests;
 
       lab-surface = import ./ci/lab-surface.nix {
         inherit pkgs repoConfig;
@@ -341,8 +349,8 @@
     };
     packages.${system} = {
       inherit (pkgs) cachix vulnix;
-      mcbots = pkgs.callPackage ./hosts/bandit-lab/services/mcbots/package.nix {};
-      mcbots-worker = pkgs.callPackage ./hosts/bandit-lab/services/mcbots/worker.nix {
+      mcbots = pkgs.callPackage "${inputs.bandit-craft}/hosts/bandit-lab/services/mcbots/package.nix" {};
+      mcbots-worker = pkgs.callPackage "${inputs.bandit-craft}/hosts/bandit-lab/services/mcbots/worker.nix" {
         inherit repoConfig;
         inherit (self.packages.${system}) mcbots;
       };

@@ -25,7 +25,7 @@ Deployed with the panel change (`40a947e`, 2026-10-06): `minecraft-backup.timer`
 writes a consistent archive (`save-off`, `save-all flush`, rsync, `save-on`, tar.zst)
 with a `.sha256` and keeps the newest 14 in `/srv/containers/minecraft/backups/auto`;
 the restic job calls the same snapshot script. `tools/minecraft-restore-test.sh
-ARCHIVE` is the restore drill (new directory, throwaway container, no published
+ARCHIVE` (in bandit-craft) is the restore drill (new directory, throwaway container, no published
 port). The manual procedure below stays valid for cold backups.
 
 1. Make a fresh consistent backup after `save-all flush` and a graceful stop.

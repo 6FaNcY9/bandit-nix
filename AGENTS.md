@@ -30,7 +30,7 @@ NixOS flake for `bandit` (Framework 13 AMD laptop) and `bandit-lab` (headless se
 | Laptop system modules | `nixos/` |
 | Headless server base | `nixos/server/` |
 | Server services and assets | `hosts/bandit-lab/services/<name>/` |
-| Minecraft server, proxy, bots | `hosts/bandit-lab/services/{minecraft,mcbots}/`, `docs/runbooks/minecraft/` (`BOTS.md`, `PROXY.md`, `ADMIN.md`) |
+| Minecraft server, bots, Andy, gaming PCs | the flake input `bandit-craft` ([github:6FaNcY9/bandit-craft](https://github.com/6FaNcY9/bandit-craft), split out 2026-10-12): its modules are imported in `hosts/bandit-lab/default.nix`; the contract checks `ci/lab-minecraft.nix`, `ci/lab-mcbots.nix` stay here |
 | User environment | `home/` (`desktop/`, `terminal/`, `editor/`) |
 | Secrets wiring and encrypted data | `nixos/sops.nix`, `.sops.yaml`, `secrets/` |
 | Checks and CI | `ci/`, `.github/workflows/`, `.gitlab-ci.yml` |

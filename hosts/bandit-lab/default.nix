@@ -1,8 +1,13 @@
 {
   lib,
   repoConfig,
+  inputs,
   ...
-}: {
+}: let
+  # Game and AI services from the bandit-craft input (github:6FaNcY9/bandit-craft), kept at their old
+  # place in this list so the module order (and the system) did not change with the split.
+  craft = "${inputs.bandit-craft}/hosts/bandit-lab/services";
+in {
   imports = [
     ./hardware.nix
     ./services/cockpit-theme
@@ -13,13 +18,13 @@
     ./services/monitoring
     ./services/beszel
     ./services/vaultwarden
-    ./services/minecraft
-    ./services/minecraft/sandbox.nix
-    ./services/mcbots
+    "${craft}/minecraft"
+    "${craft}/minecraft/sandbox.nix"
+    "${craft}/mcbots"
     ./services/ntfy
-    ./services/ollama
-    ./services/llamacpp
-    ./services/mcagents
+    "${craft}/ollama"
+    "${craft}/llamacpp"
+    "${craft}/mcagents"
     ./power.nix
     ./services/aiia
     ./services/auto-rebuild
@@ -82,7 +87,7 @@
   # deploy back. Firmware on the lab is updated by hand, so the timer is not needed.
   systemd.timers.fwupd-refresh.enable = false;
 
-  # Andy-4.2 also runs on the owner's gaming PCs when they are free (tools/slayer/README.md);
+  # Andy-4.2 also runs on the owner's gaming PCs when they are free (bandit-craft tools/slayer/README.md);
   # each tunnel makes it a loopback port here and mcagents shares the work with Ollama.
   bandit-lab.slayerTunnel.enable = true;
   bandit-lab.inferenceHosts.albert = {
