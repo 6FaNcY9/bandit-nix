@@ -1690,6 +1690,8 @@ require('./crafting');
     bots[1].err = 'homebed: no wool';
     now += 6000;
     plan.tick();
+    now += IDLE_MS; // a chain is over once its bot has been idle this long
+    plan.tick();
     assert.strictEqual(plan.state().objectives[0].pct, 50);
     assert.match(events.items.map((e) => e.text).join('\n'), /bot12 did not finish beds \(homebed: no wool\)/);
     const n = bots[1].sent.length;
@@ -1699,7 +1701,7 @@ require('./crafting');
     bots[1].err = '';
     now += 11 * 60 * 1000; plan.tick(); now += IDLE_MS; plan.tick();
     assert.strictEqual(bots[1].sent.length, n + 1, 'retried after the wait');
-    now += 6000; plan.tick(); bots[1].working = false; now += 6000; plan.tick();
+    now += 6000; plan.tick(); bots[1].working = false; now += 6000; plan.tick(); now += IDLE_MS; plan.tick();
     // the keeper is borrowed for the stock objective: plan quotas, plan chest, roster only, no site
     assert.strictEqual(plan.state().current.id, 'stock');
     assert.deepStrictEqual([keeper.enabled, keeper.chest, keeper.quotas, keeper.site, [...keeper.runners.keys()]], [true, chest, [['logs', 10]], null, ['bot11', 'bot12']]);
@@ -4319,6 +4321,69 @@ require('./crafting');
     assert.strictEqual(mk().enabled, true, 'restored on start');
     p.setEnabled(false);
     assert.strictEqual(mk().enabled, false, 'Stop all is remembered too');
+  }
+  { // 2026-10-12: two shaft strips "finished" 1-3 s after a deploy, 20-30 layers short, and the parked shaft stalled the plan
+    const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+    const {Plan, MIN_HOLD_MS} = require('./plan');
+    const {IDLE_MS} = require('./keeper');
+    const HOUR = 3600 * 1000;
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'mcbots-planrestart-')), 'plan.json');
+    let now = 1e6, bottom = 'stone';
+    const snap = (o = {}) => ({online: true, dead: false, job: null, queue: [], inventory: [], lastError: '', lastErrorAgoS: null, ...o});
+    const bot = {name: 'bot11', sent: [], working: false, online: true, snapshot() { return snap({online: this.online, job: this.working ? {type: 'shaft', runningS: 5} : null}); }, enqueue(type) { this.sent.push(type); this.working = true; }};
+    const objectives = [
+      {id: 'shaft', label: 'shaft', needs: [], onBlocked: 'park', roles: [{count: 1, jobs: [['shaft', {}]]}], done: () => bottom === 'air'},
+      {id: 'later', label: 'later', needs: ['shaft'], onBlocked: 'skip', roles: [{count: 1, jobs: [['goto', {}]]}]},
+    ];
+    const mk = () => new Plan({runners: new Map([['bot11', bot]]), world: new WorldModel({now: () => now}), objectives, roster: ['bot11'], chest: {x: 1, y: 2, z: 3}, file, now: () => now});
+    let plan = mk();
+    plan.setEnabled(true);
+    plan.tick(); now += IDLE_MS; plan.tick();
+    assert.strictEqual(bot.sent.length, 1);
+    now += 6000; plan.tick(); // seen busy
+    // the deploy: a new hub, and the bot is online a moment before its job is resumed
+    plan = mk();
+    bot.working = false;
+    bot.online = false;
+    plan.tick(); // the new hub; the bot still logs in
+    bot.online = true;
+    now += MIN_HOLD_MS; plan.tick();
+    bot.working = true;
+    now += 1000; plan.tick();
+    assert.strictEqual(plan.results.size, 0, 'a bot idle for a moment after a restart has not finished its chain');
+    // the chain ends without an error, but the shaft bottom is still stone: the strip goes out again, as a failure
+    bot.working = false;
+    now += IDLE_MS; plan.tick(); now += IDLE_MS; plan.tick();
+    assert.strictEqual(plan.completed.has('shaft'), false, 'every slot says done, the world says no');
+    assert.strictEqual(plan.fails.get('shaft'), 1);
+    now += 11 * 60 * 1000; plan.tick(); now += IDLE_MS; plan.tick();
+    assert.strictEqual(bot.sent.length, 2, 'the strip is dug again after the wait');
+    bottom = 'air';
+    now += 6000; plan.tick();
+    assert.strictEqual(plan.completed.has('shaft'), true, 'the world says done');
+    // a parked step is tried again after an hour instead of stalling the plan for good
+    const file2 = path.join(path.dirname(file), 'plan2.json');
+    bottom = 'stone';
+    const p2 = new Plan({runners: new Map([['bot11', bot]]), world: new WorldModel({now: () => now}), objectives, roster: ['bot11'], chest: {x: 1, y: 2, z: 3}, file: file2, now: () => now});
+    p2.setEnabled(true);
+    p2.fails.set('shaft', 3);
+    p2.tick();
+    assert.deepStrictEqual(p2.state().parked.map((o) => o.id), ['shaft']);
+    now += HOUR - 1000; p2.tick();
+    assert.strictEqual(p2.blocked.has('shaft'), true, 'parked within the hour');
+    now += 2000; p2.tick();
+    assert.deepStrictEqual([p2.blocked.has('shaft'), p2.fails.get('shaft') ?? 0, p2.state().current?.id], [false, 0, 'shaft'], 'tried again after the hour');
+    // a block saved before its time was kept (the shaft of 2026-10-11) is tried again at once
+    fs.writeFileSync(file2, JSON.stringify({enabled: true, completed: [], skipped: [], fails: {shaft: 3}, blocked: {shaft: '3 chains failed'}, assigned: {}, results: {}}));
+    const p3 = new Plan({runners: new Map([['bot11', bot]]), world: new WorldModel({now: () => now}), objectives, roster: ['bot11'], chest: {x: 1, y: 2, z: 3}, file: file2, now: () => now});
+    p3.tick();
+    assert.strictEqual(p3.blocked.has('shaft'), false);
+    // a step skipped by its block (nothing needs it) stays skipped
+    const p4 = new Plan({runners: new Map([['bot11', bot]]), world: new WorldModel({now: () => now}), objectives: objectives.slice(1).map((o) => ({...o, needs: []})), roster: ['bot11'], chest: {x: 1, y: 2, z: 3}, now: () => now});
+    p4.setEnabled(true);
+    p4.fails.set('later', 3);
+    p4.tick(); now += 2 * HOUR; p4.tick();
+    assert.strictEqual(p4.skipped.has('later'), true, 'only parked steps come back');
   }
   { // R6-2 + R6-3: smelting honours Stop after every await, and one bot at a time uses a furnace
     const {makeCrafting} = require('./crafting');

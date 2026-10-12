@@ -17,6 +17,7 @@ const MIN_HOLD_MS = 60000; // a slot stays taken this long after a bot got it, w
 const RETRY_MS = 10 * 60 * 1000; // a slot whose chain failed waits this long
 const MAX_FAILS = 3; // failed chains per objective before it counts as blocked
 const TIMEOUT_MS = 4 * 3600 * 1000; // enabled time on one objective before it counts as blocked
+const PARK_RETRY_MS = 3600 * 1000; // a parked objective is tried again after this long (a deploy may have fixed it)
 const MIN_STRIP = 3; // a shaft strip is at least 3 wide
 
 // ---- pure helpers (tested in test.js with plain objects) ----
@@ -88,13 +89,14 @@ function assignRoles(obj, snaps, assigned, now, minHoldMs = MIN_HOLD_MS, opts = 
   return out;
 }
 
-// Is the objective done? Keeper-driven: every quota is in the chest (fresh numbers only). Direct: all
-// its slots ended without an error, or its own done(ctx) says so.
+// Is the objective done? Keeper-driven: every quota is in the chest (fresh numbers only). Direct: its
+// own done(ctx) when it has one (the world: a slot can report a finish that is none), else all its
+// slots ended without an error.
 function objectiveDone(obj, ctx) {
   if (obj.keeper) return !!ctx.stock?.items && obj.keeper.every(([item, want]) => have(ctx.stock.items, item) >= want);
+  if (obj.done) return !!obj.done(ctx);
   const slots = slotsOf(obj, [...ctx.snaps.keys()]);
-  if (slots.length && slots.every((s) => ctx.results.get(`${obj.id}#${s.key}`)?.ok)) return true;
-  return !!obj.done?.(ctx);
+  return slots.length > 0 && slots.every((s) => ctx.results.get(`${obj.id}#${s.key}`)?.ok);
 }
 
 // What to work on now. Objectives before `idx` are closed. An objective waits for its `needs`; a blocked
@@ -156,6 +158,7 @@ class Plan {
     this.completed = new Set();
     this.skipped = new Set();
     this.blocked = new Map(); // id -> why
+    this.blockedAt = new Map(); // id -> since when (none: blocked before this was kept)
     this.fails = new Map(); // id -> failed chains
     this.started = new Map(); // id -> since when it has been the current one while enabled
     this.assigned = new Map(); // id -> Map<slotKey, entry>
@@ -191,6 +194,7 @@ class Plan {
     this.skipped = new Set(known(d.skipped));
     for (const [id, n] of Object.entries(d.fails || {})) if (ids.has(id) && Number.isInteger(n)) this.fails.set(id, n);
     for (const [id, why] of Object.entries(d.blocked || {})) if (ids.has(id) && typeof why === 'string') this.blocked.set(id, why);
+    for (const [id, at] of Object.entries(d.blockedAt || {})) if (this.blocked.has(id) && Number.isFinite(at)) this.blockedAt.set(id, at);
     for (const [id, slots] of Object.entries(d.assigned || {})) if (ids.has(id)) this.assigned.set(id, new Map(Object.entries(slots)));
     for (const [k, v] of Object.entries(d.results || {})) if (ids.has(k.split('#')[0])) this.results.set(k, v);
   }
@@ -199,7 +203,7 @@ class Plan {
     this.dirty = false;
     if (!this.file) return;
     const obj = (m) => Object.fromEntries(m);
-    const data = {enabled: this.enabled, completed: [...this.completed], skipped: [...this.skipped], fails: obj(this.fails), blocked: obj(this.blocked), assigned: Object.fromEntries([...this.assigned].map(([id, m]) => [id, obj(m)])), results: obj(this.results)};
+    const data = {enabled: this.enabled, completed: [...this.completed], skipped: [...this.skipped], fails: obj(this.fails), blocked: obj(this.blocked), blockedAt: obj(this.blockedAt), assigned: Object.fromEntries([...this.assigned].map(([id, m]) => [id, obj(m)])), results: obj(this.results)};
     try {
       fs.writeFileSync(`${this.file}.tmp`, JSON.stringify(data));
       fs.renameSync(`${this.file}.tmp`, this.file);
@@ -228,24 +232,35 @@ class Plan {
     this.find(id);
     this.skipped.add(id);
     this.blocked.delete(id);
+    this.blockedAt.delete(id);
     this.dirty = true;
     this.say(`${id} skipped by hand`);
     this.advance();
     if (this.dirty) this.save();
   }
 
-  retry(id) {
+  retry(id, why = '') {
     this.find(id);
     this.skipped.delete(id);
     this.completed.delete(id);
     this.blocked.delete(id);
+    this.blockedAt.delete(id);
     this.fails.delete(id);
     this.started.delete(id);
     for (const [k, e] of this.assigned.get(id) || []) if (!e.done) this.assigned.get(id).delete(k);
     this.dirty = true;
-    this.say(`${id} will be tried again`);
+    this.say(`${id} will be tried again${why}`);
     this.advance();
     if (this.dirty) this.save();
+  }
+
+  // A parked objective holds up everything that needs it, so it is not left for a hand on the dashboard:
+  // after PARK_RETRY_MS it is tried again (2026-10-12: the shaft sat parked for 36 h while the roster idled).
+  unpark(t) {
+    for (const id of [...this.blocked.keys()]) {
+      if (this.skipped.has(id) || this.completed.has(id) || t - (this.blockedAt.get(id) ?? 0) < PARK_RETRY_MS) continue;
+      this.retry(id, ` (parked for ${Math.round((t - (this.blockedAt.get(id) ?? t)) / 60000)} min)`);
+    }
   }
 
   // ---- observing ----
@@ -295,7 +310,9 @@ class Plan {
       if (idle(s)) this.idleSince.has(name) || this.idleSince.set(name, t);
       else this.idleSince.delete(name);
     }
+    this.unpark(t);
     this.collect(snaps, t);
+    this.recheck(snaps, t);
     this.advance(snaps, t);
     const o = this.cur;
     if (o?.keeper && this.keeper) this.driveKeeper(o);
@@ -303,8 +320,8 @@ class Plan {
     if (this.dirty) this.save();
   }
 
-  // A chain is over when its bot is idle again (after having been seen busy, or after the hold): closed
-  // if it logged no error since, else retried after RETRY_MS (and counted).
+  // A chain is over when its bot is idle again (after having been seen busy, or after the hold) for
+  // IDLE_MS: closed if it logged no error since, else retried after RETRY_MS (and counted).
   collect(snaps, t) {
     const o = this.cur;
     if (!o || o.keeper) return;
@@ -313,8 +330,10 @@ class Plan {
       if (e.done || !e.bot || e.retryAt) continue; // a failed slot waits for its retry (assignRoles overwrites it)
       const s = snaps.get(e.bot);
       if (s && !idle(s)) e.seen = true;
-      // a chain can start and fail between two ticks, so a bot idle after the hold counts as ended too
-      if (!(idle(s) && (e.seen || t - e.at >= MIN_HOLD_MS))) continue;
+      // a chain can start and fail between two ticks, so a bot idle after the hold counts as ended too;
+      // but after a hub restart a bot is online a moment before its job is resumed (2026-10-11: two shaft
+      // strips "finished" 1-3 s after a deploy), so it must have stayed idle for IDLE_MS
+      if (!(idle(s) && (e.seen || t - e.at >= MIN_HOLD_MS) && t - (this.idleSince.get(e.bot) ?? t) >= IDLE_MS)) continue;
       if (failedSince(s, e.at, t)) {
         this.fails.set(o.id, (this.fails.get(o.id) || 0) + 1);
         slots.set(key, {...e, retryAt: t + RETRY_MS, seen: false});
@@ -331,6 +350,24 @@ class Plan {
     }
   }
 
+  // Every slot of the current objective says done, but its own done(ctx) (the world) says no: the
+  // chains did not do the work, so the slots go out again after RETRY_MS, counted as a failure.
+  recheck(snaps, t) {
+    const o = this.cur;
+    if (!o?.done || o.keeper) return;
+    const all = slotsOf(o, [...snaps.keys()]);
+    if (!all.length || !all.every((s) => this.results.get(`${o.id}#${s.key}`)?.ok) || o.done(this.ctx(snaps))) return;
+    const slots = this.assigned.get(o.id);
+    for (const s of all) {
+      this.results.delete(`${o.id}#${s.key}`);
+      const e = slots?.get(s.key);
+      if (e) slots.set(s.key, {bot: e.bot, at: e.at, retryAt: t + RETRY_MS});
+    }
+    this.fails.set(o.id, (this.fails.get(o.id) || 0) + 1);
+    this.dirty = true;
+    this.say(`${o.id}: every part reported done but it is not; trying again in ${RETRY_MS / 60000} min`);
+  }
+
   // Is the current objective stuck? Then it is blocked (parked or skipped by nextIndex).
   blockIfStuck(cur, t) {
     if (this.blocked.has(cur.id)) return false;
@@ -342,6 +379,7 @@ class Plan {
       : null;
     if (!why) return false;
     this.blocked.set(cur.id, why);
+    this.blockedAt.set(cur.id, t);
     this.dirty = true;
     this.say(`${cur.id} is blocked: ${why}`);
     return true;
