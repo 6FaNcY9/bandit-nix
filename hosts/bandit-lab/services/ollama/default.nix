@@ -27,41 +27,43 @@ in {
     extraOptions = ["--device=nvidia.com/gpu=all" "--security-opt=no-new-privileges"];
   };
 
-  systemd.tmpfiles.rules = [
-    "d /srv/ollama 0700 root root -"
-    "d /var/lib/ollama-import 0700 root root -"
-  ];
+  systemd = {
+    tmpfiles.rules = [
+      "d /srv/ollama 0700 root root -"
+      "d /var/lib/ollama-import 0700 root root -"
+    ];
 
-  systemd.services.docker-ollama = {
-    after = ["nvidia-container-toolkit-cdi-generator.service"];
-    wants = ["nvidia-container-toolkit-cdi-generator.service"];
-  };
-
-  # Import andy-4.2 once; a later start finds it in Ollama's store and exits.
-  systemd.services.ollama-andy = {
-    description = "Import the Andy-4.2 model into Ollama";
-    after = ["docker-ollama.service"];
-    requires = ["docker-ollama.service"];
-    wantedBy = ["multi-user.target"];
-    path = [pkgs.docker pkgs.curl pkgs.coreutils pkgs.gnugrep];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      TimeoutStartSec = "1h";
-      NoNewPrivileges = true;
-      PrivateTmp = true;
+    services.docker-ollama = {
+      after = ["nvidia-container-toolkit-cdi-generator.service"];
+      wants = ["nvidia-container-toolkit-cdi-generator.service"];
     };
-    script = ''
-      set -euo pipefail
-      for _ in $(seq 60); do docker exec ollama ollama list >/dev/null 2>&1 && break; sleep 2; done
-      if docker exec ollama ollama list | grep -q '^andy-4.2:'; then exit 0; fi
-      d=/var/lib/ollama-import # host-only; the container sees it read-only as /import
-      rm -f "$d/andy.gguf" "$d/Modelfile"
-      curl -fL --retry 3 -o "$d/andy.gguf" ${model.url}
-      echo "${model.sha256}  $d/andy.gguf" | sha256sum -c
-      printf 'FROM /import/andy.gguf\nPARAMETER temperature 0.6\nPARAMETER num_ctx 8192\n' > "$d/Modelfile"
-      docker exec ollama ollama create andy-4.2 -f /import/Modelfile
-      rm -f "$d/andy.gguf" # Ollama copied it into its blob store
-    '';
+
+    # Import andy-4.2 once; a later start finds it in Ollama's store and exits.
+    services.ollama-andy = {
+      description = "Import the Andy-4.2 model into Ollama";
+      after = ["docker-ollama.service"];
+      requires = ["docker-ollama.service"];
+      wantedBy = ["multi-user.target"];
+      path = [pkgs.docker pkgs.curl pkgs.coreutils pkgs.gnugrep];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        TimeoutStartSec = "1h";
+        NoNewPrivileges = true;
+        PrivateTmp = true;
+      };
+      script = ''
+        set -euo pipefail
+        for _ in $(seq 60); do docker exec ollama ollama list >/dev/null 2>&1 && break; sleep 2; done
+        if docker exec ollama ollama list | grep -q '^andy-4.2:'; then exit 0; fi
+        d=/var/lib/ollama-import # host-only; the container sees it read-only as /import
+        rm -f "$d/andy.gguf" "$d/Modelfile"
+        curl -fL --retry 3 -o "$d/andy.gguf" ${model.url}
+        echo "${model.sha256}  $d/andy.gguf" | sha256sum -c
+        printf 'FROM /import/andy.gguf\nPARAMETER temperature 0.6\nPARAMETER num_ctx 8192\n' > "$d/Modelfile"
+        docker exec ollama ollama create andy-4.2 -f /import/Modelfile
+        rm -f "$d/andy.gguf" # Ollama copied it into its blob store
+      '';
+    };
   };
 }
