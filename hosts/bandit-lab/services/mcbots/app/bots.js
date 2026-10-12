@@ -2146,6 +2146,13 @@ const JOBS = {
             job.t.doing = `digging out the room at ${x1} ${y1} ${z1}`;
             if (await digAt(r, job, pos, (n) => n === b.name)) dug++;
             else left++;
+          } catch (e) {
+            // One block nobody can reach or dig safely is left, as the mine job does; it ended the whole
+            // shaft (2026-10-12: a pillar block hanging over the open shaft at -277 54 -209).
+            guard(job);
+            if (!/^unsafe: |could not reach|Digging aborted/.test(e.message)) throw e;
+            left++;
+            r.emit('info', `left a ${b.name} block at ${at(pos)}: ${e.message.slice(0, 80)}`);
           } finally {
             r.world?.release(r.name, k);
           }

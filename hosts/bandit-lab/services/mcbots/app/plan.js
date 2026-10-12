@@ -352,15 +352,18 @@ class Plan {
     }
   }
 
-  // Every slot of the current objective says done, but its own done(ctx) (the world) says no: the
-  // chains did not do the work, so the slots go out again after RETRY_MS, counted as a failure.
+  // Every slot of the current objective has ended (done, or failed and waiting for its retry), but its own
+  // done(ctx) (the world) says no: the done chains did not do the work, so they go out again after
+  // RETRY_MS, counted as a failure. Waiting for every slot to be done kept strips 1 and 2 shut while
+  // strip 3 failed on and on (2026-10-12).
   recheck(snaps, t) {
     const o = this.cur;
     if (!o?.done || o.keeper) return;
-    const all = slotsOf(o, [...snaps.keys()]);
-    if (!all.length || !all.every((s) => this.results.get(`${o.id}#${s.key}`)?.ok) || o.done(this.ctx(snaps))) return;
     const slots = this.assigned.get(o.id);
-    for (const s of all) {
+    const ok = (s) => !!this.results.get(`${o.id}#${s.key}`)?.ok;
+    const all = slotsOf(o, [...snaps.keys()]);
+    if (!all.some(ok) || !all.every((s) => ok(s) || slots?.get(s.key)?.retryAt) || o.done(this.ctx(snaps))) return;
+    for (const s of all.filter(ok)) {
       this.results.delete(`${o.id}#${s.key}`);
       const e = slots?.get(s.key);
       if (e) slots.set(s.key, {bot: e.bot, at: e.at, retryAt: t + RETRY_MS});

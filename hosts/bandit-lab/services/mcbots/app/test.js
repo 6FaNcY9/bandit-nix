@@ -2864,6 +2864,15 @@ require('./crafting');
     assert.strictEqual(again.noop, true, 'a second dig of the same room had nothing to do');
     assert.deepStrictEqual([...blocks.values()].sort(), ['chest', 'cobblestone'], 'placed blocks stay');
     await assert.rejects(JOBS.excavate({...r, protectedAreas: [[-5, -5, 5, 5]]}, {...job, t: {}}), /protected/);
+    { // 2026-10-12: a pillar block hanging over the open shaft (-277 54 -209) ended the whole shaft; it is left, the rest is dug
+      for (const [k, v] of [['0,60,0', 'stone'], ['0,59,0', 'dirt'], ['0,58,0', 'iron_ore']]) blocks.set(k, v);
+      order.length = 0;
+      const far = {...bot, entity: {position: new Vec3(0, 61, 20), onGround: true}, pathfinder: {...bot.pathfinder, goto: async (g) => { if (g?.pos?.y === 59) throw new Error('No path to the goal!'); }}};
+      const infos = [];
+      await assert.rejects(JOBS.excavate({...r, bot: far, emit: (kind, text) => infos.push(text)}, {...job, t: {}}), /1 blocks of the room were not dug/);
+      assert.deepStrictEqual(order, ['stone@60', 'iron_ore@58'], 'the layers below the unreachable block are still dug');
+      assert.ok(infos.some((t) => /left a dirt block at 0 59 0: could not reach/.test(t)), infos.join('\n'));
+    }
   }
   { // shaft: 1-high excavate layers top-down, one stair step per layer spiralling along the walls
     const {JOBS, VALIDATE, stairRing} = require('./bots');
@@ -4384,6 +4393,28 @@ require('./crafting');
     p4.fails.set('later', 3);
     p4.tick(); now += 2 * HOUR; p4.tick();
     assert.strictEqual(p4.skipped.has('later'), true, 'only parked steps come back');
+  }
+  { // 2026-10-12: strip 3 kept failing while strips 1 and 2 stood "done" 30 layers short; once every strip has ended, the done ones go out again too
+    const {Plan} = require('./plan');
+    const {IDLE_MS} = require('./keeper');
+    let now = 1e6;
+    const snap = (o = {}) => ({online: true, dead: false, job: null, queue: [], inventory: [], lastError: '', lastErrorAgoS: null, ...o});
+    const fake = (name) => ({name, sent: [], working: false, err: '', snapshot() { return snap({job: this.working ? {type: 'shaft', runningS: 5} : null, lastError: this.err, lastErrorAgoS: this.err ? 1 : null}); }, enqueue(type) { this.sent.push(type); this.working = true; }});
+    const bots = ['bot11', 'bot12'].map(fake);
+    const objectives = [{id: 'shaft', label: 'shaft', needs: [], onBlocked: 'park', roles: [{count: 2, jobs: [['shaft', {}]]}], done: () => false}];
+    const plan = new Plan({runners: new Map(bots.map((b) => [b.name, b])), world: new WorldModel({now: () => now}), objectives, roster: ['bot11', 'bot12'], chest: {x: 1, y: 2, z: 3}, now: () => now});
+    plan.setEnabled(true);
+    plan.tick(); now += IDLE_MS; plan.tick();
+    now += 6000; plan.tick(); // both seen busy
+    bots[0].working = false; // strip 1 "finishes"
+    bots[1].working = false;
+    bots[1].err = 'the shaft reached y -54 but 2 blocks were left'; // strip 3 fails
+    now += 6000; plan.tick(); now += IDLE_MS; plan.tick();
+    assert.strictEqual(plan.results.size, 0, 'the finished strip is open again: the shaft is not done');
+    assert.strictEqual(plan.fails.get('shaft'), 2, 'the failure and the recheck');
+    bots[1].err = '';
+    now += 11 * 60 * 1000; plan.tick(); now += IDLE_MS; plan.tick();
+    assert.deepStrictEqual(bots.map((b) => b.sent.length), [2, 2], 'both strips are dug again');
   }
   { // 2026-10-12: the wheat farm counted as done after 2 min, then nobody farmed and the chest had no bread for days
     const {Plan} = require('./plan');
