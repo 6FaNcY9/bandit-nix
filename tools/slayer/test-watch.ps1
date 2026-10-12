@@ -45,16 +45,16 @@ try {
     Assert ((@(Servers @()).ProcessId -join ',') -eq '11') 'Stale record must not authorize a reused PID'
     'PASS: listener detection, session/path ownership, loading child, stale PID'
     foreach ($r in 'fullscreen window', 'game cs2.exe', 'non-llama GPU 99%') {
-        Assert ((PickMode $r 'full') -eq 'shared' -and (PickMode $r $null) -eq 'shared') "Busy reason '$r' must run shared"
+        Assert ((PickMode $r) -eq 'shared') "Busy reason '$r' must run shared"
     }
     foreach ($r in 'training', 'another console session (or no console)', 'probe failed: x') {
-        Assert ($null -eq (PickMode $r 'shared')) "Reason '$r' must stop the server"
+        Assert ($null -eq (PickMode $r)) "Reason '$r' must stop the server"
     }
     $script:freeSince = (Get-Date).AddMinutes(-1)
-    Assert ((PickMode $null 'shared') -eq 'shared') 'Free < 5 min after shared must stay shared'
-    Assert ((PickMode $null 'full') -eq 'full' -and (PickMode $null $null) -eq 'full') 'Free PC without shared server runs full'
+    # Codex R8-5: also when the shared server died meanwhile, a restart within the 5 minutes stays shared
+    Assert ((PickMode $null) -eq 'shared') 'Free < 5 min after a game stays shared'
     $script:freeSince = (Get-Date).AddMinutes(-6)
-    Assert ((PickMode $null 'shared') -eq 'full') 'Free >= 5 min must return to full'
+    Assert ((PickMode $null) -eq 'full') 'Free >= 5 min must return to full'
     Assert ((ServerMode ([pscustomobject]@{ CommandLine = 'llama-server.exe --port 8081 --n-gpu-layers 0 --prio -1' })) -eq 'shared') '--prio -1 is shared'
     Assert ((ServerMode ([pscustomobject]@{ CommandLine = 'llama-server.exe --port 8081 --n-gpu-layers 99' })) -eq 'full') '--n-gpu-layers is full'
     Assert ((ServerMode ([pscustomobject]@{ CommandLine = $null })) -eq 'full') 'Unreadable command line counts as full'

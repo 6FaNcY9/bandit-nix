@@ -62,9 +62,18 @@ in {
         # that fails or waits in auto-restart fails switch-to-configuration, and lab-update then
         # rolls the whole deploy back (albert offline, 2026-10-12).
         ExecStart = pkgs.writeShellScript "${name}-tunnel" ''
+          err=$(${pkgs.coreutils}/bin/mktemp)
           while :; do
-            ${pkgs.openssh}/bin/ssh -NT -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/etc/ssh/ssh_known_hosts -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$CREDENTIALS_DIRECTORY/${name}-tunnel-key" -L 127.0.0.1:${toString host.localPort}:127.0.0.1:8081 ${host.user}@${host.address}
-            ${pkgs.coreutils}/bin/sleep 30
+            ${pkgs.openssh}/bin/ssh -NT -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/etc/ssh/ssh_known_hosts -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$CREDENTIALS_DIRECTORY/${name}-tunnel-key" -L 127.0.0.1:${toString host.localPort}:127.0.0.1:8081 ${host.user}@${host.address} 2>"$err"
+            ${pkgs.coreutils}/bin/cat "$err" >&2
+            # A rejected key or a changed host key is no PC that is off (Codex R8-6): say so at error
+            # priority (journalctl -p err) and ask less often; the unit still must not fail, see above.
+            if ${pkgs.gnugrep}/bin/grep -qE 'Permission denied|Host key verification failed|IDENTIFICATION HAS CHANGED' "$err"; then
+              echo "<3>${host.user}@${host.address} rejected the ${name} tunnel key, or its host key changed; next try in 10 min"
+              ${pkgs.coreutils}/bin/sleep 600
+            else
+              ${pkgs.coreutils}/bin/sleep 30
+            fi
           done
         '';
         LoadCredential = "${name}-tunnel-key:${config.sops.secrets."${name}-tunnel-key".path}";

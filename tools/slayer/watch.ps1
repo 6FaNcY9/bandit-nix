@@ -10,7 +10,8 @@ if (-not (Test-Path $runtime)) { $null = New-Item -ItemType Directory $runtime }
 $model = "$base\models\andy.gguf"
 $modelSha256 = '3cfccaa17be8d2ded998fab8bd4b7032f91f2a916ac2aa03a412908342228eb1'
 $script:modelFailureLogged = $false
-$script:freeSince = $null
+# Since when the PC is free; a watcher that starts on a free PC may use the GPU at once.
+$script:freeSince = (Get-Date).AddMinutes(-5)
 $port = 8081
 $layers = 99
 # A CPU-only second server lets checks leave the replay's GPU server alone.
@@ -45,13 +46,13 @@ function Servers($listeners) {
           $_.CreationDate.ToString('o') -eq $record.CreationDate))
     })
 }
-# Games leave the GPU to the game but not to Andy: 'shared' serves on the VRAM they leave free
-# (CPU only, low priority), 'full' is the normal all-layers server. $null stops the server (training,
-# another console session, probe failures). Back to full only after 5 min of a free PC, so
-# alt-tabbing does not restart the server.
-function PickMode($reason, $current) {
+# Games leave the GPU to the game: 'shared' runs Andy on the CPU at low priority, 'full' is the normal
+# all-layers server. $null stops the server (training, another console session, probe failures). Back
+# to full only after 5 min of a free PC, so alt-tabbing does not restart the server; that holds for a
+# server started anew in those minutes too (Codex R8-5: a shared server that died went straight to full).
+function PickMode($reason) {
     if ($reason -and $reason -notmatch '^(fullscreen window|game |non-llama GPU)') { return $null }
-    if (-not $reason -and $current -eq 'shared' -and $script:freeSince -and ((Get-Date) - $script:freeSince).TotalMinutes -lt 5) { return 'shared' }
+    if (-not $reason -and $script:freeSince -and ((Get-Date) - $script:freeSince).TotalMinutes -lt 5) { return 'shared' }
     if ($reason) { return 'shared' }
     return 'full'
 }
@@ -100,7 +101,7 @@ try {
         try {
             $listeners = @(Listeners)
             $servers = @(Servers $listeners)
-            $mode = PickMode $reason $(if ($servers.Count) { ServerMode $servers[0] })
+            $mode = PickMode $reason
             if (-not $mode) {
                 foreach ($server in $servers) {
                     Stop-Process -Id $server.ProcessId -ErrorAction Stop
@@ -120,7 +121,7 @@ try {
                 # Verification can take seconds; a game may have started during hashing.
                 if (Training) { throw 'Training started during model verification; launch deferred' }
                 if ($mode -eq 'full' -and ($again = Busy)) {
-                    $mode = PickMode $again $null
+                    $mode = PickMode $again
                     if (-not $mode) { throw "$again during model verification; launch deferred" }
                 }
                 $gpu = "--n-gpu-layers $layers"
