@@ -28,7 +28,8 @@
 in
   assert lib.assertMsg (c.volumes == ["/srv/containers/minecraft/data:/data"]) "the Minecraft container may mount only its data directory (no docker.sock, no unrelated paths)";
   assert lib.assertMsg (!(lib.hasInfix "privileged" extra) && !(lib.hasInfix "cap-add" extra) && !(lib.hasInfix "docker.sock" extra)) "the Minecraft container must stay unprivileged: ${extra}";
-  assert lib.assertMsg (lib.sort lib.lessThan c.ports == ["127.0.0.1:8100:8100"]) "Paper publishes only the map on loopback, never a game port: ${toString c.ports}";
+  # Besides the map, only Simple Voice Chat's UDP port, and on the tailnet address only (2026-10-15).
+  assert lib.assertMsg (lib.elem (lib.sort lib.lessThan c.ports) [["127.0.0.1:8100:8100"] (lib.sort lib.lessThan ["127.0.0.1:8100:8100" "${tailnet}:24454:24454/udp"])]) "Paper publishes only the map on loopback and voice chat on the tailnet, never a game port: ${toString c.ports}";
   assert lib.assertMsg (v.ports == ["${tailnet}:25565:25565"]) "the Velocity proxy publishes exactly the game port on the tailnet address: ${toString v.ports}";
   assert lib.assertMsg (c.environment.ONLINE_MODE != "FALSE" || (lab.virtualisation.oci-containers.containers ? velocity && !(lib.any (lib.hasSuffix ":25565") c.ports))) "Paper may run online-mode=false only behind Velocity and without a published game port";
   assert lib.assertMsg (lib.hasInfix "--network=minecraft" extra && lib.hasInfix "--network=minecraft" vExtra) "Paper and Velocity share the dedicated minecraft network";
