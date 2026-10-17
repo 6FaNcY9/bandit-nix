@@ -56,6 +56,12 @@ if ((deploy)); then
   git -C "$repo" worktree remove "$wt"
   ((dry)) && exit 0
   command -v lab-apply >/dev/null || { echo "no lab-apply here: the hourly timer deploys it" >&2; exit 0; }
+  # The finger prompt comes after the build, a minute or more after the start, and timed out three times while the
+  # owner looked away (2026-10-17): call them back to it with a bell, a sound and a desktop notice.
+  printf '\a\n>>> lab-apply: put your finger on the reader now <<<\n\n'
+  notify-send -u critical ship-claude "lab-apply: put your finger on the reader now" 2>/dev/null || true
+  snd=/run/current-system/sw/share/sounds/freedesktop/stereo/bell.oga
+  [[ -r $snd ]] && command -v pw-play >/dev/null && { pw-play "$snd" >/dev/null 2>&1 & }
   exec lab-apply
 fi
 echo "ready: $(git -C "$wt" rev-parse --short HEAD) on $remote/main in $wt"
