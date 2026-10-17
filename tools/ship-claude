@@ -1,25 +1,28 @@
 #!/usr/bin/env bash
 # Prepare a ship to bandit-lab (bandit-craft docs/runbooks/minecraft/BOTS.md, "Shipping").
-#   tools/ship-claude [--dry-run] [--repo DIR] [--remote NAME] SHA...
+#   tools/ship-claude [--deploy] [--dry-run] [--repo DIR] [--remote NAME] SHA...
 # Builds a clean detached worktree on <remote>/main, cherry-picks the SHAs
 # (re-signed with your GPG key), checks the signature, builds the committed
-# bandit-lab revision, then PRINTS the push line and stops. It never pushes:
-# a push to main deploys to the lab within the hour. The dirty tree in --repo
-# cannot leak in because nothing is read from it but the object database.
-# --dry-run skips signing, the signature check and the build (for tests).
+# bandit-lab revision, then PRINTS the push line and stops: a push to main
+# deploys to the lab within the hour. With --deploy (you ask for the deploy by
+# typing it) it pushes itself once all that passed, removes the worktree and
+# runs lab-apply (finger); a refused push keeps the worktree. The dirty tree in
+# --repo cannot leak in because nothing is read from it but the object database.
+# --dry-run skips signing, the signature check, the build and lab-apply (for tests).
 set -euo pipefail
 
-dry=0 repo=. remote=origin
+dry=0 deploy=0 repo=. remote=origin
 while [[ ${1:-} == --* ]]; do
   case $1 in
     --dry-run) dry=1 ;;
+    --deploy) deploy=1 ;;
     --repo) repo=${2:?--repo DIR}; shift ;;
     --remote) remote=${2:?--remote NAME}; shift ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
   shift
 done
-(($#)) || { echo "usage: ship-claude [--dry-run] [--repo DIR] [--remote NAME] SHA..." >&2; exit 2; }
+(($#)) || { echo "usage: ship-claude [--deploy] [--dry-run] [--repo DIR] [--remote NAME] SHA..." >&2; exit 2; }
 
 repo=$(realpath "$repo")
 git -C "$repo" fetch -q "$remote" main
@@ -47,6 +50,14 @@ fi
 
 # shellcheck disable=SC2034 # read by the EXIT trap
 ok=1
+if ((deploy)); then
+  git -C "$wt" push "$remote" HEAD:main
+  echo "pushed: $(git -C "$wt" rev-parse --short HEAD) to $remote/main"
+  git -C "$repo" worktree remove "$wt"
+  ((dry)) && exit 0
+  command -v lab-apply >/dev/null || { echo "no lab-apply here: the hourly timer deploys it" >&2; exit 0; }
+  exec lab-apply
+fi
 echo "ready: $(git -C "$wt" rev-parse --short HEAD) on $remote/main in $wt"
 echo "THIS DEPLOYS (changes restarting docker-minecraft disconnect players). You run:"
 echo "  git -C $wt push $remote HEAD:main"

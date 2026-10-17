@@ -22,6 +22,13 @@ wt=$(sed -n 's/^ready: .* in //p' <<<"$out")
 [[ $(cat "$t/work/f") == dirty ]]                       # work tree untouched
 git -C "$t/work" worktree remove --force "$wt"
 
+# --deploy: pushes once everything passed and removes its worktree (lab-apply is skipped in a dry run)
+out=$("$here/ship-claude" --dry-run --deploy --repo "$t/work" "$sha")
+grep -q "^pushed: " <<<"$out"
+[[ $(git -C "$t/origin.git" show main:g) == b ]]         # the feature is on origin/main now
+[[ $(git -C "$t/work" worktree list | wc -l) -eq 1 ]]   # and no worktree is left
+[[ $(cat "$t/work/f") == dirty ]]                       # work tree untouched
+
 # bad sha: fails and leaves no worktree behind
 if "$here/ship-claude" --dry-run --repo "$t/work" deadbeef 2>/dev/null; then echo "bad sha accepted" >&2; exit 1; fi
 [[ $(git -C "$t/work" worktree list | wc -l) -eq 1 ]]
