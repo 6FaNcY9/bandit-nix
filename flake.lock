@@ -7,11 +7,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1792336695,
-        "narHash": "sha256-VFuoG7/TulhkJdHwPjs/T4llSwXoiKcspqZXZcASnnE=",
+        "lastModified": 1792425076,
+        "narHash": "sha256-IqeQSFm1wX8hxnhWWpXMntEUUtwIDN3/2WvWofTvLuM=",
         "owner": "6FaNcY9",
         "repo": "bandit-craft",
-        "rev": "12671c91478cec77b7cbf00b4b7e0e1e1747e3b2",
+        "rev": "5abf56cdad1b7879e75fae12d3526809ec672cb8",
         "type": "github"
       },
       "original": {
