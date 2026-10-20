@@ -51,7 +51,7 @@ in {
     vaults = {
       "security-research" = {
         enable = true;
-        target = "Documents/vaults/security-research";
+        target = "docs/vaults/security-research";
       };
     };
 

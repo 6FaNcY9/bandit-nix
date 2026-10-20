@@ -32,7 +32,7 @@ in {
 
       config = {
         general = {
-          gaps_in = 6;
+          gaps_in = 4;
           gaps_out = 0;
           border_size = 3;
           layout = "dwindle";
@@ -55,6 +55,8 @@ in {
           };
         };
 
+        # Lean and battery-friendly: no blur, shadows or rounding means less GPU
+        # work per frame on the Framework's iGPU, and nothing to redraw at idle.
         decoration = {
           rounding = 0;
           blur.enabled = false;
@@ -116,7 +118,8 @@ in {
           disable_hyprland_logo = true;
         };
 
-        # Flat, snappy, retro aesthetic — no window-open/close/move animation.
+        # Flat, snappy, retro aesthetic — no window-open/close/move animation;
+        # also saves frames (and battery) on every workspace switch.
         animations.enabled = false;
 
         input = {

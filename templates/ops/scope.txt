@@ -1,0 +1,17 @@
+SCOPE-NOT-FILLED  (delete this line once the scope below is complete and authorised)
+
+Engagement scope
+================
+
+Name:
+Client/contact:
+Authorisation (ref / signed by / date):
+Testing window:
+
+In scope:
+
+Out of scope:
+
+Rules of engagement:
+
+Emergency contact:

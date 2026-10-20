@@ -4,8 +4,8 @@ This is a compact, evidence-scoped map of the two hosts. It records what was
 declared in the repository and what Scout observed live; it is not a deployment
 or readiness claim.
 
-The [Obsidian infrastructure notes](infrastructure/obsidian/README.md) provide
-navigation to the host and Beszel notes without replacing this inventory or its
+The [infrastructure entry point](infrastructure/README.md) provides navigation
+to the host and Beszel notes without replacing this inventory or its
 dependency map.
 
 ## Status vocabulary
@@ -173,6 +173,6 @@ socket. Minecraft and Wazuh exposure matched the current firewall rules.
 - Cockpit is inactive; anisette is parked and unimported.
 - No new dashboard is needed: monitoring already uses Grafana and Prometheus.
 
-The [Wazuh runbook](runbooks/wazuh.md), [monitoring runbook](runbooks/monitoring.md),
+The archived [Wazuh runbook](archive/wazuh.md), [monitoring runbook](runbooks/monitoring.md),
 and [Minecraft administration runbook](https://github.com/6FaNcY9/bandit-craft/blob/main/docs/runbooks/minecraft/ADMIN.md) contain
 service-specific verification boundaries.

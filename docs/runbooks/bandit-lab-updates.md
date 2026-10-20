@@ -4,7 +4,7 @@ Automatic updates are **on** (resumed 2026-10-08): `lab-update-apply.timer` in
 `hosts/bandit-lab/services/auto-rebuild/default.nix` applies a signed
 fast-forward `origin/main` hourly (up to ten minutes of randomized delay). A
 deploy that restarts Minecraft disconnects players; ask everyone to
-`/jarvis dismiss` first (see minecraft/ADMIN.md). To pause again, set
+`/jarvis dismiss` first (see [ADMIN.md](https://github.com/6FaNcY9/bandit-craft/blob/main/docs/runbooks/minecraft/ADMIN.md)). To pause again, set
 `enable = false` and deploy, or mask the timer at runtime as below.
 
 Until a pause (`enable = false`) has been deployed, a timer that is already running on the

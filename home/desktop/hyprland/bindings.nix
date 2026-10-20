@@ -10,7 +10,7 @@
   # values are limited to dispatcher callbacks that must remain Lua code.
   # Every bind carries a description flag: hyprctl binds reports Lua
   # dispatchers only as opaque "__lua N", so the description is what makes
-  # binds introspectable (used by ~/.local/bin/keybinds-menu).
+  # binds introspectable (used by keybinds-menu).
   lua = lib.generators.mkLuaInline;
   bind = keyCombo: dispatcher: description: {
     _args = [keyCombo (lua dispatcher) {inherit description;}];
@@ -25,6 +25,11 @@
   pactlBin = "${pkgs.pulseaudio}/bin/pactl";
   brightnessctlBin = "${pkgs.brightnessctl}/bin/brightnessctl";
   playerctlBin = "${pkgs.playerctl}/bin/playerctl";
+  # Helpers defined in this repo as home.file scripts: bind their store paths.
+  helper = name: "${config.home.file.".local/bin/${name}".source}";
+  powermenu = helper "powermenu";
+  keybindsMenu = helper "keybinds-menu";
+  screenshot = helper "hypr-screenshot";
 
   # ─── Directional focus (vim + arrows) ─────────────────
   directionalFocus = [
@@ -53,7 +58,7 @@
   # ─── Layout management (dwindle) ──────────────────────
   # i3's parent/child focus and container-level split have no equivalent in
   # Hyprland's flat dwindle model, so those bindings are dropped rather than
-  # faked; see the cheatsheet for exactly what's bound.
+  # faked; the keybinds menu (Mod+F2) lists exactly what's bound.
   layoutBindings = [
     (bind "${mod} + f" "hl.dsp.window.fullscreen()" "toggle fullscreen")
     (bind "${mod} + CTRL + f" ''hl.dsp.window.fullscreen_state({ internal = 2, client = 0, action = "toggle" })'' "fullscreen without app mode")
@@ -98,14 +103,15 @@
     (bind "${mod} + r" ''hl.dsp.submap("resize")'' "enter resize mode")
     (execBinding "${mod} + SHIFT + x" "${pkgs.hyprlock}/bin/hyprlock" "lock screen")
 
-    (execBinding "XF86PowerOff" "~/.local/bin/powermenu" "power menu")
-    (execBinding "${mod} + Escape" "~/.local/bin/powermenu" "power menu")
+    (execBinding "XF86PowerOff" powermenu "power menu")
+    (execBinding "${mod} + Escape" powermenu "power menu")
 
-    (execBinding "${mod} + F1" "~/.local/bin/hyprland-cheatsheet-show" "shortcut cheatsheet")
-    (execBinding "${mod} + F2" "~/.local/bin/keybinds-menu" "keybinding search (rofi, incl. Neovim)")
+    # Mod+F2 is the single shortcut reference (live binds + Neovim keymaps);
+    # the old hand-written Mod+F1 cheatsheet was removed to stop drift.
+    (execBinding "${mod} + F2" keybindsMenu "keybinding search (rofi, incl. Neovim)")
 
-    (execBinding "Print" "~/.local/bin/hypr-screenshot" "region screenshot")
-    (execBinding "F11" "~/.local/bin/hypr-screenshot" "region screenshot")
+    (execBinding "Print" screenshot "region screenshot")
+    (execBinding "F11" screenshot "region screenshot")
 
     # Mako notification controls
     (execBinding "${mod} + grave" "${pkgs.mako}/bin/makoctl restore" "restore last notification")

@@ -36,7 +36,7 @@ phishing-simulation labs (phase 5) — it never touches real domains.
      (GUI binds loopback on host net) and nothing scrapes it.
    - Remove `/srv/containers/jellyfin` leftover (2 MB, no container/image).
 2. **Wazuh SIEM/XDR** — the core sec-lab piece. Deploy per existing runbook
-   `docs/runbooks/wazuh.md` (Portainer/external compose stack, v4.12.0,
+   `docs/archive/wazuh.md` (Portainer/external compose stack, v4.12.0,
    indexer heap 4g, dashboard loopback-only). Manager watches the lab;
    laptop agent over tailnet later.
 3. **CrowdSec** — LAPI + agent container parsing Traefik/sshd logs, Traefik

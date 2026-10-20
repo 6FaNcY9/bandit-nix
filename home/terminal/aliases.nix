@@ -16,14 +16,14 @@
   lta = "eza --tree --icons --level=3 -a";
   cat = "bat";
   home = "cd ~";
-  csrc = "cd ~/src";
   cnix = "cd ${repoConfig.workstation.repoPath}";
   cconf = "cd ~/.config";
-  cproj = "cd ~/Projects";
-  cdocs = "cd ~/Documents";
-  cdl = "cd ~/Downloads";
+  cproj = "cd ~/proj";
+  cops = "cd ~/ops";
+  cdocs = "cd ~/docs";
+  cdl = "cd ~/dl";
   cvms = "cd ~/vms";
-  cpic = "cd ~/Pictures";
+  cpic = "cd ~/media/pictures";
 
   # ── Git ───────────────────────────────────────────────
   g = "git";

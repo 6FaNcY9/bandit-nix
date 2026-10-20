@@ -82,8 +82,6 @@ sensor metrics. Container metrics are intentionally absent.
 
 - Beszel: lightweight host resource history for this pilot
 - Prometheus/Grafana: existing authoritative metrics and dashboards
-- Portainer: Docker administration, container logs, and container actions
-- Wazuh: security monitoring, SIEM events, and security alerts
 - NixOS/systemd: declarative service ownership, lifecycle, and hardening
 - Git: reviewed configuration and documentation source of truth
 
@@ -125,8 +123,7 @@ longer listening. No Docker, firewall, or proxy rollback is required.
 
 ## Related notes
 
-- [Beszel service note](../infrastructure/obsidian/services/beszel.md)
-- [bandit-lab host note](../infrastructure/obsidian/hosts/bandit-lab.md)
+- [Infrastructure entry point (hosts and Beszel)](../infrastructure/README.md)
 - [Service inventory](../services.md)
 
 ## Future container metrics boundary

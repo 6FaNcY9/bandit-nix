@@ -4,8 +4,9 @@ The canonical reviewed Compose asset is
 [`hosts/bandit-lab/services/mrija-archive/compose.yml`](../../hosts/bandit-lab/services/mrija-archive/compose.yml),
 with the existing live project name `deploy`. It preserves the live image, loopback
 port, mounts, labels, `proxy` network, direct `MRIJA_*` variables and
-`/run/secrets/rendered/mrija-archive.env` env file. Portainer remains the
-live owner until an explicitly approved handoff is deployed.
+`/run/secrets/rendered/mrija-archive.env` env file. Portainer is retired
+(`docs/archive/portainer-retirement.md`); the container is managed through
+Docker and the Nix lifecycle unit below.
 
 Nix exposes the asset at `/etc/bandit-lab/mrija-archive.compose.yml` and
 declares the initially disabled manual `compose-mrija-archive` unit. Its

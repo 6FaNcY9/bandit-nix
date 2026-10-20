@@ -6,6 +6,7 @@
 }: {
   imports = [
     inputs.nixvim.homeModules.nixvim
+    ./layout.nix
     ./xdg-cleanup.nix
     ./xdg-shims.nix
     ./dotfiles.nix

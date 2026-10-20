@@ -1,11 +1,27 @@
 {
   config,
   pkgs,
-  repoConfig,
   ...
 }: let
   r = config.bandit.theme.roles;
   monospaceFont = config.stylix.fonts.monospace.name;
+
+  # dev/ops indicator: reads the state written by `ops on` (home/terminal/ops.nix).
+  # Dev mode prints an empty text, which waybar hides.
+  modeStatus = pkgs.writeShellApplication {
+    name = "bandit-mode-status";
+    runtimeInputs = [pkgs.coreutils pkgs.gnused pkgs.jq];
+    text = ''
+      modefile="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bandit/mode"
+      if [ ! -f "$modefile" ]; then
+        jq -cn '{text: "", class: "dev", tooltip: ""}'
+        exit 0
+      fi
+      get() { sed -n "s/^$1=//p" "$modefile" | head -1; }
+      jq -cn --arg n "$(get name)" --arg p "$(get path)" --arg s "$(get since)" \
+        '{text: ("OPS " + $n), class: "ops", tooltip: ($p + "\nsince " + $s)}'
+    '';
+  };
 in {
   programs.waybar = {
     enable = true;
@@ -22,7 +38,7 @@ in {
       margin-bottom = 0;
       margin-left = 0;
 
-      modules-left = ["custom/nix" "hyprland/workspaces" "hyprland/window"];
+      modules-left = ["custom/nix" "custom/mode" "hyprland/workspaces" "hyprland/window"];
       modules-center = ["clock"];
       modules-right = [
         "cpu"
@@ -38,6 +54,14 @@ in {
         format = "󱄅 BANDIT";
         on-click = "${config.programs.rofi.package}/bin/rofi -show drun";
         tooltip = false;
+      };
+
+      "custom/mode" = {
+        exec = "${modeStatus}/bin/bandit-mode-status";
+        return-type = "json";
+        interval = "once";
+        # `ops on|off` sends SIGRTMIN+8.
+        signal = 8;
       };
 
       "hyprland/workspaces" = {
@@ -87,7 +111,7 @@ in {
         format-disconnected = "󰖪 OFF";
         tooltip-format-wifi = "{essid}\n{ipaddr}/{cidr}\n⇣ {bandwidthDownBytes}  ⇡ {bandwidthUpBytes}";
         tooltip-format-ethernet = "{ifname}\n{ipaddr}/{cidr}\n⇣ {bandwidthDownBytes}  ⇡ {bandwidthUpBytes}";
-        on-click = "${repoConfig.workstation.homeDirectory}/.local/bin/net-menu";
+        on-click = "${config.home.file.".local/bin/net-menu".source}";
         interval = 5;
       };
 
@@ -226,6 +250,21 @@ in {
       #workspaces button.urgent {
         color: ${r.bg};
         background-color: ${r.crit};
+      }
+
+      /* Engagement active: the only place the ops role is used in the bar. */
+      #custom-mode.ops {
+        margin: 0;
+        padding: 0 7px;
+        color: ${r.ops};
+        background-color: transparent;
+        border-left: 1px solid ${r.ops};
+        border-right: 1px solid ${r.ops};
+      }
+
+      #custom-mode.dev {
+        padding: 0;
+        border: 0;
       }
 
       #window {

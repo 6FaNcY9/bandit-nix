@@ -1,7 +1,10 @@
 {
   pkgs,
   sops-nix,
-}: let
+  lab,
+}:
+assert pkgs.lib.assertMsg (builtins.elem "docker-vaultwarden.service" lab.sops.templates."vaultwarden.env".restartUnits)
+"vaultwarden container must restart on sops secret rotation"; let
   # These disposable keys and plaintext values are public test fixtures only.
   fixtures =
     pkgs.runCommand "lab-reliability-sops-fixtures" {

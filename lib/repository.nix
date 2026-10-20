@@ -20,7 +20,7 @@ in {
   workstation = {
     username = "vino";
     homeDirectory = "/home/vino";
-    repoPath = "/home/vino/src/bandit-nix";
+    repoPath = "/home/vino/proj/bandit-nix";
   };
 
   lab = {

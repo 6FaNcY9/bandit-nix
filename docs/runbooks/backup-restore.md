@@ -21,24 +21,9 @@ it does not prove application-level recovery or off-host recoverability.
 
 ## Minecraft
 
-Deployed with the panel change (`40a947e`, 2026-10-06): `minecraft-backup.timer` (03:40)
-writes a consistent archive (`save-off`, `save-all flush`, rsync, `save-on`, tar.zst)
-with a `.sha256` and keeps the newest 14 in `/srv/containers/minecraft/backups/auto`;
-the restic job calls the same snapshot script. `tools/minecraft-restore-test.sh
-ARCHIVE` (in bandit-craft) is the restore drill (new directory, throwaway container, no published
-port). The manual procedure below stays valid for cold backups.
-
-1. Make a fresh consistent backup after `save-all flush` and a graceful stop.
-2. Extract a copy into an isolated temporary directory; never extract over
-   `/srv/containers/minecraft/data`.
-3. Verify the world directory, `level.dat`, player data, plugins, and archive
-   ownership/modes.
-4. If gameplay validation is approved, start a separate temporary Paper
-   instance with no production port or network exposure.
-5. Remove only the temporary copy after recording the result.
-
-This proves archive extraction and, if the temporary instance is tested, basic
-world startup. It does not prove that a production replacement is safe.
+The Minecraft world backup (`minecraft-backup.timer`) and its restore drill
+live in [bandit-craft](https://github.com/6FaNcY9/bandit-craft); follow its
+runbooks. The restic job below still includes the world snapshot.
 
 ## Off-host backups (restic to Backblaze B2)
 

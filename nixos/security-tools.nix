@@ -4,7 +4,7 @@
   ...
 }: {
   # Host integration and small daily-use security tools (bandit only).
-  # Large coursework toolchains live in ~/Projects/pentest's devenv profiles so
+  # Large coursework toolchains live in ~/ops engagements' devenv profiles so
   # routine NixOS rebuilds do not rebuild the full pentesting environment.
   # Wireshark gets a proper capture setup (setcap dumpcap + group) instead of
   # running the GUI as root; the user is added to the wireshark group here.

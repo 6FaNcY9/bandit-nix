@@ -165,13 +165,13 @@ interface, SMB and discovery on the Wi-Fi LAN and on every Docker bridge,
 Minecraft published on all interfaces, and LLMNR/mDNS listening. Decisions:
 
 - **D4:** retire Portainer (its Agent holds `docker.sock`, root on the host,
-  and the UI was on the tunnel), following `docs/runbooks/portainer-retirement.md`.
+  and the UI was on the tunnel), following `docs/archive/portainer-retirement.md`.
   Dropping only `/:/host:ro` was rejected: it does not remove the root path.
   Removal is a separate, supervised step; see that runbook.
 - **D5:** SMB over Tailscale only; NetBIOS and WS-Discovery off; Samba
   `hosts allow` is loopback plus the tailnet.
-- **D6:** Minecraft bound to the tailnet address (Docker-published ports bypass
-  the host firewall, so the bind address is the control); SSH on `tailscale0`
+- **D6:** Minecraft ports: see [bandit-craft](https://github.com/6FaNcY9/bandit-craft)
+  (tailnet-bound; Docker-published ports bypass the host firewall). SSH on `tailscale0`
   only with no LAN fallback and the public SSH hostnames removed from the
   tunnel mirror. `bandit-lab-health` now requires Tailscale `Running`.
   Recovery is the machine's keyboard and screen (`bandit-lab-updates.md`).

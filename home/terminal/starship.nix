@@ -25,9 +25,18 @@ in {
         color_yellow = r.warn;
       };
 
-      # ╭─[ bandit ]─[ ~/src/bandit-nix ]─[  main ]─[ ~2⇡1 ]────[ 3s ]
+      # ╭─[ bandit ]─[ ~/proj/bandit-nix ]─[  main ]─[ ~2⇡1 ]────[ 3s ]
       # ╰─$ _
-      format = "[╭─](color_bg3)$hostname$directory$git_branch$git_status$nix_shell$rust$python$nodejs$golang$fill$cmd_duration$line_break[╰─](color_bg3)$character";
+      format = "[╭─](color_bg3)$hostname\${custom.ops}$directory$git_branch$git_status$nix_shell$rust$python$nodejs$golang$fill$cmd_duration$line_break[╰─](color_bg3)$character";
+
+      # Active engagement (written by `ops on`); `when` is a plain file test.
+      custom.ops = {
+        when = ''test -f "''${XDG_RUNTIME_DIR:-/nonexistent}/bandit/mode"'';
+        command = ''sed -n 's/^name=//p' "$XDG_RUNTIME_DIR/bandit/mode"'';
+        shell = ["sh"];
+        style = "color_purple bold";
+        format = "[\\[ ops:$output \\]]($style)[─](color_bg3)";
+      };
 
       fill = {
         symbol = "─";

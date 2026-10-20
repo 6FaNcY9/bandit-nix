@@ -76,9 +76,8 @@ in {
     packages = [homeAudit cacheClean pkgs.xdg-ninja];
 
     # Default homes for installers that respect the XDG base-directory spec.
-    # For new top-level dotdirs, first audit with:
-    #   ~/src/bandit-nix/script/dotdir-audit
-    # Then add only documented/supported relocations here.
+    # For new top-level dotdirs, first audit with `bandit-dotdir-audit`,
+    # then add only documented/supported relocations here.
     sessionVariables = {
       XDG_CONFIG_HOME = config.xdg.configHome;
       XDG_DATA_HOME = config.xdg.dataHome;

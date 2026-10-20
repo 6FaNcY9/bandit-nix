@@ -47,6 +47,7 @@ Follow imports to establish what is active; a directory's presence does not mean
 - Preserve independent nixvim pinning unless the task explicitly addresses dependency compatibility. Do not change `flake.lock` during unrelated work.
 - Edit declarative sources rather than generated files under `/etc` or `~/.config`.
 - Hyprland is owned by the system module; Home Manager configuration under `home/desktop/hyprland/` uses native Lua and structured bindings/rules. Preserve its `package = null` and `portalPackage = null` arrangement. Check local examples before editing.
+- Colours come only from palette roles (`config.bandit.theme.roles`, defined in `themes/palette.nix`); never write hex literals elsewhere, `ci/theme-contract.nix` rejects them.
 - Preserve explicit Stylix target ownership; hand-maintained Hyprland, Rofi, and Mako settings must not gain conflicting generated settings.
 - Keep PipeWire properties that require dotted names as literal keys (for example, `"default.clock.rate"`).
 - bandit-lab opens firewall ports on `tailscale0` only. Docker-published container ports bypass the NixOS firewall, so every `ports` entry must bind `127.0.0.1` or the tailnet address (`repoConfig.lab.tailscaleIp`); the `lab-surface` flake check enforces it.
