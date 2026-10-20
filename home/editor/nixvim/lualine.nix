@@ -26,7 +26,7 @@ in {
             fg = r.bright;
           };
           c = {
-            bg = r.bg;
+            inherit (r) bg;
             fg = r.muted;
           };
         };
@@ -41,7 +41,7 @@ in {
             fg = r.bright;
           };
           c = {
-            bg = r.bg;
+            inherit (r) bg;
             fg = r.muted;
           };
         };
@@ -56,7 +56,7 @@ in {
             fg = r.bright;
           };
           c = {
-            bg = r.bg;
+            inherit (r) bg;
             fg = r.muted;
           };
         };
@@ -71,7 +71,7 @@ in {
             fg = r.bright;
           };
           c = {
-            bg = r.bg;
+            inherit (r) bg;
             fg = r.muted;
           };
         };
@@ -86,7 +86,7 @@ in {
             fg = r.bright;
           };
           c = {
-            bg = r.bg;
+            inherit (r) bg;
             fg = r.muted;
           };
         };
@@ -97,11 +97,11 @@ in {
             gui = "bold";
           };
           b = {
-            bg = r.bg;
+            inherit (r) bg;
             fg = r.muted;
           };
           c = {
-            bg = r.bg;
+            inherit (r) bg;
             fg = r.raised;
           };
         };
