@@ -207,11 +207,12 @@
   # abort it and roll it back (2026-10-12), and shows the unit's log meanwhile. A run already going
   # (the hourly timer) is joined, not doubled.
   labApplyRemote = pkgs.writeShellScript "lab-apply-remote" ''
+    set -euo pipefail
     ${pkgs.systemd}/bin/journalctl -fu lab-update-apply.service -n0 -o cat &
     follow=$!
     status=0
     ${pkgs.systemd}/bin/systemctl start lab-update-apply.service || status=$?
-    sleep 1
+    ${pkgs.coreutils}/bin/sleep 1
     kill "$follow" 2>/dev/null || true
     exit "$status"
   '';
