@@ -26,6 +26,11 @@ prepared LUKS work waits on branch `luks-prepare`.
   flake's `nixConfig`, or import unsigned store paths (e.g. `nix copy` into the
   local store); builds, devshells, `nh os switch` and `cachix push` (token-based)
   are unaffected. Enforced by the `local-privilege` flake check.
+- [x] `nixos/cachix.nix`: only the laptop substitutes from the
+  `github-bandit-nix` Cachix cache (2026-10-20). GitHub CI pushes there without
+  a signed-commit gate, so a lab that trusted it would let whoever controls the
+  workflow or its token bypass `lab-update`'s GPG check. The lab substitutes
+  from cache.nixos.org only. Enforced by the `lab-surface` flake check.
 - [x] `flake.nix`: `nixvim` is kept on its own pinned `nixpkgs`; upstream
   recommends against `inputs.nixpkgs.follows = "nixpkgs"`.
 

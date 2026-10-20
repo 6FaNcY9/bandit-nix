@@ -12,7 +12,7 @@ This directory contains automated workflows for testing and validating the NixOS
 - **label-pr**: Auto-labels PRs by changed files.
 - **build**: Runs `nix flake check` (formatting, dead code, antipatterns, custom checks) and dry-run-evaluates the `bandit-ci` system closure.
 - **build-vm**: Builds a QEMU VM of `bandit-ci` and runs a 90-second boot smoke test.
-- **populate-cache**: On pushes to main and manual dispatch; builds the `bandit-lab` closure and pushes it to the `github-bandit-nix` Cachix cache (feeds the lab's hourly auto-apply). Needs the `CACHIX_AUTH_TOKEN` repository secret.
+- **populate-cache**: On pushes to main and manual dispatch; builds the `bandit-lab` closure and pushes it to the `github-bandit-nix` Cachix cache. Only the laptop substitutes from it (`nixos/cachix.nix`); the lab does not, because these pushes are not gated on a signed commit, so the lab builds what cache.nixos.org lacks itself (`lab-surface` enforces this). Needs the `CACHIX_AUTH_TOKEN` repository secret.
 - **update-flake**: Manually triggered; updates `flake.lock` and opens a PR.
 
 The vulnix CVE scan runs in GitLab CI (`.gitlab-ci.yml`), not here.

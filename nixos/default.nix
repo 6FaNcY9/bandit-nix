@@ -10,6 +10,7 @@
     ./mcp.nix
     ./cli-tools.nix
     ./core.nix
+    ./cachix.nix
     ./theme.nix
     ./boot.nix
     ./hardening.nix
