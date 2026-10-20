@@ -73,7 +73,7 @@
       printf 'Home Manager: moved %s to %s (older copies use .~N~ suffixes)\n' "$target" "$backup"
     '';
     standaloneStylix = {
-      stylix = repoConfig.mkStylixTheme pkgs;
+      stylix = repoConfig.mkStylixTheme pkgs "dark";
     };
     sharedArgs = {inherit inputs repoConfig;};
     securityLab = nixpkgs.lib.nixosSystem {

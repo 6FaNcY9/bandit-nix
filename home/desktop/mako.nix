@@ -1,8 +1,8 @@
 {config, ...}: let
-  colors = config.lib.stylix.colors.withHashtag;
+  r = config.bandit.theme.roles;
 in {
   # mako has no dunst-style per-urgency background color or GUI history
-  # popup; `makoctl restore` (bound in hyprland.nix) is the closest
+  # popup; `makoctl restore` (bound in home/desktop/hyprland/bindings.nix) is the closest
   # equivalent to dunst's history-pop, and a `mode=dnd` section stands in
   # for dunst's pause/resume toggle.
   services.mako = {
@@ -24,20 +24,20 @@ in {
       actions = true;
       default-timeout = 10000;
 
-      background-color = colors.base00;
-      border-color = colors.base0D;
-      text-color = colors.base05;
-      progress-color = "over ${colors.base02}";
+      background-color = r.bg;
+      border-color = r.line;
+      text-color = r.fg;
+      progress-color = "over ${r.raised}";
 
       "urgency=low" = {
-        border-color = colors.base01;
-        text-color = colors.base03;
+        border-color = r.line;
+        text-color = r.muted;
         default-timeout = 5000;
       };
 
       "urgency=critical" = {
-        border-color = colors.base08;
-        text-color = colors.base08;
+        border-color = r.crit;
+        text-color = r.crit;
         default-timeout = 0;
       };
 

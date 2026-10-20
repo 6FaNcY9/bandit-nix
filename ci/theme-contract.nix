@@ -1,37 +1,36 @@
+# Theme contract: themes/palette.nix is the only colour source.
+# - both variants define the same grey and accent keys
+# - every semantic role resolves to "#rrggbb" in both variants
+# - no hex colour literal appears in Nix, CSS, SCSS, Lua or rasi sources
+#   outside themes/palette.nix (hand-themed modules read
+#   config.bandit.theme.roles; the lab reads repoConfig.palette.roles)
 {
   pkgs,
   lib,
   repoConfig,
 }: let
-  theme = repoConfig.workstationTheme;
-  actualColorKeys = lib.sort builtins.lessThan (builtins.attrNames theme.colors);
-  expectedColorKeys = lib.sort builtins.lessThan [
-    "active"
-    "canvas"
-    "critical"
-    "foreground"
-    "info"
-    "muted"
-    "primary"
-    "raised"
-    "secondary"
-    "shadow"
-    "structure"
-    "success"
-    "surface"
-  ];
+  pal = repoConfig.palette;
+  keysOf = v: {
+    grey = lib.attrNames pal.variants.${v}.grey;
+    accent = lib.attrNames pal.variants.${v}.accent;
+  };
+  isHex = c: builtins.match "#[0-9a-f]{6}" c != null;
+  rolesOk = v: lib.all isHex (lib.attrValues (pal.roles v));
+  base16Ok = v: lib.all (c: builtins.match "[0-9a-f]{6}" c != null) (lib.attrValues (removeAttrs (pal.base16 v) ["scheme" "author" "slug"]));
+  src = lib.fileset.toSource {
+    root = ../.;
+    fileset = lib.fileset.unions [../home ../hosts ../nixos ../lib ../themes];
+  };
 in
-  assert lib.assertMsg (theme.name == "Gruvbox") "workstationTheme.name must stay Gruvbox";
-  assert lib.assertMsg (builtins.pathExists ../themes/gruvbox-light.yaml) "themes/gruvbox-light.yaml missing (light specialisation)";
-  assert lib.assertMsg (actualColorKeys == expectedColorKeys) "workstationTheme.colors keys drifted from the contract";
-  assert lib.assertMsg (theme.geometry.unit == 4) "workstationTheme.geometry.unit must stay 4";
-  assert lib.assertMsg (theme.geometry.radius == 0) "workstationTheme.geometry.radius must stay 0";
-  assert lib.assertMsg ((repoConfig.mkStylixTheme pkgs).base16Scheme == ../themes/gruvbox-dark.yaml) "mkStylixTheme must use themes/gruvbox-dark.yaml";
-  assert lib.assertMsg (theme.fonts.shell.name == "Departure Mono") "workstationTheme shell font changed";
-  assert lib.assertMsg (theme.fonts.technical.name == "JetBrainsMono Nerd Font Mono") "workstationTheme technical font changed";
-  assert lib.assertMsg (theme.fonts.interface.name == "Noto Sans") "workstationTheme interface font changed";
-  assert lib.assertMsg (theme.icons.name == "Papirus-Dark") "workstationTheme icon theme changed";
-  assert lib.assertMsg (theme.cursor.name == "Bibata-Modern-Ice") "workstationTheme cursor theme changed";
-    pkgs.runCommand "bandit-nix-theme-contract" {} ''
+  assert lib.assertMsg (keysOf "dark" == keysOf "light") "themes/palette.nix: dark and light variants must define the same keys";
+  assert lib.assertMsg (rolesOk "dark" && rolesOk "light") "themes/palette.nix: every role must be a lowercase #rrggbb colour";
+  assert lib.assertMsg (base16Ok "dark" && base16Ok "light") "themes/palette.nix: base16 slots must be lowercase rrggbb";
+  assert lib.assertMsg (lib.length (lib.attrNames (pal.base16 "dark")) == 19) "themes/palette.nix: base16 must define base00..base0F plus scheme metadata";
+    pkgs.runCommand "bandit-nix-theme-contract" {nativeBuildInputs = [pkgs.ripgrep];} ''
+      cd ${src}
+      if rg -n --no-heading -g '*.{nix,css,scss,hbs,lua,rasi}' -g '!themes/palette.nix' '#[0-9a-fA-F]{6}\b' .; then
+        echo "hex colour literals found outside themes/palette.nix; use config.bandit.theme.roles or repoConfig.palette.roles" >&2
+        exit 1
+      fi
       touch "$out"
     ''

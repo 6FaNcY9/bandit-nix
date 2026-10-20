@@ -3,12 +3,13 @@
   lib,
   ...
 }: let
-  colors = config.lib.stylix.colors.withHashtag;
-  themedChrome =
-    lib.replaceStrings
-    ["#282828" "#1d2021" "#3c3836" "#504945" "#928374" "#d5c4a1" "#d79921" "#458588" "#cc241d" "#98971a"]
-    [colors.base00 colors.base01 colors.base01 colors.base02 colors.base03 colors.base05 colors.base0A colors.base0C colors.base08 colors.base0B]
-    (builtins.readFile ./thunderbird-userchrome.css);
+  r = config.bandit.theme.roles;
+  # :root custom properties from the palette roles; the CSS references them.
+  roleVars = ":root {
+" + lib.concatStrings (lib.mapAttrsToList (n: v: "  --b-${n}: ${v};
+") r) + "}
+";
+  themedChrome = roleVars + builtins.readFile ./thunderbird-userchrome.css;
   markdownHereTokens = [
     "@canvas@"
     "@surface@"
@@ -24,20 +25,20 @@
     "@secondary@"
     "@muted@"
   ];
-  markdownHereColors = [
-    colors.base00
-    colors.base01
-    colors.base02
-    colors.base03
-    colors.base05
-    colors.base08
-    colors.base09
-    colors.base0A
-    colors.base0B
-    colors.base0C
-    colors.base0D
-    colors.base0E
-    colors.base0F
+  markdownHereColors = with r; [
+    bg
+    surface
+    raised
+    line
+    fg
+    crit
+    warn
+    accent
+    ok
+    info
+    muted # shadow
+    dim # secondary
+    muted
   ];
   themedMarkdownHere = file:
     lib.replaceStrings

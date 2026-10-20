@@ -1,33 +1,39 @@
 {
+  config,
+  lib,
   pkgs,
   repoConfig,
   ...
 }: {
-  # ─── System fonts ─────────────────────────────────────
-  fonts = {
-    fontconfig.enable = true;
-    packages = with pkgs; [
-      nerd-fonts.fira-code
-      nerd-fonts.jetbrains-mono
-      noto-fonts
-      noto-fonts-cjk-sans
-      noto-fonts-color-emoji
-    ];
+  options.bandit.themeVariant = lib.mkOption {
+    type = lib.types.enum ["dark" "light"];
+    default = "dark";
+    description = "Palette variant (themes/palette.nix); the light boot specialisation sets \"light\".";
   };
 
-  # ─── Stylix — system-wide theming ─────────────────────
-  stylix =
-    repoConfig.mkStylixTheme pkgs
-    // {
-      targets = {
-        gtk.enable = true;
-        grub.enable = true;
-        console.enable = true;
-        # kmscon target sets removed nixpkgs options (extraConfig/fonts) — disable
-        # until Stylix updates its kmscon module for the new API.
-        kmscon.enable = false;
-        qt.enable = true;
-        plymouth.enable = true;
-      };
+  config = {
+    fonts = {
+      fontconfig.enable = true;
+      packages = with pkgs; [
+        nerd-fonts.fira-code
+        noto-fonts
+        noto-fonts-cjk-sans
+        noto-fonts-color-emoji
+      ];
     };
+
+    stylix =
+      repoConfig.mkStylixTheme pkgs config.bandit.themeVariant
+      // {
+        targets = {
+          gtk.enable = true;
+          grub.enable = true;
+          console.enable = true;
+          # Stylix's kmscon module still sets options removed from nixpkgs.
+          kmscon.enable = false;
+          qt.enable = true;
+          plymouth.enable = true;
+        };
+      };
+  };
 }

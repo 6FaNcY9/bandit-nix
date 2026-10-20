@@ -1,5 +1,5 @@
 {config, ...}: let
-  c = config.lib.stylix.colors.withHashtag;
+  r = config.bandit.theme.roles;
 in {
   # Statusline
   programs.nixvim.plugins.lualine = {
@@ -17,92 +17,92 @@ in {
       theme = {
         normal = {
           a = {
-            bg = c.base0A;
-            fg = c.base00;
+            bg = r.accent;
+            fg = r.bg;
             gui = "bold";
           };
           b = {
-            bg = c.base01;
-            fg = c.base06;
+            bg = r.surface;
+            fg = r.bright;
           };
           c = {
-            bg = c.base00;
-            fg = c.base03;
+            bg = r.bg;
+            fg = r.muted;
           };
         };
         insert = {
           a = {
-            bg = c.base0D;
-            fg = c.base00;
+            bg = r.info;
+            fg = r.bg;
             gui = "bold";
           };
           b = {
-            bg = c.base01;
-            fg = c.base06;
+            bg = r.surface;
+            fg = r.bright;
           };
           c = {
-            bg = c.base00;
-            fg = c.base03;
+            bg = r.bg;
+            fg = r.muted;
           };
         };
         visual = {
           a = {
-            bg = c.base0E;
-            fg = c.base00;
+            bg = r.info;
+            fg = r.bg;
             gui = "bold";
           };
           b = {
-            bg = c.base01;
-            fg = c.base06;
+            bg = r.surface;
+            fg = r.bright;
           };
           c = {
-            bg = c.base00;
-            fg = c.base03;
+            bg = r.bg;
+            fg = r.muted;
           };
         };
         replace = {
           a = {
-            bg = c.base08;
-            fg = c.base00;
+            bg = r.crit;
+            fg = r.bg;
             gui = "bold";
           };
           b = {
-            bg = c.base01;
-            fg = c.base06;
+            bg = r.surface;
+            fg = r.bright;
           };
           c = {
-            bg = c.base00;
-            fg = c.base03;
+            bg = r.bg;
+            fg = r.muted;
           };
         };
         command = {
           a = {
-            bg = c.base0B;
-            fg = c.base00;
+            bg = r.ok;
+            fg = r.bg;
             gui = "bold";
           };
           b = {
-            bg = c.base01;
-            fg = c.base06;
+            bg = r.surface;
+            fg = r.bright;
           };
           c = {
-            bg = c.base00;
-            fg = c.base03;
+            bg = r.bg;
+            fg = r.muted;
           };
         };
         inactive = {
           a = {
-            bg = c.base01;
-            fg = c.base03;
+            bg = r.surface;
+            fg = r.muted;
             gui = "bold";
           };
           b = {
-            bg = c.base00;
-            fg = c.base03;
+            bg = r.bg;
+            fg = r.muted;
           };
           c = {
-            bg = c.base00;
-            fg = c.base02;
+            bg = r.bg;
+            fg = r.raised;
           };
         };
       };

@@ -1,0 +1,120 @@
+/* bandit theme for the Vaultwarden web vault.
+ *
+ * Deployed via Vaultwarden's TEMPLATES_FOLDER hook
+ * (templates/scss/user.vaultwarden.scss.hbs); Vaultwarden compiles it into the
+ * vaultwarden.css it serves same-origin. default.nix prepends the palette
+ * roles as Sass variables ($bg, $surface, ..., $accent, $ok, $crit, ...)
+ * from themes/palette.nix, so this file holds no colour literals: every
+ * ramp is mixed from a role.
+ *
+ * Targets both variable layers of the Bitwarden web vault: palette hexes
+ * (--color-gray-*, --color-brand-*, ...) behind the semantic --color-bg/fg/*
+ * variables, and the legacy RGB triplets of the Tailwind components.
+ * Unknown variables are inert on older builds.
+ */
+
+@function rgb-triplet($c) {
+  @return #{red($c)} #{green($c)} #{blue($c)};
+}
+
+/* 050 (lightest) -> 950 (darkest) around an anchor at 500. */
+@mixin ramp($name, $c) {
+  --color-#{$name}-050: #{mix($bright, $c, 85%)};
+  --color-#{$name}-100: #{mix($bright, $c, 70%)};
+  --color-#{$name}-200: #{mix($bright, $c, 50%)};
+  --color-#{$name}-300: #{mix($bright, $c, 30%)};
+  --color-#{$name}-400: #{mix($bright, $c, 15%)};
+  --color-#{$name}-500: #{$c};
+  --color-#{$name}-600: #{mix($bg, $c, 15%)};
+  --color-#{$name}-700: #{mix($bg, $c, 30%)};
+  --color-#{$name}-800: #{mix($bg, $c, 50%)};
+  --color-#{$name}-900: #{mix($bg, $c, 70%)};
+  --color-#{$name}-950: #{mix($bg, $c, 85%)};
+  --color-#{$name}-950-rgb: #{red(mix($bg, $c, 85%))}, #{green(mix($bg, $c, 85%))}, #{blue(mix($bg, $c, 85%))};
+}
+
+.theme_dark {
+  /* Grey ramp straight from the palette (050 = brightest). */
+  --color-gray-050: #{$bright};
+  --color-gray-100: #{$fg};
+  --color-gray-200: #{mix($fg, $dim, 50%)};
+  --color-gray-300: #{$dim};
+  --color-gray-400: #{mix($dim, $muted, 50%)};
+  --color-gray-400-rgb: #{red(mix($dim, $muted, 50%))}, #{green(mix($dim, $muted, 50%))}, #{blue(mix($dim, $muted, 50%))};
+  --color-gray-500: #{$muted};
+  --color-gray-600: #{$line};
+  --color-gray-700: #{$borderInactive};
+  --color-gray-800: #{$raised};
+  --color-gray-900: #{$surface};
+  --color-gray-950: #{$bg};
+  --color-gray-950-rgb: #{red($bg)}, #{green($bg)}, #{blue($bg)};
+
+  @include ramp(brand, $accent);
+  @include ramp(yellow, $warn);
+  @include ramp(orange, $warn);
+  @include ramp(green, $ok);
+  @include ramp(red, $crit);
+  @include ramp(coral, $crit);
+  @include ramp(teal, $info);
+  @include ramp(purple, $ops);
+  @include ramp(pink, $ops);
+
+  --color-border-focus: #{$accent};
+
+  /* Legacy RGB triplets (Tailwind redesign components) */
+  --color-background: #{rgb-triplet($surface)};
+  --color-background-alt: #{rgb-triplet($bg)};
+  --color-background-alt2: #{rgb-triplet($raised)};
+  --color-background-alt3: #{rgb-triplet($borderInactive)};
+  --color-background-alt4: #{rgb-triplet($bg)};
+
+  --color-primary-100: #{rgb-triplet(mix($bg, $accent, 85%))};
+  --color-primary-300: #{rgb-triplet(mix($bg, $accent, 30%))};
+  --color-primary-600: #{rgb-triplet($accent)};
+  --color-primary-700: #{rgb-triplet(mix($bright, $accent, 50%))};
+
+  --color-secondary-100: #{rgb-triplet($raised)};
+  --color-secondary-300: #{rgb-triplet($line)};
+  --color-secondary-500: #{rgb-triplet($muted)};
+  --color-secondary-600: #{rgb-triplet(mix($dim, $muted, 50%))};
+  --color-secondary-700: #{rgb-triplet($dim)};
+
+  --color-success-100: #{rgb-triplet(mix($bg, $ok, 85%))};
+  --color-success-600: #{rgb-triplet($ok)};
+  --color-success-700: #{rgb-triplet(mix($bright, $ok, 50%))};
+
+  --color-danger-100: #{rgb-triplet(mix($bg, $crit, 85%))};
+  --color-danger-600: #{rgb-triplet($crit)};
+  --color-danger-700: #{rgb-triplet(mix($bright, $crit, 50%))};
+
+  --color-warning-100: #{rgb-triplet(mix($bg, $warn, 85%))};
+  --color-warning-600: #{rgb-triplet($warn)};
+  --color-warning-700: #{rgb-triplet(mix($bright, $warn, 50%))};
+
+  --color-info-100: #{rgb-triplet(mix($bg, $info, 85%))};
+  --color-info-600: #{rgb-triplet($info)};
+  --color-info-700: #{rgb-triplet(mix($bright, $info, 50%))};
+
+  --color-notification-100: #{rgb-triplet(mix($bg, $ops, 85%))};
+  --color-notification-600: #{rgb-triplet($ops)};
+
+  --color-text-main: #{rgb-triplet($fg)};
+  --color-text-muted: #{rgb-triplet($dim)};
+  --color-text-contrast: #{rgb-triplet($bg)};
+  --color-text-alt2: #{rgb-triplet($bright)};
+  --color-text-code: #{rgb-triplet($info)};
+
+  --color-hover-default: #{rgba($accent, 0.12)};
+
+  --color-marketing-logo: #{rgb-triplet($fg)};
+  --color-bw-blue: #{rgb-triplet($accent)};
+
+  --tw-ring-offset-color: #{$surface};
+
+  --color-illustration-outline: #{rgb-triplet($accent)};
+  --color-illustration-bg-primary: #{rgb-triplet(mix($bright, $accent, 50%))};
+  --color-illustration-bg-secondary: #{rgb-triplet($accent)};
+  --color-illustration-bg-tertiary: #{rgb-triplet($fg)};
+  --color-illustration-tertiary: #{rgb-triplet($warn)};
+  --color-illustration-logo: #{rgb-triplet($fg)};
+}

@@ -3,7 +3,7 @@
   lib,
   ...
 }: let
-  colors = config.lib.stylix.colors.withHashtag;
+  r = config.bandit.theme.roles;
   rgb = color: "rgb(${lib.removePrefix "#" color})";
 in {
   # Stylix's Hyprland target is disabled in home/theme.nix; this module owns
@@ -41,10 +41,10 @@ in {
           hover_icon_on_border = true;
 
           col = {
-            active_border = rgb colors.base09;
-            inactive_border = rgb colors.base03;
-            nogroup_border = rgb colors.base08;
-            nogroup_border_active = rgb colors.base0A;
+            active_border = rgb r.accent;
+            inactive_border = rgb r.borderInactive;
+            nogroup_border = rgb r.crit;
+            nogroup_border_active = rgb r.warn;
           };
 
           snap = {
@@ -74,10 +74,10 @@ in {
           merge_groups_on_groupbar = true;
 
           col = {
-            border_active = rgb colors.base09;
-            border_inactive = rgb colors.base03;
-            border_locked_active = rgb colors.base0A;
-            border_locked_inactive = rgb colors.base02;
+            border_active = rgb r.accent;
+            border_inactive = rgb r.borderInactive;
+            border_locked_active = rgb r.accent;
+            border_locked_inactive = rgb r.line;
           };
 
           groupbar = {
@@ -97,22 +97,22 @@ in {
             gradient_rounding = 0;
             gaps_in = 1;
             gaps_out = 0;
-            text_color = rgb colors.base00;
-            text_color_inactive = rgb colors.base05;
-            text_color_locked_active = rgb colors.base00;
-            text_color_locked_inactive = rgb colors.base04;
+            text_color = rgb r.bg;
+            text_color_inactive = rgb r.fg;
+            text_color_locked_active = rgb r.bg;
+            text_color_locked_inactive = rgb r.fg;
 
             col = {
-              active = rgb colors.base09;
-              inactive = rgb colors.base02;
-              locked_active = rgb colors.base0A;
-              locked_inactive = rgb colors.base03;
+              active = rgb r.accent;
+              inactive = rgb r.surface;
+              locked_active = rgb r.accent;
+              locked_inactive = rgb r.line;
             };
           };
         };
 
         misc = {
-          background_color = rgb colors.base00;
+          background_color = rgb r.bg;
           disable_hyprland_logo = true;
         };
 

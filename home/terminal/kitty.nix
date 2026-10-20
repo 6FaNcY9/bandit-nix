@@ -1,11 +1,11 @@
 {config, ...}: let
-  colors = config.lib.stylix.colors.withHashtag;
+  r = config.bandit.theme.roles;
 in {
   programs.kitty = {
     enable = true;
 
-    # Stylix manages base colors and font; tab chrome follows the same palette.
-    # so we only configure behavior here
+    # Stylix manages base colors and font; tab chrome comes from the palette
+    # roles. Everything else here is behavior only.
 
     shellIntegration = {
       enableZshIntegration = true;
@@ -15,7 +15,7 @@ in {
 
     settings = {
       # ── Ligatures ────────────────────────────────────────────
-      # JetBrains Mono's programming ligatures (=>, !=, >=) stay enabled.
+      # FiraCode's programming ligatures (=>, !=, >=) stay enabled.
       disable_ligatures = "never";
 
       # ── Scrollback ─────────────────────────────────────────
@@ -57,14 +57,14 @@ in {
       tab_separator = " ┃ ";
       tab_title_template = "{index}│{title}";
       tab_bar_min_tabs = "2";
-      tab_bar_background = colors.base00;
-      active_tab_foreground = colors.base00;
-      active_tab_background = colors.base0A;
+      tab_bar_background = r.bg;
+      active_tab_foreground = r.bg;
+      active_tab_background = r.accent;
       active_tab_font_style = "bold";
-      inactive_tab_foreground = colors.base03;
-      inactive_tab_background = colors.base01;
+      inactive_tab_foreground = r.dim;
+      inactive_tab_background = r.surface;
       inactive_tab_font_style = "normal";
-      tab_bar_margin_color = colors.base00;
+      tab_bar_margin_color = r.bg;
 
       # ── Misc ───────────────────────────────────────────────
       strip_trailing_spaces = "smart";

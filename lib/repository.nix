@@ -49,61 +49,10 @@ in {
     ];
   };
 
-  # Shared with the headless shell and editor modules.
-  serverPalette = {
-    base00 = "#111111";
-    base01 = "#1b1d1e";
-    base02 = "#2d2d2d";
-    base03 = "#6c7070";
-    base04 = "#a7a9a5";
-    base05 = "#d8d8c8";
-    base06 = "#eee8d5";
-    base07 = "#fff8dc";
-    base08 = "#f2777a";
-    base09 = "#f99157";
-    base0A = "#ffcc66";
-    base0B = "#99cc99";
-    base0C = "#66cccc";
-    base0D = "#6699cc";
-    base0E = "#cc99cc";
-    base0F = "#d27b53";
-  };
-
-  workstationTheme = {
-    name = "Gruvbox";
-    colors = {
-      canvas = "#282828";
-      surface = "#3c3836";
-      raised = "#504945";
-      structure = "#665c54";
-      shadow = "#7c6f64";
-      foreground = "#ebdbb2";
-      muted = "#bdae93";
-      primary = "#fe8019";
-      active = "#d65d0e";
-      secondary = "#d3869b";
-      critical = "#fb4934";
-      success = "#b8bb26";
-      info = "#83a598";
-    };
-    geometry = {
-      unit = 4;
-      radius = 0;
-      divider = 1;
-      focus = 2;
-      structure = 3;
-    };
-    fonts = {
-      shell.name = "Departure Mono";
-      technical.name = "JetBrainsMono Nerd Font Mono";
-      interface.name = "Noto Sans";
-    };
-    icons.name = "Papirus-Dark";
-    cursor = {
-      name = "Bibata-Modern-Ice";
-      size = 20;
-    };
-  };
+  # The single colour source (themes/palette.nix) and its derived forms.
+  palette = import ../themes/palette.nix;
+  # "#rrggbb" base16 for the lab's shell, editor, Cockpit and Vaultwarden.
+  serverPalette = (import ../themes/palette.nix).base16Hashed "dark";
 
   inherit unfreePackageNames;
 
@@ -138,11 +87,26 @@ in {
     # versioned independently by nixpkgs.
     || lib.hasPrefix "cuda_" name;
 
-  mkStylixTheme = pkgs: {
+  # Stylix for the laptop. `variant` picks scheme and polarity together, so the
+  # light specialisation is one argument instead of paired mkForce overrides.
+  mkStylixTheme = pkgs: variant: let
+    pal = import ../themes/palette.nix;
+    c = pal.variants.${variant};
+  in {
     enable = true;
-    base16Scheme = ../themes/gruvbox-dark.yaml;
-    polarity = "dark";
-    image = ../themes/gruvbox_minimal_space.png;
+    base16Scheme = pal.base16 variant;
+    polarity = variant;
+    # Flat canvas with a faint scanline grid, generated from the palette so the
+    # wallpaper follows the variant instead of being a fixed image.
+    image = pkgs.runCommandLocal "bandit-wallpaper-${variant}.png" {nativeBuildInputs = [pkgs.imagemagick];} ''
+      magick -size 2880x1920 xc:'#${c.grey.g0}' \
+        -fill '#${c.grey.g1}' -draw "$(for y in $(seq 0 4 1920); do printf 'line 0,%d 2880,%d ' "$y" "$y"; done)" \
+        -fill none -stroke '#${c.grey.g3}' -strokewidth 1 -draw "rectangle 40,40 2840,1880" \
+        "$out"
+    '';
+    # Monospace everywhere on purpose: the desktop is a terminal-first retro
+    # console. Departure Mono-style pixel fonts were tried; FiraCode stays for
+    # its ligatures and Nerd Font glyphs.
     fonts = {
       monospace = {
         package = pkgs.nerd-fonts.fira-code;
@@ -160,15 +124,21 @@ in {
         terminal = 18;
         applications = 18;
         desktop = 18;
-        # Was 10 — rofi/mako/tooltip text was barely readable on the
-        # Framework 13's high-DPI panel at scale 1.
+        # Readable rofi/mako/tooltip text on the Framework 13's high-DPI panel at scale 1.
         popups = 14;
       };
     };
     cursor = {
       package = pkgs.bibata-cursors;
-      name = "Bibata-Modern-Ice";
+      name = "Bibata-Modern-Classic";
       size = 20;
+    };
+    # Papirus with grey folders matches the neutral ramp.
+    icons = {
+      enable = true;
+      package = pkgs.papirus-icon-theme.override {color = "grey";};
+      dark = "Papirus-Dark";
+      light = "Papirus-Light";
     };
   };
 }
