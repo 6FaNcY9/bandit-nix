@@ -1,13 +1,18 @@
 {
   config,
+  lib,
   pkgs,
   repoConfig,
   ...
 }: let
   username = repoConfig.workstation.username;
   # Compiled by Vaultwarden into the vaultwarden.css served to the web vault.
+  # The palette roles are prepended as Sass variables; theme.scss.hbs mixes
+  # every ramp from them (themes/palette.nix stays the only colour source).
+  roles = repoConfig.palette.roles "dark";
   vaultwardenTemplates = pkgs.writeTextDir "scss/user.vaultwarden.scss.hbs" (
-    builtins.readFile ./gruvbox.scss.hbs
+    lib.concatStrings (lib.mapAttrsToList (name: value: "\$${name}: ${value};\n") roles)
+    + builtins.readFile ./theme.scss.hbs
   );
 in {
   systemd.tmpfiles.rules = [

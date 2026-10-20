@@ -3,12 +3,13 @@
   lib,
   ...
 }: let
-  colors = config.lib.stylix.colors.withHashtag;
-  themedChrome =
-    lib.replaceStrings
-    ["#282828" "#1d2021" "#3c3836" "#504945" "#928374" "#d5c4a1" "#d79921" "#458588" "#cc241d"]
-    [colors.base00 colors.base01 colors.base01 colors.base02 colors.base03 colors.base05 colors.base0A colors.base0C colors.base08]
-    (builtins.readFile ./userchrome.css);
+  r = config.bandit.theme.roles;
+  # :root custom properties from the palette roles; the CSS references them.
+  roleVars = ":root {
+" + lib.concatStrings (lib.mapAttrsToList (n: v: "  --b-${n}: ${v};
+") r) + "}
+";
+  themedChrome = roleVars + builtins.readFile ./userchrome.css;
 in {
   programs.firefox = {
     enable = true;

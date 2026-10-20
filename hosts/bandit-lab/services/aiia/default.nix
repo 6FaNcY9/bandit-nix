@@ -102,6 +102,8 @@ in {
       volumes = ["/srv/containers/aiia/mysql:/var/lib/mysql"];
       environmentFiles = [config.sops.templates."aiia-mysql.env".path];
       networks = ["aiia"];
+      # The entrypoint drops root via gosu, which no-new-privileges permits.
+      extraOptions = ["--security-opt=no-new-privileges"];
     };
 
     aiia-redis = {

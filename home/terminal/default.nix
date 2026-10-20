@@ -4,6 +4,8 @@
     ./starship.nix
     ./tools.nix
     ./automation.nix
+    ./proj.nix
+    ./ops.nix
     ./zsh.nix
   ];
 

@@ -1,11 +1,27 @@
 {
   config,
   pkgs,
-  repoConfig,
   ...
 }: let
-  colors = config.lib.stylix.colors.withHashtag;
+  r = config.bandit.theme.roles;
   monospaceFont = config.stylix.fonts.monospace.name;
+
+  # dev/ops indicator: reads the state written by `ops on` (home/terminal/ops.nix).
+  # Dev mode prints an empty text, which waybar hides.
+  modeStatus = pkgs.writeShellApplication {
+    name = "bandit-mode-status";
+    runtimeInputs = [pkgs.coreutils pkgs.gnused pkgs.jq];
+    text = ''
+      modefile="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bandit/mode"
+      if [ ! -f "$modefile" ]; then
+        jq -cn '{text: "", class: "dev", tooltip: ""}'
+        exit 0
+      fi
+      get() { sed -n "s/^$1=//p" "$modefile" | head -1; }
+      jq -cn --arg n "$(get name)" --arg p "$(get path)" --arg s "$(get since)" \
+        '{text: ("OPS " + $n), class: "ops", tooltip: ($p + "\nsince " + $s)}'
+    '';
+  };
 in {
   programs.waybar = {
     enable = true;
@@ -22,7 +38,7 @@ in {
       margin-bottom = 0;
       margin-left = 0;
 
-      modules-left = ["custom/nix" "hyprland/workspaces" "hyprland/window"];
+      modules-left = ["custom/nix" "custom/mode" "hyprland/workspaces" "hyprland/window"];
       modules-center = ["clock"];
       modules-right = [
         "cpu"
@@ -38,6 +54,14 @@ in {
         format = "󱄅 BANDIT";
         on-click = "${config.programs.rofi.package}/bin/rofi -show drun";
         tooltip = false;
+      };
+
+      "custom/mode" = {
+        exec = "${modeStatus}/bin/bandit-mode-status";
+        return-type = "json";
+        interval = "once";
+        # `ops on|off` sends SIGRTMIN+8.
+        signal = 8;
       };
 
       "hyprland/workspaces" = {
@@ -56,13 +80,13 @@ in {
 
       clock = {
         format = "{:%a %d  ▪  %H:%M}";
-        interval = 10;
-        tooltip-format = "{:%Y-%m-%d %H:%M:%S}";
+        interval = 30;
+        tooltip-format = "{:%Y-%m-%d %H:%M}";
       };
 
       cpu = {
         format = "󰻠 {usage}%";
-        interval = 2;
+        interval = 5;
         states = {
           warning = 70;
           critical = 90;
@@ -72,7 +96,7 @@ in {
 
       memory = {
         format = "󰍛 {percentage}%";
-        interval = 3;
+        interval = 10;
         states = {
           warning = 70;
           critical = 90;
@@ -87,8 +111,8 @@ in {
         format-disconnected = "󰖪 OFF";
         tooltip-format-wifi = "{essid}\n{ipaddr}/{cidr}\n⇣ {bandwidthDownBytes}  ⇡ {bandwidthUpBytes}";
         tooltip-format-ethernet = "{ifname}\n{ipaddr}/{cidr}\n⇣ {bandwidthDownBytes}  ⇡ {bandwidthUpBytes}";
-        on-click = "${repoConfig.workstation.homeDirectory}/.local/bin/net-menu";
-        interval = 2;
+        on-click = "${config.home.file.".local/bin/net-menu".source}";
+        interval = 5;
       };
 
       pulseaudio = {
@@ -134,8 +158,8 @@ in {
       };
     };
 
-    # Flat Gruvbox rail: edge-to-edge, compact, and colorful without raised
-    # panels, shadows, or other three-dimensional effects.
+    # Flat ops-console rail: edge-to-edge, square, 1px structure lines; text in
+    # the grey ramp, accents only for state (see themes/palette.nix roles).
     style = ''
       * {
         font-family: "${monospaceFont}";
@@ -153,16 +177,17 @@ in {
       }
 
       window#waybar {
-        background-color: ${colors.base01};
-        color: ${colors.base05};
-        border-bottom: 2px solid ${colors.base03};
+        background-color: ${r.surface};
+        color: ${r.fg};
+        border-bottom: 1px solid ${r.line};
         box-shadow: none;
       }
 
       tooltip {
-        color: ${colors.base05};
-        background-color: ${colors.base01};
-        border: 1px solid ${colors.base03};
+        color: ${r.fg};
+        background-color: ${r.surface};
+        border: 1px solid ${r.line};
+        border-radius: 0;
         box-shadow: none;
       }
 
@@ -182,14 +207,14 @@ in {
       #tray {
         margin: 0;
         padding: 0 7px;
+        color: ${r.fg};
         background-color: transparent;
-        border-left: 1px solid ${colors.base02};
+        border-left: 1px solid ${r.line};
         box-shadow: none;
       }
 
       #custom-nix {
         padding-left: 9px;
-        color: ${colors.base05};
         border-left: 0;
       }
 
@@ -197,41 +222,53 @@ in {
         margin: 0;
         padding: 0;
         background-color: transparent;
-        border-left: 1px solid ${colors.base02};
+        border-left: 1px solid ${r.line};
       }
 
       #workspaces button {
         min-width: 34px;
         margin: 0;
         padding: 0 6px;
-        color: ${colors.base04};
+        color: ${r.dim};
         background: transparent;
         border: 0;
-        border-bottom: 2px solid transparent;
         box-shadow: none;
         text-shadow: none;
       }
 
       #workspaces button:hover {
-        color: ${colors.base05};
-        background-color: ${colors.base02};
+        color: ${r.fg};
+        background-color: ${r.raised};
         box-shadow: none;
       }
 
       #workspaces button.active {
-        color: ${colors.base05};
-        background-color: transparent;
-        border-bottom-color: ${colors.base03};
+        color: ${r.bg};
+        background-color: ${r.accent};
       }
 
       #workspaces button.urgent {
-        color: ${colors.base08};
+        color: ${r.bg};
+        background-color: ${r.crit};
+      }
+
+      /* Engagement active: the only place the ops role is used in the bar. */
+      #custom-mode.ops {
+        margin: 0;
+        padding: 0 7px;
+        color: ${r.ops};
         background-color: transparent;
-        border-bottom-color: ${colors.base08};
+        border-left: 1px solid ${r.ops};
+        border-right: 1px solid ${r.ops};
+      }
+
+      #custom-mode.dev {
+        padding: 0;
+        border: 0;
       }
 
       #window {
-        color: ${colors.base04};
+        color: ${r.dim};
       }
 
       #window.empty {
@@ -240,72 +277,51 @@ in {
 
       #clock {
         padding: 0 12px;
-        color: ${colors.base05};
-        border-right: 1px solid ${colors.base02};
-      }
-
-      #cpu {
-        color: ${colors.base0C};
-      }
-
-      #memory {
-        color: ${colors.base0A};
+        border-right: 1px solid ${r.line};
       }
 
       #cpu.warning,
       #memory.warning {
-        color: ${colors.base0E};
+        color: ${r.warn};
       }
 
       #cpu.critical,
       #memory.critical {
-        color: ${colors.base08};
+        color: ${r.crit};
       }
 
       #network {
-        color: ${colors.base0B};
+        color: ${r.ok};
       }
 
       #network.disconnected {
-        color: ${colors.base08};
-      }
-
-      #pulseaudio {
-        color: ${colors.base0D};
+        color: ${r.muted};
       }
 
       #pulseaudio.muted {
-        color: ${colors.base04};
-      }
-
-      #power-profiles-daemon {
-        color: ${colors.base0E};
+        color: ${r.muted};
       }
 
       #power-profiles-daemon.power-saver {
-        color: ${colors.base0B};
+        color: ${r.ok};
       }
 
       #power-profiles-daemon.performance {
-        color: ${colors.base08};
-      }
-
-      #battery {
-        color: ${colors.base0E};
+        color: ${r.warn};
       }
 
       #battery.charging,
       #battery.plugged,
       #battery.full {
-        color: ${colors.base0B};
+        color: ${r.ok};
       }
 
       #battery.warning {
-        color: ${colors.base0A};
+        color: ${r.warn};
       }
 
       #battery.critical {
-        color: ${colors.base08};
+        color: ${r.crit};
       }
 
       #tray {

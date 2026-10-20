@@ -6,7 +6,7 @@
   repoConfig,
   ...
 }: let
-  colors = config.lib.stylix.colors.withHashtag;
+  r = config.bandit.theme.roles;
   sharedAliases = import ./aliases.nix {inherit repoConfig;};
 in {
   programs = {
@@ -19,7 +19,7 @@ in {
       syntaxHighlighting = {
         enable = true;
         styles = {
-          comment = "fg=${colors.base03}";
+          comment = "fg=${r.muted}";
         };
       };
 
@@ -149,8 +149,8 @@ in {
           nixver=$(nixos-version 2>/dev/null | cut -d' ' -f1)
           kern=$(uname -r)
           print ""
-          print -P "%F{${colors.base0A}}  λ  bandit · NixOS $nixver%f"
-          print -P "%F{${colors.base03}}  kernel $kern  ·  zsh $ZSH_VERSION%f"
+          print -P "%F{${r.accent}}  λ  bandit · NixOS $nixver%f"
+          print -P "%F{${r.muted}}  kernel $kern  ·  zsh $ZSH_VERSION%f"
           print ""
         fi
 

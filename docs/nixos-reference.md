@@ -158,7 +158,7 @@ With `home-manager.nixosModules.home-manager`, Stylix needs `autoImport = true`
 # because config.stylix.enable is false in HM context.
 stylix = {
   enable = true;
-  base16Scheme = "${pkgs.base16-schemes}/share/themes/gruvbox-dark.yaml";
+  base16Scheme = pal.base16 "dark"; # lib/repository.nix mkStylixTheme, from themes/palette.nix
   # ...
 };
 ```
@@ -179,18 +179,13 @@ stylix = {
 | `xfce` | HM `stylix.targets.xfce` | Fonts only (NOT colors) |
 | `qt` | HM `stylix.targets.qt` | qtct + kvantum theme |
 
-### Available base16 gruvbox schemes (from `pkgs.base16-schemes`)
-- `gruvbox-dark.yaml` — standard dark (bg #282828)
-- `gruvbox-dark-hard.yaml` — darker (bg #1d2021)
-- `gruvbox-dark-medium.yaml` — medium dark (bg #282828, same as dark)
-- `gruvbox-dark-pale.yaml` — paler variant
-- `gruvbox-dark-soft.yaml` — softer (bg #32302f)
-- `gruvbox-light.yaml` / `gruvbox-light-*.yaml` — light variants
+### Colour source in this repo
 
-```bash
-# List all available schemes
-ls $(nix eval --raw nixpkgs#base16-schemes)/share/themes/ | grep gruvbox
-```
+The scheme is not taken from `pkgs.base16-schemes`. `themes/palette.nix`
+defines the bandit palette (dark and light variants) and its `base16` mapping;
+`lib/repository.nix` `mkStylixTheme` feeds that to Stylix, and home modules use
+the semantic roles in `config.bandit.theme.roles`. Hex literals live only in
+`themes/palette.nix` (enforced by `ci/theme-contract.nix`).
 
 ### Known Stylix bugs/workarounds
 

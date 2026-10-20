@@ -22,14 +22,6 @@
       # its own substituters and import unsigned store paths). Builds, devshells
       # and `nh os switch` work for untrusted users through the daemon.
       trusted-users = ["root"];
-      # Pull prebuilt paths from the public github-bandit-nix Cachix cache
-      # in addition to the official cache.nixos.org (kept via module defaults).
-      substituters = [
-        "https://github-bandit-nix.cachix.org"
-      ];
-      trusted-public-keys = [
-        "github-bandit-nix.cachix.org-1:iaqre/ibQyXnNT8oRzHQHJ4UQfzvGAaFooRXs8v+Hks="
-      ];
       # Avoid multiplying memory-heavy builds across all 12 logical CPUs.
       max-jobs = lib.mkDefault 1;
       cores = lib.mkDefault 6;

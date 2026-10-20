@@ -1,22 +1,24 @@
 {config, ...}: let
-  colors = config.lib.stylix.colors.withHashtag;
+  r = config.bandit.theme.roles;
 in {
+  # Re-applied after every :colorscheme; maps syntax groups to palette roles
+  # (keywords bright and bold, strings amber; magenta stays reserved for ops context).
   programs.nixvim.extraConfigLua = ''
     local function apply_bandit_highlights()
       local highlights = {
-        Comment = { fg = "${colors.base03}", italic = true },
-        Function = { fg = "${colors.base0D}" },
-        Keyword = { fg = "${colors.base0E}", bold = true },
-        String = { fg = "${colors.base0A}" },
-        Type = { fg = "${colors.base0C}" },
-        ["@comment"] = { fg = "${colors.base03}", italic = true },
-        ["@function"] = { fg = "${colors.base0D}" },
-        ["@function.call"] = { fg = "${colors.base0D}" },
-        ["@keyword"] = { fg = "${colors.base0E}", bold = true },
-        ["@string"] = { fg = "${colors.base0A}" },
-        ["@string.escape"] = { fg = "${colors.base09}" },
-        ["@type"] = { fg = "${colors.base0C}" },
-        ["@variable"] = { fg = "${colors.base05}" },
+        Comment = { fg = "${r.muted}", italic = true },
+        Function = { fg = "${r.info}" },
+        Keyword = { fg = "${r.bright}", bold = true },
+        String = { fg = "${r.warn}" },
+        Type = { fg = "${r.info}" },
+        ["@comment"] = { fg = "${r.muted}", italic = true },
+        ["@function"] = { fg = "${r.info}" },
+        ["@function.call"] = { fg = "${r.info}" },
+        ["@keyword"] = { fg = "${r.bright}", bold = true },
+        ["@string"] = { fg = "${r.warn}" },
+        ["@string.escape"] = { fg = "${r.warn}" },
+        ["@type"] = { fg = "${r.info}" },
+        ["@variable"] = { fg = "${r.fg}" },
       }
 
       for group, spec in pairs(highlights) do

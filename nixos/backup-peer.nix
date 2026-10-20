@@ -17,6 +17,10 @@
   # Deliberately absent: ~/.config/sops/age (the key that opens every secret
   # must not sit on a machine whose key it also opens; keep it offline).
   include = [
+    "proj"
+    "ops"
+    "docs"
+    "media/pictures"
     "src"
     ".ssh"
     ".gnupg"
@@ -34,6 +38,8 @@
     "target"
     ".cache"
     "Downloads"
+    "dl"
+    "tmp"
     ".venv"
     "__pycache__"
     ".gnupg/S.*"

@@ -23,7 +23,7 @@
     # gracefully to the app default rather than crashing.
     sessionSearchVariables.QT_PLUGIN_PATH = [
       "${config.home.profileDirectory}/lib/qt-6/plugins"
-      "${config.home.profileDirectory}/lib/qt-5.15.19/plugins"
+      "${config.home.profileDirectory}/lib/qt-${pkgs.libsForQt5.qtbase.version}/plugins"
     ];
   };
 }

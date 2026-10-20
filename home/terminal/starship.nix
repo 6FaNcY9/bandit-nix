@@ -3,7 +3,7 @@
   config,
   ...
 }: let
-  c = config.lib.stylix.colors.withHashtag;
+  r = config.bandit.theme.roles;
 in {
   programs.starship = {
     enable = true;
@@ -13,21 +13,30 @@ in {
       palette = lib.mkForce "stylix";
 
       palettes.stylix = {
-        color_fg0 = c.base05;
-        color_bg1 = c.base01;
-        color_bg3 = c.base02;
-        color_blue = c.base0D;
-        color_aqua = c.base0C;
-        color_green = c.base0B;
-        color_orange = c.base09;
-        color_purple = c.base0E;
-        color_red = c.base08;
-        color_yellow = c.base0A;
+        color_fg0 = r.fg;
+        color_bg1 = r.surface;
+        color_bg3 = r.raised;
+        color_blue = r.info;
+        color_aqua = r.info;
+        color_green = r.ok;
+        color_orange = r.warn;
+        color_purple = r.ops;
+        color_red = r.crit;
+        color_yellow = r.warn;
       };
 
-      # ╭─[ bandit ]─[ ~/src/bandit-nix ]─[  main ]─[ ~2⇡1 ]────[ 3s ]
+      # ╭─[ bandit ]─[ ~/proj/bandit-nix ]─[  main ]─[ ~2⇡1 ]────[ 3s ]
       # ╰─$ _
-      format = "[╭─](color_bg3)$hostname$directory$git_branch$git_status$nix_shell$rust$python$nodejs$golang$fill$cmd_duration$line_break[╰─](color_bg3)$character";
+      format = "[╭─](color_bg3)$hostname\${custom.ops}$directory$git_branch$git_status$nix_shell$rust$python$nodejs$golang$fill$cmd_duration$line_break[╰─](color_bg3)$character";
+
+      # Active engagement (written by `ops on`); `when` is a plain file test.
+      custom.ops = {
+        when = ''test -f "''${XDG_RUNTIME_DIR:-/nonexistent}/bandit/mode"'';
+        command = ''sed -n 's/^name=//p' "$XDG_RUNTIME_DIR/bandit/mode"'';
+        shell = ["sh"];
+        style = "color_purple bold";
+        format = "[\\[ ops:$output \\]]($style)[─](color_bg3)";
+      };
 
       fill = {
         symbol = "─";

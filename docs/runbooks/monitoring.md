@@ -11,25 +11,6 @@ Nix exposes the asset at `/etc/bandit-lab/monitoring.compose.yml` and declares
 the initially disabled manual lifecycle unit `compose-monitoring`. The unit
 only runs Compose `start`/`stop`; it does not create or reconcile containers.
 
-## Portainer environment reassociation
-
-Changing the saved Portainer environment from the local socket to
-`portainer-agent:9001` changes Portainer metadata, not Docker or its
-containers. Before removing the old environment, record the `monitoring`
-stack, containers, project name and persistent bind-mount directories:
-
-```bash
-sudo test -d /srv/containers/monitoring/grafana
-sudo test -d /srv/containers/monitoring/prometheus
-docker ps --filter name=grafana --filter name=prometheus \
-  --filter name=blackbox-exporter --filter name=node-exporter \
-  --filter name=cadvisor
-```
-
-Do not redeploy the stack or delete its containers, networks or data merely to
-perform metadata migration. The complete migration and rollback procedure is
-in [Portainer Agent](portainer-agent.md).
-
 ## Adoption procedure
 
 Review the checked-in Compose asset and the rendered Nix unit first. With
@@ -113,5 +94,5 @@ PCP suite plus the `pmcd`/`pmlogger` services and patching Cockpit's Python
 environment to see the bindings. That was judged not worth it: this lab already
 keeps history in **Prometheus/Grafana** (host, containers, systemd units, probes,
 alerts) and **Beszel** (host resource history), and Cockpit stays the tool for
-live state, logs and service control (`portainer-retirement.md`). Use Grafana for
+live state, logs and service control (`docs/archive/portainer-retirement.md`). Use Grafana for
 history; the message in Cockpit is expected.

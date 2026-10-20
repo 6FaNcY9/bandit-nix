@@ -31,6 +31,7 @@ in {
     ./services/crowdsec
     ./services/health-check
     ./services/backup
+    ./console
     # Sideloading is on hold (cable/hardware issues) — services/anisette stays
     # in the repo but is not imported, so the service is not installed.
   ];

@@ -16,7 +16,7 @@ Capability drops: WatchYourLAN drops ALL (and adds NET_RAW); Grafana drops a
 subset. One container is privileged (cAdvisor, needs host access for cgroup
 metrics). Only two containers hold the Docker socket: the Wazuh agent (accepted
 risk, enforced by `ci/lab-surface.nix`) and Portainer's Agent, which is being
-retired (`portainer-retirement.md`). Every published port is bound to loopback or
+retired (`docs/archive/portainer-retirement.md`). Every published port is bound to loopback or
 the tailnet address (`ci/lab-surface.nix`).
 
 | Container | Image user | Privileged | cap-drop | no-new-privileges | Read-only rootfs | Assessment |
@@ -32,11 +32,11 @@ the tailnet address (`ci/lab-surface.nix`).
 | grafana | 472 | no | partial | no | no | Drops a subset of capabilities already; add `no-new-privileges`. |
 | cadvisor | root | **yes** | none | label=disable | no | Needs privileged access to read cgroups/devices; keep, document, and consider replacing by node-exporter's cgroup data if the dashboards allow. |
 | deploy-mrija-archive-1 | root | no | none | no | no | Local build (`mrija-archive:latest`, not pinned); mounts the TheHost SSH key read-only and the mail data. `no-new-privileges` and cap-drop ALL are good first steps once the image is known. |
-| minecraft | root (entrypoint drops) | no | none | no | no | Memory capped at 12 GiB, 4 CPUs. `no-new-privileges` is safe; cap-drop needs a test with plugins. Writes the whole data volume: no read-only rootfs. |
+| minecraft | - | - | - | - | - | Moved to [bandit-craft](https://github.com/6FaNcY9/bandit-craft); hardening tracked there. |
 | watchyourlan | root | no | **ALL** (+ NET_RAW) | no | no | The reference for what is achievable; add `no-new-privileges`. |
 | wazuh.manager, wazuh.indexer, wazuh.dashboard | root / wazuh users | no | none | no | no | Large init scripts and a security plugin: test on a copy first. Pinned by digest since 2026-10-06. |
 | wazuh.agent | root | no | none | no | no | Holds the Docker socket for container monitoring (accepted risk; allowlisted in `ci/lab-surface.nix`). |
-| portainer, portainer-agent | root | no | none | no | no | Being retired; the Agent holds `docker.sock`. |
+| portainer, portainer-agent | root | no | none | no | no | Retired (2026-10); kept for history, see docs/archive/portainer-retirement.md. |
 
 ## Step 1: source changes prepared on 2026-10-10
 

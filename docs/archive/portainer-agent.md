@@ -98,7 +98,7 @@ Then verify in the UI:
 - The expected stack and container counts are present.
 - Each reassociated stack opens and controls its existing containers.
 - Application-specific health checks pass, especially the monitoring checks in
-  [monitoring.md](monitoring.md).
+  [monitoring.md](../runbooks/monitoring.md).
 
 ## Rollback
 

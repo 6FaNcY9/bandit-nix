@@ -3,7 +3,7 @@
   pkgs,
   ...
 }: let
-  colors = config.lib.stylix.colors.withHashtag;
+  r = config.bandit.theme.roles;
 
   # Obsidian community plugins are not packaged in nixpkgs. Build each one as
   # a linkFarm of the upstream release assets (main.js + manifest.json +
@@ -51,7 +51,7 @@ in {
     vaults = {
       "security-research" = {
         enable = true;
-        target = "Documents/vaults/security-research";
+        target = "docs/vaults/security-research";
       };
     };
 
@@ -93,7 +93,7 @@ in {
           else "moonstone"; # built-in light
         # Orange accent to match the Hyprland borders; overrides Stylix's
         # purple --color-accent for interactive elements.
-        accentColor = colors.base09;
+        accentColor = r.accent;
         nativeMenus = false;
         translucency = false;
       };

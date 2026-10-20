@@ -3,77 +3,97 @@
   pkgs,
   ...
 }: let
-  colors = config.lib.stylix.colors.withHashtag;
-  bg = colors.base00;
-  bg1 = colors.base01;
-  bg2 = colors.base02;
-  fg = colors.base05;
-  fg2 = colors.base03;
-  yellow = colors.base0A;
-  blue = colors.base0D;
-  red = colors.base08;
-  cyan = colors.base0C;
+  r = config.bandit.theme.roles;
   interfaceFont = config.stylix.fonts.sansSerif.name;
+
+  # Shared by both themes: flat window, 1px frame, prompt-only header.
+  # `tone` is the frame/prompt colour (accent for the launcher, crit for power).
+  window = {
+    tone,
+    width,
+    extra ? "",
+  }: ''
+    window {
+        background-color: ${r.bg};
+        border:           1px;
+        border-color:     ${tone};
+        border-radius:    0;
+        width:            ${width};
+        padding:          0;${extra}
+    }
+  '';
+  inputbar = {
+    tone,
+    padding,
+    children,
+    extra ? "",
+  }: ''
+    inputbar {
+        background-color: ${r.surface};
+        border:           0 0 1px 0;
+        border-color:     ${tone};
+        padding:          ${padding};${extra}
+        children:         [ ${children} ];
+    }
+
+    prompt {
+        background-color: transparent;
+        text-color:       ${tone};
+        font:             "${interfaceFont} Bold 11";
+    }
+  '';
+  selected = tone: ''
+    element.selected.normal {
+        background-color: ${tone};
+        text-color:       ${r.bg};
+    }
+  '';
 in {
   # ── Main launcher theme ───────────────────────────────────────
   xdg.configFile."rofi/themes/retro-eighties.rasi".text = ''
     * {
         background-color: transparent;
-        text-color:       ${fg};
+        text-color:       ${r.fg};
     }
 
-    window {
-        background-color: ${bg};
-        border:           2px;
-        border-color:     ${yellow};
-        border-radius:    0;
-        width:            640px;
-        padding:          0;
-    }
-
+    ${window {
+      tone = r.accent;
+      width = "640px";
+    }}
     mainbox {
         spacing:   0;
         padding:   0;
         children:  [ inputbar, message, listview ];
     }
 
-    inputbar {
-        background-color: ${bg1};
-        border:           0 0 2px 0;
-        border-color:     ${yellow};
-        padding:          10px 14px;
-        spacing:          8px;
-        children:         [ prompt, entry ];
-    }
-
-    prompt {
-        background-color: transparent;
-        text-color:       ${cyan};
-        font:             "${interfaceFont} Bold 11";
-    }
-
+    ${inputbar {
+      tone = r.accent;
+      padding = "10px 14px";
+      children = "prompt, entry";
+      extra = "\n        spacing:          8px;";
+    }}
     entry {
         background-color: transparent;
-        text-color:       ${fg};
+        text-color:       ${r.fg};
         placeholder:      "type to search…";
-        placeholder-color: ${fg2};
+        placeholder-color: ${r.muted};
         cursor:           text;
     }
 
     message {
-        background-color: ${bg1};
+        background-color: ${r.surface};
         border:           0 0 1px 0;
-        border-color:     ${bg2};
+        border-color:     ${r.line};
         padding:          4px 14px;
     }
 
     textbox {
-        text-color: ${fg2};
+        text-color: ${r.dim};
         font:       "${interfaceFont} 9";
     }
 
     listview {
-        background-color: ${bg};
+        background-color: ${r.bg};
         border:           0;
         padding:          6px 0;
         spacing:          0;
@@ -93,41 +113,33 @@ in {
 
     element.normal.normal {
         background-color: transparent;
-        text-color:       ${fg};
+        text-color:       ${r.fg};
     }
 
     element.normal.urgent {
         background-color: transparent;
-        text-color:       ${red};
+        text-color:       ${r.crit};
     }
 
     element.normal.active {
         background-color: transparent;
-        text-color:       ${blue};
+        text-color:       ${r.info};
     }
 
-    element.selected.normal {
-        background-color: ${bg1};
-        text-color:       ${yellow};
-        border:           0 0 0 4px;
-        border-color:     ${yellow};
-    }
-
+    ${selected r.accent}
     element.selected.urgent {
-        background-color: ${red};
-        text-color:       ${bg};
+        background-color: ${r.crit};
+        text-color:       ${r.bg};
     }
 
     element.selected.active {
-        background-color: ${bg1};
-        text-color:       ${blue};
-        border:           0 0 0 4px;
-        border-color:     ${blue};
+        background-color: ${r.info};
+        text-color:       ${r.bg};
     }
 
     element.alternate.normal {
         background-color: transparent;
-        text-color:       ${fg};
+        text-color:       ${r.fg};
     }
 
     element-icon {
@@ -145,42 +157,27 @@ in {
   xdg.configFile."rofi/themes/retro-power.rasi".text = ''
     * {
         background-color: transparent;
-        text-color:       ${fg};
+        text-color:       ${r.fg};
     }
 
-    window {
-        background-color: ${bg};
-        border:           2px;
-        border-color:     ${red};
-        border-radius:    0;
-        width:            280px;
-        padding:          0;
-        location:         center;
-        anchor:           center;
-    }
-
+    ${window {
+      tone = r.crit;
+      width = "280px";
+      extra = "\n        location:         center;\n        anchor:           center;";
+    }}
     mainbox {
         spacing:   0;
         padding:   0;
         children:  [ inputbar, listview ];
     }
 
-    inputbar {
-        background-color: ${bg1};
-        border:           0 0 2px 0;
-        border-color:     ${red};
-        padding:          8px 14px;
-        children:         [ prompt ];
-    }
-
-    prompt {
-        background-color: transparent;
-        text-color:       ${red};
-        font:             "${interfaceFont} Bold 11";
-    }
-
+    ${inputbar {
+      tone = r.crit;
+      padding = "8px 14px";
+      children = "prompt";
+    }}
     listview {
-        background-color: ${bg};
+        background-color: ${r.bg};
         padding:          6px 0;
         spacing:          0;
         lines:            5;
@@ -195,15 +192,10 @@ in {
     }
 
     element.normal.normal {
-        text-color: ${fg};
+        text-color: ${r.fg};
     }
 
-    element.selected.normal {
-        background-color: ${bg1};
-        text-color:       ${red};
-        border:           0 0 0 4px;
-        border-color:     ${red};
-    }
+    ${selected r.crit}
   '';
 
   programs.rofi = {

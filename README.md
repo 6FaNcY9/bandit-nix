@@ -20,7 +20,9 @@ declarative system and user environment.
 - **sops-nix** secret management with age encryption.
 - **Framework 13 AMD** optimizations via `nixos-hardware`.
 - **Hyprland/Wayland** desktop on `bandit` with Waybar, Mako, and Rofi.
-- **Stylix** system-wide theming using the **Gruvbox** (morhetz) palette, dark by default with a light boot specialisation.
+- **Stylix** system-wide theming from the **bandit palette** (`themes/palette.nix`: neutral grey ramp plus ok/warn/crit/info/ops accents), dark by default with a light boot specialisation.
+- **Lab console**: bandit-lab tty1 shows a read-only status TUI (`hosts/bandit-lab/console/`) instead of a login prompt.
+- **dev/ops mode**: `ops on <name>` switches the laptop into engagement mode (magenta window border and a Waybar badge); `ops off` returns to normal dev mode.
 - **nixvim** declarative Neovim setup with LSP, DAP, and completions.
 - **Zsh** with shared aliases from `home/terminal/aliases.nix`.
 - **Rootless Docker + Podman** for container workflows.
@@ -216,10 +218,11 @@ loudly.
 
 ## 📝 Customization
 
-- **Theme**: `lib/repository.nix` and `themes/gruvbox-dark.yaml` /
-  `themes/gruvbox-light.yaml` define the Gruvbox (morhetz) Stylix theme;
-  the light variant is the `light` boot specialisation in
-  `hosts/bandit/default.nix`.
+- **Theme**: `themes/palette.nix` is the single colour source; `lib/repository.nix`
+  (`mkStylixTheme`) derives the Stylix base16 scheme from it, and home modules
+  read semantic colours from `config.bandit.theme.roles`. The `theme-contract`
+  check rejects hex colour literals outside the palette. The light variant is
+  the `light` boot specialisation in `hosts/bandit/default.nix`.
 - **Window manager**: `home/desktop/hyprland.nix` is the source of truth. Home
   Manager renders it as native Lua at `~/.config/hypr/hyprland.lua`; do not edit
   that generated file. Lua-mode bindings, rules, and submaps must use structured

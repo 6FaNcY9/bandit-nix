@@ -1,17 +1,16 @@
-/* userChrome.css — Gruvbox dark, compact + retro bevel
-   Matches home/theme.nix GTK bevel system: square corners, 1px
-   inset light/dark highlights, yellow accent on selection/focus. */
+/* Flat bandit chrome. Colours are var(--b-<role>) custom properties; the
+ * Nix module prepends their values from themes/palette.nix. */
 
 :root {
-  --bg:      #282828;
-  --bg1:     #3c3836;
-  --bg2:     #504945;
-  --bg3:     #1d2021;
-  --fg:      #d5c4a1;
-  --fg2:     #928374;
-  --yellow:  #d79921;
-  --blue:    #458588;
-  --red:     #cc241d;
+  --bg:      var(--b-bg);
+  --bg1:     var(--b-surface);
+  --bg2:     var(--b-raised);
+  --bg3:     var(--b-surface);
+  --fg:      var(--b-fg);
+  --fg2:     var(--b-muted);
+  --yellow:  var(--b-accent);
+  --blue:    var(--b-info);
+  --red:     var(--b-crit);
 
   /* Compact metrics — 30px chrome bars: tall enough to read on the
      Framework 13's 2256x1504 panel (scale 1) without giving up the

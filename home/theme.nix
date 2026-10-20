@@ -1,187 +1,74 @@
 {
   config,
-  pkgs,
   lib,
+  repoConfig,
   ...
 }: let
-  colors = config.lib.stylix.colors.withHashtag;
-  gruvboxKvantum = let
-    kvconfig = config.lib.stylix.colors {
-      # Vendored from stylix's modules/qt/: the template argument must be a
-      # real path — a string is written verbatim as file content instead.
-      template = ./kvantum/kvconfig.mustache;
-      extension = ".kvconfig";
-    };
-    svg = config.lib.stylix.colors {
-      template = ./kvantum/kvantum.svg.mustache;
-      extension = ".svg";
-    };
-  in
-    pkgs.runCommandLocal "bandit-gruvbox-kvantum" {} ''
-      directory="$out/share/Kvantum/BanditGruvboxKvantum"
-      mkdir --parents "$directory"
-      cp ${kvconfig} "$directory/BanditGruvboxKvantum.kvconfig"
-      ${pkgs.gnused}/bin/sed -i \
-        's/^highlight\.color=.*/highlight.color=${colors.base0A}/' \
-        "$directory/BanditGruvboxKvantum.kvconfig"
-      cp ${svg} "$directory/BanditGruvboxKvantum.svg"
-    '';
+  # Stylix cascades the NixOS polarity ("dark", or "light" in the light
+  # specialisation); the standalone homeConfigurations output defaults to dark.
+  variant =
+    if (config.stylix.polarity or "dark") == "light"
+    then "light"
+    else "dark";
+  roles = repoConfig.palette.roles variant;
 in {
-  home = {
-    # Stylix's HM cursor module (cascaded from nixos/theme.nix's stylix.cursor)
-    # plain-sets package/name/size on the NixOS-embedded config but never sets
-    # `enable` itself, which is what triggers its own deprecation warning.
-    # mkForce enable so the warning goes away everywhere; mkDefault the rest
-    # so Stylix's values win when present, falling back to the same values
-    # for the standalone homeConfigurations output where Stylix doesn't cascade.
-    pointerCursor = {
-      enable = lib.mkForce true;
-      package = lib.mkDefault pkgs.openzone-cursors;
-      name = lib.mkDefault "OpenZone_Black_Slim";
-      size = lib.mkDefault 20;
-    };
+  # Semantic colour roles for every hand-themed module (waybar, rofi, mako,
+  # hyprland, kitty tabs, browser chrome). Modules read a role, never a base16
+  # slot, so an accent means the same thing everywhere. Source: themes/palette.nix.
+  options.bandit.theme.roles = lib.mkOption {
+    type = lib.types.attrsOf lib.types.str;
+    readOnly = true;
+    description = "Semantic \"#rrggbb\" colours derived from themes/palette.nix for the active variant.";
   };
 
-  # Generate the custom theme in the Nix store so Home Manager can safely
-  # manage it as a symlink.
-  qt.kvantum = {
-    settings.General.theme = lib.mkForce "BanditGruvboxKvantum";
-    themes = [gruvboxKvantum];
-  };
+  config = {
+    bandit.theme.roles = roles;
 
-  stylix.targets = {
-    gtk.enable = true;
-    kitty.enable = true;
-    nixvim.enable = true;
-    # Hyprland's palette is owned by home/desktop/hyprland.nix so its orange
-    # borders do not conflict with Stylix's default teal border definitions.
-    hyprland.enable = false;
-    hyprlock.enable = true;
-    firefox = {
-      enable = true;
-      firefoxGnomeTheme.enable = true;
-      colorTheme.enable = true;
-    };
-    rofi.enable = false;
-    mako.enable = false;
-    bat.enable = true;
-    fzf.enable = true;
-    starship.enable = true;
-    btop.enable = true;
-  };
+    # Stylix owns the cursor (nixos/theme.nix via mkStylixTheme); enable is
+    # forced only to silence its HM deprecation warning.
+    home.pointerCursor.enable = lib.mkForce true;
 
-  # Warm retro aesthetic — mostly-flat chrome with a gentle bevel, softened
-  # from the old high-contrast 90s look to match Gruvbox's mellower
-  # warmth. Headerbars/menus/scrollbars stay hard-edged; buttons/entries/
-  # popovers get a small radius and a lighter, blended-tone shadow.
-  stylix.targets.gtk.extraCss = ''
-    * {
-      border-radius: 3px;
-      transition: none;
-    }
-
-    window, dialog, .background { border-radius: 0; }
-    window.csd { border-radius: 0; }
-
-    /* Title bars — hard line, no shadow, flat */
-    headerbar, headerbar.titlebar, .titlebar {
-      border-radius: 0;
-      border-bottom: 2px solid ${colors.base02};
-      box-shadow: none;
-      background-image: none;
-    }
-    .csd .titlebar { border-radius: 0; }
-
-    /* Softly beveled buttons — raised normal, sunken when pressed */
-    button {
-      border-radius: 3px;
-      box-shadow:
-        inset -1px -1px 0 ${colors.base02},
-        inset  1px  1px 0 ${colors.base03};
-    }
-    button:active, button:checked {
-      box-shadow:
-        inset  1px  1px 0 ${colors.base02},
-        inset -1px -1px 0 ${colors.base03};
-    }
-
-    /* Gently sunken entries (text inputs inset into the surface) */
-    entry, spinbutton, textview {
-      border-radius: 3px;
-      box-shadow:
-        inset 1px 1px 0 ${colors.base02},
-        inset -1px -1px 0 ${colors.base03};
-    }
-
-    /* Popovers / menus — mostly square, softly flat */
-    popover, popover.background, popover > contents { border-radius: 3px; }
-    .menu, menu, menuitem { border-radius: 0; }
-    menubar { border-radius: 0; }
-    menuitem:hover {
-      background-color: ${colors.base0A};
-      color: ${colors.base00};
-    }
-
-    tooltip { border-radius: 3px; }
-
-    notebook > header tabs tab { border-radius: 0; }
-    treeview.view { border-radius: 0; }
-
-    /* Chunky, softly beveled scrollbars */
-    scrollbar { border-radius: 0; }
-    scrollbar slider {
-      border-radius: 3px;
-      min-width: 14px;
-      min-height: 14px;
-      background-color: ${colors.base02};
-      box-shadow:
-        inset -1px -1px 0 ${colors.base01},
-        inset  1px  1px 0 ${colors.base03};
-    }
-    scrollbar.horizontal slider { min-height: 14px; }
-    scrollbar.vertical   slider { min-width: 14px; }
-
-    /* Warm amber primary and teal secondary accents from Gruvbox. */
-    button:focus, entry:focus, textview:focus {
-      outline: 2px solid ${colors.base0A};
-      outline-offset: -2px;
-    }
-    button:hover {
-      background-color: ${colors.base0C};
-      color: ${colors.base00};
-    }
-    selection, *:selected {
-      background-color: ${colors.base0A};
-      color: ${colors.base00};
-    }
-    scrollbar slider:hover, scrollbar slider:active {
-      background-color: ${colors.base0A};
-    }
-    notebook > header tabs tab:checked {
-      border-bottom: 2px solid ${colors.base0A};
-    }
-  '';
-
-  gtk = let
-    # Follow the Stylix polarity so the light boot specialisation gets a
-    # light GTK hint and light icons instead of the dark holdouts.
-    isDark = config.stylix.polarity == "dark";
-    gruvboxIcons =
-      if isDark
-      then "Gruvbox Plus Dark"
-      else "Gruvbox Plus Light";
-  in {
-    gtk3.extraConfig = {
-      gtk-application-prefer-dark-theme = isDark;
-      gtk-enable-animations = false;
-      gtk-button-images = true;
-      gtk-menu-images = true;
-      gtk-icon-theme-name = gruvboxIcons;
+    # Stylix targets are on by default (autoEnable); list only the opt-outs:
+    # these modules are themed by hand from bandit.theme.roles.
+    stylix.targets = {
+      hyprland.enable = false;
+      rofi.enable = false;
+      mako.enable = false;
+      firefox = {
+        firefoxGnomeTheme.enable = true;
+        colorTheme.enable = true;
+      };
+      # Kvantum's highlight follows the focus accent instead of base0E, which
+      # is the ops (magenta) role in this palette. The override re-renders
+      # Stylix's own kvconfig template; nothing is vendored.
+      qt.colors.override = {
+        base0E = lib.removePrefix "#" roles.accent;
+        "base0E-hex" = lib.removePrefix "#" roles.accent;
+      };
     };
 
-    gtk4.extraConfig = {
-      gtk-application-prefer-dark-theme = isDark;
-      gtk-icon-theme-name = gruvboxIcons;
+    # Flat, hard-edged chrome: square corners, 1px structure lines, the amber
+    # focus accent for selection and focus, nothing animated.
+    stylix.targets.gtk.extraCss = ''
+      * { border-radius: 0; transition: none; box-shadow: none; }
+      headerbar, .titlebar { border-bottom: 1px solid ${roles.line}; background-image: none; }
+      button, entry, spinbutton, textview { border: 1px solid ${roles.line}; }
+      button:hover { background-color: ${roles.raised}; }
+      button:focus, entry:focus, textview:focus { outline: 1px solid ${roles.accent}; outline-offset: -1px; }
+      selection, *:selected, menuitem:hover { background-color: ${roles.accent}; color: ${roles.bg}; }
+      scrollbar slider { min-width: 8px; min-height: 8px; background-color: ${roles.line}; }
+      scrollbar slider:hover, scrollbar slider:active { background-color: ${roles.accent}; }
+      notebook > header tabs tab:checked { border-bottom: 2px solid ${roles.accent}; }
+    '';
+
+    gtk = let
+      isDark = variant == "dark";
+    in {
+      gtk3.extraConfig = {
+        gtk-application-prefer-dark-theme = isDark;
+        gtk-enable-animations = false;
+      };
+      gtk4.extraConfig.gtk-application-prefer-dark-theme = isDark;
     };
   };
 }

@@ -22,6 +22,9 @@
 in
   assert lib.assertMsg (lib.elem "--security-opt=no-new-privileges" lab.virtualisation.oci-containers.containers.aiia-redis.extraOptions) "aiia-redis must retain no-new-privileges";
   assert lib.assertMsg (lib.elem "--security-opt=no-new-privileges" lab.virtualisation.oci-containers.containers.aiia-ghost.extraOptions) "aiia-ghost must retain no-new-privileges";
+  assert lib.assertMsg (lib.elem "--security-opt=no-new-privileges" lab.virtualisation.oci-containers.containers.aiia-mysql.extraOptions) "aiia-mysql must retain no-new-privileges";
+  # The lab deploys GPG-signed commits only; a substituter that CI fills without that gate would bypass it (nixos/cachix.nix).
+  assert lib.assertMsg (!(lib.any (lib.hasInfix "cachix.org") (lab.nix.settings.substituters ++ (lab.nix.settings.extra-substituters or [])))) "bandit-lab must not trust a Cachix substituter: CI pushes there without the signed-commit gate";
   # ntfy listens on all addresses only so the bots container can reach it via its Docker gateway
   # (owner-approved 2026-10-10); then the firewall may admit 2586 from the mcbots subnet and nothing else.
   assert lib.assertMsg (
@@ -45,9 +48,12 @@ in
   assert lib.assertMsg (sambaAllow == "127.0.0.1 ::1 100.64.0.0/10 fd7a:115c:a1e0::/48" && lab.services.samba.settings.global."hosts deny" == "ALL") "Samba 'hosts allow' must be exactly loopback plus the tailnet and 'hosts deny' must be ALL";
   assert lib.assertMsg (lab.services.resolved.settings.Resolve.LLMNR == "false" && lab.services.resolved.settings.Resolve.MulticastDNS == "false") "LLMNR and mDNS must stay off on the server";
     pkgs.runCommand "lab-surface" {nativeBuildInputs = [pkgs.gnugrep pkgs.yq-go pkgs.python3 pkgs.bash pkgs.gnused lab.services.ntfy-sh.package];} ''
-      yq -e '.services.grafana.security_opt | any_c(. == "no-new-privileges:true")' ${../hosts/bandit-lab/services/monitoring/compose.yml} >/dev/null
-      yq -e '.services."blackbox-exporter".security_opt | any_c(. == "no-new-privileges:true")' ${../hosts/bandit-lab/services/monitoring/compose.yml} >/dev/null
-      yq -e '.services."node-exporter".security_opt | any_c(. == "no-new-privileges:true")' ${../hosts/bandit-lab/services/monitoring/compose.yml} >/dev/null
+      # Every monitoring container keeps no-new-privileges.
+      yq -e '.services | to_entries | all_c(.value.security_opt // [] | any_c(. == "no-new-privileges:true"))' ${../hosts/bandit-lab/services/monitoring/compose.yml} >/dev/null \
+        || { echo "every service in monitoring/compose.yml must set no-new-privileges:true" >&2; exit 1; }
+      # Peer backup units must stay exported, or the "Backup job failed" alert cannot fire for them.
+      grep -q 'restic-backups-peer|restic-peer-prune' ${../hosts/bandit-lab/services/monitoring/compose.yml} \
+        || { echo "node-exporter unit-include must cover restic-backups-peer and restic-peer-prune" >&2; exit 1; }
       # Compose projects must not publish a bare host:container port either.
       for f in ${../hosts/bandit-lab/services/mrija-archive/compose.yml} ${../hosts/bandit-lab/services/monitoring/compose.yml}; do
         if grep -nE '^[[:space:]]*-[[:space:]]*"?(0\.0\.0\.0:|\[::\]:)?[0-9]{1,5}:[0-9]{1,5}' "$f"; then
