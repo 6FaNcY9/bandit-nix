@@ -15,13 +15,16 @@
 
   python = pkgs.python3.withPackages (ps: [ps.textual]);
 
-  # Also the `console` user's login shell: any arguments are ignored, so a
-  # login through this binary can never reach a shell.
-  app = pkgs.writeShellScriptBin "lab-console" ''
-    export LAB_CONSOLE_ROLES=${roles}
-    export LAB_CONSOLE_STATUS=/run/lab-console/status.json
-    exec ${python}/bin/python3 -I ${./app.py}
-  '';
+  # Also the `console` user's login shell (shellPath makes it a valid shell
+  # package): any arguments are ignored, so a login through this binary can
+  # never reach a shell.
+  app =
+    pkgs.writeShellScriptBin "lab-console" ''
+      export LAB_CONSOLE_ROLES=${roles}
+      export LAB_CONSOLE_STATUS=/run/lab-console/status.json
+      exec ${python}/bin/python3 -I ${./app.py}
+    ''
+    // {shellPath = "/bin/lab-console";};
 
   collect = pkgs.writeShellScript "lab-console-collect" ''
     exec ${pkgs.python3}/bin/python3 -I ${./collect.py}

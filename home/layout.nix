@@ -1,6 +1,5 @@
 {
   config,
-  lib,
   pkgs,
   ...
 }: let
@@ -77,18 +76,11 @@
     '';
   };
 in {
-  # Canonical directories, created declaratively so they always exist.
-  systemd.user.tmpfiles.rules =
-    map (d: "d ${home}/${d} 0755 - - -") dirs
-    ++ [
-      "d ${home}/ops 0700 - - -"
-      "d ${home}/dl 0755 - - -"
-    ];
-
   xdg.userDirs = {
     enable = true;
     createDirectories = true;
     download = "${home}/dl";
+    projects = "${home}/proj";
     documents = "${home}/docs";
     pictures = "${home}/media/pictures";
     music = "${home}/media/music";
@@ -102,30 +94,39 @@ in {
   home = {
     packages = [migrate];
     sessionVariables = {
-      XDG_PROJECTS_DIR = "${home}/proj";
       BANDIT_OPS_DIR = "${home}/ops";
     };
   };
 
-  # Empty ~/tmp on each login so scratch files never accumulate.
-  systemd.user.services.bandit-tmp-clean = {
-    Unit.Description = "Empty ~/tmp scratch directory";
-    Install.WantedBy = ["default.target"];
-    Service = {
-      Type = "oneshot";
-      ExecStart = "${pkgs.findutils}/bin/find ${home}/tmp -mindepth 1 -delete";
-    };
-  };
-
-  # Prune ~/dl entries older than 14 days, daily. Never follows symlinks.
   systemd.user = {
-    services.bandit-dl-prune = {
-      Unit.Description = "Prune ~/dl entries older than 14 days";
-      Service = {
-        Type = "oneshot";
-        ExecStart = "${pkgs.findutils}/bin/find ${home}/dl -mindepth 1 -mtime +14 -delete";
+    # Canonical directories, created declaratively so they always exist.
+    tmpfiles.rules =
+      map (d: "d ${home}/${d} 0755 - - -") dirs
+      ++ [
+        "d ${home}/ops 0700 - - -"
+        "d ${home}/dl 0755 - - -"
+      ];
+
+    services = {
+      # Empty ~/tmp on each login so scratch files never accumulate.
+      bandit-tmp-clean = {
+        Unit.Description = "Empty ~/tmp scratch directory";
+        Install.WantedBy = ["default.target"];
+        Service = {
+          Type = "oneshot";
+          ExecStart = "${pkgs.findutils}/bin/find ${home}/tmp -mindepth 1 -delete";
+        };
+      };
+      # Prune ~/dl entries older than 14 days, daily. Never follows symlinks.
+      bandit-dl-prune = {
+        Unit.Description = "Prune ~/dl entries older than 14 days";
+        Service = {
+          Type = "oneshot";
+          ExecStart = "${pkgs.findutils}/bin/find ${home}/dl -mindepth 1 -mtime +14 -delete";
+        };
       };
     };
+
     timers.bandit-dl-prune = {
       Unit.Description = "Daily ~/dl prune";
       Install.WantedBy = ["timers.target"];

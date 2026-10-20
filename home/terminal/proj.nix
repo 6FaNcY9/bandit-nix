@@ -1,12 +1,8 @@
 {
-  config,
   lib,
   pkgs,
   ...
 }: let
-  home = config.home.homeDirectory;
-  projDir = "${home}/proj";
-
   # devenv project templates live in the Nix store (templates/devenv/<lang>).
   templates = pkgs.runCommandLocal "bandit-devenv-templates" {} ''
     cp -r ${../../templates/devenv} "$out"

@@ -31,8 +31,9 @@ in
     pkgs.runCommand "lab-backup" {nativeBuildInputs = [pkgs.gnugrep];} ''
       # Missing backup metrics must alert once backups are on, and stay quiet
       # while they are off (the series do not exist yet).
-      grep -q 'noDataState: Alerting' ${provisioningOf labOn}/alerting/bandit-lab.yaml
-      grep -q 'noDataState: OK' ${provisioningOf labOff}/alerting/bandit-lab.yaml
-      ! grep -q 'noDataState: Alerting' ${provisioningOf labOff}/alerting/bandit-lab.yaml
+      # The rules file is JSON (valid YAML); match either serialisation.
+      grep -qE '"?noDataState"?: ?"?Alerting' ${provisioningOf labOn}/alerting/bandit-lab.yaml
+      grep -qE '"?noDataState"?: ?"?OK' ${provisioningOf labOff}/alerting/bandit-lab.yaml
+      ! grep -qE '"?noDataState"?: ?"?Alerting' ${provisioningOf labOff}/alerting/bandit-lab.yaml
       touch "$out"
     ''
