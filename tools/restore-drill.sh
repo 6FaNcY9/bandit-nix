@@ -60,13 +60,11 @@ stage=$work/restored/var/backup/restic-staging-peer
 pgdump=$work/restored/var/backup/postgresql/all.sql.gz
 test -f "$stage/aiia/mysql.sql.gz" && test -f "$pgdump" || fail 'database dumps missing'
 test -d "$work/restored/srv/containers/aiia/content-data" || fail 'Ghost content-data missing'
-# Mrija links each mailbox to its container mount /maildir/<box> (the mail itself is backed up from
-# the host maildir); drop exactly those dangling links so they cannot be followed.
-if [[ -d $stage/mrija/mailboxes ]]; then
-  find "$stage/mrija/mailboxes" -mindepth 2 -maxdepth 2 -type l -name maildir -lname '/maildir/*' -delete
-fi
-# A restored symlink must not turn a scratch check into a read of a live path.
-test -z "$(find "$work/restored" -type l -print -quit)" || fail 'lab restore contains a symlink; review it before testing'
+# A restored symlink must not turn a scratch check into a read of a live path. Mrija links each
+# mailbox to its container mount /maildir/<box> (the mail itself is backed up from the host
+# maildir); nothing below reads mailboxes, so only those links are exempt.
+test -z "$(find "$work/restored" -type l ! \( -path "$stage/mrija/mailboxes/*/maildir" -lname '/maildir/*' \) -print -quit)" \
+  || fail 'lab restore contains a symlink; review it before testing'
 python3 - "$stage/vaultwarden/db.sqlite3" "$stage/mrija/mail_index.sqlite" <<'PY'
 import pathlib, sqlite3, sys
 for filename in sys.argv[1:]:
@@ -123,7 +121,7 @@ done
 gzip -dc "$pgdump" | docker exec -i "$pg" psql -U "$pg_admin" -d postgres -v ON_ERROR_STOP=1 >"$work/pg-import.log" 2>&1 || fail 'PostgreSQL dump import failed'
 databases=$(docker exec "$pg" psql -U "$pg_admin" -d postgres -Atc "SELECT count(*) FROM pg_database WHERE NOT datistemplate AND datname NOT IN ('postgres','restore_drill_bootstrap');")
 [[ "$databases" =~ ^[0-9]+$ ]] || fail 'invalid PostgreSQL database count'
-# The lab instance holds no application database today (verified 2026-10-22); the clean import is the check.
+# The lab instance holds no application database today (verified 2026-10-21); the clean import is the check.
 echo "PASS PostgreSQL import application databases=$databases"
 
 world=$stage/minecraft

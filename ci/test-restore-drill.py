@@ -36,6 +36,10 @@ if command == 'restic-peer':
             if mode in ['mrija-links','mrija-escape']:
                 box=stage/'mrija/mailboxes/admin'; box.mkdir(parents=True)
                 (box/'maildir').symlink_to('/maildir/admin' if mode=='mrija-links' else '/srv/live')
+            if mode=='mrija-parent-escape':
+                live=pathlib.Path(os.environ['DRILL_STATE'])/'live-mrija'; (stage/'mrija').rename(live)
+                (live/'mailboxes/admin').mkdir(parents=True); (live/'mailboxes/admin/maildir').symlink_to('/maildir/admin')
+                (stage/'mrija').symlink_to(live)
     sys.exit()
 if command=='sleep': sys.exit()
 with (state/'calls.jsonl').open('a') as f: f.write(json.dumps(a)+'\n')
@@ -82,7 +86,7 @@ with tempfile.TemporaryDirectory(prefix='drill-fixture-') as temp:
     for role, mode, ok in [
         ('laptop','ok',True), ('lab','ok',True), ('lab','wrong-host',False),
         ('lab','restore-failure',False), ('lab','symlink',False),
-        ('lab','mrija-links',True), ('lab','mrija-escape',False),
+        ('lab','mrija-links',True), ('lab','mrija-escape',False), ('lab','mrija-parent-escape',False),
         ('lab','import-failure',False), ('lab','empty-db',False), ('lab','pg-empty',True),
         ('lab','mc-timeout',False), ('lab','mc-error',False), ('lab','cleanup-failure',False),
         ('lab','mc-exit',False), ('lab','signal',False),
@@ -105,6 +109,8 @@ with tempfile.TemporaryDirectory(prefix='drill-fixture-') as temp:
         else:
             assert not list(scratch.iterdir()), (role,mode,'scratch leaked')
             assert not list(state.glob('restore-drill-*')), (role,mode,'container leaked')
-        if role == 'laptop' or mode in ['wrong-host','restore-failure','symlink','mrija-escape']:
+        if mode == 'mrija-parent-escape':
+            assert (state/'live-mrija/mailboxes/admin/maildir').is_symlink(), 'drill deleted through a symlinked parent'
+        if role == 'laptop' or mode in ['wrong-host','restore-failure','symlink','mrija-escape','mrija-parent-escape']:
             assert not (state/'calls.jsonl').exists(), 'Docker used before input checks'
-print('ok: 15 fixture cases; scratch/container cleanup, isolation, SIGTERM and failure propagation')
+print('ok: 16 fixture cases; scratch/container cleanup, isolation, SIGTERM and failure propagation')
