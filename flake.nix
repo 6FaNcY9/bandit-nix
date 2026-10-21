@@ -93,20 +93,27 @@
     };
   in {
     nixosConfigurations = let
-      banditModules = [
+      laptopModules = tree: hm: [
         {nixpkgs.hostPlatform = system;}
         stylix.nixosModules.stylix
         nixos-hardware.nixosModules.framework-13-7040-amd
         sops-nix.nixosModules.sops
         ./hosts/bandit
-        ./nixos
+        tree
         home-manager.nixosModules.home-manager
-        {home-manager = hmBase;}
+        {home-manager = hm;}
       ];
+      banditModules = laptopModules ./nixos hmBase;
     in {
       bandit = nixpkgs.lib.nixosSystem {
         specialArgs = sharedArgs;
         modules = banditModules;
+      };
+
+      # Phase 2 scaffolding: same laptop built from modules/; removed in Task 8.
+      bandit-v2 = nixpkgs.lib.nixosSystem {
+        specialArgs = sharedArgs;
+        modules = laptopModules ./modules (builtins.removeAttrs hmBase ["users"]);
       };
 
       bandit-ci = nixpkgs.lib.nixosSystem {
@@ -239,6 +246,12 @@
           statix check .
           touch "$out"
         '';
+
+      laptop-parity = import ./ci/laptop-parity.nix {
+        inherit pkgs;
+        old = self.nixosConfigurations.bandit.config.system.build.toplevel;
+        new = self.nixosConfigurations.bandit-v2.config.system.build.toplevel;
+      };
 
       sops-isolation = import ./ci/sops-isolation.nix {
         inherit pkgs;
