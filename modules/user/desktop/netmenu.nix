@@ -1,0 +1,83 @@
+{
+  config,
+  pkgs,
+  ...
+}: {
+  home.file = {
+    # ── Network rofi menu (waybar network module on-click) ─────────
+    ".local/bin/net-menu" = {
+      executable = true;
+      text = ''
+        #!/usr/bin/env bash
+        THEME="$HOME/.config/rofi/themes/retro-eighties.rasi"
+
+        # ── Gather state ────────────────────────────────────────────────
+        SSID=$(${pkgs.networkmanager}/bin/nmcli -t -f active,ssid dev wifi 2>/dev/null \
+               | grep '^yes:' | cut -d: -f2 | head -1)
+        LOCAL_IP=$(ip route get 1.1.1.1 2>/dev/null | awk '/src/{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}')
+        PUBLIC_IP=$(cat "$XDG_RUNTIME_DIR/public-ip-cache" 2>/dev/null | tr -d '[:space:]')
+
+        # ── Build menu items ─────────────────────────────────────────────
+        ITEMS=""
+
+        # Status header
+        ITEMS+="── Status ──────────────────────────"$'\n'
+        [[ -n "$SSID" ]]      && ITEMS+="󰖩  WiFi: $SSID"$'\n'
+        [[ -z "$SSID" ]]      && ITEMS+="󰖪  WiFi: disconnected"$'\n'
+        [[ -n "$LOCAL_IP" ]]  && ITEMS+="󰩟  Local:  $LOCAL_IP"$'\n'
+        [[ -n "$PUBLIC_IP" ]] && ITEMS+="󰓅  Public: $PUBLIC_IP"$'\n'
+
+        # Connections
+        ITEMS+="── Connections ─────────────────────"$'\n'
+        while IFS=: read -r name type state; do
+          [[ -z "$name" ]] && continue
+          case "$type" in
+            *wifi*)     icon="󰖩" ;;
+            *ethernet*) icon="󰈀" ;;
+            *vpn*)      icon="󰌆" ;;
+            *)          icon="󰛳" ;;
+          esac
+          ITEMS+="$icon  $name"$'\n'
+        done < <(${pkgs.networkmanager}/bin/nmcli -t -f NAME,TYPE,STATE con show --active 2>/dev/null)
+        ITEMS+="󰐕  Connect / manage WiFi…"$'\n'
+
+        # Tools
+        ITEMS+="── Tools ────────────────────────────"$'\n'
+        ITEMS+="󰆒  Copy public IP to clipboard"$'\n'
+        ITEMS+="󰒓  Network settings"$'\n'
+
+        # ── Show menu ────────────────────────────────────────────────────
+        CHOICE=$(printf '%s' "$ITEMS" \
+          | ${config.programs.rofi.package}/bin/rofi -dmenu -p "  network" \
+              -theme "$THEME" \
+              -no-custom \
+              -i)
+
+        [[ -z "$CHOICE" ]] && exit 0
+
+        # ── Handle selection ─────────────────────────────────────────────
+        case "$CHOICE" in
+          *"Copy public IP"*)
+            echo -n "$PUBLIC_IP" | ${pkgs.wl-clipboard}/bin/wl-copy
+            ;;
+          *"Connect"*|*"manage WiFi"*)
+            ${pkgs.networkmanagerapplet}/bin/nm-connection-editor &
+            ;;
+          *"Network settings"*)
+            ${pkgs.networkmanagerapplet}/bin/nm-connection-editor &
+            ;;
+        esac
+      '';
+    };
+  };
+
+  systemd.user.services.public-ip-refresh = {
+    Unit.Description = "Refresh public IP cache";
+    Service = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.curl}/bin/curl -s https://ifconfig.me";
+      StandardOutput = "file:%t/public-ip-cache";
+    };
+    Install.WantedBy = ["default.target"];
+  };
+}

@@ -1,0 +1,95 @@
+{
+  config,
+  lib,
+  ...
+}: let
+  colors = config.lib.stylix.colors.withHashtag;
+  themedChrome =
+    lib.replaceStrings
+    ["#282828" "#1d2021" "#3c3836" "#504945" "#928374" "#d5c4a1" "#d79921" "#458588" "#cc241d" "#98971a"]
+    [colors.base00 colors.base01 colors.base01 colors.base02 colors.base03 colors.base05 colors.base0A colors.base0C colors.base08 colors.base0B]
+    (builtins.readFile ./thunderbird-userchrome.css);
+  markdownHereTokens = [
+    "@canvas@"
+    "@surface@"
+    "@raised@"
+    "@structure@"
+    "@foreground@"
+    "@critical@"
+    "@active@"
+    "@primary@"
+    "@success@"
+    "@info@"
+    "@shadow@"
+    "@secondary@"
+    "@muted@"
+  ];
+  markdownHereColors = [
+    colors.base00
+    colors.base01
+    colors.base02
+    colors.base03
+    colors.base05
+    colors.base08
+    colors.base09
+    colors.base0A
+    colors.base0B
+    colors.base0C
+    colors.base0D
+    colors.base0E
+    colors.base0F
+  ];
+  themedMarkdownHere = file:
+    lib.replaceStrings
+    markdownHereTokens
+    markdownHereColors
+    (builtins.readFile file);
+in {
+  programs.thunderbird = {
+    enable = true;
+    profiles.default = {
+      isDefault = true;
+      settings = {
+        "toolkit.legacyUserProfileCustomizations.stylesheets" = true;
+        # Follow Stylix polarity (1 = dark, 0 = light).
+        "ui.systemUsesDarkTheme" =
+          if config.stylix.polarity == "dark"
+          then 1
+          else 0;
+
+        # Keep message rendering aligned with the system-wide Stylix fonts.
+        "font.name.monospace.x-western" = config.stylix.fonts.monospace.name;
+        "font.name.sans-serif.x-western" = config.stylix.fonts.sansSerif.name;
+        "font.name.serif.x-western" = config.stylix.fonts.serif.name;
+        "font.size.variable.x-western" = 14;
+        "font.size.fixed.x-western" = 14;
+
+        # Layout: classic 3-pane
+        "mail.pane_config.dynamic" = 1;
+        # Compact density
+        "mail.uiDensity" = 1;
+
+        # Sort newest first
+        "mailnews.default_sort_type" = 18;
+        "mailnews.default_sort_order" = 2;
+
+        # Plain text compose by default
+        "mail.identity.default.compose_html" = false;
+        "mail.compose.default_to_paragraph" = false;
+
+        # Misc
+        "browser.aboutConfig.showWarning" = false;
+        "mail.phishing.detection.enabled" = true;
+        "mail.spam.manualMark.biffAtStartup" = false;
+      };
+      userChrome = themedChrome;
+    };
+  };
+
+  xdg.configFile = {
+    "markdown-here-revival/chinatown-pixel-primary.css".text =
+      themedMarkdownHere ./markdown-here-chinatown-primary.css;
+    "markdown-here-revival/chinatown-pixel-syntax.css".text =
+      themedMarkdownHere ./markdown-here-chinatown-syntax.css;
+  };
+}

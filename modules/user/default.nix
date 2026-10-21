@@ -1,28 +1,24 @@
-# Home Manager root for the new tree. legacyHome lists the old home/ modules
-# not yet ported; it shrinks per phase-2 task and disappears at the end.
+# Home Manager root for the new tree.
 {
   bandit,
   inputs,
   pkgs,
   ...
-}: let
-  legacyHome = [
-    ../../home/desktop
+}: {
+  imports = [
+    inputs.nixvim.homeModules.nixvim
+    ./xdg-cleanup.nix
+    ./xdg-shims.nix
+    ./dotfiles.nix
+    ./ssh.nix
+    ./git.nix
+    ./theme.nix
+    ./qt.nix
+    ./desktop
+    ./editor
+    ./terminal
+    ./node.nix
   ];
-in {
-  imports =
-    [
-      inputs.nixvim.homeModules.nixvim
-      ./xdg-cleanup.nix
-      ./xdg-shims.nix
-      ./dotfiles.nix
-      ./ssh.nix
-      ./git.nix
-      ./theme.nix
-      ./qt.nix
-    ]
-    ++ legacyHome
-    ++ [./editor ./terminal ./node.nix];
 
   home = {
     inherit (bandit.workstation) username homeDirectory;

@@ -1,0 +1,176 @@
+/* userChrome.css — Gruvbox dark, compact + retro bevel
+   Matches home/theme.nix GTK bevel system: square corners, 1px
+   inset light/dark highlights, yellow accent on selection/focus. */
+
+:root {
+  --bg:      #282828;
+  --bg1:     #3c3836;
+  --bg2:     #504945;
+  --bg3:     #1d2021;
+  --fg:      #d5c4a1;
+  --fg2:     #928374;
+  --yellow:  #d79921;
+  --blue:    #458588;
+  --red:     #cc241d;
+
+  /* Compact metrics — 30px chrome bars: tall enough to read on the
+     Framework 13's 2256x1504 panel (scale 1) without giving up the
+     dense retro look. All chrome text below is 14px, one size only. */
+  --tab-min-height: 30px !important;
+  --tab-block-margin: 0 !important;
+  --urlbar-min-height: 30px !important;
+  --urlbar-height: 30px !important;
+  --toolbarbutton-inner-padding: 4px !important;
+  --toolbarbutton-outer-padding: 1px !important;
+  --arrowpanel-menuitem-padding: 4px 8px !important;
+}
+
+/* Kill rounded corners + transitions everywhere in chrome */
+* {
+  border-radius: 0 !important;
+  transition: none !important;
+}
+
+/* === Tab bar — square, beveled, compact === */
+#TabsToolbar {
+  --tab-min-height: 30px !important;
+  background-color: var(--bg1) !important;
+}
+#tabbrowser-tabs {
+  background-color: var(--bg1) !important;
+  --tab-min-height: 30px !important;
+  min-height: 30px !important;
+}
+.tabbrowser-tab {
+  min-height: 30px !important;
+  padding-block: 0 !important;
+}
+.tabbrowser-tab .tab-background {
+  background-color: var(--bg1) !important;
+  border: none !important;
+  margin-inline: 0 !important;
+  box-shadow:
+    inset -1px -1px 0 var(--bg3),
+    inset  1px  1px 0 var(--bg2) !important;
+}
+.tabbrowser-tab[selected] .tab-background {
+  background-color: var(--bg) !important;
+  box-shadow:
+    inset  1px  1px 0 var(--bg3),
+    inset -1px -1px 0 var(--bg2),
+    inset 0 -2px 0 var(--yellow) !important;
+}
+.tabbrowser-tab[attention]:not([selected]) .tab-background {
+  box-shadow:
+    inset -1px -1px 0 var(--bg3),
+    inset  1px  1px 0 var(--red) !important;
+}
+.tab-label {
+  color: var(--fg2) !important;
+  /* Single chrome font size (14px) shared with #urlbar-input and
+     .bookmark-item — see the :root metrics comment above. */
+  font-size: 14px !important;
+}
+.tabbrowser-tab[selected] .tab-label {
+  color: var(--fg) !important;
+  font-weight: bold !important;
+}
+
+/* Show tab close button only on hover/selected */
+.tabbrowser-tab:not(:hover):not([selected]) .tab-close-button {
+  display: none !important;
+}
+
+/* === Nav bar — tighter, beveled buttons === */
+#nav-bar {
+  background-color: var(--bg) !important;
+  border-bottom: 1px solid var(--bg2) !important;
+  box-shadow: none !important;
+  padding-block: 0 !important;
+}
+#nav-bar toolbarbutton {
+  padding: 0 2px !important;
+}
+#nav-bar toolbarbutton > .toolbarbutton-icon {
+  padding: 2px !important;
+  box-shadow:
+    inset -1px -1px 0 var(--bg3),
+    inset  1px  1px 0 var(--bg2) !important;
+}
+#nav-bar toolbarbutton:hover > .toolbarbutton-icon {
+  background-color: var(--bg1) !important;
+}
+#nav-bar toolbarbutton[open] > .toolbarbutton-icon,
+#nav-bar toolbarbutton:active > .toolbarbutton-icon {
+  box-shadow:
+    inset  1px  1px 0 var(--bg3),
+    inset -1px -1px 0 var(--bg2) !important;
+  background-color: var(--bg1) !important;
+}
+
+/* === URL bar — sunken inset === */
+#urlbar,
+#urlbar-background {
+  min-height: 30px !important;
+}
+#urlbar-background {
+  background-color: var(--bg1) !important;
+  border: none !important;
+  box-shadow:
+    inset  1px  1px 0 var(--bg3),
+    inset -1px -1px 0 var(--bg2) !important;
+}
+#urlbar[focused="true"] > #urlbar-background {
+  box-shadow:
+    inset  1px  1px 0 var(--bg3),
+    inset -1px -1px 0 var(--bg2),
+    inset 0 -2px 0 var(--yellow) !important;
+}
+#urlbar-input {
+  color: var(--fg) !important;
+  /* Match the tab-label size so the whole chrome uses one font size;
+     previously 12px here clashed with Stylix's 18pt app font and any
+     per-site page zoom. */
+  font-size: 14px !important;
+}
+
+/* === Bookmarks bar — tight === */
+#PersonalToolbar {
+  background-color: var(--bg1) !important;
+  border-bottom: 1px solid var(--bg2) !important;
+  padding-block: 0 !important;
+  --bookmark-block-padding: 2px !important;
+}
+#PersonalToolbar .bookmark-item {
+  padding: 2px 6px !important;
+  /* Keep in sync with .tab-label / #urlbar-input (14px). */
+  font-size: 14px !important;
+}
+
+/* === Menus / popovers — square, flat, retro === */
+menupopup,
+panel,
+.panel-arrowcontent {
+  --panel-background: var(--bg) !important;
+  --panel-border-color: var(--bg2) !important;
+  border: 1px solid var(--bg2) !important;
+}
+menupopup {
+  background-color: var(--bg) !important;
+}
+menuitem,
+.menuitem-iconic {
+  padding: 2px 8px !important;
+}
+menuitem:hover,
+menuitem[_moz-menuactive="true"] {
+  background-color: var(--yellow) !important;
+  color: var(--bg) !important;
+}
+
+/* === Findbar / sidebar headers — match chrome === */
+.findbar-container,
+#sidebar-header {
+  background-color: var(--bg) !important;
+  border-top: 1px solid var(--bg2) !important;
+}
