@@ -1,0 +1,55 @@
+# Shell-agnostic aliases shared by the terminal modules.
+# Per-shell aliases live in the shell's module.
+{bandit}: {
+  # ── Nix workflow ──────────────────────────────────────
+  ns = "nh os switch";
+  nt = "nh os test";
+  nfu = "nix flake update";
+  ngc = "nix-collect-garbage -d";
+  nd = "nix develop";
+  nsn = "nix search nixpkgs";
+
+  # ── Navigation ────────────────────────────────────────
+  ll = "eza -la --icons --git";
+  la = "eza -a --icons --git";
+  lt = "eza --tree --icons --level=2";
+  lta = "eza --tree --icons --level=3 -a";
+  cat = "bat";
+  home = "cd ~";
+  csrc = "cd ~/src";
+  cnix = "cd ${bandit.workstation.repoPath}";
+  cconf = "cd ~/.config";
+  cproj = "cd ~/Projects";
+  cdocs = "cd ~/Documents";
+  cdl = "cd ~/Downloads";
+  cvms = "cd ~/vms";
+  cpic = "cd ~/Pictures";
+
+  # ── Git ───────────────────────────────────────────────
+  g = "git";
+  ga = "git add";
+  gc = "git commit";
+  gca = "git commit --amend";
+  gp = "git push";
+  gl = "git pull";
+  gs = "git status";
+  gd = "git diff";
+  glog = "git log --oneline --decorate --graph";
+
+  # ── Editor ────────────────────────────────────────────
+  v = "nvim";
+  vi = "nvim";
+  vim = "nvim";
+
+  # ── System ────────────────────────────────────────────
+  ports = "ss -tulanp";
+  psg = "ps aux | grep";
+  cls = "clear";
+
+  # ── Network ───────────────────────────────────────────
+  myip = "curl -sf ifconfig.me";
+
+  # ── Framework Hardware Controll ───────────────────────
+  thermal = "sudo framework_tool --thermal";
+  autofan = "sudo framework_tool --autofanctrl";
+}

@@ -7,20 +7,23 @@
   ...
 }: let
   legacyHome = [
-    ../../home/xdg-cleanup.nix
-    ../../home/xdg-shims.nix
-    ../../home/dotfiles.nix
-    ../../home/ssh.nix
-    ../../home/git.nix
-    ../../home/theme.nix
-    ../../home/qt.nix
     ../../home/desktop
     ../../home/editor
-    ../../home/terminal
-    ../../home/node.nix
   ];
 in {
-  imports = [inputs.nixvim.homeModules.nixvim] ++ legacyHome;
+  imports =
+    [
+      inputs.nixvim.homeModules.nixvim
+      ./xdg-cleanup.nix
+      ./xdg-shims.nix
+      ./dotfiles.nix
+      ./ssh.nix
+      ./git.nix
+      ./theme.nix
+      ./qt.nix
+    ]
+    ++ legacyHome
+    ++ [./terminal ./node.nix];
 
   home = {
     inherit (bandit.workstation) username homeDirectory;
