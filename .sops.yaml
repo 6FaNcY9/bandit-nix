@@ -19,16 +19,6 @@ creation_rules:
       - age:
           - *user
           - *host_bandit
-  # TEMPORARY: legacy shared file, removed once both hosts run the split
-  # (docs/runbooks/sops-split.md, step "Cleanup"). Without this rule the
-  # catch-all would re-key it to `user` only on an accidental updatekeys and
-  # lock both hosts out.
-  - path_regex: (^|/)secrets/secrets\.yaml$
-    key_groups:
-      - age:
-          - *user
-          - *host_bandit
-          - *host_bandit_lab
   - path_regex: (^|/)secrets/.*\.ya?ml$
     key_groups:
       - age:

@@ -102,6 +102,9 @@ After the backup exists:
   `docs/runbooks/secret-rotation.md`.
 - Each file gets its own data key (`sops rotate -i`); `updatekeys` alone would
   not revoke a former recipient.
+- 2026-10-22: legacy `secrets/secrets.yaml` removed from the repository together
+  with its `.sops.yaml` rule and the `sops-isolation` tolerance; `github.yaml`
+  is re-keyed to the laptop key by the owner (`sops-split.md` step 4).
 - **Decision D1 (accepted risk):** the `user` age key stays on the laptop, so a
   compromised *running* laptop can still decrypt `lab.yaml`. That attacker
   already holds the admin SSH path to the lab, so a separate sops key alone

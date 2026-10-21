@@ -16,14 +16,6 @@
     bandit-lab = ["lab.yaml"];
   };
 
-  # ponytail: legacy shared file, tolerated only until the split cleanup
-  # commit deletes it (runbook step 4). Drop this entry then.
-  legacyFiles = ["secrets.yaml"];
-
-  # ponytail: github.yaml still lists the lab key until the cleanup step
-  # re-keys it (the lab must stop referencing it first). Drop this entry then.
-  tolerateLabRecipient = ["github.yaml"];
-
   declaredByFile = host: let
     secrets = lib.attrValues hosts.${host}.config.sops.secrets;
     files = lib.unique (map (s: baseNameOf (toString s.sopsFile)) secrets);
@@ -49,8 +41,6 @@ in
   pkgs.runCommand "sops-isolation" {
     nativeBuildInputs = [pkgs.yq-go pkgs.jq];
     declaredJson = builtins.toJSON declared;
-    legacy = toString legacyFiles;
-    tolerateLab = toString tolerateLabRecipient;
     # The lab must not be able to decrypt anything it does not declare.
     exactFiles = "lab.yaml";
   } ''
@@ -70,7 +60,6 @@ in
 
     for f in secrets/*.yaml; do
       name=$(basename "$f")
-      case " $legacy " in *" $name "*) continue ;; esac
       r=$(recipients "$f")
       has_bandit=0; has_lab=0
       grep -qx "$bandit" <<<"$r" && has_bandit=1
@@ -80,7 +69,6 @@ in
         bandit.yaml|github.yaml) want="1 0" ;;
         *) echo "unexpected secrets file $name: add it to the isolation policy" >&2; exit 1 ;;
       esac
-      case " $tolerateLab " in *" $name "*) [[ $has_lab == 1 ]] && want="1 1" ;; esac
       [[ "$has_bandit $has_lab" == "$want" ]] || {
         echo "$name has wrong host recipients (bandit/lab = $has_bandit/$has_lab, want $want)" >&2; exit 1; }
     done
