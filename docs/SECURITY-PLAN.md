@@ -249,3 +249,27 @@ Decision needed: quick GRUB password first, or wait and do lanzaboote properly?
   `net.core.bpf_jit_harden` remains off pending workload testing).
 - [x] Review `vino` in `nix.settings.trusted-users`: removed on both hosts
   (`nixos/core.nix`).
+
+---
+
+## Rewrite audit (2026-10-21)
+
+One read-only `security-auditor` run over `hosts/bandit-lab/`, `nixos/server/` and the self-written
+network code in bandit-craft (`mcbots/app/{server,hub,hubclient,admin}.js`, `minecraft/botgate/`,
+`minecraft/overlay.js`). Every "fix" row becomes an acceptance criterion of the phase that rewrites
+that file (roadmap: `docs/superpowers/plans/2026-10-21-bandit-rewrite-roadmap.md`). `owner?` marks a
+possible "accept" that only the owner can decide; nothing is accepted yet.
+
+| ID | File:line | Finding | Severity | Decision (fix in phase N / accept / superseded by phase N) |
+| --- | --- | --- | --- | --- |
+| A1 | bandit-nix/hosts/bandit-lab/services/monitoring/compose.yml:85,99 | cAdvisor runs `privileged: true` and mounts `/var/run` (read-only mount does not stop connecting to `/var/run/docker.sock`); a compromised cAdvisor means root on the host. | High | fix in phase 4 (no privileged container, no Docker socket path) |
+| A2 | bandit-craft/hosts/bandit-lab/services/minecraft/default.nix:125 | `BOTGATE_SOURCES` contains the whole bot subnet `10.250.77.0/29`, including the gateway `.1` (the host); BotGate forces offline mode for `bot1..bot99` from there, so any host process can log in as a bot without Mojang auth. Tailnet clients on the published port 25565 may arrive with the gateway IP as source (unverified). | Medium | fix in phase 5 (list only the bot containers' addresses; verify the source IP of tailnet connections) |
+| A3 | bandit-craft/hosts/bandit-lab/services/mcbots/default.nix:115 | `TRUSTED_PROXIES` lists the bridge gateways `10.250.77.1,172.22.0.1`; `authorized()` (server.js:228-231) then trusts the `tailscale-user-login` header, so any host process or connection arriving as the gateway can forge the owner login and reach the dashboard and `/api/admin/*` with full RCON. | Medium | fix in phase 6 |
+| A4 | bandit-craft/hosts/bandit-lab/services/mcbots/app/server.js:229-230 | `authorized()` returns `true` when `ALLOWED_TS_LOGINS` is empty, and accepts the identity header from every peer when `TRUSTED_PROXIES` is empty: a misconfiguration opens the dashboard with RCON instead of refusing to start (fail-open). | Medium | fix in phase 6 (fail closed at startup) |
+| A5 | bandit-craft/hosts/bandit-lab/services/mcbots/app/admin.js:129 | The admin action `command` forwards arbitrary RCON commands (only length and control characters are checked), so dashboard access equals server ownership; protection rests entirely on A3/A4. `sameOrigin()` (server.js:238) also lets requests without an `Origin` header through. | Low | fix in phase 6 (reject missing Origin on POST/WS); owner? (accept raw RCON passthrough as a dashboard feature) |
+
+Not covered by this run (follow up in the phase that touches it): `hub.js` lines 300-590, `hubclient.js`
+beyond the message handlers, systemd hardening of all units in `nixos/server/`, ntfy, beszel,
+vaultwarden and webhost configuration; no CVE lookup. Verified clean: hub token comparison uses
+`timingSafeEqual` with a token per worker; mcbots publishes on `127.0.0.1` only and runs with
+`cap-drop=ALL` and `no-new-privileges`; the Traefik Docker socket goes through a GET-only proxy.
