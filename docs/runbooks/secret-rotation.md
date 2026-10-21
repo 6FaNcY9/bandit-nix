@@ -28,7 +28,7 @@ rotating the SOPS source. None of these justify restarting unrelated daemons.
 ## Exposed on bandit-lab (rotate after the secrets split)
 
 Until `docs/runbooks/sops-split.md` is complete, bandit-lab imports the
-laptop's `nixos/sops.nix`, so its sops key decrypts laptop-only secrets to disk
+laptop's `modules/system/sops.nix`, so its sops key decrypts laptop-only secrets to disk
 (owner `vino`), and it holds the whole legacy `secrets.yaml` in its repository
 checkout, so it can decrypt every value in it, including keys no module
 declares. The split only protects values created afterwards: old commits stay

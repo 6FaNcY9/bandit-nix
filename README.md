@@ -22,7 +22,7 @@ declarative system and user environment.
 - **Hyprland/Wayland** desktop on `bandit` with Waybar, Mako, and Rofi.
 - **Stylix** system-wide theming using the **Gruvbox** (morhetz) palette, dark by default with a light boot specialisation.
 - **nixvim** declarative Neovim setup with LSP, DAP, and completions.
-- **Zsh** with shared aliases from `home/terminal/aliases.nix`.
+- **Zsh** with shared aliases from `modules/user/terminal/aliases.nix`.
 - **Rootless Docker + Podman** for container workflows.
 - **CI checks** for formatting, linting, dead code, statix, theme-contract and output-evaluation assertions, plus security-lab compose/atomic checks.
 
@@ -47,27 +47,14 @@ declarative system and user environment.
 │   │   ├── default.nix    # Hostname, stateVersion, bootloader
 │   │   └── hardware.nix   # Filesystems, kernel modules, Framework tweaks
 │   └── bandit-lab/        # Homelab host and service modules
-├── nixos/                 # System-level NixOS modules
-│   ├── default.nix        # Aggregator for the bandit host
-│   ├── core.nix           # Locale, nix daemon, GC, journald
-│   ├── boot.nix           # Kernel packages, tmpfs
-│   ├── network.nix        # NetworkManager, firewall, DNS-over-TLS
-│   ├── desktop.nix        # greetd, Hyprland, Bluetooth, polkit
-│   ├── theme.nix          # Fonts and Stylix system targets
-│   ├── dev.nix            # Dev tooling, containers, VMs
-│   ├── users.nix          # User account and groups
-│   ├── sops.nix           # Shared sops/age settings and user-password
-│   ├── secrets-workstation.nix  # Laptop-only secrets (bandit.yaml, github.yaml)
+├── modules/               # Laptop module tree (bandit)
+│   ├── default.nix        # Flat list of module roots for the bandit host
+│   ├── options.nix        # options.bandit.* (defaults from lib/repository.nix)
+│   ├── system/            # Locale, boot, network, users, sops, backup peer, lab-apply
+│   ├── desktop/           # greetd/Hyprland, graphics, audio, power, dev, theme
+│   └── user/              # Home Manager: terminal/, desktop/, editor/, theme, git, ssh, qt
+├── nixos/                 # Legacy tree, still imported by bandit-lab (phase 3)
 │   └── server/            # Headless server base (reads secrets/lab.yaml)
-├── home/                  # Home Manager configuration
-│   ├── default.nix        # Aggregator and user packages
-│   ├── terminal/          # Zsh, Kitty, Starship, aliases
-│   ├── desktop/           # Hyprland, Waybar, Mako, Rofi, Firefox, Thunderbird
-│   ├── editor/            # nixvim, pdfreader
-│   ├── theme.nix          # HM Stylix targets
-│   ├── git.nix            # Git, delta, GPG agent
-│   ├── ssh.nix            # SSH client config
-│   └── qt.nix             # Qt/Kvantum theming
 ├── secrets/               # Encrypted secrets (sops-nix)
 │   ├── bandit.yaml        # Laptop secrets (user + laptop key)
 │   ├── github.yaml        # Laptop GitHub keys
@@ -146,7 +133,7 @@ bandit-lab.mrija.org
 ```
 
 SSH is reachable over Tailscale only (`ssh bandit-lab`; client config in
-`home/ssh.nix`). It is no longer published through the Cloudflare tunnel.
+`modules/user/ssh.nix`). It is no longer published through the Cloudflare tunnel.
 
 Admin services (Cockpit, Samba) are not port-forwarded. Access them
 via SSH/Tailscale tunnels:
@@ -220,15 +207,15 @@ loudly.
   `themes/gruvbox-light.yaml` define the Gruvbox (morhetz) Stylix theme;
   the light variant is the `light` boot specialisation in
   `hosts/bandit/default.nix`.
-- **Window manager**: `home/desktop/hyprland.nix` is the source of truth. Home
+- **Window manager**: `modules/user/desktop/hyprland/` is the source of truth. Home
   Manager renders it as native Lua at `~/.config/hypr/hyprland.lua`; do not edit
   that generated file. Lua-mode bindings, rules, and submaps must use structured
   entries because legacy Hyprland configuration strings are not rendered.
-- **Status bar / notifications**: `home/desktop/waybar.nix` and
-  `home/desktop/mako.nix`.
-- **Shell**: `home/terminal/zsh.nix` and shared
-  aliases in `home/terminal/aliases.nix`.
-- **Editor**: `home/editor/nixvim.nix`.
+- **Status bar / notifications**: `modules/user/desktop/waybar.nix` and
+  `modules/user/desktop/mako.nix`.
+- **Shell**: `modules/user/terminal/zsh.nix` and shared
+  aliases in `modules/user/terminal/aliases.nix`.
+- **Editor**: `modules/user/editor/nixvim/`.
 - **Shared constants**: `lib/repository.nix` holds `system`, username,
   home/repository paths, the unfree package policy, and theme helpers.
 

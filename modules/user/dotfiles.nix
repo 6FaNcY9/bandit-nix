@@ -35,7 +35,7 @@
       if [ "$drift" -eq 0 ]; then
         echo "no unshimmed top-level dotdirs"
       else
-        echo "run: bandit-dotdir-adopt <name> [config|cache], then add the printed line to home/xdg-shims.nix and rebuild" >&2
+        echo "run: bandit-dotdir-adopt <name> [config|cache], then add the printed line to modules/user/xdg-shims.nix and rebuild" >&2
         exit 1
       fi
     '';
@@ -111,7 +111,7 @@
         config) list=configShims ;;
         cache) list=cacheShims ;;
       esac
-      printf '\nadd to %s in home/xdg-shims.nix:\n  "%s"\nthen: sudo nixos-rebuild switch --flake .#bandit\n' "$list" "$name"
+      printf '\nadd to %s in modules/user/xdg-shims.nix:\n  "%s"\nthen: sudo nixos-rebuild switch --flake .#bandit\n' "$list" "$name"
       [ "$conflicts" -eq 0 ]
     '';
   };

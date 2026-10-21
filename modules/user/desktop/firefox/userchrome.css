@@ -1,5 +1,5 @@
 /* userChrome.css — Gruvbox dark, compact + retro bevel
-   Matches home/theme.nix GTK bevel system: square corners, 1px
+   Matches modules/user/theme.nix GTK bevel system: square corners, 1px
    inset light/dark highlights, yellow accent on selection/focus. */
 
 :root {

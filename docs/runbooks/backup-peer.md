@@ -9,7 +9,7 @@ as a third copy.
 | --- | --- | --- |
 | REST server | `100.102.247.30:8000`, data in `/var/lib/restic-peer` | `100.125.161.81:8000`, data in `/srv/backup/restic-peer` |
 | Hosts the repo of | `lab` (user `lab`, `/var/lib/restic-peer/lab`) | `bandit` (user `bandit`, `/srv/backup/restic-peer/bandit`) |
-| Quota | 150 GiB (`maxSize` in `nixos/backup-peer.nix`) | none (2.4 TB free) |
+| Quota | 150 GiB (`maxSize` in `modules/system/backup-peer.nix`) | none (2.4 TB free) |
 | Pushes | `restic-backups-peer.service` at 11:30, 15:30, 20:30 (+15 min jitter, `Persistent`) | `restic-backups-peer.service` at 05:30 (+20 min jitter, `Persistent`) |
 | Retries | on failure every 20 min, 4 tries per 2 h; skipped on battery (`ConditionACPower`) | on failure every hour, 6 tries per 12 h, then `failed` (alert) |
 | Applies retention (`forget --prune`, weekly Sun 07:30) | the lab's repo (`restic-peer-prune`) | the laptop's repo (`restic-peer-prune`) |
@@ -23,7 +23,7 @@ What is backed up
   Vaultwarden, AiiA/Ghost DB + content, PostgreSQL dumps, Mrija mail, Minecraft
   snapshot). Same prepare logic, separate staging dir `/var/backup/restic-staging-peer`;
   the unit is ordered after `restic-backups-lab.service` so they never overlap.
-- Laptop: the `include` list in `nixos/backup-peer.nix` (home-relative, missing
+- Laptop: the `include` list in `modules/system/backup-peer.nix` (home-relative, missing
   entries are skipped): `src`, `.ssh`, `.gnupg`, `Documents`, `Pictures`, Prism
   Launcher `saves/config/xaero*/screenshots`. Excludes: `node_modules`, `.direnv`,
   `result`, `result-*`, `target`, `.cache`, `Downloads`, `.venv`, `__pycache__`.

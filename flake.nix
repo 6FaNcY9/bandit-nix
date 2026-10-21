@@ -89,7 +89,6 @@
       useUserPackages = true;
       backupCommand = hmBackupCommand;
       extraSpecialArgs = sharedArgs;
-      users.${repoConfig.workstation.username} = import ./home;
     };
   in {
     nixosConfigurations = let
@@ -106,17 +105,11 @@
           home-manager.nixosModules.home-manager
           {home-manager = hm;}
         ];
-      banditModules = laptopModules [./nixos] hmBase;
+      banditModules = laptopModules (import ./modules) hmBase;
     in {
       bandit = nixpkgs.lib.nixosSystem {
         specialArgs = sharedArgs;
         modules = banditModules;
-      };
-
-      # Phase 2 scaffolding: same laptop built from modules/; removed in Task 8.
-      bandit-v2 = nixpkgs.lib.nixosSystem {
-        specialArgs = sharedArgs;
-        modules = laptopModules (import ./modules) (builtins.removeAttrs hmBase ["users"]);
       };
 
       bandit-ci = nixpkgs.lib.nixosSystem {
@@ -249,12 +242,6 @@
           statix check .
           touch "$out"
         '';
-
-      laptop-parity = import ./ci/laptop-parity.nix {
-        inherit pkgs;
-        old = self.nixosConfigurations.bandit.config.system.build.toplevel;
-        new = self.nixosConfigurations.bandit-v2.config.system.build.toplevel;
-      };
 
       sops-isolation = import ./ci/sops-isolation.nix {
         inherit pkgs;

@@ -5,7 +5,7 @@ host's secrets. Target layout:
 
 | File | Recipients | Consumed by |
 | --- | --- | --- |
-| `secrets/bandit.yaml` | `user` + `host_bandit` | laptop (`nixos/secrets-workstation.nix`) |
+| `secrets/bandit.yaml` | `user` + `host_bandit` | laptop (`modules/system/secrets-workstation.nix`) |
 | `secrets/github.yaml` | `user` + `host_bandit` | laptop |
 | `secrets/lab.yaml` | `user` + `host_bandit_lab` | bandit-lab (`nixos/server/default.nix` default file) |
 | `secrets/secrets.yaml` | all three | **legacy, deleted in the cleanup step** |

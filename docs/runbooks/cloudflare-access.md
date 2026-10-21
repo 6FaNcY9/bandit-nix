@@ -103,7 +103,7 @@ The routes `ssh-bandit-lab.mrija.org` and `ssh.atmosphaere.at` are no longer
 declared in `hosts/bandit-lab/wan.nix`, and sshd on the lab listens only on the
 Tailscale interface (`docs/SECURITY-PLAN.md`, decision D6). Tailscale is the
 only admin path; the local client alias is `bandit-lab` (tailnet address, see
-`home/ssh.nix`). The `bandit-lab-wan` alias and the `cloudflared` client were
+`modules/user/ssh.nix`). The `bandit-lab-wan` alias and the `cloudflared` client were
 removed from the laptop.
 
 The dashboard is the source of truth, so the live routes must be removed there

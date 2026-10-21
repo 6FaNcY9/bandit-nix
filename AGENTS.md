@@ -27,12 +27,13 @@ NixOS flake for `bandit` (Framework 13 AMD laptop) and `bandit-lab` (headless se
 | Inputs, outputs, formatter | `flake.nix`, `flake.lock` |
 | Shared paths, username, theme, unfree policy | `lib/repository.nix` |
 | Host configuration and hardware | `hosts/<host>/default.nix`, `hosts/<host>/hardware.nix` |
-| Laptop system modules | `nixos/` |
+| Shared options (`options.bandit.*`, defaults from `lib/repository.nix`) | `modules/options.nix` |
+| Laptop system modules | `modules/system/`, `modules/desktop/` (`nixos/` is the lab's legacy tree until phase 3) |
 | Headless server base | `nixos/server/` |
 | Server services and assets | `hosts/bandit-lab/services/<name>/` |
 | Minecraft server, bots, Andy, gaming PCs | the flake input `bandit-craft` ([github:6FaNcY9/bandit-craft](https://github.com/6FaNcY9/bandit-craft), split out 2026-10-12): its modules are imported in `hosts/bandit-lab/default.nix`; the contract checks `ci/lab-minecraft.nix`, `ci/lab-mcbots.nix` stay here |
-| User environment | `home/` (`desktop/`, `terminal/`, `editor/`) |
-| Secrets wiring and encrypted data | `nixos/sops.nix`, `.sops.yaml`, `secrets/` |
+| User environment | `modules/user/` (`desktop/`, `terminal/`, `editor/`) |
+| Secrets wiring and encrypted data | `modules/system/sops.nix` (lab: `nixos/sops.nix`), `.sops.yaml`, `secrets/` |
 | Checks and CI | `ci/`, `.github/workflows/`, `.gitlab-ci.yml` |
 | Operational procedures | `docs/runbooks/`; security roadmap: `docs/SECURITY-PLAN.md`; operator helpers: `tools/` |
 
@@ -46,7 +47,7 @@ Follow imports to establish what is active; a directory's presence does not mean
 - Preserve existing `system.stateVersion` and `home.stateVersion` unless an explicitly scoped migration requires changes. These values are not the installed NixOS release.
 - Preserve independent nixvim pinning unless the task explicitly addresses dependency compatibility. Do not change `flake.lock` during unrelated work.
 - Edit declarative sources rather than generated files under `/etc` or `~/.config`.
-- Hyprland is owned by the system module; Home Manager configuration under `home/desktop/hyprland/` uses native Lua and structured bindings/rules. Preserve its `package = null` and `portalPackage = null` arrangement. Check local examples before editing.
+- Hyprland is owned by the system module; Home Manager configuration under `modules/user/desktop/hyprland/` uses native Lua and structured bindings/rules. Preserve its `package = null` and `portalPackage = null` arrangement. Check local examples before editing.
 - Preserve explicit Stylix target ownership; hand-maintained Hyprland, Rofi, and Mako settings must not gain conflicting generated settings.
 - Keep PipeWire properties that require dotted names as literal keys (for example, `"default.clock.rate"`).
 - bandit-lab opens firewall ports on `tailscale0` only. Docker-published container ports bypass the NixOS firewall, so every `ports` entry must bind `127.0.0.1` or the tailnet address (`repoConfig.lab.tailscaleIp`); the `lab-surface` flake check enforces it.

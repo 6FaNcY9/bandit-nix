@@ -42,7 +42,7 @@ in {
                  xmlns:xs="http://www.w3.org/2001/XMLSchema"
                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 
-        <!-- Document author metadata — same identity as home/git.nix. -->
+        <!-- Document author metadata — same identity as modules/user/git.nix. -->
         <item oor:path="/org.openoffice.UserProfile/Data">
           <prop oor:name="o" oor:op="fuse">
             <value>29282675+6FaNcY9@users.noreply.github.com</value>

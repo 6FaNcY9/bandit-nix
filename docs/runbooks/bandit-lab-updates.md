@@ -31,7 +31,7 @@ lab-apply
 ```
 
 Laptop sudo (pam_fprintd, password as fallback) unlocks the root-only key in
-`/var/lib/lab-apply` (`nixos/lab-apply.nix`). bandit-lab accepts it for root only from the
+`/var/lib/lab-apply` (`modules/system/lab-apply.nix`). bandit-lab accepts it for root only from the
 laptop's tailnet address and only to start `lab-update-apply.service`, whose log `lab-apply`
 shows; a dropped connection leaves the deploy running instead of rolling it back. On the lab
 itself, or as a fallback:
