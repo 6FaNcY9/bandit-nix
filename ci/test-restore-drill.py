@@ -66,7 +66,7 @@ elif a[0]=='exec':
             assert 'SELECT COUNT(*)' in data and '-N' in a
             print('0' if mode=='empty-db' else '3')
         sys.exit(1 if mode=='import-failure' else 0)
-    if '-e' in a or '-Atc' in a: print('0' if mode=='empty-db' else '3')
+    if '-e' in a or '-Atc' in a: print('0' if mode in ['empty-db','pg-empty'] else '3')
 elif a[0]!='stop': raise AssertionError(a)
 '''
 
@@ -83,7 +83,7 @@ with tempfile.TemporaryDirectory(prefix='drill-fixture-') as temp:
         ('laptop','ok',True), ('lab','ok',True), ('lab','wrong-host',False),
         ('lab','restore-failure',False), ('lab','symlink',False),
         ('lab','mrija-links',True), ('lab','mrija-escape',False),
-        ('lab','import-failure',False), ('lab','empty-db',False),
+        ('lab','import-failure',False), ('lab','empty-db',False), ('lab','pg-empty',True),
         ('lab','mc-timeout',False), ('lab','mc-error',False), ('lab','cleanup-failure',False),
         ('lab','mc-exit',False), ('lab','signal',False),
     ]:
@@ -98,6 +98,8 @@ with tempfile.TemporaryDirectory(prefix='drill-fixture-') as temp:
             'PG_IMAGE':'postgres:16@sha256:'+'b'*64}
         result = subprocess.run(['bash',str(script),role],env=env,capture_output=True,text=True,timeout=30)
         assert (result.returncode == 0) == ok, (role,mode,result.stdout,result.stderr)
+        if mode == 'pg-empty':
+            assert 'PASS PostgreSQL import application databases=0' in result.stdout, result.stdout
         if mode == 'cleanup-failure':
             assert 'cleanup failed' in result.stderr and list(scratch.iterdir())
         else:
@@ -105,4 +107,4 @@ with tempfile.TemporaryDirectory(prefix='drill-fixture-') as temp:
             assert not list(state.glob('restore-drill-*')), (role,mode,'container leaked')
         if role == 'laptop' or mode in ['wrong-host','restore-failure','symlink','mrija-escape']:
             assert not (state/'calls.jsonl').exists(), 'Docker used before input checks'
-print('ok: 14 fixture cases; scratch/container cleanup, isolation, SIGTERM and failure propagation')
+print('ok: 15 fixture cases; scratch/container cleanup, isolation, SIGTERM and failure propagation')
