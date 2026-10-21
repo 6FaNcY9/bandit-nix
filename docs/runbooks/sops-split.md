@@ -122,10 +122,11 @@ Activate by hand, never through the paused updater:
   The lab stops receiving the laptop-only secrets; stale links under
   `~vino/.ssh` (`github*`) can be removed by hand.
 
-## 4. Cleanup (only after both hosts run Commit B) — done 2026-10-22
+## 4. Cleanup (only after both hosts run Commit B)
 
-Repository side done in phase 2 (`secrets.yaml` deleted, legacy rule and check
-tolerance removed). The `updatekeys`/`rotate` below is the owner's step.
+Repository side done 2026-10-22 in phase 2 (`secrets.yaml` deleted, legacy rule
+and check tolerance removed). The `updatekeys`/`rotate` below is still pending
+the owner; `sops-isolation` stays red until that commit.
 
 ```bash
 git rm secrets/secrets.yaml

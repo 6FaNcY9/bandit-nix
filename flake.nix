@@ -335,7 +335,8 @@
       dotdir-tools = import ./ci/dotdir-tools.nix {
         inherit pkgs;
         inherit (nixpkgs) lib;
-        homePackages = self.homeConfigurations.vino.config.home.packages;
+        # The laptop's HM tree (modules/user), not the standalone home/ output.
+        homePackages = self.nixosConfigurations.bandit.config.home-manager.users.${repoConfig.workstation.username}.home.packages;
       };
     };
 

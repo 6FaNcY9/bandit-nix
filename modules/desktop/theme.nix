@@ -1,39 +1,10 @@
-{pkgs, ...}: let
-  # Workstation Stylix theme. The standalone homeConfigurations.vino still
-  # takes the same values from lib/repository.nix mkStylixTheme; keep in step.
-  stylixTheme = {
-    enable = true;
-    base16Scheme = ../../themes/gruvbox-dark.yaml;
-    polarity = "dark";
-    image = ../../themes/gruvbox_minimal_space.png;
-    fonts = {
-      monospace = {
-        package = pkgs.nerd-fonts.fira-code;
-        name = "FiraCode Nerd Font Mono";
-      };
-      sansSerif = {
-        package = pkgs.nerd-fonts.fira-code;
-        name = "FiraCode Nerd Font";
-      };
-      serif = {
-        package = pkgs.nerd-fonts.fira-code;
-        name = "FiraCode Nerd Font";
-      };
-      sizes = {
-        terminal = 18;
-        applications = 18;
-        desktop = 18;
-        # Was 10 — rofi/mako/tooltip text was barely readable on the
-        # Framework 13's high-DPI panel at scale 1.
-        popups = 14;
-      };
-    };
-    cursor = {
-      package = pkgs.bibata-cursors;
-      name = "Bibata-Modern-Ice";
-      size = 20;
-    };
-  };
+{
+  lib,
+  pkgs,
+  ...
+}: let
+  # Same helper as homeConfigurations.vino; ci/theme-contract.nix asserts on it.
+  stylixTheme = (import ../../lib/repository.nix {inherit lib;}).mkStylixTheme pkgs;
 in {
   # ─── System fonts ─────────────────────────────────────
   fonts = {
