@@ -8,7 +8,6 @@
 }: let
   legacyHome = [
     ../../home/desktop
-    ../../home/editor
   ];
 in {
   imports =
@@ -23,7 +22,7 @@ in {
       ./qt.nix
     ]
     ++ legacyHome
-    ++ [./terminal ./node.nix];
+    ++ [./editor ./terminal ./node.nix];
 
   home = {
     inherit (bandit.workstation) username homeDirectory;
