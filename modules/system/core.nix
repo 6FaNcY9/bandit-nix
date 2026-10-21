@@ -1,0 +1,55 @@
+{
+  lib,
+  config,
+  ...
+}: {
+  nixpkgs.config.allowUnfreePredicate = pkg: let
+    name = lib.getName pkg;
+  in
+    builtins.elem name config.bandit.unfreePackageNames
+    # The NVIDIA driver closure needs cuda_nvml_dev, whose package name is
+    # versioned independently by nixpkgs.
+    || lib.hasPrefix "cuda_" name;
+
+  i18n.defaultLocale = "en_US.UTF-8";
+  time.timeZone = "Europe/Vienna";
+
+  console = {
+    keyMap = "de-latin1-nodeadkeys";
+    font = "Lat2-Terminus16";
+    earlySetup = true;
+  };
+
+  nix = {
+    settings = {
+      experimental-features = ["nix-command" "flakes"];
+      allowed-users = [config.bandit.workstation.username];
+      # Only root is trusted: a trusted Nix user is root-equivalent (it can add
+      # its own substituters and import unsigned store paths). Builds, devshells
+      # and `nh os switch` work for untrusted users through the daemon.
+      trusted-users = ["root"];
+      # Pull prebuilt paths from the public github-bandit-nix Cachix cache
+      # in addition to the official cache.nixos.org (kept via module defaults).
+      substituters = [
+        "https://github-bandit-nix.cachix.org"
+      ];
+      trusted-public-keys = [
+        "github-bandit-nix.cachix.org-1:iaqre/ibQyXnNT8oRzHQHJ4UQfzvGAaFooRXs8v+Hks="
+      ];
+      # Avoid multiplying memory-heavy builds across all 12 logical CPUs.
+      max-jobs = lib.mkDefault 1;
+      cores = lib.mkDefault 6;
+    };
+    gc = {
+      automatic = true;
+      dates = "weekly";
+      options = "--delete-older-than 30d";
+    };
+    optimise = {
+      automatic = true;
+      dates = ["weekly"];
+    };
+  };
+
+  services.journald.settings.Journal.SystemMaxUse = "500M";
+}

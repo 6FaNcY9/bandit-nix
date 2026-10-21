@@ -93,17 +93,20 @@
     };
   in {
     nixosConfigurations = let
-      laptopModules = tree: hm: [
-        {nixpkgs.hostPlatform = system;}
-        stylix.nixosModules.stylix
-        nixos-hardware.nixosModules.framework-13-7040-amd
-        sops-nix.nixosModules.sops
-        ./hosts/bandit
-        tree
-        home-manager.nixosModules.home-manager
-        {home-manager = hm;}
-      ];
-      banditModules = laptopModules ./nixos hmBase;
+      laptopModules = tree: hm:
+        [
+          {nixpkgs.hostPlatform = system;}
+          stylix.nixosModules.stylix
+          nixos-hardware.nixosModules.framework-13-7040-amd
+          sops-nix.nixosModules.sops
+          ./hosts/bandit
+        ]
+        ++ tree
+        ++ [
+          home-manager.nixosModules.home-manager
+          {home-manager = hm;}
+        ];
+      banditModules = laptopModules [./nixos] hmBase;
     in {
       bandit = nixpkgs.lib.nixosSystem {
         specialArgs = sharedArgs;
@@ -113,7 +116,7 @@
       # Phase 2 scaffolding: same laptop built from modules/; removed in Task 8.
       bandit-v2 = nixpkgs.lib.nixosSystem {
         specialArgs = sharedArgs;
-        modules = laptopModules ./modules (builtins.removeAttrs hmBase ["users"]);
+        modules = laptopModules (import ./modules) (builtins.removeAttrs hmBase ["users"]);
       };
 
       bandit-ci = nixpkgs.lib.nixosSystem {

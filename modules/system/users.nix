@@ -1,0 +1,29 @@
+{
+  pkgs,
+  config,
+  ...
+}: {
+  programs.zsh.enable = true;
+
+  users = {
+    mutableUsers = false;
+    users.${config.bandit.workstation.username} = {
+      isNormalUser = true;
+      extraGroups = [
+        "wheel"
+        "networkmanager"
+        # Laptop-only groups (audio/video/libvirtd/adbusers) are appended by
+        # modules/desktop/dev.nix, which only bandit imports; bandit-lab declares its
+        # own narrower list in hosts/bandit-lab/services/webhost/default.nix.
+        # "input" removed — raw /dev/input/* access is a keylogging risk; acpilight uses video group
+        # "storage" removed — raw block device r/w; udisks2 handles mount/unmount correctly
+        # "podman" removed — not needed for rootless podman
+      ];
+
+      shell = pkgs.zsh;
+      hashedPasswordFile = config.sops.secrets."user-password".path;
+    };
+  };
+
+  security.sudo.wheelNeedsPassword = true; # default but explicit is better
+}
