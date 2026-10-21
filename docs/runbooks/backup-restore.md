@@ -123,7 +123,9 @@ do not run the drill during peer pruning, which could remove the chosen snapshot
 
 The lab drill checks Vaultwarden/Mrija SQLite integrity and nonempty schemas,
 records the Vaultwarden user count, imports the MySQL and PostgreSQL dumps,
-requires application tables/databases, and boots the restored Minecraft world.
+requires MySQL application tables, reports the PostgreSQL application database
+count (0 is valid: no service uses the native instance yet), and boots the
+restored Minecraft world.
 It restores Ghost `content-data` too and verifies the restored files with restic.
 The laptop drill restores and verifies `Documents`, requiring at least one file.
 These are bounded recovery samples, not a complete application or home recovery.
@@ -147,7 +149,9 @@ SQL containers each have a 2 GiB memory cap and Minecraft has 4 GiB. Larger
 databases may require a reviewed resource-limit change. Load the MySQL 8.4 and
 Minecraft image digests used by their owning modules (also pinned in the
 script), plus PostgreSQL 16, matching the lab's native PostgreSQL major version.
-Pin the PostgreSQL image by its inspected digest:
+The lab has no `python3` and no checkout of this repo: copy the script over with
+`scp` and wrap the run in `nix shell nixpkgs#python3 -c`. Pin the PostgreSQL
+image by its inspected digest:
 
 ```bash
 # Owner on the lab, one-time drill image preparation:
@@ -164,9 +168,19 @@ python3 ci/test-restore-drill.py
 
 Record UTC date, full snapshot IDs, image digests, output counts and each PASS
 line after **both** owner runs. Do not publish database contents or private
-diagnostics. As of 2026-10-10: source, shell syntax, ShellCheck and isolated
-fixtures checked; **no actual peer snapshot or live Docker restore has been
-tested by Codex**. The owner-run result is pending; this does not close goal #1.
+diagnostics.
+
+#### 2026-10-21 (UTC)
+
+- Laptop: `PASS laptop snapshot=980fc4df74b6007d3503213478af484e89e3dc1fdcf34fb28cd0bb641ca1fbcf Documents files=4611 (restic content verification)`.
+- Lab: `PASS lab snapshot=9d3ffb9e9909fb6787475ec44e753361ebf3514b91aecd60be942ed77710222c SQLite, MySQL, PostgreSQL, Minecraft world boot; plugins disabled`
+  (Vaultwarden users=2, SQLite integrity ok, MySQL application tables=99, PostgreSQL application databases=0;
+  `postgres:16@sha256:a902560563d3a5661228585f53474c5065e7f273b21ffd77e555a8b5682c5690`). Two drill fixes
+  were needed first: Mrija's dangling `/maildir/<box>` container links, and the PostgreSQL check that
+  wrongly required an application database.
+- Minecraft archive (`tools/minecraft-restore-test.sh`, bandit-craft): PASS at 21:50Z, archive
+  `minecraft-20261021-034605.tar.zst` checksum ok, Paper 26.2 build 130, 14 plugins, regions
+  overworld 138 / the_end 73 / the_nether 27, 56 player files, 0 ERROR lines.
 
 For the optional B2 repository, the older manual smoke checks below remain
 available. They do not establish SQL import or Minecraft startup acceptance.

@@ -17,7 +17,7 @@ Evidence is from `origin/main` at `74f15c4` unless a branch is named. Lines mark
 
 | # | Goal | Why | Done when | Size | Depends on |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Restore drill from the peer backup | A backup never restored is a hope. Covers Vaultwarden, DBs, Minecraft world. | One lab snapshot and one laptop snapshot restored into scratch dirs, Minecraft world booted by `minecraft-restore-test.sh`, result dated in `backup-restore.md`. | S | - |
+| 1 | ~~Restore drill from the peer backup~~ **done 2026-10-21** (results in `backup-restore.md`) | A backup never restored is a hope. Covers Vaultwarden, DBs, Minecraft world. | One lab snapshot and one laptop snapshot restored into scratch dirs, Minecraft world booted by `minecraft-restore-test.sh`, result dated in `backup-restore.md`. | S | - |
 | 2 | ~~Reconcile stale docs~~ **done 2026-10-10** | Agents act on docs; several gave the wrong state. | Section 4. | S | - |
 | 3 | Finish sops split cleanup | Legacy file still readable by the laptop host key; `TEMPORARY` rule lingers. | `secrets/secrets.yaml` and its rule gone, `github.yaml` rotated, `sops-isolation` check updated. | S | both hosts verified on split files |
 | 4 | Bots: live-test keeper + land soak monitor | Standing orders are the base of every later bot goal and were only unit-tested. | Keeper on at `KEEPER_SITE` for a soak run; `mcbots-soak` shipped; report shows quotas met, 0 lost kits. | S | - |
