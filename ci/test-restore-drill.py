@@ -33,6 +33,9 @@ if command == 'restic-peer':
             w=stage/'minecraft'; (w/'world/region').mkdir(parents=True); (w/'plugins').mkdir()
             for p in [w/'server.properties',w/'paper-fixture.jar',w/'world/region/r.0.0.mca']: p.write_text('fixture')
             if mode=='symlink': (stage/'escape').symlink_to('/srv/live')
+            if mode in ['mrija-links','mrija-escape']:
+                box=stage/'mrija/mailboxes/admin'; box.mkdir(parents=True)
+                (box/'maildir').symlink_to('/maildir/admin' if mode=='mrija-links' else '/srv/live')
     sys.exit()
 if command=='sleep': sys.exit()
 with (state/'calls.jsonl').open('a') as f: f.write(json.dumps(a)+'\n')
@@ -79,6 +82,7 @@ with tempfile.TemporaryDirectory(prefix='drill-fixture-') as temp:
     for role, mode, ok in [
         ('laptop','ok',True), ('lab','ok',True), ('lab','wrong-host',False),
         ('lab','restore-failure',False), ('lab','symlink',False),
+        ('lab','mrija-links',True), ('lab','mrija-escape',False),
         ('lab','import-failure',False), ('lab','empty-db',False),
         ('lab','mc-timeout',False), ('lab','mc-error',False), ('lab','cleanup-failure',False),
         ('lab','mc-exit',False), ('lab','signal',False),
@@ -99,6 +103,6 @@ with tempfile.TemporaryDirectory(prefix='drill-fixture-') as temp:
         else:
             assert not list(scratch.iterdir()), (role,mode,'scratch leaked')
             assert not list(state.glob('restore-drill-*')), (role,mode,'container leaked')
-        if role == 'laptop' or mode in ['wrong-host','restore-failure','symlink']:
+        if role == 'laptop' or mode in ['wrong-host','restore-failure','symlink','mrija-escape']:
             assert not (state/'calls.jsonl').exists(), 'Docker used before input checks'
-print('ok: 12 fixture cases; scratch/container cleanup, isolation, SIGTERM and failure propagation')
+print('ok: 14 fixture cases; scratch/container cleanup, isolation, SIGTERM and failure propagation')

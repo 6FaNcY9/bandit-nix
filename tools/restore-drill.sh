@@ -60,6 +60,11 @@ stage=$work/restored/var/backup/restic-staging-peer
 pgdump=$work/restored/var/backup/postgresql/all.sql.gz
 test -f "$stage/aiia/mysql.sql.gz" && test -f "$pgdump" || fail 'database dumps missing'
 test -d "$work/restored/srv/containers/aiia/content-data" || fail 'Ghost content-data missing'
+# Mrija links each mailbox to its container mount /maildir/<box> (the mail itself is backed up from
+# the host maildir); drop exactly those dangling links so they cannot be followed.
+if [[ -d $stage/mrija/mailboxes ]]; then
+  find "$stage/mrija/mailboxes" -mindepth 2 -maxdepth 2 -type l -name maildir -lname '/maildir/*' -delete
+fi
 # A restored symlink must not turn a scratch check into a read of a live path.
 test -z "$(find "$work/restored" -type l -print -quit)" || fail 'lab restore contains a symlink; review it before testing'
 python3 - "$stage/vaultwarden/db.sqlite3" "$stage/mrija/mail_index.sqlite" <<'PY'
