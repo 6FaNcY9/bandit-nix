@@ -40,9 +40,10 @@ port). The manual procedure below stays valid for cold backups.
 This proves archive extraction and, if the temporary instance is tested, basic
 world startup. It does not prove that a production replacement is safe.
 
-## Off-host backups (restic to Backblaze B2)
+## Off-host backups (restic to DigitalOcean Spaces)
 
-Decision D7 (2026-10-06). Module: `hosts/bandit-lab/services/backup/default.nix`,
+Decision D7 (2026-10-06; target changed from Backblaze B2 to DigitalOcean Spaces,
+S3-compatible, on 2026-10-22 because the owner has GitHub Student Pack credits there). Module: `hosts/bandit-lab/services/backup/default.nix`,
 disabled until the secrets exist. Evaluated in its enabled form by the
 `lab-backup` flake check.
 
@@ -66,9 +67,11 @@ structure plus a rotating 5 % of the data). Staging lives in
 
 ### Enabling it (owner, one time)
 
-1. **Backblaze:** create a private bucket and an application key restricted to
-   that bucket (read, write, delete; restic needs delete to prune). Note the
-   keyID and the applicationKey: B2 shows the key only once.
+1. **DigitalOcean:** create a Space (bucket, file listing restricted) in a
+   nearby region such as `fra1`, then a Spaces access key limited to that
+   bucket with read/write/delete (restic needs delete to prune). Note the
+   access key ID and the secret: DigitalOcean shows the secret only once.
+   Spaces bills a flat monthly fee once the credits are gone.
 2. **Add the four secrets** to `secrets/lab.yaml` with the prompt-driven helper
    (nothing is echoed; it can generate the repository password and makes you
    save it offline first):
@@ -182,11 +185,11 @@ diagnostics.
   `minecraft-20261021-034605.tar.zst` checksum ok, Paper 26.2 build 130, 14 plugins, regions
   overworld 138 / the_end 73 / the_nether 27, 56 player files, 0 ERROR lines.
 
-For the optional B2 repository, the older manual smoke checks below remain
+For the optional Spaces repository, the older manual smoke checks below remain
 available. They do not establish SQL import or Minecraft startup acceptance.
 
 Never restore over live data to test. The module installs a wrapper, `restic-lab`,
-that already knows the repository, password file and B2 credentials (plain
+that already knows the repository, password file and Spaces credentials (plain
 `restic` is not on the PATH). Restore into a scratch directory:
 
 ```bash
@@ -228,19 +231,19 @@ container first, and start it again afterwards.
 Not recoverable from this backup: the Wazuh indexer data and agent keys (agents
 must be enrolled again), Grafana and Prometheus history, and the lab's own sops
 age key (`/var/lib/sops-nix/key.txt`). For a lost disk you need your own sops age
-key to decrypt `secrets/lab.yaml` (it holds the repository password and the B2
+key to decrypt `secrets/lab.yaml` (it holds the repository password and the Spaces
 key); re-provision a lab key and re-key `.sops.yaml` afterwards
 (`sops-split.md`).
 
 ### Accepted residual risks
 
-- The B2 application key on the lab must be able to delete (restic prunes), so a
+- The Spaces access key on the lab must be able to delete (restic prunes), so a
   fully compromised lab can destroy the backups. Real protection needs a second,
   prune-only key used from another machine or an append-only target; a "keep
   prior versions" lifecycle rule alone does not help because restic deletes all
   versions, and Object Lock conflicts with restic's own lock files. Left as a
   separate decision.
-- The repository password and B2 key live on the lab, protecting data the lab
+- The repository password and Spaces key live on the lab, protecting data the lab
   already holds; the offline copy of the password is mandatory.
 - One failing dataset (for example the MySQL container being down) fails the
   whole run, loudly, rather than skipping it silently. A catch-up run at boot

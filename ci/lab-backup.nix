@@ -15,7 +15,7 @@
   b = labOn.services.restic.backups.lab;
   prepare = b.backupPrepareCommand;
   secretNames = lib.filter (n: lib.hasPrefix "restic-" n && !lib.hasPrefix "restic-peer-" n) (lib.attrNames labOn.sops.secrets);
-  expectedSecrets = ["restic-b2-account-id" "restic-b2-account-key" "restic-password" "restic-repository"];
+  expectedSecrets = ["restic-password" "restic-repository" "restic-s3-access-key-id" "restic-s3-secret-access-key"];
   mustBackUp = ["/var/backup/postgresql" "/srv/containers/aiia/content-data" "/srv/containers/mrija-archive/maildir"];
 in
   assert lib.assertMsg (lib.sort lib.lessThan secretNames == expectedSecrets) "backup secrets must be exactly ${toString expectedSecrets}, found ${toString secretNames}";

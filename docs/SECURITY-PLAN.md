@@ -180,7 +180,8 @@ Minecraft published on all interfaces, and LLMNR/mDNS listening. Decisions:
 
 ## Off-host backups (2026-10-06)
 
-Decision D7: restic to a Backblaze B2 bucket, encrypted with a repository
+Decision D7: restic to a Backblaze B2 bucket (changed to DigitalOcean Spaces,
+S3-compatible, on 2026-10-22: the owner has Student Pack credits there), encrypted with a repository
 password that lives in `secrets/lab.yaml` and offline. The module is committed
 but disabled until the four secrets are added (`docs/runbooks/backup-restore.md`),
 because enabling it without them would fail activation. The `lab-backup` flake

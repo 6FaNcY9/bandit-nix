@@ -1,4 +1,5 @@
-# Off-host backups for bandit-lab (hardening phase 5, decision D7: Backblaze B2).
+# Off-host backups for bandit-lab (hardening phase 5, decision D7; target changed
+# from Backblaze B2 to DigitalOcean Spaces, S3-compatible, 2026-10-22).
 # Disabled until the four sops secrets below exist in secrets/lab.yaml; enabling
 # without them fails activation, so the switch is one line:
 #   bandit-lab.backups.enable = true;
@@ -18,28 +19,29 @@
   shared = import ./shared.nix {inherit pkgs inputs;};
   repositoryFile = config.sops.secrets."restic-repository".path;
   passwordFile = config.sops.secrets."restic-password".path;
-  environmentFile = config.sops.templates."restic-b2.env".path;
+  environmentFile = config.sops.templates."restic-s3.env".path;
   resticBin = "${pkgs.restic}/bin/restic";
 in {
   imports = [./peer.nix ../../../../nixos/restic-peer-server.nix];
 
-  options.bandit-lab.backups.enable = lib.mkEnableOption "encrypted off-host restic backups to Backblaze B2";
+  options.bandit-lab.backups.enable = lib.mkEnableOption "encrypted off-host restic backups to an S3 bucket (DigitalOcean Spaces)";
 
   config = lib.mkIf cfg.enable {
     sops = {
       secrets = {
-        # B2 bucket as a restic repository string, e.g. b2:<bucket>:/
+        # S3 bucket as a restic repository string, e.g.
+        # s3:https://fra1.digitaloceanspaces.com/<bucket>/restic
         "restic-repository" = {};
         # Passphrase that encrypts the repository. Losing it loses every backup:
         # keep an offline copy (docs/runbooks/backup-restore.md).
         "restic-password" = {};
-        # B2 application key restricted to the one bucket: keyID and key.
-        "restic-b2-account-id" = {};
-        "restic-b2-account-key" = {};
+        # S3 access key limited to the one bucket (DigitalOcean Spaces key).
+        "restic-s3-access-key-id" = {};
+        "restic-s3-secret-access-key" = {};
       };
-      templates."restic-b2.env".content = ''
-        B2_ACCOUNT_ID=${config.sops.placeholder."restic-b2-account-id"}
-        B2_ACCOUNT_KEY=${config.sops.placeholder."restic-b2-account-key"}
+      templates."restic-s3.env".content = ''
+        AWS_ACCESS_KEY_ID=${config.sops.placeholder."restic-s3-access-key-id"}
+        AWS_SECRET_ACCESS_KEY=${config.sops.placeholder."restic-s3-secret-access-key"}
       '';
     };
 
@@ -69,7 +71,7 @@ in {
       # Staging area for consistent snapshots; root only, emptied after each run.
       tmpfiles.rules = ["d ${staging} 0700 root root -"];
 
-      # A stalled B2 upload or a blocked repository lock would otherwise leave a
+      # A stalled upload or a blocked repository lock would otherwise leave a
       # oneshot "activating" forever: no failed state, no alert, and the timer
       # silently does nothing. Fail instead. Size 12 h against the data volume
       # and upload speed (raise it for the very first run if needed). The
@@ -81,7 +83,7 @@ in {
 
       # Integrity check: repository structure plus a rotating 5% sample of the
       # actual data every week (a full read-everything check would download the
-      # whole repository from B2).
+      # whole repository from the bucket).
       services.restic-check = {
         description = "Verify the restic repository";
         after = ["network-online.target"];
