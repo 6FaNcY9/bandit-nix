@@ -8,10 +8,10 @@
   labOn,
   labOff,
 }: let
-  # The Grafana provisioning directory is symlinked by a tmpfiles rule; take its
-  # store path (with string context, so building this check builds it).
+  # The Grafana provisioning directory is mounted from the store; take its path
+  # from the volume (with string context, so building this check builds it).
   provisioningOf = cfg:
-    lib.last (lib.splitString " " (lib.findFirst (r: lib.hasInfix "grafana-provisioning " r) (throw "no grafana-provisioning tmpfiles rule") cfg.systemd.tmpfiles.rules));
+    lib.head (lib.splitString ":" (lib.findFirst (v: lib.hasSuffix ":/etc/grafana/provisioning:ro" v) (throw "no grafana provisioning volume") cfg.virtualisation.quadlet.containers.grafana.containerConfig.volumes));
   b = labOn.services.restic.backups.lab;
   prepare = b.backupPrepareCommand;
   secretNames = lib.filter (n: lib.hasPrefix "restic-" n && !lib.hasPrefix "restic-peer-" n) (lib.attrNames labOn.sops.secrets);
