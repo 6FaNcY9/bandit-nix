@@ -35,6 +35,9 @@ in
   # Traefik reaches it through the file provider, and the compose lifecycle unit is gone.
   assert lib.assertMsg (lab.virtualisation.quadlet.pods.monitoring.podConfig.publishPorts == ["127.0.0.1:3000:3000" "127.0.0.1:9115:9115"])
   "the monitoring pod must publish grafana (3000) and blackbox (9115) on loopback only";
+  # Config files are mounted from the store, so a changed prometheus.yml or dashboard changes the unit and restarts the container.
+  assert lib.assertMsg (lib.all (v: lib.hasPrefix "/nix/store/" v) (lib.filter (v: lib.hasInfix ":ro" v && !(lib.hasPrefix "/run/" v)) (lab.virtualisation.quadlet.containers.prometheus.containerConfig.volumes ++ lab.virtualisation.quadlet.containers.grafana.containerConfig.volumes ++ lab.virtualisation.quadlet.containers.blackbox-exporter.containerConfig.volumes)))
+  "monitoring read-only config mounts must point into the store, not at stable symlinks";
   assert lib.assertMsg (!(lab.systemd.services ? compose-monitoring))
   "the compose-monitoring lifecycle unit must be gone once the pod exists";
   assert lib.assertMsg (lab.services.traefik.dynamicConfigOptions.http.services.grafana.loadBalancer.servers == [{url = "http://127.0.0.1:3000";}])
