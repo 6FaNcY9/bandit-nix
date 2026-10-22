@@ -4,7 +4,7 @@
   ...
 }: let
   username = repoConfig.workstation.username;
-  inherit (config.virtualisation.quadlet) networks pods;
+  inherit (config.virtualisation.quadlet) pods;
 in {
   # The shop is a Podman pod (phase 4): ghost, mysql and redis share one
   # network namespace, so the database and cache are reachable on localhost
@@ -78,7 +78,6 @@ in {
 
   virtualisation.quadlet = {
     pods.aiia.podConfig = {
-      networks = [networks.proxy.ref];
       publishPorts = ["127.0.0.1:2368:2368"];
       # The former Docker network names, so the image's configuration keeps resolving them.
       addHosts = ["aiia-mysql:127.0.0.1" "aiia-redis:127.0.0.1"];
@@ -116,6 +115,8 @@ in {
           pod = pods.aiia.ref;
           # The image runs as ghost (1000:1000); the content dirs are owned by 1000.
           user = "1000:1000";
+          # Ghost writes generated assets (sitemaps, cards) here at runtime.
+          tmpfses = ["/home/ghost/content/public"];
           # Persist only the mutable content subdirs. The app root in this image
           # is /home/ghost (not the upstream /var/lib/ghost), and themes — the
           # aiia theme included — ship inside the image, so a whole-content mount
@@ -158,6 +159,7 @@ in {
           After = ["aiia-mysql.service" "aiia-redis.service"];
           Requires = ["aiia-mysql.service" "aiia-redis.service"];
         };
+        serviceConfig.RestartSec = 5;
       };
     };
   };

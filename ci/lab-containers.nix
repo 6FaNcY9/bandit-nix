@@ -35,6 +35,9 @@ in
   # Traefik reaches it through the file provider, and the compose lifecycle unit is gone.
   assert lib.assertMsg (lab.virtualisation.quadlet.pods.monitoring.podConfig.publishPorts == ["127.0.0.1:3000:3000" "127.0.0.1:9115:9115"])
   "the monitoring pod must publish grafana (3000) and blackbox (9115) on loopback only";
+  # Config files are mounted from the store, so a changed prometheus.yml or dashboard changes the unit and restarts the container.
+  assert lib.assertMsg (lib.all (v: lib.hasPrefix "/nix/store/" v) (lib.filter (v: lib.hasInfix ":ro" v && !(lib.hasPrefix "/run/" v)) (lab.virtualisation.quadlet.containers.prometheus.containerConfig.volumes ++ lab.virtualisation.quadlet.containers.grafana.containerConfig.volumes ++ lab.virtualisation.quadlet.containers.blackbox-exporter.containerConfig.volumes)))
+  "monitoring read-only config mounts must point into the store, not at stable symlinks";
   assert lib.assertMsg (!(lab.systemd.services ? compose-monitoring))
   "the compose-monitoring lifecycle unit must be gone once the pod exists";
   assert lib.assertMsg (lab.services.traefik.dynamicConfigOptions.http.services.grafana.loadBalancer.servers == [{url = "http://127.0.0.1:3000";}])
@@ -51,6 +54,14 @@ in
   "the aiia-ghost image is loaded by hand and must never be pulled";
   assert lib.assertMsg (lab.virtualisation.quadlet.containers.vaultwarden.containerConfig.publishPorts == ["127.0.0.1:8222:8080"] && lab.virtualisation.quadlet.containers.vaultwarden.containerConfig.notify == "healthy")
   "vaultwarden must publish on loopback only and report ready through its health check";
+  assert lib.assertMsg (!(lab.virtualisation.quadlet.pods.aiia.podConfig ? networks) || lab.virtualisation.quadlet.pods.aiia.podConfig.networks == [])
+  "the aiia pod must not join the proxy network: mysql and redis would be reachable from other containers";
+  assert lib.assertMsg (let g = lab.virtualisation.quadlet.containers.aiia-ghost; in g.containerConfig.tmpfses == ["/home/ghost/content/public"] && g.serviceConfig.RestartSec == 5)
+  "aiia-ghost writes generated assets to content/public (tmpfs) and restarts after 5s";
+  assert lib.assertMsg (let b = lab.systemd.services.restic-backups-peer; in lib.elem "aiia-mysql.service" b.after && lib.elem "vaultwarden.service" b.after && lib.hasInfix "podman exec aiia-mysql" lab.services.restic.backups.peer.backupPrepareCommand)
+  "restic-backups-peer must order after the quadlet units and dump aiia-mysql with podman exec";
+  assert lib.assertMsg (let s = lab.systemd.services.mrija-archive-sync; in !(lib.elem "mrija-archive.service" s.requires) && lib.elem "mrija-archive.service" s.wants)
+  "mrija-archive-sync must only want the container: requires would stop the sync whenever the container restarts";
   assert lib.assertMsg (rootContainers == [])
   "every lab quadlet container must set containerConfig.user and no userns (found: ${toString rootContainers})";
   assert lib.assertMsg (podman.enable && !podman.dockerCompat && !podman.dockerSocket.enable)
