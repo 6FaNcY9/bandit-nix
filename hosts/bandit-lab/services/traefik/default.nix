@@ -122,18 +122,28 @@ in {
     # No container socket is involved; the Docker provider above serves only
     # the containers that have not moved yet.
     dynamicConfigOptions.http = {
-      routers.grafana = {
-        rule = "Host(`grafana.bandit-lab.mrija.org`)";
-        entryPoints = ["web"];
-        service = "grafana";
+      routers = {
+        grafana = {
+          rule = "Host(`grafana.bandit-lab.mrija.org`)";
+          entryPoints = ["web"];
+          service = "grafana";
+        };
+        mrija-archive = {
+          rule = "Host(`mail-archive.bandit-lab.mrija.org`)";
+          entryPoints = ["web"];
+          service = "mrija-archive";
+        };
+        aiia = {
+          rule = "Host(`aiia.at`) || Host(`www.aiia.at`) || Host(`aiia.bandit-lab.mrija.org`)";
+          entryPoints = ["web"];
+          service = "aiia";
+        };
       };
-      routers.mrija-archive = {
-        rule = "Host(`mail-archive.bandit-lab.mrija.org`)";
-        entryPoints = ["web"];
-        service = "mrija-archive";
+      services = {
+        grafana.loadBalancer.servers = [{url = "http://127.0.0.1:3000";}];
+        mrija-archive.loadBalancer.servers = [{url = "http://127.0.0.1:8081";}];
+        aiia.loadBalancer.servers = [{url = "http://127.0.0.1:2368";}];
       };
-      services.grafana.loadBalancer.servers = [{url = "http://127.0.0.1:3000";}];
-      services.mrija-archive.loadBalancer.servers = [{url = "http://127.0.0.1:8081";}];
       # CrowdSec bouncer plugin: see the plugin stanza above.
       middlewares.crowdsec-bouncer.plugin.bouncer = {
         enabled = true;

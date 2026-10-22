@@ -30,23 +30,26 @@ Cloudflare Tunnel at `https://aiia.bandit-lab.mrija.org`.
    ```bash
    gh run download <run-id> --repo 6FaNcY9/AiiA --name docker-image-production
    scp docker-image-production.tar.gz bandit-lab:/tmp/
-   ssh bandit-lab 'sudo docker load < /tmp/docker-image-production.tar.gz && rm /tmp/docker-image-production.tar.gz'
-   ssh bandit-lab 'sudo docker image inspect ghcr.io/6fancy9/aiia:main --format "{{.Id}} {{.Os}}/{{.Architecture}}"'
+   ssh bandit-lab 'sudo podman load < /tmp/docker-image-production.tar.gz && rm /tmp/docker-image-production.tar.gz'
+   ssh bandit-lab 'sudo podman image inspect ghcr.io/6fancy9/aiia:main --format "{{.Id}} {{.Os}}/{{.Architecture}}"'
    ```
+
+   The shop runs under Podman (phase 4); a Docker-era image is moved over once
+   with `sudo sh -c 'docker save ghcr.io/6fancy9/aiia:main | podman load'`.
 
    Confirm the expected tag exists and reports `linux/amd64` before starting
    Ghost. If inspection fails, stop and resolve the image mismatch first.
 
    ```bash
-   ssh bandit-lab 'sudo systemctl reset-failed docker-aiia-ghost'
-   ssh bandit-lab 'sudo systemctl restart docker-aiia-ghost'
-   ssh bandit-lab 'systemctl is-active docker-aiia-ghost'
+   ssh bandit-lab 'sudo systemctl reset-failed aiia-ghost'
+   ssh bandit-lab 'sudo systemctl restart aiia-ghost'
+   ssh bandit-lab 'systemctl is-active aiia-ghost'
    ```
 
    These transfer and service commands modify the server; they are deployment
    steps, not read-only diagnostic checks.
 
-   Until the first load, `docker-aiia-ghost.service` fails because its image is
+   Until the first load, `aiia-ghost.service` fails because its image is
    unavailable locally (`pull = "never"`); it is excluded from `criticalUnits` in
    `health-check.nix` so this does not roll back deploys. After the first
    successful startup and application health verification, add it to
@@ -65,27 +68,22 @@ Cloudflare Tunnel at `https://aiia.bandit-lab.mrija.org`.
 
 ## Updating the shop
 
-The image is **pinned by digest** in `hosts/bandit-lab/services/aiia/default.nix`
-(`ghcr.io/6fancy9/aiia:main@sha256:...`, the digest wins over the tag). That
-makes the deployed shop reproducible and stops a moved tag or a wrong image from
-starting silently, but it also means a newly loaded image only runs once its
-digest is committed.
+The image is referenced by tag (`ghcr.io/6fancy9/aiia:main`, `pull = "never"`)
+in `hosts/bandit-lab/services/aiia/default.nix`: a hand-loaded archive carries no
+registry digest Podman could pin, so the image ID is what you verify.
 
 1. Push to `main` on `6FaNcY9/AiiA`, wait for the CI `docker-image-production`
    artifact, and transfer and load the image exactly as in step 2 above.
-2. Read the new digest on the lab:
-   `ssh bandit-lab 'docker image inspect ghcr.io/6fancy9/aiia:main --format "{{index .RepoDigests 0}}"'`
-3. Replace the digest in the `image = ...` line of the aiia module, run
-   `nix flake check --no-update-lock-file`, commit (signed), push, then apply with
-   `sudo lab-update apply` on the lab. `docker-aiia-ghost` is deliberately not
-   part of the health gate, so check the shop yourself afterwards.
-4. Verify: `docker inspect aiia-ghost --format '{{.Config.Image}}'` shows the new
-   digest, the storefront loads and `/ghost/` admin works.
+2. Verify the loaded image on the lab:
+   `ssh bandit-lab 'sudo podman image inspect ghcr.io/6fancy9/aiia:main --format "{{.Id}}"'`
+   and compare with the artifact's image ID.
+3. `ssh bandit-lab 'sudo systemctl restart aiia-ghost'`. `aiia-ghost` is
+   deliberately not part of the health gate, so check the shop yourself.
+4. Verify: `sudo podman inspect aiia-ghost --format '{{.ImageName}} {{.Image}}'`
+   shows the new ID, the storefront loads and `/ghost/` admin works.
 
-Rollback: the previous image stays loaded until `docker image prune`. Revert the
-commit (a revert is a fast-forward) and apply again. Do **not** `docker load` and
-restart the container without committing the digest: recreating the container
-uses the pinned (old) digest, and the new image never runs.
+Rollback: the previous image stays in the store until `podman image prune`;
+`sudo podman tag <old id> ghcr.io/6fancy9/aiia:main` and restart the unit.
 
 ## Going live (real charges)
 

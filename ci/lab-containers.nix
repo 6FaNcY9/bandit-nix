@@ -45,6 +45,10 @@ in
   "the compose-mrija-archive lifecycle unit must be gone once the container exists";
   assert lib.assertMsg (let a = lab.systemd.services.mrija-archive-sync.serviceConfig.IPAddressAllow; in lib.elem "10.89.0.0/24" a && !(lib.elem "172.18.0.0/16" a))
   "mrija-archive-sync must allow the podman proxy subnet (IPAddressAllow sees the DNATed destination), not the old Docker one";
+  assert lib.assertMsg (lab.virtualisation.quadlet.pods.aiia.podConfig.publishPorts == ["127.0.0.1:2368:2368"])
+  "the aiia pod must publish Ghost on loopback only";
+  assert lib.assertMsg (lab.virtualisation.quadlet.containers.aiia-ghost.containerConfig.pull == "never")
+  "the aiia-ghost image is loaded by hand and must never be pulled";
   assert lib.assertMsg (rootContainers == [])
   "every lab quadlet container must set containerConfig.user and no userns (found: ${toString rootContainers})";
   assert lib.assertMsg (podman.enable && !podman.dockerCompat && !podman.dockerSocket.enable)
