@@ -1,6 +1,6 @@
 {pkgs, ...}: {
   # CLI tools used on both bandit and bandit-lab.
-  # The lab still imports nixos/cli-tools.nix until phase 3; keep both in step.
+  # Imported by both hosts: modules/system/default.nix (laptop) and modules/server/default.nix (lab).
   environment.systemPackages = [
     pkgs.git
     pkgs.curl

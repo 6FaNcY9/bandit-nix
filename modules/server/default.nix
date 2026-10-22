@@ -4,17 +4,18 @@
   ...
 }: {
   imports = [
-    ../../nixos/sops.nix
-    ../../nixos/cli-tools.nix
-    ../../nixos/core.nix
-    ../../nixos/boot.nix
-    ../../nixos/hardening.nix
-    ../../nixos/network.nix
-    ../../nixos/firmware.nix
-    ../../nixos/users.nix
-    ../../nixos/server/editor.nix
-    ../../nixos/server/zsh.nix
-    ../../nixos/server/starship.nix
+    ../options.nix
+    ../system/sops.nix
+    ../system/cli-tools.nix
+    ../system/core.nix
+    ../system/boot.nix
+    ../system/hardening.nix
+    ../system/network.nix
+    ../system/firmware.nix
+    ../system/users.nix
+    ./editor.nix
+    ./zsh.nix
+    ./starship.nix
   ];
 
   # bandit-lab decrypts only secrets/lab.yaml (recipients: user + lab host key).
@@ -22,16 +23,16 @@
 
   environment = {
     # ── Base server packages (no desktop/VM tools) ──────────────────────────
-    systemPackages = with pkgs; [
-      btop
-      htop
-      iotop
-      lsof
-      ncdu
-      dnsutils
-      fzf
-      zoxide
-      zsh-fzf-tab
+    systemPackages = [
+      pkgs.btop
+      pkgs.htop
+      pkgs.iotop
+      pkgs.lsof
+      pkgs.ncdu
+      pkgs.dnsutils
+      pkgs.fzf
+      pkgs.zoxide
+      pkgs.zsh-fzf-tab
     ];
 
     # ── Remote access ──────────────────────────────────────────────────────
