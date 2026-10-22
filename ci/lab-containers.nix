@@ -49,6 +49,8 @@ in
   "the aiia pod must publish Ghost on loopback only";
   assert lib.assertMsg (lab.virtualisation.quadlet.containers.aiia-ghost.containerConfig.pull == "never")
   "the aiia-ghost image is loaded by hand and must never be pulled";
+  assert lib.assertMsg (lab.virtualisation.quadlet.containers.vaultwarden.containerConfig.publishPorts == ["127.0.0.1:8222:8080"] && lab.virtualisation.quadlet.containers.vaultwarden.containerConfig.notify == "healthy")
+  "vaultwarden must publish on loopback only and report ready through its health check";
   assert lib.assertMsg (rootContainers == [])
   "every lab quadlet container must set containerConfig.user and no userns (found: ${toString rootContainers})";
   assert lib.assertMsg (podman.enable && !podman.dockerCompat && !podman.dockerSocket.enable)

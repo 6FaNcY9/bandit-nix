@@ -43,6 +43,7 @@
         static_configs:
           - targets:
               - http://localhost:3000/api/health
+              - http://vaultwarden:8080/alive
         relabel_configs:
           - source_labels: [__address__]
             target_label: __param_target
