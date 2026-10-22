@@ -169,7 +169,7 @@
       lab-reliability = let
         lab = self.nixosConfigurations.bandit-lab.config;
       in
-        assert nixpkgs.lib.assertMsg (builtins.elem "docker-vaultwarden.service" lab.sops.templates."vaultwarden.env".restartUnits)
+        assert nixpkgs.lib.assertMsg (builtins.elem "vaultwarden.service" lab.sops.templates."vaultwarden.env".restartUnits)
         "vaultwarden container must restart on sops secret rotation";
           import ./ci/lab-reliability.nix {inherit pkgs sops-nix;};
       docker-discovery-proxy =

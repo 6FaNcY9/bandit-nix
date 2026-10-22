@@ -16,7 +16,7 @@
     "aiia-mysql.service"
     "aiia-redis.service"
     "docker-network-proxy.service"
-    "docker-vaultwarden.service"
+    "vaultwarden.service"
     "docker.service"
     "monitoring-pod.service"
     "prometheus.service"
@@ -37,7 +37,7 @@
   ];
   healthCheck = pkgs.writeShellApplication {
     name = "bandit-lab-health";
-    runtimeInputs = [pkgs.bash pkgs.coreutils pkgs.systemd pkgs.curl pkgs.docker pkgs.jq pkgs.tailscale config.services.postgresql.package];
+    runtimeInputs = [pkgs.bash pkgs.coreutils pkgs.systemd pkgs.curl pkgs.podman pkgs.jq pkgs.tailscale config.services.postgresql.package];
     text = ''
       set -euo pipefail
 
@@ -60,14 +60,14 @@
         echo "Readiness check failed: $*" >&2
         return 1
       }
-      # Traefik withholds routing while a container's Docker healthcheck is
+      # Traefik withholds routing while a container's healthcheck is
       # "starting", and vaultwarden's first check lands a full interval after
       # boot. An HTTP probe alone burns all retries on instant 404s and rolls
       # back healthy deploys — wait for the engine health state first.
       container_healthy() {
         local attempt status
         for ((attempt = 1; attempt <= 24; attempt++)); do
-          if ! status="$(docker inspect --format '{{.State.Health.Status}}' "$1")"; then
+          if ! status="$(podman inspect --format '{{.State.Health.Status}}' "$1")"; then
             sleep "$((attempt < 5 ? attempt : 5))"
             continue
           fi

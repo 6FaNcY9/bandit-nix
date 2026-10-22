@@ -138,11 +138,17 @@ in {
           entryPoints = ["web"];
           service = "aiia";
         };
+        vaultwarden = {
+          rule = "Host(`vault.atmosphaere.at`) || Host(`vault.bandit-lab.mrija.org`)";
+          entryPoints = ["web"];
+          service = "vaultwarden";
+        };
       };
       services = {
         grafana.loadBalancer.servers = [{url = "http://127.0.0.1:3000";}];
         mrija-archive.loadBalancer.servers = [{url = "http://127.0.0.1:8081";}];
         aiia.loadBalancer.servers = [{url = "http://127.0.0.1:2368";}];
+        vaultwarden.loadBalancer.servers = [{url = "http://127.0.0.1:8222";}];
       };
       # CrowdSec bouncer plugin: see the plugin stanza above.
       middlewares.crowdsec-bouncer.plugin.bouncer = {

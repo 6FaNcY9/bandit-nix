@@ -21,7 +21,7 @@ the tailnet address (`ci/lab-surface.nix`).
 
 | Container | Image user | Privileged | cap-drop | no-new-privileges | Read-only rootfs | Assessment |
 | --- | --- | --- | --- | --- | --- | --- |
-| vaultwarden | root (drops itself) | no | none | no | no | First candidate: `no-new-privileges`. Writes only `/data` (and `/tmp`): read-only rootfs with a tmpfs `/tmp` is realistic. Highest value (password vault). Changes under `services/vaultwarden/` need the supervised-maintenance path in `bandit-lab-updates.md`. |
+| vaultwarden | 1000:100 (quadlet, phase 4) | yes | all | yes | yes | Moved to Podman with the defaults; listens on 8080 as non-root, published on `127.0.0.1:8222`. Changes under `services/vaultwarden/` still need the supervised-maintenance path in `bandit-lab-updates.md`. |
 | searxng | root | no | none | no | no | Candidate for `no-new-privileges` and cap-drop; writes its settings/cache, test before read-only. |
 | cyberchef, it-tools | 101 / root (nginx) | no | none | no | no | nginx images: `no-new-privileges` is safe; cap-drop ALL then add back CHOWN, SETGID, SETUID, NET_BIND_SERVICE; read-only rootfs needs tmpfs for `/var/cache/nginx` and `/var/run`. |
 | juice-shop | 65532 | no | none | no | no | Deliberately vulnerable training target: `no-new-privileges` and cap-drop ALL are safe and worthwhile; it writes at runtime, so no read-only rootfs. |

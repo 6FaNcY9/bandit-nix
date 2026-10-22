@@ -192,14 +192,33 @@ without any change on the lab.
 ## Vaultwarden changes
 
 Automatic apply refuses a signed revision that changes
-anything under `hosts/bandit-lab/services/vaultwarden/`. NixOS rollback restores configuration and
-services, but it does not restore persistent Vaultwarden data under
-`/srv/containers/vaultwarden/data`.
+anything under `hosts/bandit-lab/services/vaultwarden/`, and there is no
+override flag. NixOS rollback restores configuration and services, but it does
+not restore persistent Vaultwarden data under `/srv/containers/vaultwarden/data`.
 
-Apply Vaultwarden changes only during supervised maintenance, after taking a
-consistent, verified backup of that data. Confirm the backup can be restored
-before using a supervised deployment procedure; the unattended apply guard
-must not be bypassed casually.
+Apply such a revision only during supervised maintenance, after a consistent,
+verified backup of that data (confirm the nightly `restic-backups-peer` run
+succeeded today, then restore `latest` into a scratch directory and check the
+database file is there). Then run the steps `lab-update apply` would run,
+with `<sha>` the merged tip of `main`:
+
+```bash
+sudo systemctl stop lab-update-apply.timer
+sudo git -C /etc/nixos/bandit-nix fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
+sudo git -C /etc/nixos/bandit-nix verify-commit <sha>
+out=$(sudo nix build --no-link --print-out-paths "git+file:///etc/nixos/bandit-nix?rev=<sha>#nixosConfigurations.bandit-lab.config.system.build.toplevel")
+sudo nix-env --profile /nix/var/nix/profiles/system --set "$out"
+sudo "$out/bin/switch-to-configuration" switch
+sudo git -C /etc/nixos/bandit-nix merge --ff-only <sha>
+sudo bandit-lab-health
+sudo systemctl start lab-update-apply.timer
+```
+
+The `merge --ff-only` advances the anchor so the next automatic run diffs from
+`<sha>` and does not see the Vaultwarden change again. Rollback before that
+step: `sudo nix-env --profile /nix/var/nix/profiles/system --rollback`, then
+`sudo /nix/var/nix/profiles/system/bin/switch-to-configuration switch`, and
+start the timer again; the anchor still points at the previous commit.
 
 ## Inspect failures
 
