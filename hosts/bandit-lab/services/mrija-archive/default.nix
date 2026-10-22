@@ -48,9 +48,9 @@ in {
 
     services.mrija-archive-sync = {
       description = "Trigger mrija-archive daily mail sync";
-      after = ["network-online.target" "docker.service"];
+      after = ["network-online.target" "mrija-archive.service"];
       wants = ["network-online.target"];
-      requires = ["docker.service"];
+      requires = ["mrija-archive.service"];
       serviceConfig = {
         Type = "oneshot";
         User = username;
@@ -75,7 +75,9 @@ in {
         RestrictSUIDSGID = true;
         RestrictAddressFamilies = ["AF_UNIX" "AF_INET" "AF_INET6"];
         # Docker DNAT reaches the proxy on its dynamic shared-network address.
-        IPAddressAllow = ["localhost" "172.18.0.0/16"];
+        # The loopback port is DNATed to the container, and the filter sees the
+        # translated destination: allow the podman proxy subnet.
+        IPAddressAllow = ["localhost" "10.89.0.0/24"];
         IPAddressDeny = ["any"];
         ExecStart = pkgs.writeShellScript "mrija-sync" ''
           set -euo pipefail
@@ -216,21 +218,6 @@ in {
       };
     };
 
-    services.compose-mrija-archive = {
-      description = "Start and stop the bandit-lab Mrija archive Compose project";
-      wants = ["network-online.target"];
-      requires = ["docker.service" "docker-network-proxy.service"];
-      after = ["network-online.target" "docker.service" "docker-network-proxy.service"];
-      restartIfChanged = false;
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        ExecCondition = "${pkgs.coreutils}/bin/test -r ${envFile}";
-        ExecStart = "${pkgs.docker-compose}/bin/docker-compose --project-name deploy --file /etc/bandit-lab/mrija-archive.compose.yml start";
-        ExecStop = "${pkgs.docker-compose}/bin/docker-compose --project-name deploy --file /etc/bandit-lab/mrija-archive.compose.yml stop";
-      };
-    };
-
     timers.mrija-archive-sync = {
       description = "Periodic mrija.org mail sync";
       enable = true;
@@ -242,5 +229,33 @@ in {
     };
   };
 
-  environment.etc."bandit-lab/mrija-archive.compose.yml".source = ./compose.yml;
+  # The archive as a quadlet container (phase 4): same image (loaded into
+  # Podman by hand, see the runbook), same mounts and loopback port, running
+  # as the data owner on the podman proxy network.
+  virtualisation.quadlet.containers.mrija-archive = {
+    containerConfig = {
+      image = "localhost/mrija-archive:latest";
+      pull = "never";
+      # /srv/containers/mrija-archive is owned by vino (1000:100); the uid is not declared in Nix.
+      user = "1000:100";
+      networks = [config.virtualisation.quadlet.networks.proxy.ref];
+      publishPorts = ["127.0.0.1:8081:8080"];
+      environmentFiles = [envFile];
+      environments = {
+        MRIJA_SYNC_REMOTE = "mrija_org@s16.thehost.com.ua";
+        MRIJA_SYNC_REMOTE_PATH = "email/mrija.org/";
+        MRIJA_SSH_KEY = "/run/secrets/thehost_sshkey";
+        MRIJA_MAILDIR = "/maildir";
+        MRIJA_DB = "/data/mail_index.sqlite";
+        MRIJA_AUDIT_LOG = "/data/audit/events.jsonl";
+      };
+      volumes = [
+        "${data}:/data"
+        "${maildir}:/maildir"
+        "${config.sops.secrets."thehost-sshkey".path}:/run/secrets/thehost_sshkey:ro"
+        "/srv/containers/mrija-archive/deploy/known_hosts:/run/ssh/known_hosts:ro"
+      ];
+    };
+    serviceConfig.ExecCondition = "${pkgs.coreutils}/bin/test -r ${envFile}";
+  };
 }

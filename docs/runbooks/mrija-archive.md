@@ -1,41 +1,34 @@
 # Mrija archive on bandit-lab
 
-The canonical reviewed Compose asset is
-[`hosts/bandit-lab/services/mrija-archive/compose.yml`](../../hosts/bandit-lab/services/mrija-archive/compose.yml),
-with the existing live project name `deploy`. It preserves the live image, loopback
-port, mounts, labels, `proxy` network, direct `MRIJA_*` variables and
-`/run/secrets/rendered/mrija-archive.env` env file. Portainer remains the
-live owner until an explicitly approved handoff is deployed.
+Since phase 4 the archive runs as the quadlet container `mrija-archive`
+([`hosts/bandit-lab/services/mrija-archive/default.nix`](../../hosts/bandit-lab/services/mrija-archive/default.nix)):
+the locally built image `localhost/mrija-archive:latest` (never pulled), the
+same mounts under `/srv/containers/mrija-archive`, the TheHost SSH key read-only,
+the loopback port `127.0.0.1:8081`, running as the data owner (`vino`) on the
+podman `proxy` network. Traefik routes `mail-archive.bandit-lab.mrija.org` to
+that port through its file provider; the daily `mrija-archive-sync` unit calls
+it on loopback. The Compose project `deploy` is gone.
 
-Nix exposes the asset at `/etc/bandit-lab/mrija-archive.compose.yml` and
-declares the initially disabled manual `compose-mrija-archive` unit. Its
-`start`/`stop` lifecycle does not create or reconcile containers.
+## Image updates
 
-## Safe inspection and lifecycle
-
-Run status and start/stop only during approved maintenance when the host
-procedure owns the project:
+The image is built on the host, not pulled. Load a new build into Podman's
+store (it is separate from Docker's), then restart the unit:
 
 ```bash
-sudo docker compose --project-name deploy \
-  --file /etc/bandit-lab/mrija-archive.compose.yml ps
-sudo systemctl start compose-mrija-archive.service
-sudo systemctl stop compose-mrija-archive.service
+sudo podman load < mrija-archive.tar
+sudo systemctl restart mrija-archive.service
 ```
 
-An apply is a separate, explicitly approved maintenance action because it can
-reconcile containers. It must not pull or build:
+## Operate
 
 ```bash
-sudo docker compose --project-name deploy \
-  --file /etc/bandit-lab/mrija-archive.compose.yml \
-  up -d --pull never --no-build
+systemctl status mrija-archive.service mrija-archive-sync.timer
+sudo podman logs --tail 50 mrija-archive
+sudo systemctl start mrija-archive-sync.service   # manual sync
 ```
 
-For rollback, stop the project, restore the previously reviewed Git/Nix
-revision, activate it through the normal signed deployment process, and
-recheck the project before starting it again. Never use `down -v`, prune
-volumes/networks, or remove `/srv/containers/mrija-archive`.
+Never remove `/srv/containers/mrija-archive`; a Nix rollback restores the unit,
+not the data.
 
 ## Credentials and verification
 
