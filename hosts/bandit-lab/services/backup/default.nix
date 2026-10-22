@@ -22,7 +22,7 @@
   environmentFile = config.sops.templates."restic-s3.env".path;
   resticBin = "${pkgs.restic}/bin/restic";
 in {
-  imports = [./peer.nix ../../../../nixos/restic-peer-server.nix];
+  imports = [./peer.nix ../../../../modules/system/restic-peer-server.nix];
 
   options.bandit-lab.backups.enable = lib.mkEnableOption "encrypted off-host restic backups to an S3 bucket (DigitalOcean Spaces)";
 

@@ -126,12 +126,6 @@
 
       bandit-lab = nixpkgs.lib.nixosSystem {
         specialArgs = sharedArgs;
-        modules = labModules ./nixos/server;
-      };
-
-      # Phase 3 scaffolding: same lab built from modules/server; removed at the swap.
-      bandit-lab-v2 = nixpkgs.lib.nixosSystem {
-        specialArgs = sharedArgs;
         modules = labModules ./modules/server;
       };
     };
@@ -250,12 +244,6 @@
           statix check .
           touch "$out"
         '';
-
-      lab-parity = import ./ci/lab-parity.nix {
-        inherit pkgs;
-        old = self.nixosConfigurations.bandit-lab.config.system.build.toplevel;
-        new = self.nixosConfigurations.bandit-lab-v2.config.system.build.toplevel;
-      };
 
       sops-isolation = import ./ci/sops-isolation.nix {
         inherit pkgs;

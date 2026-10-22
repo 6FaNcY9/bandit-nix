@@ -1,3 +1,5 @@
+# Legacy tree: no host imports this file since phase 3 (bandit-lab builds
+# from modules/server/); deleted in phase 7.
 {
   lib,
   pkgs,

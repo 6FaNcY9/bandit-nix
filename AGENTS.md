@@ -28,12 +28,12 @@ NixOS flake for `bandit` (Framework 13 AMD laptop) and `bandit-lab` (headless se
 | Shared paths, username, theme, unfree policy | `lib/repository.nix` |
 | Host configuration and hardware | `hosts/<host>/default.nix`, `hosts/<host>/hardware.nix` |
 | Shared options (`options.bandit.*`, defaults from `lib/repository.nix`) | `modules/options.nix` |
-| Laptop system modules | `modules/system/`, `modules/desktop/` (`nixos/` is the lab's legacy tree until phase 3) |
-| Headless server base | `nixos/server/` |
+| Laptop system modules | `modules/system/`, `modules/desktop/` (`nixos/` is the legacy tree: only `nixos/ci-overrides.nix` is still imported, by `bandit-ci`; deleted in phase 7) |
+| Headless server base | `modules/server/` (shares `modules/system/` base files with the laptop) |
 | Server services and assets | `hosts/bandit-lab/services/<name>/` |
 | Minecraft server, bots, Andy, gaming PCs | the flake input `bandit-craft` ([github:6FaNcY9/bandit-craft](https://github.com/6FaNcY9/bandit-craft), split out 2026-10-12): its modules are imported in `hosts/bandit-lab/default.nix`; the contract checks `ci/lab-minecraft.nix`, `ci/lab-mcbots.nix` stay here |
 | User environment | `modules/user/` (`desktop/`, `terminal/`, `editor/`) |
-| Secrets wiring and encrypted data | `modules/system/sops.nix` (lab: `nixos/sops.nix`), `.sops.yaml`, `secrets/` |
+| Secrets wiring and encrypted data | `modules/system/sops.nix`, `.sops.yaml`, `secrets/` |
 | Checks and CI | `ci/`, `.github/workflows/`, `.gitlab-ci.yml` |
 | Operational procedures | `docs/runbooks/`; security roadmap: `docs/SECURITY-PLAN.md`; operator helpers: `tools/` |
 

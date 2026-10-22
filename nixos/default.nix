@@ -1,3 +1,5 @@
+# Legacy tree: no host imports this file since phase 3 (both build from
+# modules/); deleted in phase 7.
 # Import order is grouped (system, then desktop) to match modules/, the
 # phase-2 replacement tree; list-typed options such as systemPackages follow it.
 {inputs, ...}: {

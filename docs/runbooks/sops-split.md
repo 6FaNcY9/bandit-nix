@@ -7,7 +7,7 @@ host's secrets. Target layout:
 | --- | --- | --- |
 | `secrets/bandit.yaml` | `user` + `host_bandit` | laptop (`modules/system/secrets-workstation.nix`) |
 | `secrets/github.yaml` | `user` + `host_bandit` | laptop |
-| `secrets/lab.yaml` | `user` + `host_bandit_lab` | bandit-lab (`nixos/server/default.nix` default file) |
+| `secrets/lab.yaml` | `user` + `host_bandit_lab` | bandit-lab (`modules/server/default.nix` default file) |
 | `secrets/secrets.yaml` | all three | **legacy, deleted in the cleanup step** |
 
 `.sops.yaml` rules are ordered: `lab.yaml`, `bandit|github.yaml`, the temporary

@@ -47,14 +47,15 @@ declarative system and user environment.
 │   │   ├── default.nix    # Hostname, stateVersion, bootloader
 │   │   └── hardware.nix   # Filesystems, kernel modules, Framework tweaks
 │   └── bandit-lab/        # Homelab host and service modules
-├── modules/               # Laptop module tree (bandit)
+├── modules/               # Module tree for both hosts
 │   ├── default.nix        # Flat list of module roots for the bandit host
 │   ├── options.nix        # options.bandit.* (defaults from lib/repository.nix)
 │   ├── system/            # Locale, boot, network, users, sops, backup peer, lab-apply
 │   ├── desktop/           # greetd/Hyprland, graphics, audio, power, dev, theme
+│   ├── server/            # bandit-lab base (reads secrets/lab.yaml), shares system/ files
 │   └── user/              # Home Manager: terminal/, desktop/, editor/, theme, git, ssh, qt
-├── nixos/                 # Legacy tree, still imported by bandit-lab (phase 3)
-│   └── server/            # Headless server base (reads secrets/lab.yaml)
+├── nixos/                 # Legacy tree; only ci-overrides.nix (bandit-ci) is still imported
+│   └── server/            # Old lab base
 ├── secrets/               # Encrypted secrets (sops-nix)
 │   ├── bandit.yaml        # Laptop secrets (user + laptop key)
 │   ├── github.yaml        # Laptop GitHub keys
