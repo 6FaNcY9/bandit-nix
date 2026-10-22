@@ -31,6 +31,14 @@ in
   "Docker stays the oci-containers backend until phases 5 and 6 have moved Minecraft and mcbots";
   assert lib.assertMsg (lab.virtualisation.quadlet.networks ? proxy)
   "the lab must define the quadlet network proxy that migrated services join";
+  # Phase 4 service contracts: the monitoring stack is a pod publishing Grafana and blackbox on loopback,
+  # Traefik reaches it through the file provider, and the compose lifecycle unit is gone.
+  assert lib.assertMsg (lab.virtualisation.quadlet.pods.monitoring.podConfig.publishPorts == ["127.0.0.1:3000:3000" "127.0.0.1:9115:9115"])
+  "the monitoring pod must publish grafana (3000) and blackbox (9115) on loopback only";
+  assert lib.assertMsg (!(lab.systemd.services ? compose-monitoring))
+  "the compose-monitoring lifecycle unit must be gone once the pod exists";
+  assert lib.assertMsg (lab.services.traefik.dynamicConfigOptions.http.services.grafana.loadBalancer.servers == [{url = "http://127.0.0.1:3000";}])
+  "traefik must route grafana to its loopback port through the file provider";
   assert lib.assertMsg (rootContainers == [])
   "every lab quadlet container must set containerConfig.user and no userns (found: ${toString rootContainers})";
   assert lib.assertMsg (podman.enable && !podman.dockerCompat && !podman.dockerSocket.enable)

@@ -18,6 +18,11 @@
     "docker-network-proxy.service"
     "docker-vaultwarden.service"
     "docker.service"
+    "monitoring-pod.service"
+    "prometheus.service"
+    "grafana.service"
+    "blackbox-exporter.service"
+    "node-exporter.service"
     # Access path and brute-force protection: a config that silently kills
     # SSH or fail2ban must roll back, not deploy.
     "fail2ban.service"

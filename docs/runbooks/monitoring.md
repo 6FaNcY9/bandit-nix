@@ -1,15 +1,32 @@
 # Monitoring stack (Grafana + Prometheus) on bandit-lab
 
-The canonical reviewed Compose asset is
-[`hosts/bandit-lab/services/monitoring/compose.yml`](../../hosts/bandit-lab/services/monitoring/compose.yml),
-with project name `monitoring`. It preserves the live node-exporter unit
-include, including `ollama`, and publishes no Grafana host port; Grafana is
-reached through Traefik/Cloudflare. Portainer has been retired; the running stack
-keeps its containers and is managed with Compose on the host.
+Since phase 4 the stack is a Podman pod declared in
+[`hosts/bandit-lab/services/monitoring/default.nix`](../../hosts/bandit-lab/services/monitoring/default.nix):
+pod `monitoring` on the quadlet network `proxy`, containers `prometheus`,
+`grafana`, `blackbox-exporter` and `node-exporter` (cadvisor was dropped;
+Beszel covers host metrics). Everything scrapes over the pod's localhost; only
+Grafana (3000) and blackbox (9115) are published, on `127.0.0.1`, and Traefik
+routes `grafana.bandit-lab.mrija.org` to that port through its file provider.
+Data stays under `/srv/containers/monitoring` (Grafana as uid 472, Prometheus
+as 65534). The Compose project `monitoring` and its lifecycle unit are gone.
 
-Nix exposes the asset at `/etc/bandit-lab/monitoring.compose.yml` and declares
-the initially disabled manual lifecycle unit `compose-monitoring`. The unit
-only runs Compose `start`/`stop`; it does not create or reconcile containers.
+## Operate
+
+```bash
+systemctl status monitoring-pod.service prometheus.service grafana.service
+sudo podman logs --tail 50 prometheus
+sudo podman exec prometheus wget -qO- http://localhost:9090/api/v1/targets \
+  | jq -r '.data.activeTargets[] | [.labels.job, .health, .lastError] | @tsv'
+```
+
+A configuration change restarts only the containers whose unit changed. The
+`lab-vm` check boots the pod (without Grafana's secret) in CI; the images are
+pinned by digest in both the service module and `ci/lab-vm.nix`, bump both.
+
+Grafana's stored admin password and rotation boundary are documented in
+[secret rotation](secret-rotation.md#grafanas-stored-admin-password).
+
+## History: Compose adoption (before phase 4)
 
 ## Portainer environment reassociation
 
