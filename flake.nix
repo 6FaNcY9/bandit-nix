@@ -325,6 +325,12 @@
           .config;
       };
 
+      lab-vm = import ./ci/lab-vm.nix {
+        inherit pkgs;
+        modules = labModules ./modules/server;
+        specialArgs = sharedArgs;
+      };
+
       lab-surface = import ./ci/lab-surface.nix {
         inherit pkgs repoConfig;
         inherit (nixpkgs) lib;
