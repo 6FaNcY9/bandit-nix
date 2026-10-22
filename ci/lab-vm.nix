@@ -15,6 +15,23 @@
     copyToRoot = [pkgs.busybox (pkgs.writeTextDir "srv/index.html" "canary\n")];
     config.Cmd = ["httpd" "-f" "-p" "8080" "-h" "/srv"];
   };
+  # The VM has no network: the lab's own service images come in as fixed-output
+  # fetches and replace the registry references for the test only. Keep the
+  # digests equal to the service modules (bump both together).
+  pulled = name: tag: digest: hash:
+    pkgs.dockerTools.pullImage {
+      imageName = name;
+      imageDigest = digest;
+      inherit hash;
+      finalImageName = name;
+      finalImageTag = tag;
+    };
+  images = {
+    prometheus = pulled "prom/prometheus" "v3.13.2" "sha256:508729e0e2d18e11fd742a5a5ca70e557b940a93948c3c95fd0123a6fd538b69" "sha256-/dxFY1+okZ7sP1/ZR0P/z4o9GWI8Z7w0qM1IqR+qjVQ=";
+    grafana = pulled "grafana/grafana-oss" "13.0.2" "sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2" "sha256-v37NASJVQdMc14u5xRzRpaapA4s2lQCNpk+m7P+omXY=";
+    blackbox-exporter = pulled "prom/blackbox-exporter" "v0.28.0" "sha256:e753ff9f3fc458d02cca5eddab5a77e1c175eee484a8925ac7d524f04366c2fc" "sha256-CrLkLkQ2w9goBAtaClW4aQ2IXWwPgkrdhE6fOfh4abg=";
+    node-exporter = pulled "prom/node-exporter" "v1.12.1" "sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0" "sha256-NvmqPfm027ksBCJMZCphTHF1empR65uLf99DNndEWOI=";
+  };
 in
   pkgs.testers.runNixOSTest {
     name = "lab-vm";
@@ -39,20 +56,24 @@ in
       virtualisation = {
         memorySize = 4096;
         cores = 2;
+        # Podman's image store lives on the VM disk; the default 1 GiB cannot hold the service images.
+        diskSize = 8192;
         # Test-only containers: no hardening flags set, so they carry the defaults from modules/server/containers.nix.
-        quadlet.containers = {
-          canary.containerConfig = {
-            image = "docker-archive:${canaryImage}";
-            publishPorts = ["127.0.0.1:8080:8080"];
-            user = "65534:65534";
-            networks = [config.virtualisation.quadlet.networks.proxy.ref];
+        quadlet.containers =
+          pkgs.lib.mapAttrs (_: image: {containerConfig.image = pkgs.lib.mkForce "docker-archive:${image}";}) images
+          // {
+            canary.containerConfig = {
+              image = "docker-archive:${canaryImage}";
+              publishPorts = ["127.0.0.1:8080:8080"];
+              user = "65534:65534";
+              networks = [config.virtualisation.quadlet.networks.proxy.ref];
+            };
+            canary2.containerConfig = {
+              image = "docker-archive:${canaryImage}";
+              user = "65534:65534";
+              networks = [config.virtualisation.quadlet.networks.proxy.ref];
+            };
           };
-          canary2.containerConfig = {
-            image = "docker-archive:${canaryImage}";
-            user = "65534:65534";
-            networks = [config.virtualisation.quadlet.networks.proxy.ref];
-          };
-        };
       };
     };
     testScript = ''
@@ -84,16 +105,26 @@ in
       lab.wait_for_unit("proxy-network.service")
       lab.wait_for_unit("canary2.service")
       lab.succeed("podman exec canary2 wget -qO- http://canary:8080/ | grep canary")
-      # Policy-independent: netavark's chain is consulted before Docker's, so a Docker FORWARD DROP
-      # policy (the lab's default) cannot swallow Podman traffic.
-      forward = lab.succeed("iptables -S FORWARD").splitlines()
-      assert "NETAVARK_FORWARD" in forward[1], forward
+      # The lab's Docker sets the FORWARD policy to DROP; the VM's boot order may leave it ACCEPT and
+      # the jump order of Docker's and netavark's chains varies per boot. Force the worst case so the
+      # proof below does not depend on either.
+      lab.succeed("iptables -P FORWARD DROP")
       peer.wait_for_unit("peer-httpd.service")
       peer_ip = peer.wait_until_succeeds("ip -4 -o addr | grep -o '192\\.168\\.1\\.[0-9]*' | head -1").strip()
       lab.succeed(f"podman exec canary2 wget -qO- http://{peer_ip}/ | grep peer")
-      # No published port of the real lab configuration answers on the LAN address.
+
+      # Real service: the monitoring pod needs no secret except Grafana (not asserted).
+      lab.wait_for_unit("monitoring-pod.service")
+      lab.wait_for_unit("prometheus.service")
+      lab.wait_for_unit("node-exporter.service")
+      lab.wait_until_succeeds("curl -fsS http://127.0.0.1:9115/metrics | grep -q blackbox")
+      lab.wait_until_succeeds("podman exec prometheus wget -qO- http://localhost:9090/-/ready")
+      lab.succeed("podman exec prometheus wget -qO- http://localhost:9100/metrics | grep node_scrape_collector_success >/dev/null")
+
+      # No published port of the real lab configuration answers on the LAN address
+      # (after the pod is up, so its ports are in the sweep; any HTTP answer counts as reachable).
       for p in lab.succeed("podman ps --format '{{.Ports}}'").split():
           port = p.split("->")[0].rsplit(":", 1)[-1]
-          lab.fail(f"curl -fsS --max-time 3 http://{lan}:{port}/")
+          lab.fail(f"curl -sS -o /dev/null --max-time 3 http://{lan}:{port}/")
     '';
   }

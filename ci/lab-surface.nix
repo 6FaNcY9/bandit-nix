@@ -53,11 +53,8 @@ in
   assert lib.assertMsg (sambaAllow == "127.0.0.1 ::1 100.64.0.0/10 fd7a:115c:a1e0::/48" && lab.services.samba.settings.global."hosts deny" == "ALL") "Samba 'hosts allow' must be exactly loopback plus the tailnet and 'hosts deny' must be ALL";
   assert lib.assertMsg (lab.services.resolved.settings.Resolve.LLMNR == "false" && lab.services.resolved.settings.Resolve.MulticastDNS == "false") "LLMNR and mDNS must stay off on the server";
     pkgs.runCommand "lab-surface" {nativeBuildInputs = [pkgs.gnugrep pkgs.yq-go pkgs.python3 pkgs.bash pkgs.gnused lab.services.ntfy-sh.package];} ''
-      yq -e '.services.grafana.security_opt | any_c(. == "no-new-privileges:true")' ${../hosts/bandit-lab/services/monitoring/compose.yml} >/dev/null
-      yq -e '.services."blackbox-exporter".security_opt | any_c(. == "no-new-privileges:true")' ${../hosts/bandit-lab/services/monitoring/compose.yml} >/dev/null
-      yq -e '.services."node-exporter".security_opt | any_c(. == "no-new-privileges:true")' ${../hosts/bandit-lab/services/monitoring/compose.yml} >/dev/null
       # Compose projects must not publish a bare host:container port either.
-      for f in ${../hosts/bandit-lab/services/mrija-archive/compose.yml} ${../hosts/bandit-lab/services/monitoring/compose.yml}; do
+      for f in ${../hosts/bandit-lab/services/mrija-archive/compose.yml}; do
         if grep -nE '^[[:space:]]*-[[:space:]]*"?(0\.0\.0\.0:|\[::\]:)?[0-9]{1,5}:[0-9]{1,5}' "$f"; then
           echo "$f publishes a port without a 127.0.0.1 or tailnet bind address" >&2
           exit 1

@@ -8,22 +8,6 @@
     hash = "sha256-GExrdAnzBtp1Ul13cvcZRbEM6iOtFrXXjEaY6g6lGYY=";
   };
 
-  # grafana.com id 14282 rev 1 (Cadvisor exporter). The upstream JSON carries
-  # an import input (''${DS_PROMETHEUS}) that file provisioning cannot fill;
-  # pin it to the provisioned datasource uid and drop import-only metadata.
-  dashboardCadvisor = pkgs.runCommand "grafana-dashboard-cadvisor.json" {} ''
-    ${pkgs.jq}/bin/jq '
-      del(.__inputs, .__requires, .__elements)
-      | walk(if . == "''${DS_PROMETHEUS}" then "prometheus" else . end)
-    ' ${
-      pkgs.fetchurl {
-        name = "grafana-dashboard-cadvisor-raw.json";
-        url = "https://grafana.com/api/dashboards/14282/revisions/1/download";
-        hash = "sha256-dqhaC4r4rXHCJpASt5y3EZXW00g5fhkQM+MgNcgX1c0=";
-      }
-    } > $out
-  '';
-
   # Small purpose-built dashboard for the blackbox WAN probes (community
   # blackbox dashboards assume datasource UIDs we do not control).
   dashboardWanProbes = pkgs.writeText "grafana-dashboard-wan-probes.json" (builtins.toJSON {
@@ -272,7 +256,6 @@
   grafanaDashboards = pkgs.runCommand "grafana-dashboards" {} ''
     mkdir -p $out
     cp -L ${dashboardNodeExporter} $out/node-exporter-full.json
-    cp -L ${dashboardCadvisor} $out/cadvisor-exporter.json
     cp -L ${dashboardWanProbes} $out/wan-probes.json
     cp -L ${dashboardOriginProbes} $out/origin-probes.json
   '';

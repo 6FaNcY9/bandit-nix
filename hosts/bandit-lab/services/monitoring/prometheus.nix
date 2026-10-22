@@ -12,11 +12,7 @@
 
       - job_name: node
         static_configs:
-          - targets: ["node-exporter:9100"]
-
-      - job_name: cadvisor
-        static_configs:
-          - targets: ["cadvisor:8080"]
+          - targets: ["localhost:9100"]
 
       # Public endpoint reachability. Cloudflare Access can return a login
       # redirect without contacting the tunnel or origin application.
@@ -35,28 +31,29 @@
           - source_labels: [__param_target]
             target_label: instance
           - target_label: __address__
-            replacement: blackbox-exporter:9115
+            replacement: localhost:9115
 
-      # Direct Docker endpoints bypass Traefik, the tunnel, and Access.
+      # Direct container endpoints bypass Traefik, the tunnel, and Access.
+      # Everything in this pod is on localhost; services on the proxy network
+      # are added by name once they run on Podman (vaultwarden: phase 4 task 5).
       - job_name: blackbox-origin
         metrics_path: /probe
         params:
           module: [http_origin]
         static_configs:
           - targets:
-              - http://vaultwarden:80/alive
-              - http://grafana:3000/api/health
+              - http://localhost:3000/api/health
         relabel_configs:
           - source_labels: [__address__]
             target_label: __param_target
           - source_labels: [__param_target]
             target_label: instance
           - target_label: __address__
-            replacement: blackbox-exporter:9115
+            replacement: localhost:9115
 
       - job_name: blackbox-exporter
         static_configs:
-          - targets: ["blackbox-exporter:9115"]
+          - targets: ["localhost:9115"]
   '';
 
   # Shared with the regression test so it exercises the deployed modules.

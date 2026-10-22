@@ -118,22 +118,34 @@ in {
         version = "v1.7.1";
       };
     };
-    dynamicConfigOptions.http.middlewares.crowdsec-bouncer.plugin.bouncer = {
-      enabled = true;
-      # The LAPI is loopback-only (crowdsec.nix). The plugin resolves the
-      # key from this sops-owned file itself — it MUST be crowdsecLapiKeyFile,
-      # not crowdsecLapiKey: the latter is sent verbatim as X-Api-Key, and
-      # putting a path there made every LAPI call 403 (and every request
-      # fail-closed), which rolled the first deploy back.
-      crowdsecLapiScheme = "http";
-      crowdsecLapiHost = "127.0.0.1:8080";
-      crowdsecLapiKeyFile = config.sops.secrets.crowdsec-traefik-bouncer-key.path;
-      # Immediate peer is always cloudflared on loopback; the real client
-      # IP comes from its X-Forwarded-For.
-      forwardedHeadersTrustedIPs = [
-        "127.0.0.1/32"
-        "::1/128"
-      ];
+    # Podman services (phase 4): one router per service to its loopback port.
+    # No container socket is involved; the Docker provider above serves only
+    # the containers that have not moved yet.
+    dynamicConfigOptions.http = {
+      routers.grafana = {
+        rule = "Host(`grafana.bandit-lab.mrija.org`)";
+        entryPoints = ["web"];
+        service = "grafana";
+      };
+      services.grafana.loadBalancer.servers = [{url = "http://127.0.0.1:3000";}];
+      # CrowdSec bouncer plugin: see the plugin stanza above.
+      middlewares.crowdsec-bouncer.plugin.bouncer = {
+        enabled = true;
+        # The LAPI is loopback-only (crowdsec.nix). The plugin resolves the
+        # key from this sops-owned file itself — it MUST be crowdsecLapiKeyFile,
+        # not crowdsecLapiKey: the latter is sent verbatim as X-Api-Key, and
+        # putting a path there made every LAPI call 403 (and every request
+        # fail-closed), which rolled the first deploy back.
+        crowdsecLapiScheme = "http";
+        crowdsecLapiHost = "127.0.0.1:8080";
+        crowdsecLapiKeyFile = config.sops.secrets.crowdsec-traefik-bouncer-key.path;
+        # Immediate peer is always cloudflared on loopback; the real client
+        # IP comes from its X-Forwarded-For.
+        forwardedHeadersTrustedIPs = [
+          "127.0.0.1/32"
+          "::1/128"
+        ];
+      };
     };
   };
 }
