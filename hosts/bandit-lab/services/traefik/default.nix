@@ -127,7 +127,13 @@ in {
         entryPoints = ["web"];
         service = "grafana";
       };
+      routers.mrija-archive = {
+        rule = "Host(`mail-archive.bandit-lab.mrija.org`)";
+        entryPoints = ["web"];
+        service = "mrija-archive";
+      };
       services.grafana.loadBalancer.servers = [{url = "http://127.0.0.1:3000";}];
+      services.mrija-archive.loadBalancer.servers = [{url = "http://127.0.0.1:8081";}];
       # CrowdSec bouncer plugin: see the plugin stanza above.
       middlewares.crowdsec-bouncer.plugin.bouncer = {
         enabled = true;

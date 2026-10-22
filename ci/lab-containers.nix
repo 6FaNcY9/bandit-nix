@@ -42,6 +42,14 @@ in
   "the compose-monitoring lifecycle unit must be gone once the pod exists";
   assert lib.assertMsg (lab.services.traefik.dynamicConfigOptions.http.services.grafana.loadBalancer.servers == [{url = "http://127.0.0.1:3000";}])
   "traefik must route grafana to its loopback port through the file provider";
+  assert lib.assertMsg (lab.virtualisation.quadlet.containers.mrija-archive.containerConfig.publishPorts == ["127.0.0.1:8081:8080"])
+  "mrija-archive must publish its API on loopback only (the sync unit and Traefik use it)";
+  assert lib.assertMsg (!(lab.systemd.services ? compose-mrija-archive))
+  "the compose-mrija-archive lifecycle unit must be gone once the container exists";
+  assert lib.assertMsg (let a = lab.systemd.services.mrija-archive-sync.serviceConfig.IPAddressAllow; in lib.elem "10.89.0.0/24" a && !(lib.elem "172.18.0.0/16" a))
+  "mrija-archive-sync must allow the podman proxy subnet (IPAddressAllow sees the DNATed destination), not the old Docker one";
+  assert lib.assertMsg (let s = lab.systemd.services.mrija-archive-sync; in !(lib.elem "mrija-archive.service" s.requires) && lib.elem "mrija-archive.service" s.wants)
+  "mrija-archive-sync must only want the container: requires would stop the sync whenever the container restarts";
   assert lib.assertMsg (rootContainers == [])
   "every lab quadlet container must set containerConfig.user and no userns (found: ${toString rootContainers})";
   assert lib.assertMsg (podman.enable && !podman.dockerCompat && !podman.dockerSocket.enable)
