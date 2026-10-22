@@ -28,8 +28,7 @@ in
   # rawConfig replaces the generated unit text, so neither the port rule above nor the
   # hardening defaults (modules/server/containers.nix) could see what it publishes.
   assert lib.assertMsg (lib.all (c: c.rawConfig == null) (lib.attrValues lab.virtualisation.quadlet.containers ++ lib.attrValues lab.virtualisation.quadlet.pods)) "quadlet containers and pods must not use rawConfig";
-  assert lib.assertMsg (lib.elem "--security-opt=no-new-privileges" lab.virtualisation.oci-containers.containers.aiia-redis.extraOptions) "aiia-redis must retain no-new-privileges";
-  assert lib.assertMsg (lib.elem "--security-opt=no-new-privileges" lab.virtualisation.oci-containers.containers.aiia-ghost.extraOptions) "aiia-ghost must retain no-new-privileges";
+  assert lib.assertMsg (lab.virtualisation.quadlet.containers.aiia-redis.containerConfig.noNewPrivileges && lab.virtualisation.quadlet.containers.aiia-ghost.containerConfig.noNewPrivileges) "aiia-redis and aiia-ghost must retain no-new-privileges";
   # ntfy listens on all addresses only so the bots container can reach it via its Docker gateway
   # (owner-approved 2026-10-10); then the firewall may admit 2586 from the mcbots subnet and nothing else.
   assert lib.assertMsg (

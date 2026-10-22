@@ -9,12 +9,12 @@
     # sshd/traefik, bouncers enforce). A dead engine must roll back deploys.
     "crowdsec.service"
     "crowdsec-firewall-bouncer.service"
-    # docker-aiia-ghost deliberately stays out until the image transfer onto
+    # aiia-ghost deliberately stays out until the image transfer onto
     # the host is confirmed — the private GHCR image is docker-loaded by hand,
     # so the unit fails (and would roll back deploys) until then.
-    "docker-aiia-mysql.service"
-    "docker-aiia-redis.service"
-    "docker-network-aiia.service"
+    "aiia-pod.service"
+    "aiia-mysql.service"
+    "aiia-redis.service"
     "docker-network-proxy.service"
     "docker-vaultwarden.service"
     "docker.service"

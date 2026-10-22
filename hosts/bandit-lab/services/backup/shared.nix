@@ -5,13 +5,13 @@
   pkgs,
   inputs,
 }: let
-  docker = "${pkgs.docker}/bin/docker";
+  podman = "${pkgs.podman}/bin/podman";
   sqlite = "${pkgs.sqlite}/bin/sqlite3";
   rsync = "${pkgs.rsync}/bin/rsync";
   minecraftSnapshot = "${(import "${inputs.bandit-craft}/hosts/bandit-lab/services/minecraft/scripts.nix" {inherit pkgs;}).snapshot}/bin/minecraft-snapshot";
 in {
   # Run after the containers whose databases are dumped.
-  after = ["docker-aiia-mysql.service" "docker-vaultwarden.service" "docker-minecraft.service"];
+  after = ["aiia-mysql.service" "vaultwarden.service" "docker-minecraft.service"];
 
   paths = staging: [
     staging
@@ -52,7 +52,7 @@ in {
     fi
 
     # AiiA / Ghost MySQL: single-transaction dump of every database.
-    ${docker} exec aiia-mysql sh -c \
+    ${podman} exec aiia-mysql sh -c \
       'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqldump --single-transaction --routines --events --all-databases -uroot' \
       | ${pkgs.gzip}/bin/gzip -c > ${staging}/aiia/mysql.sql.gz
 

@@ -1,14 +1,14 @@
 {
   config,
-  pkgs,
   repoConfig,
   ...
 }: let
   username = repoConfig.workstation.username;
+  inherit (config.virtualisation.quadlet) pods;
 in {
-  # Internal service network for ghost <-> mysql <-> redis. The ghost container
-  # additionally joins the `proxy` network at creation so Traefik can
-  # reach it; mysql and redis stay off `proxy` on purpose.
+  # The shop is a Podman pod (phase 4): ghost, mysql and redis share one
+  # network namespace, so the database and cache are reachable on localhost
+  # only and nothing but Ghost's port leaves the pod, on loopback, for Traefik.
   systemd = {
     tmpfiles.rules = [
       "d /srv/containers/aiia 0750 ${username} users -"
@@ -25,26 +25,9 @@ in {
       # `chown 999:999 /srv/containers/aiia/mysql`.
       "d /srv/containers/aiia/mysql 0750 - - -"
     ];
-
-    services = {
-      docker-network-aiia = repoConfig.mkDockerNetwork pkgs "aiia";
-
-      docker-aiia-mysql = {
-        after = ["docker-network-aiia.service"];
-        requires = ["docker-network-aiia.service"];
-      };
-      docker-aiia-redis = {
-        after = ["docker-network-aiia.service"];
-        requires = ["docker-network-aiia.service"];
-      };
-      docker-aiia-ghost = {
-        after = ["docker-network-aiia.service" "docker-network-proxy.service"];
-        requires = ["docker-network-aiia.service" "docker-network-proxy.service"];
-      };
-    };
   };
 
-  # Declared here instead of nixos/sops.nix so the shop credentials are only
+  # Declared here instead of modules/server/sops.nix so the shop credentials are only
   # decrypted on bandit-lab.
   sops = {
     secrets = {
@@ -93,83 +76,91 @@ in {
     };
   };
 
-  virtualisation.oci-containers.containers = {
-    aiia-mysql = {
-      image = "mysql:8.4@sha256:b3b90af2a6552ae30c266fdb7d5dd55f3afb72404bb78d37fe8a23eb857fd3fb";
-      # Low-churn Ghost DB: cap binlog point-in-time recovery at 7 days
-      # instead of the 30-day default.
-      cmd = ["--binlog-expire-logs-seconds=604800"];
-      volumes = ["/srv/containers/aiia/mysql:/var/lib/mysql"];
-      environmentFiles = [config.sops.templates."aiia-mysql.env".path];
-      networks = ["aiia"];
+  virtualisation.quadlet = {
+    pods.aiia.podConfig = {
+      publishPorts = ["127.0.0.1:2368:2368"];
+      # The former Docker network names, so the image's configuration keeps resolving them.
+      addHosts = ["aiia-mysql:127.0.0.1" "aiia-redis:127.0.0.1"];
     };
-
-    aiia-redis = {
-      image = "redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf";
-      networks = ["aiia"];
-      extraOptions = ["--security-opt=no-new-privileges"];
-    };
-
-    # Custom Ghost 6 fork build (github.com/6FaNcY9/AiiA). The image is loaded
-    # onto the host from the CI `docker-image-production` workflow artifact
-    # (gh run download + ssh docker load) because the GHCR package is private
-    # and the host holds no registry credentials. `pull = "never"` keeps
-    # docker from contacting GHCR; updates repeat the artifact transfer and
-    # restart docker-aiia-ghost.service.
-    aiia-ghost = {
-      # Pinned by digest (2026-10-06) so the deployed shop is reproducible; the
-      # tag is kept for readability and the digest wins. To ship a new build:
-      # docs/runbooks/aiia-shop.md, "Updating the shop".
-      image = "ghcr.io/6fancy9/aiia:main@sha256:95457b635a61d7f7154bbfb51f24a2a17ed5903453635f453e87138a8a344d74";
-      pull = "never";
-      dependsOn = ["aiia-mysql" "aiia-redis"];
-      networks = ["aiia" "proxy"];
-      # Persist only the mutable content subdirs. The app root in this image
-      # is /home/ghost (not the upstream /var/lib/ghost), and themes — the
-      # aiia theme included — ship inside the image, so a whole-content mount
-      # would shadow them on first boot.
-      # Theme activation is a DB setting, not an image property: the image
-      # still seeds active_theme="source" (default-settings.json), so after
-      # any DB rebuild the storefront silently falls back to the Source theme.
-      # Fix: UPDATE settings SET value='aiia' WHERE settings.key='active_theme'
-      # in aiia-mysql + docker restart aiia-ghost. Durable fix belongs in the
-      # AiiA repo (change the defaultValue to "aiia").
-      volumes = [
-        "/srv/containers/aiia/content-images:/home/ghost/content/images"
-        "/srv/containers/aiia/content-media:/home/ghost/content/media"
-        "/srv/containers/aiia/content-files:/home/ghost/content/files"
-        "/srv/containers/aiia/content-logs:/home/ghost/content/logs"
-        "/srv/containers/aiia/content-data:/home/ghost/content/data"
-      ];
-      environment = {
-        # Canonical storefront domain. Ghost 301-redirects the old
-        # aiia.bandit-lab.mrija.org hostname here.
-        url = "https://aiia.at";
-        # Ghost 6 defaults server.host to 127.0.0.1, which makes the app
-        # unreachable for Traefik across the proxy network (502). Bind all
-        # interfaces inside the container; exposure is still gated by the
-        # tunnel + Traefik router.
-        server__host = "0.0.0.0";
-        database__client = "mysql";
-        database__connection__host = "aiia-mysql";
-        database__connection__port = "3306";
-        database__connection__user = "ghost";
-        database__connection__database = "ghost";
-        # Member sign-in uses magic-link email. Direct transport works for
-        # testing but lands in spam without SPF/DKIM; before a real launch,
-        # point this at a proper SMTP relay via additional mail__* entries.
-        mail__transport = "Direct";
-        mail__from = "noreply@aiia.bandit-lab.mrija.org";
+    containers = {
+      aiia-mysql.containerConfig = {
+        image = "docker.io/library/mysql:8.4@sha256:b3b90af2a6552ae30c266fdb7d5dd55f3afb72404bb78d37fe8a23eb857fd3fb";
+        pod = pods.aiia.ref;
+        # The datadir is owned by 999:999; started as that user the entrypoint
+        # skips its chown and needs no capability.
+        user = "999:999";
+        # Low-churn Ghost DB: cap binlog point-in-time recovery at 7 days
+        # instead of the 30-day default.
+        exec = ["--binlog-expire-logs-seconds=604800"];
+        volumes = ["/srv/containers/aiia/mysql:/var/lib/mysql"];
+        environmentFiles = [config.sops.templates."aiia-mysql.env".path];
       };
-      environmentFiles = [config.sops.templates."aiia.env".path];
-      extraOptions = [
-        "--security-opt=no-new-privileges"
-        "--label=traefik.enable=true"
-        "--label=traefik.docker.network=proxy"
-        "--label=traefik.http.routers.aiia.rule=Host(`aiia.at`) || Host(`www.aiia.at`) || Host(`aiia.bandit-lab.mrija.org`)"
-        "--label=traefik.http.routers.aiia.entrypoints=web"
-        "--label=traefik.http.services.aiia.loadbalancer.server.port=2368"
-      ];
+
+      aiia-redis.containerConfig = {
+        image = "docker.io/library/redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf";
+        pod = pods.aiia.ref;
+        user = "999:999";
+      };
+
+      # Custom Ghost 6 fork build (github.com/6FaNcY9/AiiA). The image is loaded
+      # into Podman's store by hand (docs/runbooks/aiia-shop.md, "Updating the
+      # shop") because the GHCR package is private and the host holds no
+      # registry credentials; `pull = "never"` keeps Podman off the registry.
+      # Referenced by tag: a hand-loaded archive carries no registry digest,
+      # the runbook verifies the image ID instead.
+      aiia-ghost = {
+        containerConfig = {
+          image = "ghcr.io/6fancy9/aiia:main";
+          pull = "never";
+          pod = pods.aiia.ref;
+          # The image runs as ghost (1000:1000); the content dirs are owned by 1000.
+          user = "1000:1000";
+          # Ghost writes generated assets (sitemaps, cards) here at runtime.
+          tmpfses = ["/home/ghost/content/public"];
+          # Persist only the mutable content subdirs. The app root in this image
+          # is /home/ghost (not the upstream /var/lib/ghost), and themes — the
+          # aiia theme included — ship inside the image, so a whole-content mount
+          # would shadow them on first boot.
+          # Theme activation is a DB setting, not an image property: the image
+          # still seeds active_theme="source" (default-settings.json), so after
+          # any DB rebuild the storefront silently falls back to the Source theme.
+          # Fix: UPDATE settings SET value='aiia' WHERE settings.key='active_theme'
+          # in aiia-mysql + restart aiia-ghost. Durable fix belongs in the
+          # AiiA repo (change the defaultValue to "aiia").
+          volumes = [
+            "/srv/containers/aiia/content-images:/home/ghost/content/images"
+            "/srv/containers/aiia/content-media:/home/ghost/content/media"
+            "/srv/containers/aiia/content-files:/home/ghost/content/files"
+            "/srv/containers/aiia/content-logs:/home/ghost/content/logs"
+            "/srv/containers/aiia/content-data:/home/ghost/content/data"
+          ];
+          environments = {
+            # Canonical storefront domain. Ghost 301-redirects the old
+            # aiia.bandit-lab.mrija.org hostname here.
+            url = "https://aiia.at";
+            # Ghost 6 defaults server.host to 127.0.0.1; the pod publishes the
+            # port from its own namespace, so bind all interfaces inside it.
+            # Exposure is still gated by the tunnel + Traefik router.
+            server__host = "0.0.0.0";
+            database__client = "mysql";
+            database__connection__host = "aiia-mysql";
+            database__connection__port = "3306";
+            database__connection__user = "ghost";
+            database__connection__database = "ghost";
+            # Member sign-in uses magic-link email. Direct transport works for
+            # testing but lands in spam without SPF/DKIM; before a real launch,
+            # point this at a proper SMTP relay via additional mail__* entries.
+            mail__transport = "Direct";
+            mail__from = "noreply@aiia.bandit-lab.mrija.org";
+          };
+          environmentFiles = [config.sops.templates."aiia.env".path];
+        };
+        unitConfig = {
+          After = ["aiia-mysql.service" "aiia-redis.service"];
+          Requires = ["aiia-mysql.service" "aiia-redis.service"];
+        };
+        serviceConfig.RestartSec = 5;
+      };
     };
   };
 }

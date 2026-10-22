@@ -48,6 +48,16 @@ in
   "the compose-mrija-archive lifecycle unit must be gone once the container exists";
   assert lib.assertMsg (let a = lab.systemd.services.mrija-archive-sync.serviceConfig.IPAddressAllow; in lib.elem "10.89.0.0/24" a && !(lib.elem "172.18.0.0/16" a))
   "mrija-archive-sync must allow the podman proxy subnet (IPAddressAllow sees the DNATed destination), not the old Docker one";
+  assert lib.assertMsg (lab.virtualisation.quadlet.pods.aiia.podConfig.publishPorts == ["127.0.0.1:2368:2368"])
+  "the aiia pod must publish Ghost on loopback only";
+  assert lib.assertMsg (lab.virtualisation.quadlet.containers.aiia-ghost.containerConfig.pull == "never")
+  "the aiia-ghost image is loaded by hand and must never be pulled";
+  assert lib.assertMsg (!(lab.virtualisation.quadlet.pods.aiia.podConfig ? networks) || lab.virtualisation.quadlet.pods.aiia.podConfig.networks == [])
+  "the aiia pod must not join the proxy network: mysql and redis would be reachable from other containers";
+  assert lib.assertMsg (let g = lab.virtualisation.quadlet.containers.aiia-ghost; in g.containerConfig.tmpfses == ["/home/ghost/content/public"] && g.serviceConfig.RestartSec == 5)
+  "aiia-ghost writes generated assets to content/public (tmpfs) and restarts after 5s";
+  assert lib.assertMsg (let b = lab.systemd.services.restic-backups-peer; in lib.elem "aiia-mysql.service" b.after && lib.elem "vaultwarden.service" b.after && lib.hasInfix "podman exec aiia-mysql" lab.services.restic.backups.peer.backupPrepareCommand)
+  "restic-backups-peer must order after the quadlet units and dump aiia-mysql with podman exec";
   assert lib.assertMsg (let s = lab.systemd.services.mrija-archive-sync; in !(lib.elem "mrija-archive.service" s.requires) && lib.elem "mrija-archive.service" s.wants)
   "mrija-archive-sync must only want the container: requires would stop the sync whenever the container restarts";
   assert lib.assertMsg (rootContainers == [])
