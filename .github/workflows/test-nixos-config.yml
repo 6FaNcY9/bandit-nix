@@ -38,6 +38,8 @@ jobs:
   build:
     name: Check NixOS Configuration
     runs-on: ubuntu-latest
+    # The flake check boots the lab VM; a hung boot must not burn the 6-hour default.
+    timeout-minutes: 90
     permissions:
       contents: read
 

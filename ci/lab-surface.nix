@@ -17,12 +17,17 @@
   publishedPorts =
     lib.concatLists (lib.mapAttrsToList (name: c: map (p: {inherit name p;}) (c.ports or [])) lab.virtualisation.oci-containers.containers)
     # Podman (quadlet) publishes through its own DNAT rules, so the same bind-address rule applies.
-    ++ lib.concatLists (lib.mapAttrsToList (name: c: map (p: {inherit name p;}) c.containerConfig.publishPorts) lab.virtualisation.quadlet.containers);
+    ++ lib.concatLists (lib.mapAttrsToList (name: c: map (p: {inherit name p;}) c.containerConfig.publishPorts) lab.virtualisation.quadlet.containers)
+    # In a pod the pod publishes the ports, not its containers.
+    ++ lib.concatLists (lib.mapAttrsToList (name: c: map (p: {inherit name p;}) c.podConfig.publishPorts) lab.virtualisation.quadlet.pods);
   badPublished = lib.filter (x: !(lib.hasPrefix "127.0.0.1:" x.p || lib.hasPrefix "${tailnetIp}:" x.p)) publishedPorts;
 
   tunnelTargets = lib.concatMap (t: map (v: toString (v.service or v)) (lib.attrValues t.ingress)) (lib.attrValues lab.services.cloudflared.tunnels);
   sambaAllow = lab.services.samba.settings.global."hosts allow";
 in
+  # rawConfig replaces the generated unit text, so neither the port rule above nor the
+  # hardening defaults (modules/server/containers.nix) could see what it publishes.
+  assert lib.assertMsg (lib.all (c: c.rawConfig == null) (lib.attrValues lab.virtualisation.quadlet.containers ++ lib.attrValues lab.virtualisation.quadlet.pods)) "quadlet containers and pods must not use rawConfig";
   assert lib.assertMsg (lib.elem "--security-opt=no-new-privileges" lab.virtualisation.oci-containers.containers.aiia-redis.extraOptions) "aiia-redis must retain no-new-privileges";
   assert lib.assertMsg (lib.elem "--security-opt=no-new-privileges" lab.virtualisation.oci-containers.containers.aiia-ghost.extraOptions) "aiia-ghost must retain no-new-privileges";
   # ntfy listens on all addresses only so the bots container can reach it via its Docker gateway

@@ -296,18 +296,8 @@
         inherit pkgs repoConfig;
         inherit (nixpkgs) lib;
         lab = self.nixosConfigurations.bandit-lab.config;
-        wideOpen =
-          (self.nixosConfigurations.bandit-lab.extendModules {
-            modules = [
-              {
-                virtualisation.quadlet.containers.wide.containerConfig = {
-                  image = "docker.io/library/busybox:latest";
-                  publishPorts = ["8080:80"];
-                };
-              }
-            ];
-          })
-          .config;
+        # Builds the lab with one extra module; the check uses it for its negative cases.
+        extend = m: (self.nixosConfigurations.bandit-lab.extendModules {modules = [m];}).config;
         probe =
           (self.nixosConfigurations.bandit-lab.extendModules {
             modules = [
