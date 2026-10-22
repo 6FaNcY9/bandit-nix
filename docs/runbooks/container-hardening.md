@@ -21,17 +21,17 @@ the tailnet address (`ci/lab-surface.nix`).
 
 | Container | Image user | Privileged | cap-drop | no-new-privileges | Read-only rootfs | Assessment |
 | --- | --- | --- | --- | --- | --- | --- |
-| vaultwarden | 1000:100 (quadlet, phase 4) | yes | all | yes | yes | Moved to Podman with the defaults; listens on 8080 as non-root, published on `127.0.0.1:8222`. Changes under `services/vaultwarden/` still need the supervised-maintenance path in `bandit-lab-updates.md`. |
+| vaultwarden | 1000:100 (quadlet, phase 4) | no | all | yes | yes | Moved to Podman with the defaults; listens on 8080 as non-root, published on `127.0.0.1:8222`. Changes under `services/vaultwarden/` still need the supervised-maintenance path in `bandit-lab-updates.md`. |
 | searxng | root | no | none | no | no | Candidate for `no-new-privileges` and cap-drop; writes its settings/cache, test before read-only. |
 | cyberchef, it-tools | 101 / root (nginx) | no | none | no | no | nginx images: `no-new-privileges` is safe; cap-drop ALL then add back CHOWN, SETGID, SETUID, NET_BIND_SERVICE; read-only rootfs needs tmpfs for `/var/cache/nginx` and `/var/run`. |
 | juice-shop | 65532 | no | none | no | no | Deliberately vulnerable training target: `no-new-privileges` and cap-drop ALL are safe and worthwhile; it writes at runtime, so no read-only rootfs. |
-| aiia-ghost | ghost | no | none | no | no | `no-new-privileges` and cap-drop ALL are likely fine (already non-root); Ghost writes content to mounted volumes only. |
-| aiia-mysql | root (drops to mysql) | no | none | no | no | `no-new-privileges` is safe (dropping privileges still works); cap-drop ALL then add CHOWN, SETGID, SETUID, DAC_OVERRIDE, FOWNER. Data volume only for writes. |
-| aiia-redis | root (drops itself) | no | none | no | no | `no-new-privileges` and cap-drop ALL (add SETGID, SETUID, CHOWN); read-only rootfs feasible. |
-| prometheus, node-exporter, blackbox-exporter | nobody / root | no | none | no | no | Already unprivileged: `no-new-privileges`, cap-drop ALL and read-only rootfs (tmpfs where needed) are all expected to work. node-exporter additionally mounts the host root read-only and the D-Bus socket (by design). |
-| grafana | 472 | no | partial | no | no | Drops a subset of capabilities already; add `no-new-privileges`. |
-| cadvisor | root | **yes** | none | label=disable | no | Needs privileged access to read cgroups/devices; keep, document, and consider replacing by node-exporter's cgroup data if the dashboards allow. |
-| deploy-mrija-archive-1 | root | no | none | no | no | Local build (`mrija-archive:latest`, not pinned); mounts the TheHost SSH key read-only and the mail data. `no-new-privileges` and cap-drop ALL are good first steps once the image is known. |
+| aiia-ghost | quadlet (phase 4) | no | all | yes | yes | Moved to Podman with the defaults, running as its data owner; see "Podman defaults". |
+| aiia-mysql | quadlet (phase 4) | no | all | yes | yes | Moved to Podman with the defaults, running as its data owner; see "Podman defaults". |
+| aiia-redis | quadlet (phase 4) | no | all | yes | yes | Moved to Podman with the defaults, running as its data owner; see "Podman defaults". |
+| prometheus, node-exporter, blackbox-exporter | quadlet (phase 4) | no | all | yes | yes | Moved to Podman with the defaults, running as its data owner; see "Podman defaults". |
+| grafana | quadlet (phase 4) | no | all | yes | yes | Moved to Podman with the defaults, running as its data owner; see "Podman defaults". |
+| cadvisor | dropped in phase 4 (Beszel covers host metrics) | | | | | |
+| deploy-mrija-archive-1 | quadlet (phase 4) | no | all | yes | yes | Moved to Podman with the defaults, running as its data owner; see "Podman defaults". |
 | minecraft | root (entrypoint drops) | no | none | no | no | Memory capped at 12 GiB, 4 CPUs. `no-new-privileges` is safe; cap-drop needs a test with plugins. Writes the whole data volume: no read-only rootfs. |
 | watchyourlan | root | no | **ALL** (+ NET_RAW) | no | no | The reference for what is achievable; add `no-new-privileges`. |
 | wazuh.manager, wazuh.indexer, wazuh.dashboard | root / wazuh users | no | none | no | no | Large init scripts and a security plugin: test on a copy first. Pinned by digest since 2026-10-06. |
@@ -80,7 +80,7 @@ supervised-maintenance procedure in `bandit-lab-updates.md`.
 | Container | Adopted flag | Owner's post-deploy health probe |
 | --- | --- | --- |
 | aiia-ghost | `no-new-privileges` | HTTP `http://127.0.0.1:2368/` inside its network namespace; expect a successful storefront response (follow redirects), then check `https://aiia.at/` through the normal route. |
-| aiia-redis | `no-new-privileges` | `sudo docker exec aiia-redis redis-cli ping` must return `PONG`; check Ghost still serves requests. |
+| aiia-redis | `no-new-privileges` | `sudo podman exec aiia-redis redis-cli ping` must return `PONG`; check Ghost still serves requests. |
 | grafana | `no-new-privileges` | HTTP `http://127.0.0.1:3000/api/health` inside its network namespace; require HTTP 200 and `database: ok`, then load a dashboard through its normal route. |
 | blackbox-exporter | `no-new-privileges` | HTTP `http://127.0.0.1:9115/metrics` inside its network namespace, then `/probe?module=http_origin&target=http://grafana:3000/api/health`; require `probe_success 1`. |
 | node-exporter | `no-new-privileges` | HTTP `http://127.0.0.1:9100/metrics` inside its network namespace; require `node_scrape_collector_success{collector="systemd"} 1` and `node_filesystem_size_bytes` series. |

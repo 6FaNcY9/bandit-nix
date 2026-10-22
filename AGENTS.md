@@ -31,7 +31,7 @@ NixOS flake for `bandit` (Framework 13 AMD laptop) and `bandit-lab` (headless se
 | Laptop system modules | `modules/system/`, `modules/desktop/` (`nixos/` is the legacy tree: only `nixos/ci-overrides.nix` is still imported, by `bandit-ci`; deleted in phase 7) |
 | Headless server base | `modules/server/` (shares `modules/system/` base files with the laptop) |
 | Podman, quadlet-nix and their hardening defaults | `modules/server/containers.nix`; checks `ci/lab-containers.nix`, `ci/lab-vm.nix` |
-| Server services and assets | `hosts/bandit-lab/services/<name>/` |
+| Server services and assets | `hosts/bandit-lab/services/<name>/`; containers are quadlet units (pods `monitoring`, `aiia`; `mrija-archive`, `vaultwarden`) on the podman `proxy` network, each published on a `127.0.0.1` port that Traefik routes through its file provider (no container socket) |
 | Minecraft server, bots, Andy, gaming PCs | the flake input `bandit-craft` ([github:6FaNcY9/bandit-craft](https://github.com/6FaNcY9/bandit-craft), split out 2026-10-12): its modules are imported in `hosts/bandit-lab/default.nix`; the contract checks `ci/lab-minecraft.nix`, `ci/lab-mcbots.nix` stay here |
 | User environment | `modules/user/` (`desktop/`, `terminal/`, `editor/`) |
 | Secrets wiring and encrypted data | `modules/system/sops.nix`, `.sops.yaml`, `secrets/` |

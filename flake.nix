@@ -172,14 +172,6 @@
         assert nixpkgs.lib.assertMsg (builtins.elem "vaultwarden.service" lab.sops.templates."vaultwarden.env".restartUnits)
         "vaultwarden container must restart on sops secret rotation";
           import ./ci/lab-reliability.nix {inherit pkgs sops-nix;};
-      docker-discovery-proxy =
-        pkgs.runCommand "docker-discovery-proxy-regressions" {
-          nativeBuildInputs = [pkgs.python3];
-        } ''
-          python3 ${./ci/test-docker-discovery-proxy.py} ${pkgs.lib.escapeShellArg self.nixosConfigurations.bandit-lab.config.systemd.services.traefik-docker-proxy.serviceConfig.ExecStart}
-          touch "$out"
-        '';
-
       lab-update = let
         inherit (nixpkgs) lib;
         updater =

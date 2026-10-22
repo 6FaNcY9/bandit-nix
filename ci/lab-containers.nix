@@ -54,6 +54,8 @@ in
   "the aiia-ghost image is loaded by hand and must never be pulled";
   assert lib.assertMsg (lab.virtualisation.quadlet.containers.vaultwarden.containerConfig.publishPorts == ["127.0.0.1:8222:8080"] && lab.virtualisation.quadlet.containers.vaultwarden.containerConfig.notify == "healthy")
   "vaultwarden must publish on loopback only and report ready through its health check";
+  assert lib.assertMsg (!(lib.hasAttrByPath ["providers" "docker"] lab.services.traefik.staticConfigOptions) && !(lab.systemd.services ? traefik-docker-proxy) && !(lab.systemd.services ? docker-network-proxy))
+  "traefik must route through the file provider only: no docker provider, discovery proxy or docker proxy network";
   assert lib.assertMsg (lib.all (c: (c.containerConfig.notify or null) != "healthy" || (c.containerConfig.healthCmd or null) != null) (lib.attrValues lab.virtualisation.quadlet.containers))
   "a container with notify = healthy needs an explicit healthCmd: podman ignores the image HEALTHCHECK of OCI images and the unit fails to start";
   assert lib.assertMsg (!(lab.virtualisation.quadlet.pods.aiia.podConfig ? networks) || lab.virtualisation.quadlet.pods.aiia.podConfig.networks == [])
