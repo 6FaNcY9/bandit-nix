@@ -27,9 +27,8 @@ in {
       owner = username;
       group = "users";
       mode = "0400";
-      # No restartUnits: the container is host-managed Compose (not defined in
-      # this repo), so after a sops rotation restart the mrija-archive
-      # container manually (`docker restart`).
+      # No restartUnits: after a sops rotation restart the container by hand
+      # (`sudo systemctl restart mrija-archive.service`).
       content = ''
         MRIJA_API_KEY=${config.sops.placeholder."mrija-api-key"}
         MRIJA_PASSWORD=${config.sops.placeholder."mrija-password"}
@@ -49,8 +48,7 @@ in {
     services.mrija-archive-sync = {
       description = "Trigger mrija-archive daily mail sync";
       after = ["network-online.target" "mrija-archive.service"];
-      wants = ["network-online.target"];
-      requires = ["mrija-archive.service"];
+      wants = ["network-online.target" "mrija-archive.service"];
       serviceConfig = {
         Type = "oneshot";
         User = username;
@@ -74,7 +72,6 @@ in {
         RestrictRealtime = true;
         RestrictSUIDSGID = true;
         RestrictAddressFamilies = ["AF_UNIX" "AF_INET" "AF_INET6"];
-        # Docker DNAT reaches the proxy on its dynamic shared-network address.
         # The loopback port is DNATed to the container, and the filter sees the
         # translated destination: allow the podman proxy subnet.
         IPAddressAllow = ["localhost" "10.89.0.0/24"];
