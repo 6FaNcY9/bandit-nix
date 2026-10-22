@@ -184,7 +184,8 @@ Minecraft published on all interfaces, and LLMNR/mDNS listening. Decisions:
 
 ## Off-host backups (2026-10-06)
 
-Decision D7: restic to a Backblaze B2 bucket, encrypted with a repository
+Decision D7: restic to a Backblaze B2 bucket (changed to DigitalOcean Spaces,
+S3-compatible, on 2026-10-22: the owner has Student Pack credits there), encrypted with a repository
 password that lives in `secrets/lab.yaml` and offline. The module is committed
 but disabled until the four secrets are added (`docs/runbooks/backup-restore.md`),
 because enabling it without them would fail activation. The `lab-backup` flake
@@ -270,7 +271,7 @@ possible "accept" that only the owner can decide; nothing is accepted yet.
 | A2 | bandit-craft/hosts/bandit-lab/services/minecraft/default.nix:125 | `BOTGATE_SOURCES` contains the whole bot subnet `10.250.77.0/29`, including the gateway `.1` (the host); BotGate forces offline mode for `bot1..bot99` from there, so any host process can log in as a bot without Mojang auth. Tailnet clients on the published port 25565 may arrive with the gateway IP as source (unverified). | Medium | fix in phase 5 (list only the bot containers' addresses; verify the source IP of tailnet connections) |
 | A3 | bandit-craft/hosts/bandit-lab/services/mcbots/default.nix:115 | `TRUSTED_PROXIES` lists the bridge gateways `10.250.77.1,172.22.0.1`; `authorized()` (server.js:228-231) then trusts the `tailscale-user-login` header, so any host process or connection arriving as the gateway can forge the owner login and reach the dashboard and `/api/admin/*` with full RCON. | Medium | fix in phase 6 |
 | A4 | bandit-craft/hosts/bandit-lab/services/mcbots/app/server.js:229-230 | `authorized()` returns `true` when `ALLOWED_TS_LOGINS` is empty, and accepts the identity header from every peer when `TRUSTED_PROXIES` is empty: a misconfiguration opens the dashboard with RCON instead of refusing to start (fail-open). | Medium | fix in phase 6 (fail closed at startup) |
-| A5 | bandit-craft/hosts/bandit-lab/services/mcbots/app/admin.js:129 | The admin action `command` forwards arbitrary RCON commands (only length and control characters are checked), so dashboard access equals server ownership; protection rests entirely on A3/A4. `sameOrigin()` (server.js:238) also lets requests without an `Origin` header through. | Low | fix in phase 6 (reject missing Origin on POST/WS); owner? (accept raw RCON passthrough as a dashboard feature) |
+| A5 | bandit-craft/hosts/bandit-lab/services/mcbots/app/admin.js:129 | The admin action `command` forwards arbitrary RCON commands (only length and control characters are checked), so dashboard access equals server ownership; protection rests entirely on A3/A4. `sameOrigin()` (server.js:238) also lets requests without an `Origin` header through. | Low | fix in phase 6 (reject missing Origin on POST/WS); accept raw RCON passthrough as a dashboard feature (owner, 2026-10-22) |
 
 Not covered by this run (follow up in the phase that touches it): `hub.js` lines 300-590, `hubclient.js`
 beyond the message handlers, systemd hardening of all units in `nixos/server/`, ntfy, beszel,
