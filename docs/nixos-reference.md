@@ -74,7 +74,7 @@ environment.systemPackages = lib.mkAfter [ pkgs.ripgrep ];
         home-manager.nixosModules.home-manager
         stylix.nixosModules.stylix
         ./hosts/hostname
-        ./nixos
+        ./modules
         ./home  # HM as NixOS module; needs home-manager.users.vino = import ./home
       ];
     };
@@ -210,14 +210,14 @@ via `xfconf.settings` in HM (see `home/desktop/xfce-colors.nix`).
 ## sops-nix Patterns
 
 ```nix
-# nixos/sops.nix — shared system module (no defaultSopsFile on purpose)
+# modules/system/sops.nix — shared system module (no defaultSopsFile on purpose)
 sops = {
   age.keyFile = "/var/lib/sops-nix/key.txt";   # provisioned at first boot
   secrets.user-password.neededForUsers = true;
 };
 
-# nixos/secrets-workstation.nix — laptop only; bandit-lab sets
-# sops.defaultSopsFile = ../../secrets/lab.yaml in nixos/server/default.nix
+# modules/system/secrets-workstation.nix — laptop only; bandit-lab sets
+# sops.defaultSopsFile = ../../secrets/lab.yaml in modules/server/default.nix
 sops = {
   defaultSopsFile = ../secrets/bandit.yaml;
   secrets.github_ssh_key = {

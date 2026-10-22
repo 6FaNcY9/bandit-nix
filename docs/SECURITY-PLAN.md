@@ -277,4 +277,24 @@ Not covered by this run (follow up in the phase that touches it): `hub.js` lines
 beyond the message handlers, systemd hardening of all units in `nixos/server/`, ntfy, beszel,
 vaultwarden and webhost configuration; no CVE lookup. Verified clean: hub token comparison uses
 `timingSafeEqual` with a token per worker; mcbots publishes on `127.0.0.1` only and runs with
-`cap-drop=ALL` and `no-new-privileges`; the Traefik Docker socket goes through a GET-only proxy.
+`cap-drop=ALL` and `no-new-privileges`; Traefik routes to loopback ports through its file provider and
+touches no container socket (phase 4).
+
+## Phase 4 unit scores (2026-10-22)
+
+`systemd-analyze security` of the service units before and after the move to Podman
+(spec section 6). The score rates the unit's own sandbox: a quadlet unit runs the
+`podman` process as root, so its number stays in the same band as the Docker unit's;
+the hardening that matters for the workload is inside the container (`User`,
+`NoNewPrivileges`, `DropCapability=all`, `ReadOnly`, asserted by `lab-containers` and
+`lab-vm`). Recorded anyway so a regression of the unit itself is visible.
+
+| Service | Docker-era unit | before | Podman unit | after |
+| --- | --- | --- | --- | --- |
+| monitoring | `compose-monitoring.service` | 9.6 UNSAFE | `monitoring-pod`, `prometheus`, `grafana`, `blackbox-exporter`, `node-exporter` | fill after deploy |
+| mrija-archive | (Compose project `deploy`, no unit) | n/a | `mrija-archive.service` | fill after deploy |
+| aiia | `docker-aiia-ghost/-mysql/-redis.service` | 9.6 UNSAFE | `aiia-pod`, `aiia-ghost`, `aiia-mysql`, `aiia-redis` | fill after deploy |
+| vaultwarden | `docker-vaultwarden.service` | 9.6 UNSAFE | `vaultwarden.service` | fill after deploy |
+| traefik | `traefik.service` + `traefik-docker-proxy.service` | 5.7 MEDIUM + 5.0 MEDIUM | `traefik.service` (proxy unit gone) | fill after deploy |
+
+Read a score with `ssh bandit-lab 'systemd-analyze security <unit>'` (no sudo needed).
