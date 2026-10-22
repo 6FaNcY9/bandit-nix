@@ -293,9 +293,21 @@
       inherit (inputs.bandit-craft.checks.${system}) mcagents-tests;
 
       lab-containers = import ./ci/lab-containers.nix {
-        inherit pkgs;
+        inherit pkgs repoConfig;
         inherit (nixpkgs) lib;
         lab = self.nixosConfigurations.bandit-lab.config;
+        wideOpen =
+          (self.nixosConfigurations.bandit-lab.extendModules {
+            modules = [
+              {
+                virtualisation.quadlet.containers.wide.containerConfig = {
+                  image = "docker.io/library/busybox:latest";
+                  publishPorts = ["8080:80"];
+                };
+              }
+            ];
+          })
+          .config;
         probe =
           (self.nixosConfigurations.bandit-lab.extendModules {
             modules = [
