@@ -15,7 +15,7 @@
     "aiia-pod.service"
     "aiia-mysql.service"
     "aiia-redis.service"
-    "docker-network-proxy.service"
+    "proxy-network.service"
     "vaultwarden.service"
     "docker.service"
     "monitoring-pod.service"
@@ -33,7 +33,6 @@
     "sshd.service"
     "tailscaled.service"
     "traefik.service"
-    "traefik-docker-proxy.service"
   ];
   healthCheck = pkgs.writeShellApplication {
     name = "bandit-lab-health";
