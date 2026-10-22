@@ -56,6 +56,14 @@ and checks a canary container's runtime flags, its loopback-only port and the
 Docker-compatible API on `/run/podman/podman.sock`. Docker containers keep the
 per-container flags above until their service moves to Podman (phase 4).
 
+Phase 4 adds two rules. Every lab container sets `containerConfig.user` to the
+uid:gid that owns its data under `/srv/containers/<name>` (rootful Podman maps
+uids 1:1, so the bind mounts need no migration) and never sets `userns`;
+`lab-containers` rejects a container without a user. Migrated services join the
+quadlet network `proxy` (10.89.0.0/24, `modules/server/containers.nix`) so they
+resolve each other by name; `lab-vm` proves a container on it reaches a sibling
+and another host while Docker still owns the `FORWARD DROP` policy.
+
 ## Step 1: source changes prepared on 2026-10-10
 
 These rows record declarative flags, not deployed state. Each container is a

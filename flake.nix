@@ -80,11 +80,11 @@
     };
     sharedArgs = {inherit inputs repoConfig;};
     # The lab's module list; the lab-vm check boots the same list.
-    labModules = tree: [
+    labModules = [
       inputs.nixvim.nixosModules.nixvim
       sops-nix.nixosModules.sops
       ./hosts/bandit-lab
-      tree
+      ./modules/server
     ];
     securityLab = nixpkgs.lib.nixosSystem {
       inherit system;
@@ -129,7 +129,7 @@
 
       bandit-lab = nixpkgs.lib.nixosSystem {
         specialArgs = sharedArgs;
-        modules = labModules ./modules/server;
+        modules = labModules;
       };
     };
 
@@ -317,7 +317,7 @@
 
       lab-vm = import ./ci/lab-vm.nix {
         inherit pkgs;
-        modules = labModules ./modules/server;
+        modules = labModules;
         specialArgs = sharedArgs;
       };
 

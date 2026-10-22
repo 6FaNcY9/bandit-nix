@@ -24,9 +24,15 @@
         true))
   .success;
   image = "docker.io/library/busybox:latest";
+  # Rootful Podman maps uids 1:1, so a container runs as the uid that owns its data, never as root.
+  rootContainers = lib.attrNames (lib.filterAttrs (_: c: c.containerConfig.user == null || c.containerConfig.userns != null) lab.virtualisation.quadlet.containers);
 in
   assert lib.assertMsg (lab.virtualisation.docker.enable && lab.virtualisation.oci-containers.backend == "docker")
-  "Docker stays the oci-containers backend until phase 4 has moved every service";
+  "Docker stays the oci-containers backend until phases 5 and 6 have moved Minecraft and mcbots";
+  assert lib.assertMsg (lab.virtualisation.quadlet.networks ? proxy)
+  "the lab must define the quadlet network proxy that migrated services join";
+  assert lib.assertMsg (rootContainers == [])
+  "every lab quadlet container must set containerConfig.user and no userns (found: ${toString rootContainers})";
   assert lib.assertMsg (podman.enable && !podman.dockerCompat && !podman.dockerSocket.enable)
   "Podman must run without taking over the docker CLI or /run/docker.sock";
   assert lib.assertMsg (lab.virtualisation.containers.containersConf.settings.network.firewall_driver == "iptables")

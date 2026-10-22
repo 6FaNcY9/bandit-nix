@@ -22,8 +22,15 @@
 
   config.virtualisation = {
     podman.enable = true;
-    # The lab firewall and Docker use iptables (networking.nftables is off);
-    # netavark would otherwise pick its own default.
+    # The lab firewall and Docker use iptables (networking.nftables is off), so
+    # netavark must not pick nftables.
     containers.containersConf.settings.network.firewall_driver = "iptables";
+    # Shared network for migrated services (phase 4): container names resolve
+    # through aardvark-dns like on the Docker proxy network. Explicit subnet so
+    # firewall rules can name it; collides with no LAN, tailnet or Docker range.
+    quadlet.networks.proxy.networkConfig = {
+      subnets = ["10.89.0.0/24"];
+      gateways = ["10.89.0.1"];
+    };
   };
 }
