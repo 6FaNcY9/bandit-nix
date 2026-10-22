@@ -54,6 +54,8 @@ in
   "the aiia-ghost image is loaded by hand and must never be pulled";
   assert lib.assertMsg (lab.virtualisation.quadlet.containers.vaultwarden.containerConfig.publishPorts == ["127.0.0.1:8222:8080"] && lab.virtualisation.quadlet.containers.vaultwarden.containerConfig.notify == "healthy")
   "vaultwarden must publish on loopback only and report ready through its health check";
+  assert lib.assertMsg (lib.all (c: (c.containerConfig.notify or null) != "healthy" || (c.containerConfig.healthCmd or null) != null) (lib.attrValues lab.virtualisation.quadlet.containers))
+  "a container with notify = healthy needs an explicit healthCmd: podman ignores the image HEALTHCHECK of OCI images and the unit fails to start";
   assert lib.assertMsg (!(lab.virtualisation.quadlet.pods.aiia.podConfig ? networks) || lab.virtualisation.quadlet.pods.aiia.podConfig.networks == [])
   "the aiia pod must not join the proxy network: mysql and redis would be reachable from other containers";
   assert lib.assertMsg (let g = lab.virtualisation.quadlet.containers.aiia-ghost; in g.containerConfig.tmpfses == ["/home/ghost/content/public"] && g.serviceConfig.RestartSec == 5)
