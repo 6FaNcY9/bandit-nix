@@ -23,7 +23,7 @@
           uid: prometheus
           type: prometheus
           access: proxy
-          url: http://prometheus:9090
+          url: http://localhost:9090
           isDefault: true
     '';
     dashboards = pkgs.writeTextDir "dashboards/bandit-lab.yaml" ''

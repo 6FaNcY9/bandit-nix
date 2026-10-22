@@ -197,7 +197,7 @@ override flag. NixOS rollback restores configuration and services, but it does
 not restore persistent Vaultwarden data under `/srv/containers/vaultwarden/data`.
 
 Apply such a revision only during supervised maintenance, after a consistent,
-verified backup of that data (confirm the nightly `restic-backups-lab` run
+verified backup of that data (confirm the nightly `restic-backups-peer` run
 succeeded today, then restore `latest` into a scratch directory and check the
 database file is there). Then run the steps `lab-update apply` would run,
 with `<sha>` the merged tip of `main`:

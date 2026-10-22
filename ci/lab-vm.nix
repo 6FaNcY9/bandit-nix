@@ -112,10 +112,6 @@ in
       peer.wait_for_unit("peer-httpd.service")
       peer_ip = peer.wait_until_succeeds("ip -4 -o addr | grep -o '192\\.168\\.1\\.[0-9]*' | head -1").strip()
       lab.succeed(f"podman exec canary2 wget -qO- http://{peer_ip}/ | grep peer")
-      # No published port of the real lab configuration answers on the LAN address.
-      for p in lab.succeed("podman ps --format '{{.Ports}}'").split():
-          port = p.split("->")[0].rsplit(":", 1)[-1]
-          lab.fail(f"curl -fsS --max-time 3 http://{lan}:{port}/")
 
       # Real service: the monitoring pod needs no secret except Grafana (not asserted).
       lab.wait_for_unit("monitoring-pod.service")
@@ -124,5 +120,11 @@ in
       lab.wait_until_succeeds("curl -fsS http://127.0.0.1:9115/metrics | grep -q blackbox")
       lab.wait_until_succeeds("podman exec prometheus wget -qO- http://localhost:9090/-/ready")
       lab.succeed("podman exec prometheus wget -qO- http://localhost:9100/metrics | grep node_scrape_collector_success >/dev/null")
+
+      # No published port of the real lab configuration answers on the LAN address
+      # (after the pod is up, so its ports are in the sweep; any HTTP answer counts as reachable).
+      for p in lab.succeed("podman ps --format '{{.Ports}}'").split():
+          port = p.split("->")[0].rsplit(":", 1)[-1]
+          lab.fail(f"curl -sS -o /dev/null --max-time 3 http://{lan}:{port}/")
     '';
   }
