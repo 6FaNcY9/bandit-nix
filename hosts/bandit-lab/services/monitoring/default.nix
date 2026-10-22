@@ -1,6 +1,8 @@
 # Monitoring stack as a Podman pod (phase 4): the four containers share one
 # network namespace, so Prometheus scrapes its exporters on localhost and only
 # Grafana and blackbox are published, on loopback, for Traefik and the host.
+# Config files are mounted straight from the store: a changed file changes the
+# unit text, so the container restarts on activation (a stable symlink would not).
 {
   config,
   monitoringPrometheus,
@@ -9,6 +11,9 @@
   ...
 }: let
   inherit (config.virtualisation.quadlet) networks pods;
+  inherit (monitoringPrometheus) prometheusYml blackboxYml;
+  inherit (monitoringDashboards) grafanaDashboards;
+  inherit (monitoringProvisioning) grafanaProvisioning;
   data = "/srv/containers/monitoring";
   secret = config.sops.secrets."grafana-admin-password".path;
 in {
@@ -38,23 +43,10 @@ in {
     restartUnits = ["grafana.service"];
   };
 
-  systemd.tmpfiles.rules = let
-    inherit
-      (monitoringPrometheus)
-      prometheusYml
-      blackboxYml
-      ;
-    inherit (monitoringDashboards) grafanaDashboards;
-    inherit (monitoringProvisioning) grafanaProvisioning;
-  in [
+  systemd.tmpfiles.rules = [
     "d /srv/containers/monitoring 0755 root root -"
     "d /srv/containers/monitoring/grafana 0750 472 472 -"
     "d /srv/containers/monitoring/prometheus 0750 65534 65534 -"
-    # Stable paths for Compose bind mounts; targets update on rebuild.
-    "L+ /srv/containers/monitoring/prometheus.yml - - - - ${prometheusYml}"
-    "L+ /srv/containers/monitoring/blackbox.yml - - - - ${blackboxYml}"
-    "L+ /srv/containers/monitoring/grafana-provisioning - - - - ${grafanaProvisioning}"
-    "L+ /srv/containers/monitoring/grafana-dashboards - - - - ${grafanaDashboards}"
   ];
 
   virtualisation.quadlet = {
@@ -69,7 +61,7 @@ in {
         user = "65534:65534";
         exec = ["--config.file=/etc/prometheus/prometheus.yml" "--storage.tsdb.retention.time=30d"];
         volumes = [
-          "${data}/prometheus.yml:/etc/prometheus/prometheus.yml:ro"
+          "${prometheusYml}:/etc/prometheus/prometheus.yml:ro"
           "${data}/prometheus:/prometheus"
         ];
       };
@@ -84,8 +76,8 @@ in {
           };
           volumes = [
             "${data}/grafana:/var/lib/grafana"
-            "${data}/grafana-provisioning:/etc/grafana/provisioning:ro"
-            "${data}/grafana-dashboards:/var/lib/grafana-dashboards:ro"
+            "${grafanaProvisioning}:/etc/grafana/provisioning:ro"
+            "${grafanaDashboards}:/var/lib/grafana-dashboards:ro"
             "${secret}:${secret}:ro"
           ];
         };
@@ -99,7 +91,7 @@ in {
         pod = pods.monitoring.ref;
         user = "65534:65534";
         exec = ["--config.file=/etc/blackbox_exporter/config.yml"];
-        volumes = ["${data}/blackbox.yml:/etc/blackbox_exporter/config.yml:ro"];
+        volumes = ["${blackboxYml}:/etc/blackbox_exporter/config.yml:ro"];
       };
       node-exporter.containerConfig = {
         image = "docker.io/prom/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0";
