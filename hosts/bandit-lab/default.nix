@@ -20,6 +20,7 @@ in {
     ./services/vaultwarden
     "${craft}/minecraft"
     "${craft}/minecraft/sandbox.nix"
+    "${craft}/minecraft/nix-minecraft.nix"
     "${craft}/mcbots"
     ./services/ntfy
     "${craft}/ollama"

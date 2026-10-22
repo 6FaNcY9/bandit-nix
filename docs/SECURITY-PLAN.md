@@ -298,3 +298,9 @@ the hardening that matters for the workload is inside the container (`User`,
 | traefik | `traefik.service` + `traefik-docker-proxy.service` | 5.7 MEDIUM + 5.0 MEDIUM | `traefik.service` (proxy unit gone) | fill after deploy |
 
 Read a score with `ssh bandit-lab 'systemd-analyze security <unit>'` (no sudo needed).
+
+### Phase 5: nix-minecraft rehearsal units
+
+Scores come after the 5.3 deploy: `systemd-analyze security minecraft-server-paper.service minecraft-server-velocity.service`
+(run over ssh, no sudo), recorded here and compared with the Docker `docker-minecraft` / `docker-velocity` units
+(9.6 UNSAFE). Not measured yet.

@@ -25,6 +25,16 @@
   };
   expansions = pkgs.linkFarm "seed-expansions" {"PAPI-Expansion-Player_R5xV754.jar" = dummyJar "papi";};
   overlay = dummyJar "overlay.js";
+
+  # Rehearsal stack on nix-minecraft (phase 5.3).
+  ms = lab.services.minecraft-servers.servers;
+  paper = ms.paper;
+  vel = ms.velocity;
+  fwAll = [lab.networking.firewall] ++ lib.attrValues lab.networking.firewall.interfaces;
+  fwTcp = lib.concatMap (f: f.allowedTCPPorts or []) fwAll;
+  fwUdp = lib.concatMap (f: f.allowedUDPPorts or []) fwAll;
+  fwTs = lab.networking.firewall.interfaces.tailscale0;
+  velToml = builtins.readFile vel.files."velocity.toml";
 in
   assert lib.assertMsg (c.volumes == ["/srv/containers/minecraft/data:/data"]) "the Minecraft container may mount only its data directory (no docker.sock, no unrelated paths)";
   assert lib.assertMsg (!(lib.hasInfix "privileged" extra) && !(lib.hasInfix "cap-add" extra) && !(lib.hasInfix "docker.sock" extra)) "the Minecraft container must stay unprivileged: ${extra}";
@@ -51,6 +61,15 @@ in
   in
     lib.all (n: !(cs.${n}.environment ? MC_VHOST)) (lib.filter (lib.hasPrefix "mcbots") (builtins.attrNames cs)) && e.RCON_HOST == "minecraft" && (e.OWNER_UUIDS or "") != "" && (e.PROTECTED_AREAS or "") != "" && lib.elem "PATCH_DEFINITIONS" (builtins.attrNames sb.environment)) "the three helper bots play on main (protected areas set, only the owner's in-game orders count); the sandbox stays for test bots";
   assert lib.assertMsg (lab.systemd.timers ? minecraft-backup) "the consistent Minecraft backup timer must exist";
+  assert lib.assertMsg (paper.serverProperties.server-ip == "127.0.0.1" && paper.serverProperties.server-port == 25567) "the rehearsal Paper listens on loopback 25567 only";
+  assert lib.assertMsg (paper.serverProperties."rcon.password" == "@RCON_PASSWORD@") "the RCON password is a placeholder filled from the sops env file, never a value in the store";
+  assert lib.assertMsg (!paper.openFirewall && !vel.openFirewall && !lab.services.minecraft-servers.openFirewall) "nix-minecraft must not open any firewall port by itself";
+  assert lib.assertMsg (lib.elem 25566 fwTs.allowedTCPPorts && lib.elem 24455 fwTs.allowedUDPPorts && !(lib.elem 25566 lab.networking.firewall.allowedTCPPorts)) "Velocity (25566/tcp) and the rehearsal voice chat (24455/udp) are open on tailscale0 only";
+  assert lib.assertMsg (!(lib.elem 25567 (fwTcp ++ fwUdp)) && !(lib.elem 25575 (fwTcp ++ fwUdp))) "Paper's port and RCON are in no firewall list";
+  assert lib.assertMsg (lib.hasInfix ''bind = "${tailnet}:25566"'' velToml && lib.hasInfix ''main = "127.0.0.1:25567"'' velToml) "Velocity binds the tailnet address and forwards to loopback Paper";
+  assert lib.assertMsg (!(lib.hasInfix "VELOCITY_FORWARDING_SECRET" (builtins.toJSON [paper.environment vel.environment]))) "the forwarding secret reaches the servers only through the sops env file";
+  assert lib.assertMsg (paper.managementSystem.systemd-socket.enable && !paper.managementSystem.tmux.enable) "Paper's console is the systemd socket";
+  assert lib.assertMsg (paper.package.version == "${c.environment.VERSION}-build.${c.environment.PAPER_BUILD}") "the rehearsal Paper is the same build as the Docker one: ${paper.package.version}";
     pkgs.runCommand "lab-minecraft" {} ''
       export PATH=${lib.makeBinPath [pkgs.coreutils pkgs.gnugrep pkgs.gnused]}:$PATH
       data=$TMPDIR/data
