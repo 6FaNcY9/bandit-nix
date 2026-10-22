@@ -17,6 +17,7 @@
     ./zsh.nix
     ./starship.nix
     ./containers.nix
+    ./minecraft.nix
   ];
 
   # bandit-lab decrypts only secrets/lab.yaml (recipients: user + lab host key).

@@ -44,6 +44,12 @@
     # Podman quadlet units as typed NixOS options (lab containers from phase 3 on).
     quadlet-nix.url = "github:SEIAROTg/quadlet-nix";
 
+    # Paper and Velocity as NixOS services (phase 5; the Docker stack stays until the cutover).
+    nix-minecraft = {
+      url = "github:Infinidoge/nix-minecraft";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # The game and AI half (Minecraft, bots, Andy, the gaming PCs' tooling), split out 2026-10-12.
     # bandit-lab imports its modules (hosts/bandit-lab/default.nix); hosts, secrets and deployment stay here.
     bandit-craft = {
