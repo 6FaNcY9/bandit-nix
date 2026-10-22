@@ -38,6 +38,24 @@ the tailnet address (`ci/lab-surface.nix`).
 | wazuh.agent | root | no | none | no | no | Holds the Docker socket for container monitoring (accepted risk; allowlisted in `ci/lab-surface.nix`). |
 | portainer, portainer-agent | root | no | none | no | no | Being retired; the Agent holds `docker.sock`. |
 
+## Podman defaults (phase 3)
+
+Every Podman container declared under `virtualisation.quadlet.containers`
+(quadlet-nix) starts hardened, set in `modules/server/containers.nix`:
+
+- `noNewPrivileges = true` (`NoNewPrivileges=true`)
+- `dropCapabilities = ["all"]` (`DropCapability=all`)
+- `readOnly = true` (`ReadOnly=true`)
+
+A container relaxes one flag by setting it in its own `containerConfig`, for
+example `readOnly = false;` or `addCapabilities = ["NET_BIND_SERVICE"];`. Write
+the reason next to it. Checks: `lab-containers` asserts the defaults in the
+generated unit text and that one explicit override wins; `lab-surface` applies
+the bind-address rule to quadlet `publishPorts`; `lab-vm` boots the lab in a VM
+and checks a canary container's runtime flags, its loopback-only port and the
+Docker-compatible API on `/run/podman/podman.sock`. Docker containers keep the
+per-container flags above until their service moves to Podman (phase 4).
+
 ## Step 1: source changes prepared on 2026-10-10
 
 These rows record declarative flags, not deployed state. Each container is a

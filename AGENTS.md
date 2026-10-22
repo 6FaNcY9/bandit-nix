@@ -30,6 +30,7 @@ NixOS flake for `bandit` (Framework 13 AMD laptop) and `bandit-lab` (headless se
 | Shared options (`options.bandit.*`, defaults from `lib/repository.nix`) | `modules/options.nix` |
 | Laptop system modules | `modules/system/`, `modules/desktop/` (`nixos/` is the legacy tree: only `nixos/ci-overrides.nix` is still imported, by `bandit-ci`; deleted in phase 7) |
 | Headless server base | `modules/server/` (shares `modules/system/` base files with the laptop) |
+| Podman, quadlet-nix and their hardening defaults | `modules/server/containers.nix`; checks `ci/lab-containers.nix`, `ci/lab-vm.nix` |
 | Server services and assets | `hosts/bandit-lab/services/<name>/` |
 | Minecraft server, bots, Andy, gaming PCs | the flake input `bandit-craft` ([github:6FaNcY9/bandit-craft](https://github.com/6FaNcY9/bandit-craft), split out 2026-10-12): its modules are imported in `hosts/bandit-lab/default.nix`; the contract checks `ci/lab-minecraft.nix`, `ci/lab-mcbots.nix` stay here |
 | User environment | `modules/user/` (`desktop/`, `terminal/`, `editor/`) |
@@ -50,7 +51,7 @@ Follow imports to establish what is active; a directory's presence does not mean
 - Hyprland is owned by the system module; Home Manager configuration under `modules/user/desktop/hyprland/` uses native Lua and structured bindings/rules. Preserve its `package = null` and `portalPackage = null` arrangement. Check local examples before editing.
 - Preserve explicit Stylix target ownership; hand-maintained Hyprland, Rofi, and Mako settings must not gain conflicting generated settings.
 - Keep PipeWire properties that require dotted names as literal keys (for example, `"default.clock.rate"`).
-- bandit-lab opens firewall ports on `tailscale0` only. Docker-published container ports bypass the NixOS firewall, so every `ports` entry must bind `127.0.0.1` or the tailnet address (`repoConfig.lab.tailscaleIp`); the `lab-surface` flake check enforces it.
+- bandit-lab opens firewall ports on `tailscale0` only. Docker-published container ports bypass the NixOS firewall, so every `ports` entry must bind `127.0.0.1` or the tailnet address (`repoConfig.lab.tailscaleIp`); the `lab-surface` flake check enforces it. Quadlet `publishPorts` are checked like Docker ports.
 - Container privilege and deployment models differ between hosts. Inspect the affected host's modules and Compose definitions before changing them.
 
 ## Verification
