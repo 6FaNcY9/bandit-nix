@@ -56,6 +56,8 @@ in
   "vaultwarden must publish on loopback only and report ready through its health check";
   assert lib.assertMsg (!(lib.hasAttrByPath ["providers" "docker"] lab.services.traefik.staticConfigOptions) && !(lab.systemd.services ? traefik-docker-proxy) && !(lab.systemd.services ? docker-network-proxy))
   "traefik must route through the file provider only: no docker provider, discovery proxy or docker proxy network";
+  assert lib.assertMsg (lib.all (c: (c.containerConfig.notify or null) != "healthy" || (c.containerConfig.healthCmd or null) != null) (lib.attrValues lab.virtualisation.quadlet.containers))
+  "a container with notify = healthy needs an explicit healthCmd: podman ignores the image HEALTHCHECK of OCI images and the unit fails to start";
   assert lib.assertMsg (!(lab.virtualisation.quadlet.pods.aiia.podConfig ? networks) || lab.virtualisation.quadlet.pods.aiia.podConfig.networks == [])
   "the aiia pod must not join the proxy network: mysql and redis would be reachable from other containers";
   assert lib.assertMsg (let g = lab.virtualisation.quadlet.containers.aiia-ghost; in g.containerConfig.tmpfses == ["/home/ghost/content/public"] && g.serviceConfig.RestartSec == 5)

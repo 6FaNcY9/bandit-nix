@@ -46,6 +46,9 @@ in {
     # The unit is active only once the image's health check passes, so the
     # deploy health gate and Traefik never see a half-started vault.
     notify = "healthy";
+    # The OCI image drops its Dockerfile HEALTHCHECK, so restate it here.
+    healthCmd = "/healthcheck.sh";
+    healthInterval = "10s";
     volumes = [
       "/srv/containers/vaultwarden/data:/data"
       "${vaultwardenTemplates}:/templates:ro"
