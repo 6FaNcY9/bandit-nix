@@ -332,6 +332,21 @@
         "type": "github"
       }
     },
+    "quadlet-nix": {
+      "locked": {
+        "lastModified": 1790641475,
+        "narHash": "sha256-G/priWdc/7y1Fogok9rn6WS4KhbYpTr2B2PwSMt3ekA=",
+        "owner": "SEIAROTg",
+        "repo": "quadlet-nix",
+        "rev": "db3af9df6943692c78cf9a05e3bfeb7d82e94cf3",
+        "type": "github"
+      },
+      "original": {
+        "owner": "SEIAROTg",
+        "repo": "quadlet-nix",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "bandit-craft": "bandit-craft",
@@ -341,6 +356,7 @@
         "nixpkgs": "nixpkgs",
         "nixvim": "nixvim",
         "pdfreader-nvim": "pdfreader-nvim",
+        "quadlet-nix": "quadlet-nix",
         "sops-nix": "sops-nix",
         "stylix": "stylix",
         "zsh-kimi-cli": "zsh-kimi-cli"

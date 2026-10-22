@@ -41,6 +41,9 @@
       flake = false;
     };
 
+    # Podman quadlet units as typed NixOS options (lab containers from phase 3 on).
+    quadlet-nix.url = "github:SEIAROTg/quadlet-nix";
+
     # The game and AI half (Minecraft, bots, Andy, the gaming PCs' tooling), split out 2026-10-12.
     # bandit-lab imports its modules (hosts/bandit-lab/default.nix); hosts, secrets and deployment stay here.
     bandit-craft = {
@@ -288,6 +291,27 @@
       };
 
       inherit (inputs.bandit-craft.checks.${system}) mcagents-tests;
+
+      lab-containers = import ./ci/lab-containers.nix {
+        inherit pkgs;
+        inherit (nixpkgs) lib;
+        lab = self.nixosConfigurations.bandit-lab.config;
+        probe =
+          (self.nixosConfigurations.bandit-lab.extendModules {
+            modules = [
+              {
+                virtualisation.quadlet.containers = {
+                  hardened.containerConfig.image = "docker.io/library/busybox:latest";
+                  relaxed.containerConfig = {
+                    image = "docker.io/library/busybox:latest";
+                    readOnly = false;
+                  };
+                };
+              }
+            ];
+          })
+          .config;
+      };
 
       lab-surface = import ./ci/lab-surface.nix {
         inherit pkgs repoConfig;
