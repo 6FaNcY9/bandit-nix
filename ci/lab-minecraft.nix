@@ -90,7 +90,7 @@ in
     cs = lab.virtualisation.oci-containers.containers;
     e = cs.mcbots.environment;
   in
-    lib.all (n: !(cs.${n}.environment ? MC_VHOST)) (lib.filter (lib.hasPrefix "mcbots") (builtins.attrNames cs)) && e.RCON_HOST == "minecraft" && (e.OWNER_UUIDS or "") != "" && (e.PROTECTED_AREAS or "") != "" && lib.elem "PATCH_DEFINITIONS" (builtins.attrNames sb.environment)) "the three helper bots play on main (protected areas set, only the owner's in-game orders count); the sandbox stays for test bots";
+    lib.all (n: (cs.${n}.environment.MC_VHOST or "") == "sandbox.bots") (lib.filter (lib.hasPrefix "mcbots") (builtins.attrNames cs)) && e.RCON_HOST == "minecraft" && (e.OWNER_UUIDS or "") != "" && (e.PROTECTED_AREAS or "") != "" && lib.elem "PATCH_DEFINITIONS" (builtins.attrNames sb.environment)) "every mcbots container plays in the sandbox (MC_VHOST sandbox.bots) until the job board passes there (owner 2026-10-23); protected areas set, only the owner's in-game orders count";
   assert lib.assertMsg (lab.systemd.timers ? minecraft-backup) "the consistent Minecraft backup timer must exist";
   assert lib.assertMsg (paper.serverProperties.server-ip == "127.0.0.1" && paper.serverProperties.server-port == 25567) "the rehearsal Paper listens on loopback 25567 only";
   assert lib.assertMsg (paper.serverProperties."rcon.password" == "@RCON_PASSWORD@") "the RCON password is a placeholder filled from the sops env file, never a value in the store";
