@@ -24,27 +24,30 @@
   services.crowdsec = {
     enable = true;
     autoUpdateService = true; # daily cscli hub update
-    settings = {
-      # LAPI for the bouncers; loopback default (127.0.0.1:8080), no firewall.
-      general.api.server.enable = true;
-      # Explicit credential paths under the writable state dir.
-      # Bootstrap caveat: the module's setup script runs `cscli machine add`
-      # BEFORE `cscli capi register`, and machine add strictly loads the
-      # online credentials file when capi.credentialsFile is set — so on
-      # first boot this option must stay null. The file below was enrolled
-      # once imperatively (`sudo cscli capi register -f <path>`); only then
-      # could the option be enabled. If the state dir is ever wiped, repeat
-      # that dance: deploy with the line commented out, register, re-enable.
-      lapi.credentialsFile = "/var/lib/crowdsec/state/local_api_credentials.yaml";
-      capi.credentialsFile = "/var/lib/crowdsec/state/online_api_credentials.yaml";
-    };
     hub.collections = [
       "crowdsecurity/linux"
       "crowdsecurity/sshd"
       "crowdsecurity/traefik"
       "crowdsecurity/http-cve"
     ];
-    localConfig = {
+    settings = {
+      # LAPI for the bouncers; loopback default (127.0.0.1:8080), no firewall.
+      config.api.server.enable = true;
+      # Keep the deployed state dir (the module default moved to /var/lib/crowdsec/data):
+      # it holds the DB with the imperatively registered bouncers and machine.
+      config.config_paths.data_dir = "/var/lib/crowdsec/state";
+      # Explicit credential paths under the writable state dir. The setup
+      # script registers with the central API and adds the local machine
+      # when the files are missing.
+      config.api.client.credentials_path = "/var/lib/crowdsec/state/local_api_credentials.yaml";
+      config.api.server.online_client.credentials_path = "/var/lib/crowdsec/state/online_api_credentials.yaml";
+      # Defaults of the pre-26.11 module, no longer set by it.
+      config.api.server.online_client.sharing = true;
+      config.api.server.online_client.pull = {
+        community = true;
+        blocklists = true;
+      };
+      config.db_config.use_wal = true;
       # Without profiles the engine alerts but never decides (module warns).
       profiles = [
         {
