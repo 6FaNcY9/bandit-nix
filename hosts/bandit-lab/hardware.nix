@@ -84,6 +84,33 @@ in {
     };
   };
 
+  # ── Boot order guard ─────────────────────────────────────────────────────
+  # The ESP is shared with Windows, whose updates (and some firmware updates)
+  # move "Windows Boot Manager" back to the front of BootOrder. GRUB only sets
+  # the order at install time, so put its entry first again on every boot.
+  # "NixOS-efi" is GRUB's default bootloader id for efiSysMountPoint = "/efi".
+  systemd.services.efi-bootorder-nixos-first = {
+    description = "Keep the NixOS GRUB entry first in the UEFI BootOrder";
+    wantedBy = ["multi-user.target"];
+    after = ["local-fs.target"];
+    path = [pkgs.efibootmgr pkgs.gnugrep pkgs.gnused pkgs.coreutils];
+    serviceConfig.Type = "oneshot";
+    script = ''
+      nixos=$(efibootmgr | sed -n 's/^Boot\([0-9A-Fa-f]\{4\}\)\*\{0,1\} NixOS-efi\b.*/\1/p' | head -n1)
+      order=$(efibootmgr | sed -n 's/^BootOrder: //p')
+      if [ -z "$nixos" ] || [ -z "$order" ]; then
+        echo "NixOS-efi entry or BootOrder not found; leaving BootOrder unchanged"
+        exit 0
+      fi
+      if [ "''${order%%,*}" = "$nixos" ]; then
+        exit 0
+      fi
+      rest=$(echo "$order" | tr ',' '\n' | grep -vix "$nixos" | paste -sd, -)
+      efibootmgr --bootorder "$nixos''${rest:+,$rest}" >/dev/null
+      echo "BootOrder was $order; set $nixos (NixOS-efi) first"
+    '';
+  };
+
   # NixOS' NVIDIA module keys off this option even with no X server running; keep X disabled in server.nix.
   services.xserver.videoDrivers = ["nvidia"];
 
