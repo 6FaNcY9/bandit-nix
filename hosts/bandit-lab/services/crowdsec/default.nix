@@ -31,23 +31,31 @@
       "crowdsecurity/http-cve"
     ];
     settings = {
-      # LAPI for the bouncers; loopback default (127.0.0.1:8080), no firewall.
-      config.api.server.enable = true;
-      # Keep the deployed state dir (the module default moved to /var/lib/crowdsec/data):
-      # it holds the DB with the imperatively registered bouncers and machine.
-      config.config_paths.data_dir = "/var/lib/crowdsec/state";
-      # Explicit credential paths under the writable state dir. The setup
-      # script registers with the central API and adds the local machine
-      # when the files are missing.
-      config.api.client.credentials_path = "/var/lib/crowdsec/state/local_api_credentials.yaml";
-      config.api.server.online_client.credentials_path = "/var/lib/crowdsec/state/online_api_credentials.yaml";
-      # Defaults of the pre-26.11 module, no longer set by it.
-      config.api.server.online_client.sharing = true;
-      config.api.server.online_client.pull = {
-        community = true;
-        blocklists = true;
+      config = {
+        # Keep the deployed state dir (the module default moved to /var/lib/crowdsec/data):
+        # it holds the DB with the imperatively registered bouncers and machine.
+        config_paths.data_dir = "/var/lib/crowdsec/state";
+        api = {
+          # Explicit credential paths under the writable state dir. The setup
+          # script registers with the central API and adds the local machine
+          # when the files are missing.
+          client.credentials_path = "/var/lib/crowdsec/state/local_api_credentials.yaml";
+          server = {
+            # LAPI for the bouncers; loopback default (127.0.0.1:8080), no firewall.
+            enable = true;
+            online_client = {
+              credentials_path = "/var/lib/crowdsec/state/online_api_credentials.yaml";
+              # Defaults of the pre-26.11 module, no longer set by it.
+              sharing = true;
+              pull = {
+                community = true;
+                blocklists = true;
+              };
+            };
+          };
+        };
+        db_config.use_wal = true;
       };
-      config.db_config.use_wal = true;
       # Without profiles the engine alerts but never decides (module warns).
       profiles = [
         {

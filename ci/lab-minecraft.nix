@@ -28,7 +28,7 @@
 
   # Rehearsal stack on nix-minecraft (phase 5.3).
   ms = lab.services.minecraft-servers.servers;
-  paper = ms.paper;
+  inherit (ms) paper;
   vel = ms.velocity;
   fwAll = [lab.networking.firewall] ++ lib.attrValues lab.networking.firewall.interfaces;
   fwTcp = lib.concatMap (f: f.allowedTCPPorts or []) fwAll;
