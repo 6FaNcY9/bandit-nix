@@ -26,6 +26,9 @@ in
   assert lib.assertMsg (lib.any (lib.hasPrefix "--keep-daily") b.pruneOpts && lib.any (lib.hasPrefix "--keep-monthly") b.pruneOpts) "retention must keep daily and monthly snapshots";
   assert lib.assertMsg (lib.hasInfix ".backup" prepare && lib.hasInfix "--single-transaction" prepare) "databases must be snapshotted consistently (sqlite .backup, mysqldump --single-transaction)";
   assert lib.assertMsg (lib.hasInfix "minecraft-snapshot" prepare) "the Minecraft world must be captured through the save-flushing snapshot, never a plain copy";
+  # Phase 5.5: the live server is the nix-minecraft one; a snapshot of the stopped Docker container would back up a cold, stale copy.
+  assert lib.assertMsg (lib.hasInfix "MC_UNIT=minecraft-server-paper MC_DATA=/srv/minecraft/paper /nix/store/" prepare) "the restic job must snapshot the nix-minecraft server (MC_UNIT/MC_DATA)";
+  assert lib.assertMsg (lib.elem "minecraft-server-paper.service" labOn.systemd.services.restic-backups-lab.after && !(lib.elem "docker-minecraft.service" labOn.systemd.services.restic-backups-lab.after)) "the restic job runs after the nix-minecraft server, not the stopped Docker one";
   assert lib.assertMsg (!(lib.hasInfix " -p" prepare)) "no inline database password on a command line";
   assert lib.assertMsg (labOn.systemd.timers ? restic-check && lib.hasInfix "--read-data-subset" labOn.systemd.services.restic-check.script) "the weekly integrity check must exist";
     pkgs.runCommand "lab-backup" {nativeBuildInputs = [pkgs.gnugrep];} ''

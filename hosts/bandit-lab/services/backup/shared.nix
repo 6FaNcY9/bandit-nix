@@ -9,7 +9,7 @@
   sqlite = "${pkgs.sqlite}/bin/sqlite3";
   rsync = "${pkgs.rsync}/bin/rsync";
   minecraftSnapshot = "${(import "${inputs.bandit-craft}/hosts/bandit-lab/services/minecraft/scripts.nix" {inherit pkgs;}).snapshot}/bin/minecraft-snapshot";
-  # The live Minecraft stack the snapshot reads: "docker" until the phase 5.5 cutover flips it to "nix".
+  # The live Minecraft stack the snapshot reads: "nix" since the phase 5.5 cutover (the Docker one is stopped, its data cold).
   minecraft =
     {
       docker = {
@@ -21,7 +21,7 @@
         env = "MC_UNIT=minecraft-server-paper MC_DATA=/srv/minecraft/paper ";
       };
     }
-    .docker;
+    .nix;
 in {
   # Run after the containers whose databases are dumped.
   after = ["aiia-mysql.service" "vaultwarden.service" minecraft.unit];
