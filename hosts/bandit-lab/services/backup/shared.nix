@@ -9,9 +9,22 @@
   sqlite = "${pkgs.sqlite}/bin/sqlite3";
   rsync = "${pkgs.rsync}/bin/rsync";
   minecraftSnapshot = "${(import "${inputs.bandit-craft}/hosts/bandit-lab/services/minecraft/scripts.nix" {inherit pkgs;}).snapshot}/bin/minecraft-snapshot";
+  # The live Minecraft stack the snapshot reads: "docker" until the phase 5.5 cutover flips it to "nix".
+  minecraft =
+    {
+      docker = {
+        unit = "docker-minecraft.service";
+        env = "";
+      };
+      nix = {
+        unit = "minecraft-server-paper.service";
+        env = "MC_UNIT=minecraft-server-paper MC_DATA=/srv/minecraft/paper ";
+      };
+    }
+    .docker;
 in {
   # Run after the containers whose databases are dumped.
-  after = ["aiia-mysql.service" "vaultwarden.service" "docker-minecraft.service"];
+  after = ["aiia-mysql.service" "vaultwarden.service" minecraft.unit];
 
   paths = staging: [
     staging
@@ -59,6 +72,6 @@ in {
     # Minecraft: saves flushed and frozen while rsync copies the data
     # directory, then re-enabled (a plain copy of a live world is torn).
     # Runs last so a flush timeout cannot cancel the other dumps; it still fails the run instead of uploading an inconsistent world.
-    ${minecraftSnapshot} ${staging}/minecraft
+    ${minecraft.env}${minecraftSnapshot} ${staging}/minecraft
   '';
 }

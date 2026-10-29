@@ -172,5 +172,29 @@ in
       echo custom > $data/plugins/BlueMap/core.conf
       stage
       grep -q '^custom$' $data/plugins/BlueMap/core.conf
+
+      # minecraft-snapshot on the nix-minecraft backend (phase 5.4), with fake systemctl/journalctl:
+      # live = save-off, flush, copy, save-on in that order; inactive = cold copy, no console;
+      # an unclear state = no copy (fail closed).
+      fake=$TMPDIR/fake && mkdir -p $fake
+      printf '#!${pkgs.runtimeShell}\ncat $TMPDIR/state\n[ "$(cat $TMPDIR/state)" = active ]\n' > $fake/systemctl
+      printf '#!${pkgs.runtimeShell}\necho "[INFO]: Saved the game"\n' > $fake/journalctl
+      chmod +x $fake/*
+      snap() {
+        : > $TMPDIR/console
+        PATH=$fake:${lib.makeBinPath [pkgs.coreutils pkgs.gnugrep pkgs.rsync pkgs.util-linux]} \
+          MC_UNIT=minecraft-server-paper MC_CONSOLE=$TMPDIR/console MC_DATA=$data MC_LOCK=$TMPDIR/snap.lock \
+          ${pkgs.bash}/bin/bash ${craft}/hosts/bandit-lab/services/minecraft/snapshot.sh "$1"
+      }
+      echo active > $TMPDIR/state
+      snap $TMPDIR/live
+      test "$(cat $TMPDIR/console)" = "$(printf 'save-off\nsave-all flush\nsave-on')"
+      test -e $TMPDIR/live/server.properties
+      echo inactive > $TMPDIR/state
+      snap $TMPDIR/cold
+      test ! -s $TMPDIR/console && test -e $TMPDIR/cold/server.properties
+      echo activating > $TMPDIR/state
+      ! snap $TMPDIR/unclear
+      test ! -e $TMPDIR/unclear
       touch "$out"
     ''
