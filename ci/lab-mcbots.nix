@@ -24,7 +24,7 @@ in
   assert lib.assertMsg (lib.hasInfix "--add-host=velocity:10.250.77." extra) "with two networks `velocity` must be pinned to its mcbots-network address, or BotGate sees a minecraft-network source: ${extra}";
   assert lib.assertMsg (c.environment.BLUEMAP_URL == "http://minecraft:8100") "mcbots reads BlueMap over the minecraft network only: ${c.environment.BLUEMAP_URL}";
   assert lib.assertMsg (lib.elem "docker-network-minecraft.service" units.docker-mcbots.after && lib.elem "docker-network-minecraft.service" units.docker-mcbots.requires) "docker-mcbots needs the minecraft network";
-  assert lib.assertMsg (lib.all (n: builtins.match "bot[0-9]{1,2}" n != null) names) "BOT_NAMES must match BotGate's ^bot[0-9]{1,2}$: ${c.environment.BOT_NAMES}";
+  assert lib.assertMsg (lib.all (n: builtins.match "(bot[0-9]{1,2}|MisaBot)" n != null) names) "BOT_NAMES must match BotGate's ^(bot[0-9]{1,2}|MisaBot)$: ${c.environment.BOT_NAMES}";
   assert lib.assertMsg (c.environment.ALLOWED_TS_LOGINS != "") "the dashboard must require a Tailscale login allowlist";
   assert lib.assertMsg (lib.hasInfix "tailscale serve" units.mcbots-https.script && !(lib.hasInfix "funnel" units.mcbots-https.script)) "the dashboard is exposed by Tailscale Serve only, never Funnel";
   # Remote-worker hub: its own loopback port behind Tailscale Serve, token from
