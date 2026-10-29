@@ -97,7 +97,23 @@ in
   assert lib.assertMsg (!paper.openFirewall && !vel.openFirewall && !lab.services.minecraft-servers.openFirewall) "nix-minecraft must not open any firewall port by itself";
   assert lib.assertMsg (lib.elem 25566 fwTs.allowedTCPPorts && lib.elem 24455 fwTs.allowedUDPPorts && !(lib.elem 25566 lab.networking.firewall.allowedTCPPorts)) "Velocity (25566/tcp) and the rehearsal voice chat (24455/udp) are open on tailscale0 only";
   assert lib.assertMsg (!(lib.elem 25567 (fwTcp ++ fwUdp)) && !(lib.elem 25575 (fwTcp ++ fwUdp))) "Paper's port and RCON are in no firewall list";
-  assert lib.assertMsg (lib.hasInfix ''bind = "${tailnet}:25566"'' velToml && lib.hasInfix ''main = "127.0.0.1:25567"'' velToml) "Velocity binds the tailnet address and forwards to loopback Paper";
+  assert lib.assertMsg (lib.hasInfix ''bind = "0.0.0.0:25566"'' velToml && lib.hasInfix ''main = "127.0.0.1:25567"'' velToml) "Velocity binds all addresses (tailnet and bridge, firewall decides) and forwards to loopback Paper";
+  # The mcbots bridge reaches the rehearsal through one firewall rule on the gateway; Paper's game port is never in it.
+  assert lib.assertMsg (let
+    gwRules = lib.filter (lib.hasInfix "10.250.77.1") (lib.splitString "\n" lab.networking.firewall.extraCommands);
+  in
+    gwRules == ["iptables -A nixos-fw -s 10.250.77.0/29 -d 10.250.77.1 -p tcp -m multiport --dports 25566,25575,8101 -j nixos-fw-accept"]) "exactly one bridge rule, to the gateway, for Velocity, rehearsal RCON and map only";
+  assert lib.assertMsg (lib.attrNames lab.systemd.sockets
+    != []
+    && lib.all (n: let
+      s = lab.systemd.sockets.${n};
+      p = lib.last (lib.splitString ":" (lib.head s.listenStreams));
+    in
+      lib.hasPrefix "mc-bridge-" n && s.listenStreams == ["10.250.77.1:${p}"] && s.socketConfig.FreeBind && lib.hasInfix "systemd-socket-proxyd 127.0.0.1:${p}" lab.systemd.services.${n}.serviceConfig.ExecStart) (lib.filter (lib.hasPrefix "mc-bridge-") (lib.attrNames lab.systemd.sockets))) "bridge forwarders listen on the gateway only (FreeBind) and forward to the same loopback port";
+  assert lib.assertMsg (let
+    src = vel.environment.BOTGATE_SOURCES;
+  in
+    !(lib.hasInfix tailnet src) && !(lib.hasInfix "172." src) && !(lib.hasInfix "10.250.77.1" src) && !(lib.hasInfix "/29" src)) "the rehearsal BotGate allowlist excludes the lab address, Docker defaults, the bridge gateway and the whole /29: ${vel.environment.BOTGATE_SOURCES}";
   assert lib.assertMsg (!(lib.hasInfix "VELOCITY_FORWARDING_SECRET" (builtins.toJSON [paper.environment vel.environment]))) "the forwarding secret reaches the servers only through the sops env file";
   assert lib.assertMsg (paper.managementSystem.systemd-socket.enable && !paper.managementSystem.tmux.enable) "Paper's console is the systemd socket";
   assert lib.assertMsg (paper.package.version == "${c.environment.VERSION}-build.${c.environment.PAPER_BUILD}") "the rehearsal Paper is the same build as the Docker one: ${paper.package.version}";
