@@ -37,6 +37,9 @@
 
   environment.systemPackages = [
     pkgs.brightnessctl
+    # System-wide so polkit finds its action (fingerprint unlock of the
+    # browser extension); the app writes its own Firefox native-messaging manifest.
+    pkgs.bitwarden-desktop
   ];
 
   # Polkit for privilege escalation in GUI apps (e.g. software updater).
