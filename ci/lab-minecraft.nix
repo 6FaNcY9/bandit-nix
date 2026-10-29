@@ -288,7 +288,7 @@ in
       cutover
       test -e $dst/.cutover-done && test -e $TMPDIR/old/CUTOVER-5.5-DONE
       test "$(cat $dst/world/level.dat)" = level && test ! -e $dst/world/session.lock
-      test ! -e $dst/stale-rehearsal-file && test ! -e $dst/.rehearsal-copied && test ! -e $dst/plugins/LuckPerms.jar && test ! -e $dst/.rcon-cli.history
+      test ! -e $dst/stale-rehearsal-file && test -e $dst/.rehearsal-copied && test ! -e $dst/plugins/LuckPerms.jar && test ! -e $dst/.rcon-cli.history
       test ! -e $dst/logs && test ! -e $dst/backups && test -e $dst/bluemap/web/mcbots/overlay.js
       grep -qx 'port=24454' $dst/plugins/voicechat/voicechat-server.properties
       test "$(cat $dst/plugins/BlueMap/webserver.conf)" = "$(printf 'port: 8100\nip: "127.0.0.1"')"
