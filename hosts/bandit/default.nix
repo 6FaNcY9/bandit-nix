@@ -48,6 +48,20 @@
     tailscale.enable = true;
     # iOS device pairing over USB (SideStore/iloader sideloading).
     usbmuxd.enable = true;
+    # Broken space key: tap AltGr for space, hold it (>200ms, not mid-typing)
+    # to keep AltGr symbols (@ { } [ ] \ |) on the Austrian layout.
+    # Built-in keyboard only (0001:0001, AT Translated Set 2): its water-damaged
+    # space key is ignored; an external keyboard keeps its own space key.
+    keyd = {
+      enable = true;
+      keyboards.internal = {
+        ids = ["0001:0001"];
+        settings.main = {
+          rightalt = "overloadi(space, overloadt2(altgr, space, 200), 150)";
+          space = "noop";
+        };
+      };
+    };
   };
 
   # Random MAC per network, stable per SSID: defeats cross-network
