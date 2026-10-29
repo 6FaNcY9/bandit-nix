@@ -35,7 +35,7 @@ in
   assert lib.assertMsg (c.environment.RCON_PORT == toString ms.paper.serverProperties."rcon.port" && c.environment.SANDBOX_RCON_PORT == toString ms.sandbox.serverProperties."rcon.port") "RCON_PORT is the real server's rcon.port, SANDBOX_RCON_PORT the sandbox's";
   assert lib.assertMsg (!(lib.hasInfix "/var/lib/minecraft-rcon/password" units.mcbots-seed.script) && lib.hasInfix lab.sops.secrets."minecraft-rcon-password".path units.mcbots-seed.script && lib.hasInfix "/var/lib/minecraft-sandbox-rcon/password" units.mcbots-seed.script) "mcbots-seed hands over the real RCON password from sops and the sandbox's generated one";
   assert lib.assertMsg (lib.elem "docker-network-minecraft.service" units.docker-mcbots.after && lib.elem "docker-network-minecraft.service" units.docker-mcbots.requires) "docker-mcbots needs the minecraft network";
-  assert lib.assertMsg (lib.all (n: builtins.match "bot[0-9]{1,2}" n != null) names) "BOT_NAMES must match BotGate's ^bot[0-9]{1,2}$: ${c.environment.BOT_NAMES}";
+  assert lib.assertMsg (lib.all (n: builtins.match "(bot[0-9]{1,2}|MisaBot)" n != null) names) "BOT_NAMES must match BotGate's ^(bot[0-9]{1,2}|MisaBot)$: ${c.environment.BOT_NAMES}";
   assert lib.assertMsg (c.environment.ALLOWED_TS_LOGINS != "") "the dashboard must require a Tailscale login allowlist";
   assert lib.assertMsg (lib.hasInfix "tailscale serve" units.mcbots-https.script && !(lib.hasInfix "funnel" units.mcbots-https.script)) "the dashboard is exposed by Tailscale Serve only, never Funnel";
   # Remote-worker hub: its own loopback port behind Tailscale Serve, token from
