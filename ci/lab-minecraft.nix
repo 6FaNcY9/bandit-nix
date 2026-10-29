@@ -252,7 +252,7 @@ in
 
       # minecraft-cutover (phase 5.5), fake systemctl/docker: a live Docker unit or container = refuse and copy
       # nothing; cold = copy over the rehearsal copy (stale files go, jars and locks go, ports fixed), stamp both
-      # sides; stamped = nothing, even when the sources are live again.
+      # sides; stamped = nothing, even when the sources are live again, unless Docker saved after the stamp.
       units=$TMPDIR/units && mkdir -p $units
       printf '#!${pkgs.runtimeShell}\ns=inactive; [ -e "$TMPDIR/units/$2" ] && s=$(cat "$TMPDIR/units/$2")\necho "$s"\n[ "$s" = active ]\n' > $fake/systemctl
       printf '#!${pkgs.runtimeShell}\nif [ -e "$TMPDIR/docker-error" ]; then cat "$TMPDIR/docker-error" >&2; exit 1; fi\ncat "$TMPDIR/docker-running"\n' > $fake/docker
@@ -295,6 +295,10 @@ in
       touch $src/world/new-after-cutover
       echo active > $units/docker-minecraft.service
       cutover
+      test ! -e $dst/world/new-after-cutover
+      # Docker saved after the cutover (a rollback ran it): stamped but refused, nothing copied.
+      touch -d '+1 min' $src/world/level.dat
+      if cutover 2>/dev/null; then echo "cutover must refuse after a Docker save" >&2; exit 1; fi
       test ! -e $dst/world/new-after-cutover
       touch "$out"
     ''
