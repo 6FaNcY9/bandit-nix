@@ -51,6 +51,37 @@ in
   assert lib.assertMsg (c.environment.PAPER_BUILD != "" && !(c.environment ? MOTD)) "the Paper build is pinned and server.properties keys owned by the panel (MOTD) have no environment variable";
   assert lib.assertMsg (!(units.minecraft-plugins.environment ? STAGE_PANELS) && units.minecraft-panels.partOf == ["docker-minecraft.service"]) "menus are reloaded in place (minecraft-panels), never staged before the start, so a menu change does not restart Minecraft";
   assert lib.assertMsg (units.docker-minecraft.serviceConfig.Restart == "always") "docker-minecraft must restart after a clean stop (panel Stop = restart)";
+  # docker-prune deletes networks no container is on (2026-10-28: mcbots gone at boot, Velocity down).
+  assert lib.all ({
+    u,
+    n,
+  }:
+    lib.assertMsg (lib.hasInfix "ensure-${n}-network" units.${u}.preStart) "${u} must re-create the ${n} network in preStart") [
+    {
+      u = "docker-minecraft";
+      n = "minecraft";
+    }
+    {
+      u = "docker-minecraft-sandbox";
+      n = "minecraft";
+    }
+    {
+      u = "docker-velocity";
+      n = "minecraft";
+    }
+    {
+      u = "docker-velocity";
+      n = "mcbots";
+    }
+    {
+      u = "docker-mcbots";
+      n = "minecraft";
+    }
+    {
+      u = "docker-mcbots";
+      n = "mcbots";
+    }
+  ];
   assert lib.assertMsg (lib.hasInfix "tailscale serve" units.minecraft-panel-https.script && !(lib.hasInfix "funnel" units.minecraft-panel-https.script)) "map HTTPS is Tailscale Serve (tailnet only), never Funnel";
   assert lib.assertMsg (!(lib.hasInfix "serve 443" units.minecraft-panel-https.script) && !(lib.any (lib.hasInfix "7867") c.ports)) "the retired VoxelDash panel stays unpublished (no port 7867, no serve on 443)";
   assert lib.assertMsg (sb.ports == [] && lib.head sb.volumes == "/srv/containers/minecraft-sandbox/data:/data" && lib.all (v: lib.hasPrefix "/nix/store/" v && lib.hasSuffix ":ro" v) (lib.tail sb.volumes) && sb.image == c.image && lib.elem "--network=minecraft" sb.extraOptions && !(lib.hasInfix "privileged" (toString sb.extraOptions))) "the sandbox publishes no port, mounts only its own data (plus read-only store jars), uses the real image on the minecraft network";
