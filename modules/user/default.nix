@@ -30,7 +30,7 @@
     packages = [
       pkgs.bitwarden-cli
       pkgs.gruvbox-plus-icons
-      pkgs.chromium
+      pkgs.brave
     ];
   };
 }

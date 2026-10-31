@@ -42,6 +42,15 @@
     pkgs.bitwarden-desktop
   ];
 
+  # Brave reads the same policy dir Stylix's chromium target feeds
+  # (BrowserThemeColor); turn off its crypto/VPN/AI extras there too.
+  programs.chromium.extraOpts = {
+    BraveRewardsDisabled = true;
+    BraveWalletDisabled = true;
+    BraveVPNDisabled = true;
+    BraveAIChatEnabled = false;
+  };
+
   # Polkit for privilege escalation in GUI apps (e.g. software updater).
   # libvirt on qemu:///system is root-equivalent (a VM can mount the host
   # disk). NixOS's own libvirtd module appends a rule that auto-approves
