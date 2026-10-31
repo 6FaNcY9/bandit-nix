@@ -292,7 +292,7 @@ in
       echo false > $TMPDIR/docker-running
       echo 'Cannot connect to the Docker daemon' > $TMPDIR/docker-error
       ! cutover 2>/dev/null
-      echo 'Error response from daemon: No such object: minecraft' > $TMPDIR/docker-error
+      echo 'Error response from daemon: No such container: minecraft' > $TMPDIR/docker-error
       echo active > $units/minecraft-server-paper.service
       ! cutover 2>/dev/null
       test ! -e $dst/.cutover-done && test ! -e $dst/world && test -e $dst/stale-rehearsal-file
