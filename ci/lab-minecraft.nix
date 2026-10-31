@@ -64,6 +64,7 @@ in
   assert lib.assertMsg (c.environment.PAPER_BUILD != "" && !(c.environment ? MOTD)) "the Paper build is pinned and server.properties keys owned by the panel (MOTD) have no environment variable";
   assert lib.assertMsg (!(units.minecraft-plugins.environment ? STAGE_PANELS) && units.minecraft-panels.partOf == ["minecraft-server-paper.service"]) "menus are reloaded in place (minecraft-panels, over RCON), never staged before the start, so a menu change does not restart Minecraft";
   assert lib.assertMsg (units.docker-minecraft.serviceConfig.Restart == "always") "docker-minecraft must restart after a clean stop (panel Stop = restart)";
+  assert lib.assertMsg (units.docker-velocity.serviceConfig.SuccessExitStatus == 143) "docker-velocity exits 143 on docker stop; counted as failed, lab-update rolls the cutover back";
   # docker-prune deletes networks no container is on (2026-10-28: mcbots gone at boot, Velocity down).
   assert lib.all ({
     u,
