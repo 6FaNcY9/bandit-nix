@@ -34,14 +34,15 @@ def executable(path, body):
 
 
 def scenario(source, failure="", already_active=False, history="fresh",
-             args=("apply",), expect="ok", env=None):
+             args=("apply",), expect="ok", env=None, failed_before=False):
     """history: how the deployed checkout relates to the remote tip.
     fresh      no checkout yet (the updater clones)
     ff         remote is one commit ahead of the checkout
     downgrade  remote was force-moved back to an older commit
     diverged   remote history was rewritten (force-push)
     tagshadow  a tag named origin/main points at an off-main commit
-    expect: ok | refused | usage | check-warns | manual-only
+    expect: ok | refused | usage | check-warns | manual-only | blocked
+    failed_before: the remote tip is marked as a rolled-back candidate
     """
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
@@ -69,6 +70,10 @@ def scenario(source, failure="", already_active=False, history="fresh",
             git("clone", "-q", str(remote), str(checkout))
             git("commit", "-q", "--allow-empty", "-m", "next", repo=remote)
         deployed = git("rev-parse", "HEAD", repo=checkout) if checkout.exists() else None
+        marker = root / "state/failed-candidate"
+        if failed_before:
+            marker.parent.mkdir()
+            marker.write_text(git("rev-parse", "main", repo=remote) + "\n")
         old, candidate = root / "old", root / "candidate"
         current, profile = root / "current", root / "profile"
         for system in (old, candidate):
@@ -105,6 +110,7 @@ ln -sfn "$4" "$2"
             "/run/lab-update.lock": str(root / "lock"),
             "/run/current-system": str(current),
             "/nix/var/nix/profiles/system": str(profile),
+            "/var/lib/lab-update": str(root / "state"),
         }.items():
             # Fail loudly when the updater script stops containing a path we
             # redirect, instead of silently testing against real system paths.
@@ -138,6 +144,10 @@ ln -sfn "$4" "$2"
             assert result.returncode == 0, detail
             assert "Non-fast-forward (" in output and "will refuse" in output, detail
             assert actions == "", detail
+        elif expect == "blocked":
+            assert result.returncode != 0 and "rolled back (marker" in output, detail
+            assert "build" not in actions and "switch" not in actions, detail
+            assert marker.exists(), detail
         elif expect == "refused":
             assert result.returncode != 0 and f"Refusing {history} update" in output, detail
             # Refused before any signature check, build or activation, and the
@@ -154,6 +164,11 @@ ln -sfn "$4" "$2"
                 assert git("rev-parse", "HEAD", repo=checkout) == deployed, detail
             if failure == "signature":
                 assert "build" not in actions, detail
+            # Only a rolled-back candidate is marked; a bad signature never reached the switch.
+            rolled_back = failure in ("health", "profile", "switch")
+            assert marker.exists() == rolled_back, detail
+            if rolled_back:
+                assert marker.read_text().strip() == git("rev-parse", "main", repo=remote), detail
         else:
             assert result.returncode == 0, detail
             assert "build" in actions, "Equal Git HEAD skipped deployment verification:\n" + detail
@@ -165,6 +180,7 @@ ln -sfn "$4" "$2"
             assert f"verify:{tip}" in actions, detail
             if already_active:
                 assert "candidate:test" not in actions, detail
+            assert not marker.exists(), detail
         name = failure or ("already active" if already_active else history)
         print(f"PASS: {name} [{label}] -> {expect if failure == '' else 'rolled back'}")
 
@@ -196,3 +212,6 @@ scenario(source, failure="health", history="ff")
 scenario(source, failure="switch", history="ff")
 # A tag named origin/main must not steer the deployment away from main.
 scenario(source, history="tagshadow")
+# A rolled-back candidate is not tried again (the timer would restart the units hourly);
+# a new commit clears the block, and a successful run removes the marker.
+scenario(source, history="ff", failed_before=True, expect="blocked")

@@ -109,6 +109,16 @@
       exit 1
     fi
 
+    # A candidate whose test switch failed (and was rolled back) is not tried again every hour: each
+    # try restarts the changed units and disconnects the players (cutover 2026-10-31: five tries).
+    # A fix is a new commit; this very commit is retried only after the owner removes the marker.
+    failed_marker=/var/lib/lab-update/failed-candidate
+    if [[ -f "$failed_marker" && "$(<"$failed_marker")" == "$after" ]]; then
+      echo "Refusing $after: its activation failed and was rolled back (marker $failed_marker)." >&2
+      echo "Push a fix, or to retry this very commit: sudo rm $failed_marker" >&2
+      exit 1
+    fi
+
     # The apply timer runs unattended as root, so only commits signed by the
     # owner's GPG key may be built and activated — a compromised GitHub
     # account alone must not be able to push code that runs here.
@@ -130,6 +140,8 @@
         if ! "$current_system/bin/switch-to-configuration" test; then
           echo "ERROR: could not restore the running configuration" >&2
         fi
+        install -d -m 0755 "$(dirname "$failed_marker")"
+        echo "$after" >"$failed_marker"
         status=1
       fi
       ${pkgs.coreutils}/bin/rm -rf "$GNUPGHOME"
@@ -199,6 +211,7 @@
       exit 1
     fi
     rollback_needed=0
+    rm -f "$failed_marker"
     echo "bandit-lab activated and recorded at $after"
   '';
 

@@ -141,7 +141,8 @@ After the backup exists:
 or rewritten history) before building anything; the manual override is
 `lab-update apply --allow-non-ff`, which no systemd unit may pass. Tests in
 `ci/test-lab-update.py` cover fast-forward, downgrade, diverged, the override,
-`check` output and argument errors; the `lab-update` flake check also fails if a
+`check` output, argument errors and the failed-candidate marker (a rolled-back
+commit is not retried hourly; `/var/lib/lab-update/failed-candidate`, 2026-11-01); the `lab-update` flake check also fails if a
 unit passes the flag. GitHub branch protection for `main` and the procedure for
 a lost phone signing key are in `docs/runbooks/bandit-lab-updates.md` (manual
 steps for the owner). Found in review (`architect`) and fixed with a regression
