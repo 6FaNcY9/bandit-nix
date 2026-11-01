@@ -251,6 +251,12 @@
         lab = self.nixosConfigurations.bandit-lab.config;
       };
 
+      lab-jerry = import ./ci/lab-jerry.nix {
+        inherit pkgs;
+        inherit (nixpkgs) lib;
+        lab = self.nixosConfigurations.bandit-lab.config;
+      };
+
       lab-minecraft = import ./ci/lab-minecraft.nix {
         inherit pkgs repoConfig;
         craft = inputs.bandit-craft;
