@@ -34,22 +34,29 @@ kernel is shared (accepted, see `docs/SECURITY-PLAN.md` A6). Design:
    `restic-peer-htpasswd` (`nix shell nixpkgs#apacheHttpd -c htpasswd -nB jerry`).
 4. **SSH key.** Paste Jerry's public key (collected out of band) into `jerryKey`
    in `hosts/bandit-lab/services/jerry-box/default.nix`, commit.
-5. **Subvolumes**, as root on the lab. The restic part is in
+5. **Subvolumes**, as root on the lab, **before any push to `main`** (the hourly
+   timer deploys it). The restic part is in
    [backup-peer.md, "Extra peer: jerry"](backup-peer.md#extra-peer-jerry); do not
-   repeat it here. Additionally the box:
+   repeat it here. Additionally the box, owned by Jerry's mapped root (the
+   container runs in a user namespace and could not write a uid-0 directory):
 
    ```bash
    btrfs subvolume create /srv/jerry/box && btrfs qgroup limit 50G /srv/jerry/box
+   chown 524288:524288 /srv/jerry/box
    ```
 
+   Warning: `restic-rest-server` has `RequiresMountsFor` on
+   `/srv/backup/restic-peer/jerry`, so until `/srv/jerry/restic` exists the REST
+   server does not start and the laptop's nightly backup to the lab fails too.
    If a subvolume was created after the mount unit had already failed:
 
    ```bash
    systemctl restart 'srv-backup-restic\x2dpeer-jerry.mount'
+   systemctl restart restic-rest-server.service
    systemctl start restic-rest-server.socket
    ```
-6. **Apply**: `lab-apply` from the laptop (or push to `main` and wait for the
-   hourly timer).
+6. **Apply**: the first deploy is `lab-apply` from the laptop, not the timer, so a
+   failing `container@jerry` is seen immediately. Push to `main` only after that.
 7. **Tailnet IP.** Read the container's address:
    `ssh bandit-lab 'sudo nixos-container run jerry -- tailscale ip -4'`. Put
    Jerry's device IPs (the container's included, for backups from the box) into
@@ -64,7 +71,11 @@ On the lab:
 systemctl status container@jerry auditd jerry-ssh-watch jerry-restic-watch jerry-report.timer
 ausearch -k jerry | tail
 btrfs qgroup show -reF /srv/jerry/restic
-iptables -S DOCKER-USER | grep ve-jerry                        # three DROP rules
+iptables -S DOCKER-USER | grep ve-jerry                        # two DROP rules
+stat -c %u /srv/jerry/box                                      # 524288
+nixos-container run jerry -- touch /data/.w                    # /data is writable
+machinectl status jerry | grep -i uid                          # user namespace base 524288
+nixos-container run jerry -- tailscale status                  # joined the tailnet
 ls -ln /var/lib/nixos-containers/jerry/var/lib/tailscale/      # authkey owned by 524288
 journalctl -M jerry -u sshd -n 5                               # host can read the container journal
 systemctl status jerry-report.timer
@@ -93,4 +104,6 @@ Technical note, he knows the field.
 - Visibility: the owner receives an hourly report of the box's processes (names,
   exit codes and counts; no arguments) and an immediate notice on every SSH
   login and every backup session. Treat process names and logins as visible.
+- No nix in the box (the host's nix daemon is not exposed to guests); use `uv`,
+  pip, or static binaries under `/data`.
 - The owner does not support software inside the container.
