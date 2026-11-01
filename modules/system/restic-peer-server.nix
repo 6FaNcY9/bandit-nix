@@ -113,7 +113,7 @@ in {
       appendOnly = true;
       privateRepos = true;
       htpasswd-file = config.sops.secrets."restic-peer-htpasswd".path;
-      extraFlags = lib.optionals (cfg.maxSize != null) ["--max-size" (toString cfg.maxSize)];
+      extraFlags = ["--log" "-"] ++ lib.optionals (cfg.maxSize != null) ["--max-size" (toString cfg.maxSize)];
     };
     # The socket unit binds with FreeBind, so it starts before tailscaled has
     # assigned the address; no tailscaled ordering or retry loop is needed.

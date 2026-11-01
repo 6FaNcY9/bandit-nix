@@ -18,6 +18,8 @@
   ];
   delete = r: "iptables -w ${builtins.replaceStrings ["-A " "-I DOCKER-USER 1"] ["-D " "-D DOCKER-USER"] r} || true";
 in {
+  imports = [./watch.nix];
+
   sops.secrets."jerry-tailscale-authkey" = {};
 
   containers.jerry = {

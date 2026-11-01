@@ -30,5 +30,5 @@ in
   assert lib.assertMsg (lib.all (l: lib.hasInfix l fw) fwLines) "firewall must refuse ve-jerry on the host and drop its LAN/bots/docker forwards";
   assert lib.assertMsg (lib.all (l: lib.hasInfix l lab.networking.firewall.extraStopCommands) stopLines) "firewall stop commands must mirror every jerry rule";
   assert lib.assertMsg (c.config.networking.nameservers == ["9.9.9.9" "1.1.1.1"]) "jerry must use fixed nameservers, not the host resolv.conf";
-  # Task 4: assert lib.assertMsg (lib.any (r: lib.hasInfix "-F uid>=524288 -F uid<=589823 -k jerry" r) lab.security.audit.rules) "audit rule for jerry's uid range missing";
+  assert lib.assertMsg (lib.any (r: lib.hasInfix "-F uid>=524288 -F uid<=589823 -k jerry" r) lab.security.audit.rules) "audit rule for jerry's uid range missing";
     pkgs.writeText "lab-jerry" "ok\n"
