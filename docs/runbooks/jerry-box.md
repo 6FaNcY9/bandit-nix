@@ -100,7 +100,7 @@ Technical note, he knows the field.
 - Backup: `rest:http://jerry:<pw>@100.125.161.81:8000/jerry/` with your own
   restic password. The repo is append-only, 512 GB quota; you cannot forget or
   prune. Retention is applied on the host: keep-daily 7, keep-weekly 5,
-  keep-monthly 12.
+  keep-monthly 12, keep-yearly 2.
 - Visibility: the owner receives an hourly report of the box's processes (names,
   exit codes and counts; no arguments) and an immediate notice on every SSH
   login and every backup session. Treat process names and logins as visible.
