@@ -30,6 +30,7 @@
     job = cfg.services.restic.backups.peer;
     sops = cfg.sops.secrets;
     msg = m: "${name}: ${m}";
+    extraPeers = cfg.bandit.resticPeerServer.extraPeers;
   in
     assert lib.assertMsg srv.enable (msg "restic REST server must be enabled");
     assert lib.assertMsg (srv.listenAddress == "${self}:${port}") (msg "rest-server must bind only ${self}:${port}, got ${srv.listenAddress}");
@@ -43,10 +44,16 @@
     assert lib.assertMsg (lib.hasPrefix "/run/secrets/" job.repositoryFile && lib.hasPrefix "/run/secrets/" job.passwordFile) (msg "peer repository and password must be sops files");
     assert lib.assertMsg (job.pruneOpts == []) (msg "peer job must not prune (peer server is append-only)");
     assert lib.assertMsg (cfg.systemd.timers ? restic-peer-prune) (msg "local retention timer missing");
+    assert lib.assertMsg (lib.all (n: cfg.systemd.timers ? "restic-peer-prune-${n}") (lib.attrNames extraPeers)) (msg "extra peer retention timer missing");
+    assert lib.assertMsg (lib.all (p: lib.all (ip: lib.hasInfix (rule ip) cfg.networking.firewall.extraCommands) p.ips) (lib.attrValues extraPeers)) (msg "firewall rule missing for an extra peer ip");
       lib.sort lib.lessThan (lib.filter (lib.hasPrefix "restic-peer-") (lib.attrNames sops));
   declared = lib.mapAttrs checkHost expect;
+  expectedSecrets = n: let
+    extra = hosts.${n}.config.bandit.resticPeerServer.extraPeers;
+  in
+    lib.sort lib.lessThan (["restic-peer-htpasswd" "restic-peer-password" "restic-peer-prune-password" "restic-peer-repository"] ++ map (k: extra.${k}.prunePasswordSecret) (lib.attrNames extra));
 in
-  assert lib.assertMsg (declared.bandit == declared.bandit-lab && declared.bandit == ["restic-peer-htpasswd" "restic-peer-password" "restic-peer-prune-password" "restic-peer-repository"]) "each host must declare exactly the four restic-peer-* secrets";
+  assert lib.assertMsg (lib.all (n: declared.${n} == expectedSecrets n) (lib.attrNames expect)) "each host must declare exactly the base restic-peer-* secrets plus its extra peers' prune secrets";
     pkgs.runCommand "backup-peer" {} ''
       touch "$out"
     ''

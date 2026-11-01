@@ -19,6 +19,11 @@ in {
     peerIp = repoConfig.lab.workstationTailscaleIp;
     peerUser = "bandit"; # the laptop's repository: /srv/backup/restic-peer/bandit
     dataDir = "/srv/backup/restic-peer";
+    # jerry: ips stays empty (nothing admitted) until his device tailnet IPs are known.
+    extraPeers.jerry = {
+      ips = [];
+      prunePasswordSecret = "restic-peer-prune-password-jerry";
+    };
   };
 
   sops.secrets = {
@@ -45,22 +50,37 @@ in {
     };
   };
 
-  systemd = {
-    tmpfiles.rules = ["d ${staging} 0700 root root -"];
+  # Jerry's append-only repository lives on its own quota-limited subvolume.
+  fileSystems."/srv/backup/restic-peer/jerry" = {
+    device = "/srv/jerry/restic";
+    fsType = "none";
+    options = ["bind" "nofail"];
+  };
 
-    services.restic-backups-peer = {
-      # Never overlap the Backblaze job (both call minecraft-snapshot).
-      after = shared.after ++ ["restic-backups-lab.service" "tailscaled.service"];
-      # Laptop asleep or off the tailnet: retry hourly. After 6 failed starts in
-      # 12 h the unit stays failed (alert) until the next timer run.
-      unitConfig = {
-        StartLimitIntervalSec = "12h";
-        StartLimitBurst = 6;
-      };
-      serviceConfig = {
-        Restart = "on-failure";
-        RestartSec = "1h";
-        TimeoutStartSec = "12h";
+  systemd = {
+    tmpfiles.rules = [
+      "d ${staging} 0700 root root -"
+      "d /srv/jerry 0755 root root -" # subvolumes are created by the owner (runbook)
+    ];
+
+    # Without the subvolume mounted, the repo would land outside the 512G qgroup.
+    services = {
+      restic-rest-server.unitConfig.RequiresMountsFor = "/srv/backup/restic-peer/jerry";
+      restic-peer-prune-jerry.unitConfig.RequiresMountsFor = "/srv/backup/restic-peer/jerry";
+      restic-backups-peer = {
+        # Never overlap the Backblaze job (both call minecraft-snapshot).
+        after = shared.after ++ ["restic-backups-lab.service" "tailscaled.service"];
+        # Laptop asleep or off the tailnet: retry hourly. After 6 failed starts in
+        # 12 h the unit stays failed (alert) until the next timer run.
+        unitConfig = {
+          StartLimitIntervalSec = "12h";
+          StartLimitBurst = 6;
+        };
+        serviceConfig = {
+          Restart = "on-failure";
+          RestartSec = "1h";
+          TimeoutStartSec = "12h";
+        };
       };
     };
   };
