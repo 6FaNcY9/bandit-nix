@@ -19,6 +19,11 @@ in {
     peerIp = repoConfig.lab.workstationTailscaleIp;
     peerUser = "bandit"; # the laptop's repository: /srv/backup/restic-peer/bandit
     dataDir = "/srv/backup/restic-peer";
+    # jerry: ips stays empty (nothing admitted) until his device tailnet IPs are known.
+    extraPeers.jerry = {
+      ips = [];
+      prunePasswordSecret = "restic-peer-prune-password-jerry";
+    };
   };
 
   sops.secrets = {
@@ -45,8 +50,18 @@ in {
     };
   };
 
+  # Jerry's append-only repository lives on its own quota-limited subvolume.
+  fileSystems."/srv/backup/restic-peer/jerry" = {
+    device = "/srv/jerry/restic";
+    fsType = "none";
+    options = ["bind"];
+  };
+
   systemd = {
-    tmpfiles.rules = ["d ${staging} 0700 root root -"];
+    tmpfiles.rules = [
+      "d ${staging} 0700 root root -"
+      "d /srv/jerry 0755 root root -" # subvolumes are created by the owner (runbook)
+    ];
 
     services.restic-backups-peer = {
       # Never overlap the Backblaze job (both call minecraft-snapshot).

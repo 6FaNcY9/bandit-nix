@@ -106,3 +106,32 @@ Restore into a new directory; databases come back as dumps in
 Already prepared: set `bandit-lab.backups.enable = true;` after
 `tools/add-backup-secrets.sh` (see backup-restore.md). It uses the same data
 (`shared.nix`) and the same retention, with its own staging dir and 04:30 timer.
+
+## Extra peer: jerry
+
+Jerry's append-only repository lives on the lab in `/srv/jerry/restic`
+(bind-mounted to `/srv/backup/restic-peer/jerry`). Until his device tailnet IPs
+are put into `extraPeers.jerry.ips` (peer.nix) nothing is admitted.
+
+One-time, as root on the lab:
+
+```bash
+btrfs quota enable /
+mkdir -p /srv/jerry
+btrfs subvolume create /srv/jerry/restic
+btrfs subvolume create /srv/jerry/box
+btrfs qgroup limit 512G /srv/jerry/restic
+btrfs qgroup limit 50G /srv/jerry/box
+chown restic:restic /srv/jerry/restic && chmod 0700 /srv/jerry/restic
+```
+
+Secrets (owner, on the laptop):
+
+```bash
+nix shell nixpkgs#apacheHttpd -c htpasswd -nB jerry   # prints jerry:<hash>
+sops secrets/lab.yaml
+# append the htpasswd line to restic-peer-htpasswd
+# add restic-peer-prune-password-jerry: <new random passphrase>
+```
+
+Client repository URL: `rest:http://jerry:<pw>@100.125.161.81:8000/jerry/`
