@@ -1,23 +1,11 @@
 # Audit of the container's execs and ntfy reports: hourly summary, ssh logins, backup activity.
 {pkgs, ...}: let
   report = pkgs.callPackage ./report.nix {};
-  notify = title: ''curl -fsS -H "Authorization: Bearer $NTFY_TOKEN" -H "Title: ${title}"'';
-  sshWatch = pkgs.writeShellScript "jerry-ssh-watch" ''
-    journalctl -M jerry -u sshd -f -n0 -o cat | grep --line-buffered 'Accepted publickey' |
-      while read -r line; do
-        ${notify "Jerry box: ssh login"} -d "$line" "$NTFY_URL/$NTFY_TOPIC" || true
-      done
-  '';
-  resticWatch = pkgs.writeShellScript "jerry-restic-watch" ''
-    last_sent=0
-    journalctl -u restic-rest-server -f -n0 -o cat | grep --line-buffered jerry | grep --line-buffered POST |
-      while read -r line; do
-        now=$(date +%s)
-        [ $((now - last_sent)) -ge 600 ] || continue
-        last_sent=$now
-        ${notify "Jerry restic: backup activity"} -d "$line" "$NTFY_URL/$NTFY_TOPIC" || true
-      done
-  '';
+  watch = pkgs.callPackage ./watch-wrapper.nix {};
+  # Run the journal through the filter; pipefail and the filter's exit 1 at EOF make the unit restart.
+  pipe = journal: mode: "${pkgs.bash}/bin/bash -o pipefail -c '${journal} | ${watch}/bin/jerry-watch ${mode}'";
+  sshWatch = pipe "${pkgs.systemd}/bin/journalctl -M jerry -u sshd -f -n0 -o cat" "ssh";
+  resticWatch = pipe "${pkgs.systemd}/bin/journalctl -u restic-rest-server -f -n0 -o cat" "restic";
   ntfy = {
     after = ["ntfy-seed.service"];
     requires = ["ntfy-seed.service"];

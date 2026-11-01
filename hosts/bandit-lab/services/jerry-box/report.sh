@@ -13,11 +13,19 @@ fi
 records=$(printf '%s\n' "$records" | jq -c 'select(._AUDIT_TYPE_NAME == "SYSCALL" and (.MESSAGE | contains("key=\"jerry\"")))')
 [ -n "$records" ] || exit 0
 
-body=$(printf '%s\n' "$records" |
-  jq -r '.MESSAGE | capture("exit=(?<e>-?[0-9]+) .*comm=\"(?<c>[^\"]*)\"") | "\(.c) \(.e)"' |
-  awk '{n[$1]++; if ($2 != 0) f[$1]++} END {for (c in n) printf "%d %s %d\n", n[c], c, f[c]}' |
-  sort -k1,1nr -k2,2 | awk '{printf "%dx %s (%d failed)\n", $1, $2, $3}')
-total=$(printf '%s\n' "$records" | wc -l)
+# One "comm<TAB>exit" row per record; the kernel hex-encodes comm when it has spaces or special chars.
+rows=$(printf '%s\n' "$records" |
+  jq -r '.MESSAGE | capture("exit=(?<e>-?[0-9]+) .*comm=(?:\"(?<c>[^\"]*)\"|(?<h>[0-9A-Fa-f]+))")? | [.c // "", .h // "", .e] | join("\u001f")' |
+  while IFS=$'\037' read -r c h e; do
+    [ -z "$h" ] || c=$(printf '%s' "$h" | xxd -r -p)
+    printf '%s\t%s\n' "$c" "$e"
+  done)
+[ -n "$rows" ] || exit 0
+# Sorted by count desc, then name, so the body is deterministic.
+body=$(printf '%s\n' "$rows" |
+  awk -F'\t' '{n[$1]++; if ($2 != 0) f[$1]++} END {for (c in n) printf "%d\t%s\t%d\n", n[c], c, f[c]}' |
+  LC_ALL=C sort -t$'\t' -k1,1nr -k2,2 | awk -F'\t' '{printf "%dx %s (%d failed)\n", $1, $2, $3}')
+total=$(printf '%s\n' "$rows" | wc -l)
 cursor=$(printf '%s\n' "$records" | tail -n1 | jq -r .__CURSOR)
 
 # CURL overrides the binary so tests can inject a stub.
