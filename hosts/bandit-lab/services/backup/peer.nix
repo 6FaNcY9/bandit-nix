@@ -19,9 +19,9 @@ in {
     peerIp = repoConfig.lab.workstationTailscaleIp;
     peerUser = "bandit"; # the laptop's repository: /srv/backup/restic-peer/bandit
     dataDir = "/srv/backup/restic-peer";
-    # jerry: ips stays empty (nothing admitted) until his device tailnet IPs are known.
+    # jerry: his phone (cmf-by-nothing-phone-2-pro) and the jerry container (tag:jerry-box).
     extraPeers.jerry = {
-      ips = [];
+      ips = ["100.120.86.122" "100.102.212.56"];
       prunePasswordSecret = "restic-peer-prune-password-jerry";
     };
   };
