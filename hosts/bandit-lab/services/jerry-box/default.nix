@@ -7,7 +7,7 @@
   lib,
   ...
 }: let
-  jerryKey = ""; # TODO owner: paste Jerry's SSH public key
+  jerryKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAID4PNbKtaXkyHqz7p8sXH1xtPpiP+FiIgeRpfm6x1/U+ jerry";
   authkey = "/var/lib/nixos-containers/jerry/var/lib/tailscale/authkey";
   # The drops live in Docker's DOCKER-USER chain because Docker reorders FORWARD (same dependency crowdsec accepted).
   # Allow-list: ve-jerry may only leave via enp44s0, and not to the LAN.
