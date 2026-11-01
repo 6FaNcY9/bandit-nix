@@ -12,7 +12,8 @@ pkgs.runCommand "jerry-report-test" {
   STUB
   chmod +x bin/curl
   export CURL=$PWD/bin/curl NTFY_TOKEN=t STATE_FILE=$PWD/cursor
-  posts() { ls posts-* 2>/dev/null | wc -l; }
+  # find, not ls: the builder shell has nullglob, so an empty posts-* would list the cwd.
+  posts() { find . -maxdepth 1 -name 'posts-*' | wc -l; }
   body() { sed -n '/^---$/,$p' "$1" | tail -n +2; }
 
   rec() { printf '{"_AUDIT_TYPE_NAME":"SYSCALL","__CURSOR":"s=%s","MESSAGE":"audit(1.0:%s): arch=c000003e syscall=59 success=yes exit=%s a0=1 comm=%s exe=\\"/nix/store/x/bin\\" key=\\"%s\\""}\n' "$1" "$1" "$2" "$3" "$4"; }
@@ -42,13 +43,21 @@ pkgs.runCommand "jerry-report-test" {
   CURL_EXIT=7 JERRY_JOURNAL_FILE=a.json jerry-report
   test ! -e cursor
 
+  # D: only non-jerry records, no POST, cursor still advances
+  rm -f cursor posts-*
+  rec 7 0 '\"other\"' other > d.json
+  rec 8 0 '\"other\"' other >> d.json
+  JERRY_JOURNAL_FILE=d.json jerry-report
+  test "$(posts)" = 0
+  test "$(cat cursor)" = "s=8"
+
   # watch: one stdin filter per mode; EOF must fail the unit so systemd restarts it
   rm -f posts-*
   printf 'noise\nAccepted publickey for root from 10.251.0.1\nmore\n' | jerry-watch ssh && exit 1
   test "$(posts)" = 1
   grep -qx 'Title: Jerry box: ssh login' posts-0
   grep -qx 'Authorization: Bearer t' posts-0
-  grep -qx 'Accepted publickey for root from 10.251.0.1' posts-0 # -d body is an argument
+  grep -qx 'Accepted publickey for root from 10.251.0.1' posts-0 # --data-raw body is an argument
 
   rm -f posts-*
   printf 'jerry POST /a\nother POST /b\njerry POST /c\njerry GET /d\njerry POST /e\n' > r.txt

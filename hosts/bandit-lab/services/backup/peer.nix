@@ -54,7 +54,7 @@ in {
   fileSystems."/srv/backup/restic-peer/jerry" = {
     device = "/srv/jerry/restic";
     fsType = "none";
-    options = ["bind" "nofail" "x-systemd.device-timeout=5s"];
+    options = ["bind" "nofail"];
   };
 
   systemd = {

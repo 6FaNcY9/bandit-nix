@@ -9,12 +9,13 @@
 }: let
   jerryKey = ""; # TODO owner: paste Jerry's SSH public key
   authkey = "/var/lib/nixos-containers/jerry/var/lib/tailscale/authkey";
-  # Forward drops live in DOCKER-USER: Docker evaluates it first and leaves it to administrators.
+  # The drops live in Docker's DOCKER-USER chain because Docker reorders FORWARD (same dependency crowdsec accepted).
+  # Allow-list: ve-jerry may only leave via enp44s0, and not to the LAN.
   rules = [
+    "-A nixos-fw -i ve-jerry -p udp --dport 41641 -j nixos-fw-accept" # host tailscaled (WireGuard authenticates): direct backup path
     "-A nixos-fw -i ve-jerry -j nixos-fw-refuse"
     "-I DOCKER-USER 1 -i ve-jerry -d 192.168.0.0/24 -j DROP"
-    "-I DOCKER-USER 1 -i ve-jerry -d 10.250.77.0/29 -j DROP"
-    "-I DOCKER-USER 1 -i ve-jerry -d 172.16.0.0/12 -j DROP"
+    "-I DOCKER-USER 1 -i ve-jerry ! -o enp44s0 -j DROP"
   ];
   delete = r: "iptables -w ${builtins.replaceStrings ["-A " "-I DOCKER-USER 1"] ["-D " "-D DOCKER-USER"] r} || true";
 in {
@@ -25,6 +26,8 @@ in {
   containers.jerry = {
     autoStart = true;
     privateUsers = 524288;
+    # chown (not auto/map): numeric privateUsers implies ownership=off, so the rootfs dirs would stay host-uid-0; an idmapped root would hide the authkey owned 524288.
+    extraFlags = ["--private-users-ownership=chown"];
     privateNetwork = true;
     enableTun = true;
     hostAddress = "10.251.0.1";
@@ -50,7 +53,7 @@ in {
         extraUpFlags = ["--ssh=false" "--advertise-tags=tag:jerry-box"];
       };
       environment.systemPackages = with pkgs; [git curl python3 uv htop];
-      nix.settings.experimental-features = ["nix-command" "flakes"];
+      nix.enable = false; # the host nix daemon is not exposed to the guest
       system.stateVersion = "25.11";
     };
   };

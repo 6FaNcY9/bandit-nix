@@ -8,7 +8,7 @@ last_sent=0
 
 post() {
   "${CURL:-curl}" -fsS --max-time 10 -H "Authorization: Bearer ${NTFY_TOKEN:-}" -H "Title: $1" \
-    -d "$2" "$NTFY_URL/$NTFY_TOPIC" || echo "ntfy post failed" >&2
+    --data-raw "$2" "$NTFY_URL/$NTFY_TOPIC" || echo "ntfy post failed" >&2
 }
 
 while IFS= read -r line; do
