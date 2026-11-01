@@ -9,14 +9,14 @@
 }: let
   jerryKey = ""; # TODO owner: paste Jerry's SSH public key
   authkey = "/var/lib/nixos-containers/jerry/var/lib/tailscale/authkey";
-  # Each rule once for start and once (-D, tolerant) for stop.
+  # Forward drops live in DOCKER-USER: Docker evaluates it first and leaves it to administrators.
   rules = [
     "-A nixos-fw -i ve-jerry -j nixos-fw-refuse"
-    "-I FORWARD 1 -i ve-jerry -d 192.168.0.0/24 -j DROP"
-    "-I FORWARD 1 -i ve-jerry -d 10.250.77.0/29 -j DROP"
-    "-I FORWARD 1 -i ve-jerry -d 172.16.0.0/12 -j DROP"
+    "-I DOCKER-USER 1 -i ve-jerry -d 192.168.0.0/24 -j DROP"
+    "-I DOCKER-USER 1 -i ve-jerry -d 10.250.77.0/29 -j DROP"
+    "-I DOCKER-USER 1 -i ve-jerry -d 172.16.0.0/12 -j DROP"
   ];
-  delete = r: "iptables -w ${builtins.replaceStrings ["-A " "-I FORWARD 1"] ["-D " "-D FORWARD"] r} || true";
+  delete = r: "iptables -w ${builtins.replaceStrings ["-A " "-I DOCKER-USER 1"] ["-D " "-D DOCKER-USER"] r} || true";
 in {
   sops.secrets."jerry-tailscale-authkey" = {};
 
@@ -32,6 +32,8 @@ in {
       isReadOnly = false;
     };
     config = {pkgs, ...}: {
+      networking.useHostResolvConf = false;
+      networking.nameservers = ["9.9.9.9" "1.1.1.1"];
       services.openssh = {
         enable = true;
         settings = {
@@ -56,7 +58,7 @@ in {
     internalInterfaces = ["ve-jerry"];
     externalInterface = "enp44s0";
   };
-  networking.firewall.extraCommands = lib.concatMapStringsSep "\n" (r: "iptables -w ${r}") rules;
+  networking.firewall.extraCommands = lib.concatStringsSep "\n" (["iptables -w -N DOCKER-USER 2>/dev/null || true"] ++ map (r: "iptables -w ${r}") rules);
   networking.firewall.extraStopCommands = lib.concatMapStringsSep "\n" delete rules;
 
   systemd.services = {
