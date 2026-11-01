@@ -55,13 +55,15 @@ in {
     };
   };
 
-  networking.nat = {
-    enable = true;
-    internalInterfaces = ["ve-jerry"];
-    externalInterface = "enp44s0";
+  networking = {
+    nat = {
+      enable = true;
+      internalInterfaces = ["ve-jerry"];
+      externalInterface = "enp44s0";
+    };
+    firewall.extraCommands = lib.concatStringsSep "\n" (["iptables -w -N DOCKER-USER 2>/dev/null || true"] ++ map (r: "iptables -w ${r}") rules);
+    firewall.extraStopCommands = lib.concatMapStringsSep "\n" delete rules;
   };
-  networking.firewall.extraCommands = lib.concatStringsSep "\n" (["iptables -w -N DOCKER-USER 2>/dev/null || true"] ++ map (r: "iptables -w ${r}") rules);
-  networking.firewall.extraStopCommands = lib.concatMapStringsSep "\n" delete rules;
 
   systemd.services = {
     "container@jerry".serviceConfig = {

@@ -64,22 +64,23 @@ in {
     ];
 
     # Without the subvolume mounted, the repo would land outside the 512G qgroup.
-    services.restic-rest-server.unitConfig.RequiresMountsFor = "/srv/backup/restic-peer/jerry";
-    services.restic-peer-prune-jerry.unitConfig.RequiresMountsFor = "/srv/backup/restic-peer/jerry";
-
-    services.restic-backups-peer = {
-      # Never overlap the Backblaze job (both call minecraft-snapshot).
-      after = shared.after ++ ["restic-backups-lab.service" "tailscaled.service"];
-      # Laptop asleep or off the tailnet: retry hourly. After 6 failed starts in
-      # 12 h the unit stays failed (alert) until the next timer run.
-      unitConfig = {
-        StartLimitIntervalSec = "12h";
-        StartLimitBurst = 6;
-      };
-      serviceConfig = {
-        Restart = "on-failure";
-        RestartSec = "1h";
-        TimeoutStartSec = "12h";
+    services = {
+      restic-rest-server.unitConfig.RequiresMountsFor = "/srv/backup/restic-peer/jerry";
+      restic-peer-prune-jerry.unitConfig.RequiresMountsFor = "/srv/backup/restic-peer/jerry";
+      restic-backups-peer = {
+        # Never overlap the Backblaze job (both call minecraft-snapshot).
+        after = shared.after ++ ["restic-backups-lab.service" "tailscaled.service"];
+        # Laptop asleep or off the tailnet: retry hourly. After 6 failed starts in
+        # 12 h the unit stays failed (alert) until the next timer run.
+        unitConfig = {
+          StartLimitIntervalSec = "12h";
+          StartLimitBurst = 6;
+        };
+        serviceConfig = {
+          Restart = "on-failure";
+          RestartSec = "1h";
+          TimeoutStartSec = "12h";
+        };
       };
     };
   };
