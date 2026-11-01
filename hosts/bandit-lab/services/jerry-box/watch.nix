@@ -53,6 +53,7 @@ in {
         description = "ntfy on ssh logins into the Jerry box";
         wantedBy = ["multi-user.target"];
         after = ntfy.after ++ ["container@jerry.service"];
+        bindsTo = ["container@jerry.service"]; # stop cleanly with the container instead of failing the switch
       };
     jerry-restic-watch =
       ntfy

@@ -27,6 +27,8 @@ in
   assert lib.assertMsg (c.privateNetwork && c.enableTun) "jerry needs a private network and /dev/net/tun";
   assert lib.assertMsg (c.hostAddress == "10.251.0.1" && c.localAddress == "10.251.0.2") "jerry veth addresses must be 10.251.0.1/10.251.0.2";
   assert lib.assertMsg (c.bindMounts."/data".hostPath == "/srv/jerry/box") "jerry /data must bind /srv/jerry/box";
+  assert lib.assertMsg (c.config.systemd.services.tailscaled-autoconnect.serviceConfig.TimeoutStartSec == "30s") "container autoconnect must time out so the container reports READY without a tailnet login";
+  assert lib.assertMsg (lib.elem "container@jerry.service" lab.systemd.services.jerry-ssh-watch.bindsTo) "jerry-ssh-watch must be bound to the container";
   assert lib.assertMsg (svc.CPUQuota == "100%" && svc.MemoryMax == "2G" && svc.MemorySwapMax == "0" && svc.TasksMax == 512) "container@jerry must carry CPU, memory, swap and task limits";
   assert lib.assertMsg (lab.networking.nat.internalInterfaces == ["ve-jerry"]) "NAT must serve ve-jerry only";
   assert lib.assertMsg (lib.all (l: lib.hasInfix l fw) fwLines) "firewall must refuse ve-jerry on the host and drop its LAN/bots/docker forwards";

@@ -52,6 +52,13 @@ in {
         authKeyFile = "/var/lib/tailscale/authkey";
         extraUpFlags = ["--ssh=false" "--advertise-tags=tag:jerry-box"];
       };
+      # autoconnect loops until the node is Running and holds the boot; the host kills the
+      # container after 60 s without READY (seen 2026-11-01). Fail fast and keep retrying instead.
+      systemd.services.tailscaled-autoconnect.serviceConfig = {
+        TimeoutStartSec = "30s";
+        Restart = "on-failure";
+        RestartSec = "30s";
+      };
       environment.systemPackages = with pkgs; [git curl python3 uv htop];
       nix.enable = false; # the host nix daemon is not exposed to the guest
       system.stateVersion = "25.11";
