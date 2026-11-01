@@ -113,6 +113,9 @@ Jerry's append-only repository lives on the lab in `/srv/jerry/restic`
 (bind-mounted to `/srv/backup/restic-peer/jerry`). Until his device tailnet IPs
 are put into `extraPeers.jerry.ips` (peer.nix) nothing is admitted.
 
+Run the btrfs commands right after the first deploy and before any reboot; until
+the subvolume exists the bind mount is skipped and the REST server does not start.
+
 One-time, as root on the lab:
 
 ```bash

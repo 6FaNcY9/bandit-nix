@@ -54,7 +54,7 @@ in {
   fileSystems."/srv/backup/restic-peer/jerry" = {
     device = "/srv/jerry/restic";
     fsType = "none";
-    options = ["bind"];
+    options = ["bind" "nofail" "x-systemd.device-timeout=5s"];
   };
 
   systemd = {
@@ -62,6 +62,10 @@ in {
       "d ${staging} 0700 root root -"
       "d /srv/jerry 0755 root root -" # subvolumes are created by the owner (runbook)
     ];
+
+    # Without the subvolume mounted, the repo would land outside the 512G qgroup.
+    services.restic-rest-server.unitConfig.RequiresMountsFor = "/srv/backup/restic-peer/jerry";
+    services.restic-peer-prune-jerry.unitConfig.RequiresMountsFor = "/srv/backup/restic-peer/jerry";
 
     services.restic-backups-peer = {
       # Never overlap the Backblaze job (both call minecraft-snapshot).
