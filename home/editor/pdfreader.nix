@@ -44,6 +44,8 @@ in {
       })
 
       require("pdfreader").setup()
+      -- pdfreader draws every page 60 rows tall regardless of the window; fit it to the one nvim started in.
+      require("pdfreader.image").DEFAULT_SCALE = vim.o.lines - 3
     '';
 
     # mkAfter keeps these behind the main nixvim keymaps (nixvim/keymaps.nix),
