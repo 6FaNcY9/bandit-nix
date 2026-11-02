@@ -55,6 +55,10 @@
       - job_name: blackbox-exporter
         static_configs:
           - targets: ["localhost:9115"]
+
+      - job_name: nvidia-gpu
+        static_configs:
+          - targets: ["localhost:9835"]
   '';
 
   # Shared with the regression test so it exercises the deployed modules.

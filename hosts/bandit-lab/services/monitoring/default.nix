@@ -104,12 +104,28 @@ in {
         exec = [
           "--path.rootfs=/host"
           "--collector.systemd"
-          "--collector.systemd.unit-include=(sshd|docker|containerd|podman|traefik|cloudflared.*|postgresql|smbd|nmbd|ollama|tailscaled|lab-update-.*|restic-backups-lab|restic-check|restic-backups-peer|restic-peer-prune.*|.*-pod|.*-network|prometheus|grafana|blackbox-exporter|node-exporter|mrija-archive|vaultwarden)\\.(service|timer)"
+          "--collector.systemd.unit-include=(sshd|docker|containerd|podman|traefik|cloudflared.*|postgresql|smbd|nmbd|ollama|tailscaled|lab-update-.*|restic-backups-lab|restic-check|restic-backups-peer|restic-peer-prune.*|.*-pod|.*-network|prometheus|grafana|blackbox-exporter|node-exporter|nvidia-gpu-exporter|mrija-archive|vaultwarden)\\.(service|timer)"
         ];
         volumes = [
           "/:/host:ro,rslave"
           "/run/dbus:/var/run/dbus:ro"
         ];
+      };
+      # GPU metrics via nvidia-smi, which the CDI device injects together with
+      # the driver libraries (hardware.nvidia-container-toolkit, see comfyui).
+      nvidia-gpu-exporter = {
+        containerConfig = {
+          image = "docker.io/utkuozdemir/nvidia_gpu_exporter:1.16.0@sha256:cec17e3ddfce7baefbdf116d1a259e208bb1519e4e0b18b7b0879bde0fcad5a2";
+          pod = pods.monitoring.ref;
+          user = "65534:65534";
+          podmanArgs = ["--device=nvidia.com/gpu=all"];
+          # The CDI update-ldcache hook writes /etc/ld.so.cache in the container.
+          readOnly = false;
+        };
+        unitConfig = {
+          After = ["nvidia-container-toolkit-cdi-generator.service"];
+          Wants = ["nvidia-container-toolkit-cdi-generator.service"];
+        };
       };
     };
   };

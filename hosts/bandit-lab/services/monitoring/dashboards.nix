@@ -253,12 +253,15 @@
     ];
   });
 
-  # Landing page: one screen answering "is the lab healthy?". Thresholds
-  # mirror the alert rules in alerting.nix so colours and pages agree.
+  # Landing page: one screen answering "is the lab healthy?", then detail
+  # sections per resource. Tile thresholds mirror the alert rules in
+  # alerting.nix so colours and pages agree.
+  lib = pkgs.lib;
   prometheusDs = {
     type = "prometheus";
     uid = "prometheus";
   };
+  refIds = lib.stringToCharacters "ABCDEFGHIJ";
   statPanel = {
     id,
     x,
@@ -266,14 +269,13 @@
     expr,
     unit ? "none",
     steps,
-    legend ? "",
   }: {
     inherit id title;
     type = "stat";
     datasource = prometheusDs;
     gridPos = {
       h = 4;
-      w = 4;
+      w = 3;
       inherit x;
       y = 0;
     };
@@ -282,7 +284,6 @@
         refId = "A";
         inherit expr;
         instant = true;
-        legendFormat = legend;
       }
     ];
     fieldConfig = {
@@ -309,6 +310,18 @@
       textMode = "value";
     };
   };
+  rowPanel = id: y: title: {
+    inherit id title;
+    type = "row";
+    collapsed = false;
+    gridPos = {
+      h = 1;
+      w = 24;
+      x = 0;
+      inherit y;
+    };
+    panels = [];
+  };
   graphPanel = {
     id,
     x,
@@ -318,6 +331,9 @@
     targets,
     unit,
     max ? null,
+    stack ? false,
+    hideLegend ? false,
+    overrides ? [],
   }: {
     inherit id title;
     type = "timeseries";
@@ -327,11 +343,11 @@
       inherit w x y;
     };
     targets =
-      map ({
+      lib.imap0 (i: {
         expr,
         legend,
       }: {
-        refId = legend;
+        refId = lib.elemAt refIds i;
         inherit expr;
         legendFormat = legend;
       })
@@ -341,19 +357,22 @@
         {
           inherit unit;
           min = 0;
-          custom.fillOpacity = 10;
+          custom = {
+            fillOpacity = 10;
+            stacking.mode =
+              if stack
+              then "normal"
+              else "none";
+          };
         }
-        // (
-          if max == null
-          then {}
-          else {inherit max;}
-        );
-      overrides = [];
+        // lib.optionalAttrs (max != null) {inherit max;};
+      inherit overrides;
     };
     options = {
       legend = {
         displayMode = "list";
         placement = "bottom";
+        showLegend = !hideLegend;
       };
       tooltip.mode = "multi";
     };
@@ -368,11 +387,52 @@
       value = 1;
     }
   ];
+  # Green above `ok`, orange above `warn`, red below (percent-free style).
+  lowIsBad = warn: ok: [
+    {
+      color = "red";
+      value = null;
+    }
+    {
+      color = "orange";
+      value = warn;
+    }
+    {
+      color = "green";
+      value = ok;
+    }
+  ];
+  highIsBad = warn: bad: [
+    {
+      color = "green";
+      value = null;
+    }
+    {
+      color = "orange";
+      value = warn;
+    }
+    {
+      color = "red";
+      value = bad;
+    }
+  ];
+  unitOverride = name: unit: {
+    matcher = {
+      id = "byName";
+      options = name;
+    };
+    properties = [
+      {
+        id = "unit";
+        value = unit;
+      }
+    ];
+  };
   dashboardLabOverview = pkgs.writeText "grafana-dashboard-lab-overview.json" (builtins.toJSON {
     title = "Lab Overview";
     uid = "lab-overview";
     schemaVersion = 39;
-    version = 1;
+    version = 2;
     editable = false;
     timezone = "browser";
     refresh = "30s";
@@ -390,83 +450,60 @@
       })
       (statPanel {
         id = 2;
-        x = 4;
+        x = 3;
         title = "Scrape targets down";
         expr = "count(up == 0) or vector(0)";
         steps = countSteps;
       })
       (statPanel {
         id = 3;
-        x = 8;
+        x = 6;
         title = "Endpoints down";
-        expr = ''count(probe_success == 0) or vector(0)'';
+        expr = "count(probe_success == 0) or vector(0)";
         steps = countSteps;
       })
       (statPanel {
         id = 4;
-        x = 12;
+        x = 9;
         title = "Root disk free";
         expr = ''node_filesystem_avail_bytes{mountpoint="/", fstype!="tmpfs"} / node_filesystem_size_bytes{mountpoint="/"} * 100'';
         unit = "percent";
-        steps = [
-          {
-            color = "red";
-            value = null;
-          }
-          {
-            color = "orange";
-            value = 15;
-          }
-          {
-            color = "green";
-            value = 25;
-          }
-        ];
+        steps = lowIsBad 15 25;
       })
       (statPanel {
         id = 5;
-        x = 16;
+        x = 12;
         title = "Memory available";
         expr = "node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100";
         unit = "percent";
-        steps = [
-          {
-            color = "red";
-            value = null;
-          }
-          {
-            color = "orange";
-            value = 10;
-          }
-          {
-            color = "green";
-            value = 20;
-          }
-        ];
+        steps = lowIsBad 10 20;
       })
       (statPanel {
         id = 6;
-        x = 20;
-        title = "Since last lab backup";
-        expr = ''time() - node_systemd_timer_last_trigger_seconds{name="restic-backups-lab.timer"}'';
+        x = 15;
+        title = "GPU busy";
+        expr = "nvidia_smi_utilization_gpu_ratio * 100";
+        unit = "percent";
+        steps = highIsBad 80 95;
+      })
+      (statPanel {
+        id = 7;
+        x = 18;
+        title = "CPU package temp";
+        expr = ''max(node_hwmon_temp_celsius{chip=~".*coretemp.*"})'';
+        unit = "celsius";
+        steps = highIsBad 80 90;
+      })
+      (statPanel {
+        id = 8;
+        x = 21;
+        title = "Since last peer backup";
+        expr = ''time() - node_systemd_timer_last_trigger_seconds{name="restic-backups-peer.timer"}'';
         unit = "s";
-        steps = [
-          {
-            color = "green";
-            value = null;
-          }
-          {
-            color = "orange";
-            value = 86400;
-          }
-          {
-            color = "red";
-            value = 129600;
-          }
-        ];
+        steps = highIsBad 86400 129600;
       })
       (graphPanel {
-        id = 7;
+        id = 9;
         x = 0;
         y = 4;
         w = 12;
@@ -481,7 +518,7 @@
         ];
       })
       (graphPanel {
-        id = 8;
+        id = 10;
         x = 12;
         y = 4;
         w = 12;
@@ -499,7 +536,7 @@
         ];
       })
       (graphPanel {
-        id = 9;
+        id = 11;
         x = 0;
         y = 12;
         w = 8;
@@ -521,7 +558,7 @@
         ];
       })
       (graphPanel {
-        id = 10;
+        id = 12;
         x = 8;
         y = 12;
         w = 8;
@@ -535,7 +572,7 @@
         ];
       })
       (graphPanel {
-        id = 11;
+        id = 13;
         x = 16;
         y = 12;
         w = 8;
@@ -553,7 +590,7 @@
         ];
       })
       {
-        id = 12;
+        id = 14;
         type = "stat";
         title = "systemd units";
         description = "Units from the node-exporter include list. Service units behind timers are inactive between runs.";
@@ -619,6 +656,376 @@
           textMode = "value_and_name";
         };
       }
+
+      (rowPanel 20 30 "CPU")
+      (graphPanel {
+        id = 21;
+        x = 0;
+        y = 31;
+        w = 8;
+        title = "CPU by mode";
+        unit = "percent";
+        max = 100;
+        stack = true;
+        targets = [
+          {
+            expr = ''100 * sum by (mode) (rate(node_cpu_seconds_total{mode!="idle"}[5m])) / scalar(count(node_cpu_seconds_total{mode="idle"}))'';
+            legend = "{{mode}}";
+          }
+        ];
+      })
+      (graphPanel {
+        id = 22;
+        x = 8;
+        y = 31;
+        w = 8;
+        title = "Per-core busy";
+        unit = "percent";
+        max = 100;
+        hideLegend = true;
+        targets = [
+          {
+            expr = ''100 * (1 - rate(node_cpu_seconds_total{mode="idle"}[5m]))'';
+            legend = "cpu{{cpu}}";
+          }
+        ];
+      })
+      (graphPanel {
+        id = 23;
+        x = 16;
+        y = 31;
+        w = 8;
+        title = "Temperatures";
+        unit = "celsius";
+        targets = [
+          {
+            expr = ''max by (chip) (node_hwmon_temp_celsius{chip=~".*coretemp.*|.*nvme.*"})'';
+            legend = "{{chip}}";
+          }
+          {
+            expr = "nvidia_smi_temperature_gpu";
+            legend = "gpu";
+          }
+        ];
+      })
+
+      (rowPanel 30 39 "Memory")
+      (graphPanel {
+        id = 31;
+        x = 0;
+        y = 40;
+        w = 8;
+        title = "Memory breakdown";
+        unit = "bytes";
+        stack = true;
+        targets = [
+          {
+            expr = "node_memory_MemTotal_bytes - node_memory_MemFree_bytes - node_memory_Buffers_bytes - node_memory_Cached_bytes";
+            legend = "apps";
+          }
+          {
+            expr = "node_memory_Cached_bytes";
+            legend = "cache";
+          }
+          {
+            expr = "node_memory_Buffers_bytes";
+            legend = "buffers";
+          }
+          {
+            expr = "node_memory_MemFree_bytes";
+            legend = "free";
+          }
+        ];
+      })
+      (graphPanel {
+        id = 32;
+        x = 8;
+        y = 40;
+        w = 8;
+        title = "Swap (zram)";
+        unit = "bytes";
+        targets = [
+          {
+            expr = "node_memory_SwapTotal_bytes - node_memory_SwapFree_bytes";
+            legend = "used";
+          }
+          {
+            expr = "node_memory_SwapTotal_bytes";
+            legend = "total";
+          }
+        ];
+      })
+      (graphPanel {
+        id = 33;
+        x = 16;
+        y = 40;
+        w = 8;
+        title = "Pressure stall (PSI, some)";
+        unit = "percent";
+        max = 100;
+        targets = [
+          {
+            expr = "rate(node_pressure_cpu_waiting_seconds_total[5m]) * 100";
+            legend = "cpu";
+          }
+          {
+            expr = "rate(node_pressure_memory_waiting_seconds_total[5m]) * 100";
+            legend = "memory";
+          }
+          {
+            expr = "rate(node_pressure_io_waiting_seconds_total[5m]) * 100";
+            legend = "io";
+          }
+        ];
+      })
+
+      (rowPanel 40 48 "Disk")
+      (graphPanel {
+        id = 41;
+        x = 0;
+        y = 49;
+        w = 8;
+        title = "NVMe throughput";
+        unit = "Bps";
+        targets = [
+          {
+            expr = ''rate(node_disk_read_bytes_total{device="nvme0n1"}[5m])'';
+            legend = "read";
+          }
+          {
+            expr = ''rate(node_disk_written_bytes_total{device="nvme0n1"}[5m])'';
+            legend = "write";
+          }
+        ];
+      })
+      (graphPanel {
+        id = 42;
+        x = 8;
+        y = 49;
+        w = 8;
+        title = "NVMe IOPS";
+        unit = "iops";
+        targets = [
+          {
+            expr = ''rate(node_disk_reads_completed_total{device="nvme0n1"}[5m])'';
+            legend = "reads";
+          }
+          {
+            expr = ''rate(node_disk_writes_completed_total{device="nvme0n1"}[5m])'';
+            legend = "writes";
+          }
+        ];
+      })
+      (graphPanel {
+        id = 43;
+        x = 16;
+        y = 49;
+        w = 8;
+        title = "NVMe busy";
+        unit = "percent";
+        max = 100;
+        targets = [
+          {
+            expr = ''rate(node_disk_io_time_seconds_total{device="nvme0n1"}[5m]) * 100'';
+            legend = "busy";
+          }
+        ];
+      })
+      (graphPanel {
+        id = 44;
+        x = 0;
+        y = 57;
+        w = 8;
+        title = "I/O latency";
+        unit = "s";
+        targets = [
+          {
+            expr = ''rate(node_disk_read_time_seconds_total{device="nvme0n1"}[5m]) / rate(node_disk_reads_completed_total{device="nvme0n1"}[5m])'';
+            legend = "read";
+          }
+          {
+            expr = ''rate(node_disk_write_time_seconds_total{device="nvme0n1"}[5m]) / rate(node_disk_writes_completed_total{device="nvme0n1"}[5m])'';
+            legend = "write";
+          }
+        ];
+      })
+      (graphPanel {
+        id = 45;
+        x = 8;
+        y = 57;
+        w = 8;
+        title = "Filesystem used";
+        unit = "percent";
+        max = 100;
+        targets = [
+          {
+            expr = ''100 - node_filesystem_avail_bytes{fstype!~"tmpfs|ramfs"} / node_filesystem_size_bytes * 100'';
+            legend = "{{mountpoint}}";
+          }
+        ];
+      })
+      (graphPanel {
+        id = 46;
+        x = 16;
+        y = 57;
+        w = 8;
+        title = "Processes";
+        unit = "short";
+        targets = [
+          {
+            expr = "node_procs_running";
+            legend = "running";
+          }
+          {
+            expr = "node_procs_blocked";
+            legend = "blocked on I/O";
+          }
+        ];
+      })
+
+      (rowPanel 50 65 "Network")
+      (graphPanel {
+        id = 51;
+        x = 0;
+        y = 66;
+        w = 12;
+        title = "Throughput per interface";
+        unit = "Bps";
+        targets = [
+          {
+            expr = ''rate(node_network_receive_bytes_total{device!~"lo|veth.*|br-.*"}[5m])'';
+            legend = "{{device}} rx";
+          }
+          {
+            expr = ''rate(node_network_transmit_bytes_total{device!~"lo|veth.*|br-.*"}[5m])'';
+            legend = "{{device}} tx";
+          }
+        ];
+      })
+      (graphPanel {
+        id = 52;
+        x = 12;
+        y = 66;
+        w = 12;
+        title = "Errors and drops (all interfaces)";
+        unit = "pps";
+        targets = [
+          {
+            expr = "sum(rate(node_network_receive_errs_total[5m]))";
+            legend = "rx errors";
+          }
+          {
+            expr = "sum(rate(node_network_receive_drop_total[5m]))";
+            legend = "rx drops";
+          }
+          {
+            expr = "sum(rate(node_network_transmit_errs_total[5m]))";
+            legend = "tx errors";
+          }
+          {
+            expr = "sum(rate(node_network_transmit_drop_total[5m]))";
+            legend = "tx drops";
+          }
+        ];
+      })
+      (graphPanel {
+        id = 53;
+        x = 0;
+        y = 74;
+        w = 12;
+        title = "Sockets";
+        unit = "short";
+        targets = [
+          {
+            expr = "node_sockstat_TCP_inuse";
+            legend = "tcp in use";
+          }
+          {
+            expr = "node_sockstat_TCP_tw";
+            legend = "tcp time-wait";
+          }
+          {
+            expr = "node_sockstat_UDP_inuse";
+            legend = "udp in use";
+          }
+        ];
+      })
+      (graphPanel {
+        id = 54;
+        x = 12;
+        y = 74;
+        w = 12;
+        title = "Conntrack";
+        unit = "short";
+        targets = [
+          {
+            expr = "node_nf_conntrack_entries";
+            legend = "entries";
+          }
+          {
+            expr = "node_nf_conntrack_entries_limit";
+            legend = "limit";
+          }
+        ];
+      })
+
+      (rowPanel 60 82 "GPU")
+      (graphPanel {
+        id = 61;
+        x = 0;
+        y = 83;
+        w = 8;
+        title = "GPU utilization";
+        unit = "percent";
+        max = 100;
+        targets = [
+          {
+            expr = "nvidia_smi_utilization_gpu_ratio * 100";
+            legend = "compute";
+          }
+          {
+            expr = "nvidia_smi_utilization_memory_ratio * 100";
+            legend = "memory bandwidth";
+          }
+        ];
+      })
+      (graphPanel {
+        id = 62;
+        x = 8;
+        y = 83;
+        w = 8;
+        title = "GPU memory";
+        unit = "bytes";
+        targets = [
+          {
+            expr = "nvidia_smi_memory_used_bytes";
+            legend = "used";
+          }
+          {
+            expr = "nvidia_smi_memory_total_bytes";
+            legend = "total";
+          }
+        ];
+      })
+      (graphPanel {
+        id = 63;
+        x = 16;
+        y = 83;
+        w = 8;
+        title = "GPU temperature and power";
+        unit = "celsius";
+        overrides = [(unitOverride "power" "watt")];
+        targets = [
+          {
+            expr = "nvidia_smi_temperature_gpu";
+            legend = "temperature";
+          }
+          {
+            expr = "nvidia_smi_power_draw_watts";
+            legend = "power";
+          }
+        ];
+      })
     ];
   });
 
