@@ -73,6 +73,7 @@ in {
           environments = {
             GF_SECURITY_ADMIN_PASSWORD__FILE = secret;
             GF_USERS_ALLOW_SIGN_UP = "false";
+            GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH = "/var/lib/grafana-dashboards/lab-overview.json";
           };
           volumes = [
             "${data}/grafana:/var/lib/grafana"
