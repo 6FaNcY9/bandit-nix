@@ -18,6 +18,7 @@
     grafana = "http://127.0.0.1:3000";
     beszel = "http://127.0.0.1:8090";
     cockpit = "https+insecure://127.0.0.1:9090"; # self-signed cert on loopback
+    comfyui = "http://127.0.0.1:8188"; # services/comfyui, Jerry may reach this one (policy grant svc:comfyui)
   };
   serve = name: target: ''
     if ! timeout 30 tailscale serve --service=svc:${name} --https=443 ${target}; then

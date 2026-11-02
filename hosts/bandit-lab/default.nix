@@ -15,6 +15,7 @@ in {
     ./services/webhost
     ./services/traefik
     ./services/tailnet-https.nix
+    ./services/comfyui
     ./services/mrija-archive
     ./services/monitoring
     ./services/beszel

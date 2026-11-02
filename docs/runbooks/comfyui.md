@@ -2,19 +2,19 @@
 
 ## State
 
-Trial only (2026-11-02): a throwaway Docker container started by hand, GPU via
-CDI like Ollama, GUI bound to `127.0.0.1:8188` on the lab. Nothing in Nix yet.
-Model files live in `~vino/comfy/models` on the lab (Z-Image-Turbo, bf16).
+Unit since 2026-11-02: `virtualisation.oci-containers.containers.comfyui`
+(`hosts/bandit-lab/services/comfyui/default.nix`, Docker, GPU via CDI like
+Ollama), GUI on `127.0.0.1:8188`, published by name as the Tailscale Service
+`svc:comfyui` → https://comfyui.tail7facc9.ts.net (unit `lab-services`,
+`docs/runbooks/tailnet-services.md`). Data under `/srv/comfyui`: `models/`
+(owned by vino, drop files there without sudo), `output/`, `user/` (saved
+workflows). Jerry's policy grant targets `svc:comfyui`.
 
-Target (not built): an `oci-containers` unit in bandit-craft next to
-`hosts/bandit-lab/services/ollama/`, models under `/srv/comfyui`, published as
-Tailscale Service `comfyui`; Jerry's grant targets `svc:comfyui` (Jerry's tailnet
-IPs: phone `100.120.86.122`, container `100.102.212.56`, from
-`hosts/bandit-lab/services/backup/peer.nix`). ComfyUI has no user accounts, no
-per-user limits and one shared queue, so "Jerry limited, owner unlimited" means
-two containers (Jerry's with CPU/RAM limits, lower `Nice`), never one shared
-instance. VRAM cannot be split on a consumer GPU: both share the 16 GB with
-Ollama (`OLLAMA_KEEP_ALIVE=30m`) and the first one that does not fit gets an OOM.
+ComfyUI has no user accounts, no per-user limits and one shared queue, so
+"Jerry limited, owner unlimited" means a second container with CPU/RAM limits,
+never one shared instance. VRAM cannot be split on a consumer GPU: ComfyUI
+shares the 16 GB with Ollama (`OLLAMA_KEEP_ALIVE=30m`) and the first one that
+does not fit gets a CUDA OOM.
 
 ## Model: Z-Image-Turbo
 
@@ -30,19 +30,17 @@ Ollama (`OLLAMA_KEEP_ALIVE=30m`) and the first one that does not fit gets an OOM
 Alternative with image editing and reference images: FLUX.2 [klein] 4B (Apache
 2.0, ~13 GB). Anything bigger (FLUX.2 dev, Qwen-Image) needs 24 GB or more.
 
-## Run the trial (lab, as vino, docker group)
+## Operate
 
 ```sh
-docker run --rm -d --name comfy --device nvidia.com/gpu=all --security-opt no-new-privileges \
-  -p 127.0.0.1:8188:8188 -v ~/comfy/models:/root/ComfyUI/models -v ~/comfy/output:/root/ComfyUI/output \
-  docker.io/yanwk/comfyui-boot:cu128-slim
-docker logs -f comfy      # until "To see the GUI go to: http://0.0.0.0:8188"
-docker stop comfy         # done; --rm removes the container, models stay
+ssh bandit-lab 'systemctl status docker-comfyui --no-pager | head -3'   # active
+ssh bandit-lab 'docker logs --tail 20 comfyui'                          # "To see the GUI go to"
 ```
 
-Laptop: `ssh -N -L 8188:127.0.0.1:8188 bandit-lab`, then http://127.0.0.1:8188
-(the trial container is loopback only; the unit will be `svc:comfyui`,
-`https://comfyui.tail7facc9.ts.net`, see `docs/runbooks/tailnet-services.md`).
+Restart (owner sudo on the lab): `sudo systemctl restart docker-comfyui`.
+Open https://comfyui.tail7facc9.ts.net from any tailnet device (owner devices
+via `group:trusted`, Jerry via his grant). Loopback fallback from the laptop:
+`ssh -N -L 8188:127.0.0.1:8188 bandit-lab`, then http://127.0.0.1:8188.
 
 ## Using the GUI
 
@@ -66,7 +64,7 @@ variants need `Z-Image-Turbo-Fun-Controlnet-Union.safetensors` /
 - Run: the Run button or Ctrl+Enter. Progress bar on the sampler; the image
   shows in Save Image and under Queue (sidebar) → history. First run loads 20 GB
   from disk (a minute), afterwards a few seconds per image.
-- Outputs: `~/comfy/output` on the lab (`scp bandit-lab:comfy/output/\*.png .`).
+- Outputs: `/srv/comfyui/output` on the lab (`scp 'bandit-lab:/srv/comfyui/output/*.png' .`).
 - Knobs: `steps` 8 (turbo, more is not better), `cfg` 1, resolution up to
   1024x1024 is safe in 16 GB; 2048 OOMs without the tiled VAE decode node.
   `seed` control "randomize" for variations, "fixed" to iterate on one image.
@@ -78,8 +76,8 @@ variants need `Z-Image-Turbo-Fun-Controlnet-Union.safetensors` /
 
 ## Adding models
 
-Copy the file into the matching folder under `~/comfy/models` (later
-`/srv/comfyui/models`), then press `R` in the GUI (refresh node lists), or let
+Copy the file into the matching folder under `/srv/comfyui/models` (owned by
+vino, no sudo), then press `R` in the GUI (refresh node lists), or let
 the Missing Models dialog of a template download it. Folders:
 `checkpoints/` (single-file SD/SDXL), `diffusion_models/` (split models like
 Z-Image, FLUX), `text_encoders/`, `vae/`, `loras/`, `controlnet/`, `upscale_models/`.
@@ -94,4 +92,4 @@ they execute code on load.
 - `CUDA out of memory`: Ollama still resident; `docker exec docker-ollama ollama ps`,
   wait for keep-alive or restart the generation after 30 minutes.
 - GUI empty node lists: the mount path is wrong; the image expects
-  `/root/ComfyUI/models` (check `docker exec comfy ls /root/ComfyUI/models/vae`).
+  `/root/ComfyUI/models` (check `docker exec comfyui ls /root/ComfyUI/models/vae`).

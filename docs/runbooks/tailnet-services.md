@@ -46,7 +46,7 @@ still succeeds; restart it after the console is ready.
 | https://grafana.tail7facc9.ts.net | Grafana | 127.0.0.1:3000 | `lab-services` |
 | https://beszel.tail7facc9.ts.net | Beszel | 127.0.0.1:8090 | `lab-services` |
 | https://cockpit.tail7facc9.ts.net | Cockpit | https://127.0.0.1:9090 | `lab-services` |
-| https://comfyui.tail7facc9.ts.net | ComfyUI | once it is a unit | not yet |
+| https://comfyui.tail7facc9.ts.net | ComfyUI | 127.0.0.1:8188 | `lab-services` |
 | https://bandit-lab.tail7facc9.ts.net:8443 | Minecraft map | 127.0.0.1:8100 | `minecraft-panel-https` (bandit-craft), per-port serve, not a Service |
 | https://bandit-lab.tail7facc9.ts.net:8445 | mcbots dashboard | mcbots | `mcbots-https` (bandit-craft), per-port serve, not a Service |
 | https://bandit-lab.tail7facc9.ts.net:8446 | mcbots worker API | mcbots | `mcbots-https` (bandit-craft), per-port serve, not a Service |
