@@ -14,6 +14,7 @@ in {
     ./wan.nix
     ./services/webhost
     ./services/traefik
+    ./services/tailnet-https.nix
     ./services/mrija-archive
     ./services/monitoring
     ./services/beszel

@@ -40,7 +40,9 @@ docker logs -f comfy      # until "To see the GUI go to: http://0.0.0.0:8188"
 docker stop comfy         # done; --rm removes the container, models stay
 ```
 
-Laptop: `ssh -N -L 8188:127.0.0.1:8188 bandit-lab`, then http://127.0.0.1:8188.
+Laptop: `ssh -N -L 8188:127.0.0.1:8188 bandit-lab`, then http://127.0.0.1:8188
+(the trial container is loopback only; the unit will get a `tailscale serve`
+port like the other UIs, see `docs/runbooks/tailnet-https.md`).
 
 ## Using the GUI
 
