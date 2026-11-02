@@ -103,7 +103,7 @@ in {
         exec = [
           "--path.rootfs=/host"
           "--collector.systemd"
-          "--collector.systemd.unit-include=(sshd|docker|containerd|podman|traefik|cloudflared.*|postgresql|smbd|nmbd|ollama|tailscaled|lab-update-.*|restic-backups-lab|restic-check|.*-pod|.*-network|prometheus|grafana|blackbox-exporter|node-exporter|mrija-archive|vaultwarden)\\.(service|timer)"
+          "--collector.systemd.unit-include=(sshd|docker|containerd|podman|traefik|cloudflared.*|postgresql|smbd|nmbd|ollama|tailscaled|lab-update-.*|restic-backups-lab|restic-check|restic-backups-peer|restic-peer-prune.*|.*-pod|.*-network|prometheus|grafana|blackbox-exporter|node-exporter|mrija-archive|vaultwarden)\\.(service|timer)"
         ];
         volumes = [
           "/:/host:ro,rslave"

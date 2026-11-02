@@ -3,14 +3,15 @@
     enable = true;
     settings = {
       general = {
-        lock_cmd = "${pkgs.hyprlock}/bin/hyprlock";
-        before_sleep_cmd = "${pkgs.hyprlock}/bin/hyprlock";
+        lock_cmd = "${pkgs.procps}/bin/pidof hyprlock || ${pkgs.hyprlock}/bin/hyprlock";
+        # Lock via loginctl so idle and suspend reuse one hyprlock instead of stacking lockers.
+        before_sleep_cmd = "loginctl lock-session";
         after_sleep_cmd = "hyprctl dispatch dpms on";
       };
       listener = [
         {
           timeout = 600;
-          on-timeout = "${pkgs.hyprlock}/bin/hyprlock";
+          on-timeout = "loginctl lock-session";
         }
         {
           timeout = 900;
