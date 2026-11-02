@@ -7,6 +7,9 @@
   windowRule = spec: {_args = [spec];};
 
   startupCommands = [
+    # Attach the PAM-unlocked keyring to the session bus before any app asks for
+    # secrets; otherwise D-Bus spawns a fresh, locked daemon that prompts.
+    "${pkgs.gnome-keyring}/bin/gnome-keyring-daemon --start --components=secrets"
     "${pkgs.networkmanagerapplet}/bin/nm-applet"
     "${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1"
     "${pkgs.blueman}/bin/blueman-applet"
