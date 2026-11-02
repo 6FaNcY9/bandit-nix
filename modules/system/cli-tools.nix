@@ -22,6 +22,7 @@
     pkgs.statix
     pkgs.nix-output-monitor
     pkgs.nvd
+    pkgs.age
     pkgs.sops
     pkgs.systemctl-tui
     pkgs.cachix
