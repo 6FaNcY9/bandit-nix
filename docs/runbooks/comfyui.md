@@ -7,9 +7,9 @@ CDI like Ollama, GUI bound to `127.0.0.1:8188` on the lab. Nothing in Nix yet.
 Model files live in `~vino/comfy/models` on the lab (Z-Image-Turbo, bf16).
 
 Target (not built): an `oci-containers` unit in bandit-craft next to
-`hosts/bandit-lab/services/ollama/`, models under `/srv/comfyui`, port published
-on `repoConfig.lab.tailscaleIp` with a DOCKER-USER allow-list for Jerry's tailnet
-IPs (phone `100.120.86.122`, container `100.102.212.56`, from
+`hosts/bandit-lab/services/ollama/`, models under `/srv/comfyui`, published as
+Tailscale Service `comfyui`; Jerry's grant targets `svc:comfyui` (Jerry's tailnet
+IPs: phone `100.120.86.122`, container `100.102.212.56`, from
 `hosts/bandit-lab/services/backup/peer.nix`). ComfyUI has no user accounts, no
 per-user limits and one shared queue, so "Jerry limited, owner unlimited" means
 two containers (Jerry's with CPU/RAM limits, lower `Nice`), never one shared
@@ -41,8 +41,8 @@ docker stop comfy         # done; --rm removes the container, models stay
 ```
 
 Laptop: `ssh -N -L 8188:127.0.0.1:8188 bandit-lab`, then http://127.0.0.1:8188
-(the trial container is loopback only; the unit will get a `tailscale serve`
-port like the other UIs, see `docs/runbooks/tailnet-https.md`).
+(the trial container is loopback only; the unit will be `svc:comfyui`,
+`https://comfyui.tail7facc9.ts.net`, see `docs/runbooks/tailnet-services.md`).
 
 ## Using the GUI
 

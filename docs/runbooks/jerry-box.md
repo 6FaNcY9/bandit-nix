@@ -20,9 +20,13 @@ kernel is shared (accepted, see `docs/SECURITY-PLAN.md` A6). Design:
    "tagOwners": {"tag:jerry-box": ["autogroup:admin"]},
    "grants": [
      {"src": ["<jerry@example.com>"], "dst": ["tag:jerry-box"], "ip": ["tcp:22"]},
-     {"src": ["<jerry@example.com>", "tag:jerry-box"], "dst": ["100.125.161.81"], "ip": ["tcp:8000"]}
+     {"src": ["<jerry@example.com>", "tag:jerry-box"], "dst": ["100.125.161.81"], "ip": ["tcp:8000"]},
+     {"src": ["<jerry@example.com>", "tag:jerry-box"], "dst": ["svc:comfyui"], "ip": ["tcp:443"]}
    ]
    ```
+
+   (The last line reaches the ComfyUI Tailscale Service, see
+   `docs/runbooks/tailnet-services.md`.)
 
    (Equivalent `acls` entries: `<jerry@example.com> -> tag:jerry-box:22` and
    `<jerry@example.com>, tag:jerry-box -> 100.125.161.81:8000`.)
