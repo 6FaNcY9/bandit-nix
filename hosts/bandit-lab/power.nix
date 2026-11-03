@@ -14,6 +14,12 @@
     # them (tmpfiles `w` accepts shell-style globs).
     tmpfiles.rules = [
       "w /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference - - - - balance_performance"
+      # Cap the HWP boost: the TongFang GM7IX9N chassis has no fan control from
+      # Linux (EC-only; tuxedo-drivers does not build for this kernel, nbfc has no
+      # profile) and the 14900HX runs single cores at 5.1-5.4 GHz into 91-97 C
+      # package temperature under the Minecraft/bot load (measured 2026-11-03),
+      # while 2.9 GHz sits at 66 C. 80 % of the max ratio is roughly 4.3 GHz.
+      "w /sys/devices/system/cpu/intel_pstate/max_perf_pct - - - - 80"
     ];
 
     services.disable-console-blanking = {
