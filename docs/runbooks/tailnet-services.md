@@ -28,7 +28,7 @@ working as before.
    Tests: `{"src": "group:trusted", "accept": ["svc:grafana:443"]}` and
    `{"src": "jerrecode@github", "accept": ["svc:comfyui:443"], "deny": ["svc:grafana:443"]}`.
 2. Network, Services, Advertise, Define a Service: `grafana`, `beszel`,
-   `cockpit`, `comfyui`, each endpoint `tcp:443`, tag `tag:lab-svc`.
+   `cockpit`, `comfyui`, `ntopng`, each endpoint `tcp:443`, tag `tag:lab-svc`.
 3. Machines, bandit-lab, Edit ACL tags: `tag:lab`. Irreversible; IP and name
    stay.
 4. Laptop: `ssh bandit-lab true && echo ok` prints `ok`.

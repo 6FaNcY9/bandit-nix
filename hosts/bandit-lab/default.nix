@@ -18,6 +18,7 @@ in {
     ./services/comfyui
     ./services/mrija-archive
     ./services/monitoring
+    ./services/ntopng.nix
     ./services/beszel
     ./services/vaultwarden
     "${craft}/minecraft"
