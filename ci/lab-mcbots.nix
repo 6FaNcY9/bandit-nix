@@ -25,6 +25,7 @@ in
   assert lib.assertMsg (lib.length (lib.filter (lib.hasPrefix "--network") c.extraOptions) == 2) "mcbots may not join further networks: ${extra}";
   assert lib.assertMsg (lib.elem "--add-host=velocity:${gw}" c.extraOptions) "with two networks `velocity` must be pinned to the gateway where the host's Velocity listens, or BotGate sees a minecraft-network source: ${extra}";
   assert lib.assertMsg (c.environment.BLUEMAP_URL == "http://${gw}:8100") "mcbots reads BlueMap through the gateway forwarder: ${c.environment.BLUEMAP_URL}";
+  assert lib.assertMsg (c.environment.BOTUI_URL == "http://${gw}:8101" && c.environment.INGAME_VIEWERS == "fancy8869=*;MidariBread=MisaBot,EM_Trader") "mcbots reaches BotUi through the gateway forwarder and the Kommandostand viewers are the owner (all bots) and Misa (hers): ${c.environment.BOTUI_URL} ${c.environment.INGAME_VIEWERS}";
   assert lib.assertMsg (let
     cs = lab.virtualisation.oci-containers.containers;
     workers = lib.filter (lib.hasPrefix "mcbots-worker") (lib.attrNames cs);

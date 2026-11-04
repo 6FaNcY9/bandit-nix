@@ -131,14 +131,14 @@ in
   assert lib.assertMsg (lib.attrNames sbx.symlinks == ["plugins/SkinsRestorer-15.12.6.jar" "plugins/ViaBackwards-5.12.0.jar" "plugins/ViaVersion-5.12.0.jar"] && sbx.operators.fancy8869.level == 4) "the sandbox runs only the ViaVersion pair and SkinsRestorer (the bots' skins, proxy mode) and has the owner as operator";
   assert lib.assertMsg (!paper.openFirewall && !sbx.openFirewall && !vel.openFirewall && !lab.services.minecraft-servers.openFirewall) "nix-minecraft must not open any firewall port by itself";
   assert lib.assertMsg (lib.elem 25565 fwTs.allowedTCPPorts && lib.elem 24454 fwTs.allowedUDPPorts && !(lib.elem 25565 (lib.concatMap (f: f.allowedTCPPorts or []) (lib.filter (f: f != fwTs) fwAll))) && !(lib.elem 24454 (lib.concatMap (f: f.allowedUDPPorts or []) (lib.filter (f: f != fwTs) fwAll)))) "Velocity (25565/tcp) and voice chat (24454/udp) are open on tailscale0 only";
-  assert lib.assertMsg (lib.all (p: !(lib.elem p (fwTcp ++ fwUdp))) [25567 25568 25575 25576 8100]) "Paper's ports, both RCONs and the map are in no firewall list";
+  assert lib.assertMsg (lib.all (p: !(lib.elem p (fwTcp ++ fwUdp))) [25567 25568 25575 25576 8100 8101]) "Paper's ports, both RCONs, the map and BotUi are in no firewall list";
   # The mcbots bridge reaches the stack through one firewall rule on the gateway; no Paper game port is in it.
   assert lib.assertMsg (let
     gwRules = lib.filter (lib.hasInfix gw) (lib.splitString "\n" lab.networking.firewall.extraCommands);
     m = builtins.match "iptables -A nixos-fw -s 10\\.250\\.77\\.0/29 -d 10\\.250\\.77\\.1 -p tcp -m multiport --dports ([0-9,]+) -j nixos-fw-accept" (lib.head (gwRules ++ [""]));
   in
-    lib.length gwRules == 1 && m != null && lib.sort lib.lessThan (lib.splitString "," (lib.head m)) == lib.sort lib.lessThan ["25565" "25575" "25576" "8100"]) "exactly one bridge rule, to the gateway, for Velocity, both RCONs and the map only";
-  assert lib.assertMsg (lib.sort lib.lessThan (map sockPort (lib.attrValues bridgeSockets)) == lib.sort lib.lessThan ["25575" "25576" "8100"]) "the bridge forwards exactly the two RCONs and the map (Velocity listens on the gateway itself)";
+    lib.length gwRules == 1 && m != null && lib.sort lib.lessThan (lib.splitString "," (lib.head m)) == lib.sort lib.lessThan ["25565" "25575" "25576" "8100" "8101"]) "exactly one bridge rule, to the gateway, for Velocity, both RCONs, the map and BotUi only";
+  assert lib.assertMsg (lib.sort lib.lessThan (map sockPort (lib.attrValues bridgeSockets)) == lib.sort lib.lessThan ["25575" "25576" "8100" "8101"]) "the bridge forwards exactly the two RCONs, the map and BotUi (Velocity listens on the gateway itself)";
   assert lib.assertMsg (lib.all (n: let
     s = bridgeSockets.${n};
     p = sockPort s;
@@ -146,6 +146,8 @@ in
     s.listenStreams == ["${gw}:${p}"] && s.socketConfig.FreeBind && lib.hasInfix "systemd-socket-proxyd 127.0.0.1:${p}" lab.systemd.services.${n}.serviceConfig.ExecStart) (lib.attrNames bridgeSockets)) "bridge forwarders listen on the gateway only (FreeBind) and forward to the same loopback port";
   # Misrouting guard: RCON of the real server must never reach the sandbox (or the other way round), the map is the real one's.
   assert lib.assertMsg (bridgeTarget 25575 == "127.0.0.1:${toString paper.serverProperties."rcon.port"}" && bridgeTarget 25576 == "127.0.0.1:${toString sbx.serverProperties."rcon.port"}" && paper.serverProperties."rcon.port" == 25575 && sbx.serverProperties."rcon.port" == 25576) "the 25575 forwarder targets the real server's RCON and the 25576 forwarder the sandbox's";
+  # BotUi (dialogs) is the real server's only: bridged to its loopback port, linked on main, absent from the sandbox (its list is asserted above).
+  assert lib.assertMsg (bridgeTarget 8101 == "127.0.0.1:8101" && lib.hasAttr "plugins/BotUi.jar" paper.symlinks && !(lib.hasAttr "plugins/BotUi.jar" sbx.symlinks)) "the 8101 forwarder targets the BotUi plugin on the real server, which only main loads";
   assert lib.assertMsg (let
     src = vel.environment.BOTGATE_SOURCES;
   in
