@@ -147,7 +147,8 @@ in
   # Misrouting guard: RCON of the real server must never reach the sandbox (or the other way round), the map is the real one's.
   assert lib.assertMsg (bridgeTarget 25575 == "127.0.0.1:${toString paper.serverProperties."rcon.port"}" && bridgeTarget 25576 == "127.0.0.1:${toString sbx.serverProperties."rcon.port"}" && paper.serverProperties."rcon.port" == 25575 && sbx.serverProperties."rcon.port" == 25576) "the 25575 forwarder targets the real server's RCON and the 25576 forwarder the sandbox's";
   # BotUi (dialogs) is the real server's only: bridged to its loopback port, linked on main, absent from the sandbox (its list is asserted above).
-  assert lib.assertMsg (bridgeTarget 8101 == "127.0.0.1:8101" && lib.hasAttr "plugins/BotUi.jar" paper.symlinks && !(lib.hasAttr "plugins/BotUi.jar" sbx.symlinks)) "the 8101 forwarder targets the BotUi plugin on the real server, which only main loads";
+  # 8101 is BotUi.java's default port (onEnable, BOTUI_PORT): keep the two in step.
+  assert lib.assertMsg (bridgeTarget 8101 == "127.0.0.1:8101" && lib.hasAttr "plugins/BotUi.jar" paper.symlinks && !(lib.hasAttr "plugins/BotUi.jar" sbx.symlinks) && lib.hasInfix "CommandPanels/panels/bots.yml" paper.extraStartPre) "the 8101 forwarder targets the BotUi plugin on the real server, which only main loads, and the retired v1 /bots panel is removed before Paper starts";
   assert lib.assertMsg (let
     src = vel.environment.BOTGATE_SOURCES;
   in
