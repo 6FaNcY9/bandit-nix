@@ -117,13 +117,13 @@ in
       then lib.hasPrefix "${e.OWNER_UUIDS}," cs.${n}.environment.OWNER_UUIDS
       else if mainOnly n
       then !(cs.${n}.environment ? MC_VHOST) && cs.${n}.environment.OWNER_UUIDS == e.OWNER_UUIDS
-      else (cs.${n}.environment.MC_VHOST or "") == "sandbox.bots" && cs.${n}.environment.OWNER_UUIDS == e.OWNER_UUIDS)
+      else !(cs.${n}.environment ? MC_VHOST) && cs.${n}.environment.OWNER_UUIDS == e.OWNER_UUIDS)
     bots
     && lib.all (b: !lib.elem b mains) (lib.splitString "," (e.BOARD_BOTS or ""))
     && e.RCON_HOST == gw
     && (e.OWNER_UUIDS or "") != ""
     && (e.PROTECTED_AREAS or "") != ""
-    && lib.elem "PATCH_DEFINITIONS" (builtins.attrNames sb.environment)) "every mcbots container but a guest-only or MAIN_BOTS worker plays in the sandbox (MC_VHOST sandbox.bots) until the job board passes there (owner 2026-10-23) and obeys only the owner; a guest worker (GUEST_BOTS) also obeys the owner; MAIN_BOTS get no board job; protected areas set";
+    && lib.elem "PATCH_DEFINITIONS" (builtins.attrNames sb.environment)) "every mcbots container plays on main (no MC_VHOST; all helpers on main since bandit-craft a0e8d25) and obeys only the owner; a guest worker (GUEST_BOTS) also obeys the owner; MAIN_BOTS get no board job; protected areas set";
   # Phase 5.5: the Docker stack stays defined (rollback) but nothing starts it.
   assert lib.assertMsg (lib.all (n: !lab.virtualisation.oci-containers.containers.${n}.autoStart && lab.systemd.services.${"docker-" + n}.wantedBy == []) ["minecraft" "velocity" "minecraft-sandbox"]) "the Docker minecraft, velocity and minecraft-sandbox containers stay defined but must not autostart (removal is phase 5.6)";
   assert lib.assertMsg (lab.systemd.timers ? minecraft-backup && lab.systemd.services.minecraft-backup.environment.MC_UNIT == "minecraft-server-paper" && lab.systemd.services.minecraft-backup.environment.MC_DATA == "/srv/minecraft/paper") "the daily backup must snapshot the nix-minecraft server, not the stopped Docker container";
