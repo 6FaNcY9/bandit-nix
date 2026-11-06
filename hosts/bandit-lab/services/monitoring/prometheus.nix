@@ -56,6 +56,21 @@
         static_configs:
           - targets: ["localhost:9115"]
 
+      # Velocity on the host gateway of the proxy network (firewall rule in notify.nix).
+      - job_name: blackbox-minecraft
+        metrics_path: /probe
+        params:
+          module: [tcp_connect]
+        static_configs:
+          - targets: ["10.89.0.1:25565"]
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: __param_target
+          - source_labels: [__param_target]
+            target_label: instance
+          - target_label: __address__
+            replacement: localhost:9115
+
       - job_name: nvidia-gpu
         static_configs:
           - targets: ["localhost:9835"]
