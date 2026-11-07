@@ -37,6 +37,8 @@
         exit 0
       fi
       rm -f "$down"
+      # a 200 with a body that is not an alert list must not turn every firing alert into "Resolved"
+      jq -e 'type == "array"' <<<"$alerts" >/dev/null || exit 0
 
       next=$(mktemp -p "$STATE_DIRECTORY")
       trap 'rm -f "$next"' EXIT
@@ -62,9 +64,9 @@
     # a restart loop fails the unit every few seconds: one push per unit per 10 minutes
     stamp=/run/notify-failure-$1
     [ -n "$(${pkgs.findutils}/bin/find "$stamp" -mmin -10 2>/dev/null)" ] && exit 0
-    touch "$stamp"
     ${pkgs.curl}/bin/curl -fsS -H "Authorization: Bearer $NTFY_TOKEN" -H "Title: Unit failed: $1" -H "Priority: high" \
-      -d "$(${pkgs.systemd}/bin/systemctl status --no-pager -n 5 "$1" 2>&1 | head -c 1500)" "$NTFY_URL/$NTFY_TOPIC"
+      -d "$(${pkgs.systemd}/bin/systemctl status --no-pager -n 5 "$1" 2>&1 | head -c 1500)" "$NTFY_URL/$NTFY_TOPIC" &&
+      touch "$stamp"
   '';
   criticalUnits =
     ["minecraft-server-paper" "minecraft-server-velocity" "restic-backups-peer" "minecraft-backup" "postgresqlBackup"]
