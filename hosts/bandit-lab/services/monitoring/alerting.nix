@@ -275,7 +275,8 @@
         for = "10m";
         severity = "critical";
         summary = "The {{ $labels.name }} has not fired for more than 36 hours";
-        expr = ''time() - node_systemd_timer_last_trigger_seconds{name=~"restic-backups-peer.timer|minecraft-backup.timer|postgresqlBackup.timer"}'';
+        # A timer that has not fired since boot reports 0: count from boot then, so a reboot does not page.
+        expr = ''time() - (node_systemd_timer_last_trigger_seconds{name=~"restic-backups-peer.timer|minecraft-backup.timer|postgresqlBackup.timer"} > 0 or on(name) (node_systemd_timer_last_trigger_seconds{name=~"restic-backups-peer.timer|minecraft-backup.timer|postgresqlBackup.timer"} * 0 + on() group_left() max(node_boot_time_seconds)))'';
         op = "gt";
         threshold = 129600;
         noData = "Alerting";

@@ -32,12 +32,14 @@
       auth() { printf 'user = "admin:%s"\n' "$(cat ${passwordFile})"; }
       if ! alerts=$(curl -fsS -K <(auth) \
         "http://127.0.0.1:3000/api/alertmanager/grafana/api/v2/alerts?active=true&silenced=false&inhibited=false"); then
-        [ -e "$down" ] || { send "Grafana unreachable" high "Alert polling failed; the monitoring pod may be down." && touch "$down"; }
+        # the pod starts after this timer's first run at boot: only page once the lab has been up 10 minutes
+        [ -e "$down" ] || [ "$(cut -d. -f1 /proc/uptime)" -lt 600 ] || { send "Grafana unreachable" high "Alert polling failed; the monitoring pod may be down." && touch "$down"; }
         exit 0
       fi
       rm -f "$down"
 
-      next=$(mktemp)
+      next=$(mktemp -p "$STATE_DIRECTORY")
+      trap 'rm -f "$next"' EXIT
       jq -r '.[] | [.fingerprint, .labels.alertname, (.labels.severity // "warning"), (.annotations.summary // "")] | @tsv' <<<"$alerts" |
         while IFS=$'\t' read -r fp name sev summary; do
           if grep -q "^$fp"$'\t' "$state"; then
@@ -46,7 +48,7 @@
             prio=default; [ "$sev" = critical ] && prio=high
             send "Lab alert: $name" "$prio" "$summary" && printf '%s\t%s\n' "$fp" "$name" >>"$next"
           fi
-        done
+        done || true # a failed send is retried next run; the resolved notices below still go out
       while IFS=$'\t' read -r fp name; do
         [ -n "$fp" ] || continue
         grep -q "^$fp"$'\t' "$next" && continue
@@ -57,6 +59,10 @@
   };
 
   failureNotify = pkgs.writeShellScript "notify-failure" ''
+    # a restart loop fails the unit every few seconds: one push per unit per 10 minutes
+    stamp=/run/notify-failure-$1
+    [ -n "$(${pkgs.findutils}/bin/find "$stamp" -mmin -10 2>/dev/null)" ] && exit 0
+    touch "$stamp"
     ${pkgs.curl}/bin/curl -fsS -H "Authorization: Bearer $NTFY_TOKEN" -H "Title: Unit failed: $1" -H "Priority: high" \
       -d "$(${pkgs.systemd}/bin/systemctl status --no-pager -n 5 "$1" 2>&1 | head -c 1500)" "$NTFY_URL/$NTFY_TOPIC"
   '';
