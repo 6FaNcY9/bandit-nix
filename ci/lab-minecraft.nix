@@ -1,6 +1,5 @@
 # Minecraft contract: the live nix-minecraft stack (phase 5.5: ports, firewall, the bridge to the Docker
-# mcbots, the cutover), what the stopped Docker containers (kept for rollback until 5.6) may still touch,
-# how the panel is exposed, and the staging ownership rules (bandit-craft hosts/bandit-lab/services/minecraft/
+# mcbots, the cutover), the removal of the Docker Minecraft containers (phase 5.6), how the panel is exposed, and the staging ownership rules (bandit-craft hosts/bandit-lab/services/minecraft/
 # stage.sh) exercised on a fixture data directory. Evaluation-time assertions plus sandboxed runs of the
 # real staging, snapshot and cutover scripts; nothing is started or contacted.
 {
@@ -10,15 +9,9 @@
   lab,
   craft, # the bandit-craft input, where the Minecraft module lives
 }: let
-  c = lab.virtualisation.oci-containers.containers.minecraft;
-  v = lab.virtualisation.oci-containers.containers.velocity;
-  toml = builtins.readFile "${craft}/hosts/bandit-lab/services/minecraft/default.nix"; # velocity.toml is written there
   tailnet = repoConfig.lab.tailscaleIp;
   scripts = import "${craft}/hosts/bandit-lab/services/minecraft/scripts.nix" {inherit pkgs;};
   units = lab.systemd.services;
-  sb = lab.virtualisation.oci-containers.containers.minecraft-sandbox;
-  extra = lib.concatStringsSep " " c.extraOptions;
-  vExtra = lib.concatStringsSep " " v.extraOptions;
   dummyJar = name: pkgs.writeText name "jar";
   seeds = pkgs.linkFarm "seed-plugins" {
     "LuckPerms-Bukkit-5.5.71.jar" = dummyJar "lp";
@@ -49,44 +42,13 @@
     then "none"
     else lib.last (lib.splitString " " lab.systemd.services.${lib.head names}.serviceConfig.ExecStart);
 in
-  assert lib.assertMsg (c.volumes == ["/srv/containers/minecraft/data:/data"]) "the Minecraft container may mount only its data directory (no docker.sock, no unrelated paths)";
-  assert lib.assertMsg (!(lib.hasInfix "privileged" extra) && !(lib.hasInfix "cap-add" extra) && !(lib.hasInfix "docker.sock" extra)) "the Minecraft container must stay unprivileged: ${extra}";
-  # Besides the map, only Simple Voice Chat's UDP port, and on the tailnet address only (2026-10-15).
-  assert lib.assertMsg (lib.elem (lib.sort lib.lessThan c.ports) [["127.0.0.1:8100:8100"] (lib.sort lib.lessThan ["127.0.0.1:8100:8100" "${tailnet}:24454:24454/udp"])]) "Paper publishes only the map on loopback and voice chat on the tailnet, never a game port: ${toString c.ports}";
-  assert lib.assertMsg (v.ports == ["${tailnet}:25565:25565"]) "the Velocity proxy publishes exactly the game port on the tailnet address: ${toString v.ports}";
-  assert lib.assertMsg (c.environment.ONLINE_MODE != "FALSE" || (lab.virtualisation.oci-containers.containers ? velocity && !(lib.any (lib.hasSuffix ":25565") c.ports))) "Paper may run online-mode=false only behind Velocity and without a published game port";
-  assert lib.assertMsg (lib.hasInfix "--network=minecraft" extra && lib.hasInfix "--network=minecraft" vExtra) "Paper and Velocity share the dedicated minecraft network";
-  assert lib.assertMsg (!(lib.hasInfix "privileged" vExtra) && !(lib.hasInfix "cap-add" vExtra) && !(lib.any (lib.hasInfix "docker.sock") v.volumes)) "the Velocity container must stay unprivileged without docker.sock: ${vExtra}";
-  assert lib.assertMsg (!(lib.hasInfix "100.125.161.81/" v.environment.BOTGATE_SOURCES) && !(lib.hasInfix "172." v.environment.BOTGATE_SOURCES) && !(lib.hasInfix "--network=bridge" vExtra)) "BotGate must never allowlist the lab tailnet address, a default Docker range or the bridge: ${v.environment.BOTGATE_SOURCES}";
-  assert lib.assertMsg (v.environmentFiles == [(lib.head c.environmentFiles)] && !(lib.hasInfix "VELOCITY_FORWARDING_SECRET" (builtins.toJSON v.environment))) "the forwarding secret reaches both containers only through the sops env file";
-  assert lib.assertMsg (c.environment.ENABLE_RCON == "true" && !(c.environment ? RCON_PASSWORD) && !(lib.any (lib.hasInfix "25575") c.ports) && lib.elem "/run/minecraft-rcon/rcon.env" c.environmentFiles) "RCON is on for the internal network only: no published RCON port, password only from the generated env file";
-  assert lib.assertMsg (lib.hasInfix "--memory=16g" extra && lib.hasInfix "--cpus=6" extra && c.environment.MEMORY == "12G") "resource caps (16 GiB, 6 CPUs, 12 GiB heap) are part of the contract";
-  assert lib.assertMsg (c.environment.PAPER_BUILD != "" && !(c.environment ? MOTD)) "the Paper build is pinned and server.properties keys owned by the panel (MOTD) have no environment variable";
   assert lib.assertMsg (!(units.minecraft-plugins.environment ? STAGE_PANELS) && units.minecraft-panels.partOf == ["minecraft-server-paper.service"]) "menus are reloaded in place (minecraft-panels, over RCON), never staged before the start, so a menu change does not restart Minecraft";
-  assert lib.assertMsg (units.docker-minecraft.serviceConfig.Restart == "always") "docker-minecraft must restart after a clean stop (panel Stop = restart)";
-  assert lib.assertMsg (units.docker-velocity.serviceConfig.SuccessExitStatus == 143) "docker-velocity exits 143 on docker stop; counted as failed, lab-update rolls the cutover back";
   # docker-prune deletes networks no container is on (2026-10-28: mcbots gone at boot, Velocity down).
   assert lib.all ({
     u,
     n,
   }:
     lib.assertMsg (lib.hasInfix "ensure-${n}-network" units.${u}.preStart) "${u} must re-create the ${n} network in preStart") [
-    {
-      u = "docker-minecraft";
-      n = "minecraft";
-    }
-    {
-      u = "docker-minecraft-sandbox";
-      n = "minecraft";
-    }
-    {
-      u = "docker-velocity";
-      n = "minecraft";
-    }
-    {
-      u = "docker-velocity";
-      n = "mcbots";
-    }
     {
       u = "docker-mcbots";
       n = "minecraft";
@@ -98,35 +60,38 @@ in
   ];
   assert lib.assertMsg (lib.hasInfix "tailscale serve" units.minecraft-panel-https.script && !(lib.hasInfix "funnel" units.minecraft-panel-https.script)) "map HTTPS is Tailscale Serve (tailnet only), never Funnel";
   assert lib.assertMsg (lib.hasInfix "http://127.0.0.1:$2" units.minecraft-panel-https.script && lib.hasInfix "serve 8443 8100" units.minecraft-panel-https.script && lib.elem "minecraft-server-paper.service" units.minecraft-panel-https.after) "the map is served from BlueMap on 127.0.0.1:8100, after the nix Paper";
-  assert lib.assertMsg (!(lib.hasInfix "serve 443" units.minecraft-panel-https.script) && !(lib.any (lib.hasInfix "7867") c.ports)) "the retired VoxelDash panel stays unpublished (no port 7867, no serve on 443)";
-  assert lib.assertMsg (sb.ports == [] && lib.head sb.volumes == "/srv/containers/minecraft-sandbox/data:/data" && lib.all (v: lib.hasPrefix "/nix/store/" v && lib.hasSuffix ":ro" v) (lib.tail sb.volumes) && sb.image == c.image && lib.elem "--network=minecraft" sb.extraOptions && !(lib.hasInfix "privileged" (toString sb.extraOptions))) "the sandbox publishes no port, mounts only its own data (plus read-only store jars), uses the real image on the minecraft network";
-  assert lib.assertMsg (!(lib.hasInfix "minecraft-sandbox" v.environment.BOTGATE_SOURCES) && lib.hasInfix ''try = ["main"]'' toml && lib.hasInfix ''"sandbox.bots" = ["sandbox"]'' toml) "players land on main; only the bots' virtual host is forced to the sandbox";
-  assert lib.assertMsg (let
-    cs = lab.virtualisation.oci-containers.containers;
-    e = cs.mcbots.environment;
-    guests = lib.splitString "," (e.GUEST_BOTS or "");
-    mains = lib.splitString "," (e.MAIN_BOTS or "");
-    # A worker running only GUEST_BOTS (another player's bot) plays on main and also obeys that player.
-    guestOnly = n: n != "mcbots" && lib.all (b: lib.elem b guests) (lib.drop 1 cs.${n}.cmd);
-    # A worker running only MAIN_BOTS (the owner's bots on main, owner 2026-11-04) plays on main, obeys only the owner and gets no board job.
-    mainOnly = n: n != "mcbots" && lib.all (b: lib.elem b mains) (lib.drop 1 cs.${n}.cmd);
-    bots = lib.filter (lib.hasPrefix "mcbots") (builtins.attrNames cs);
-  in
-    lib.all (n:
-      if guestOnly n
-      then lib.hasPrefix "${e.OWNER_UUIDS}," cs.${n}.environment.OWNER_UUIDS
-      else if mainOnly n
-      then !(cs.${n}.environment ? MC_VHOST) && cs.${n}.environment.OWNER_UUIDS == e.OWNER_UUIDS
-      else !(cs.${n}.environment ? MC_VHOST) && cs.${n}.environment.OWNER_UUIDS == e.OWNER_UUIDS)
-    bots
-    && lib.all (b: !lib.elem b mains) (lib.splitString "," (e.BOARD_BOTS or ""))
-    && e.RCON_HOST == gw
-    && (e.OWNER_UUIDS or "") != ""
-    && (e.PROTECTED_AREAS or "") != ""
-    && lib.elem "PATCH_DEFINITIONS" (builtins.attrNames sb.environment)) "every mcbots container plays on main (no MC_VHOST; all helpers on main since bandit-craft a0e8d25) and obeys only the owner; a guest worker (GUEST_BOTS) also obeys the owner; MAIN_BOTS get no board job; protected areas set";
-  # Phase 5.5: the Docker stack stays defined (rollback) but nothing starts it.
-  assert lib.assertMsg (lib.all (n: !lab.virtualisation.oci-containers.containers.${n}.autoStart && lab.systemd.services.${"docker-" + n}.wantedBy == []) ["minecraft" "velocity" "minecraft-sandbox"]) "the Docker minecraft, velocity and minecraft-sandbox containers stay defined but must not autostart (removal is phase 5.6)";
-  assert lib.assertMsg (lab.systemd.timers ? minecraft-backup && lab.systemd.services.minecraft-backup.environment.MC_UNIT == "minecraft-server-paper" && lab.systemd.services.minecraft-backup.environment.MC_DATA == "/srv/minecraft/paper") "the daily backup must snapshot the nix-minecraft server, not the stopped Docker container";
+  assert lib.assertMsg (!(lib.hasInfix "serve 443" units.minecraft-panel-https.script)) "the retired VoxelDash panel stays unpublished (no serve on 443)";
+  assert lib.assertMsg (
+    let
+      cs = lab.virtualisation.oci-containers.containers;
+      e = cs.mcbots.environment;
+      guests = lib.splitString "," (e.GUEST_BOTS or "");
+      mains = lib.splitString "," (e.MAIN_BOTS or "");
+      # A worker running only GUEST_BOTS (another player's bot) plays on main and also obeys that player.
+      guestOnly = n: n != "mcbots" && lib.all (b: lib.elem b guests) (lib.drop 1 cs.${n}.cmd);
+      # A worker running only MAIN_BOTS (the owner's bots on main, owner 2026-11-04) plays on main, obeys only the owner and gets no board job.
+      mainOnly = n: n != "mcbots" && lib.all (b: lib.elem b mains) (lib.drop 1 cs.${n}.cmd);
+      bots = lib.filter (lib.hasPrefix "mcbots") (builtins.attrNames cs);
+    in
+      lib.all (n:
+        if guestOnly n
+        then lib.hasPrefix "${e.OWNER_UUIDS}," cs.${n}.environment.OWNER_UUIDS
+        else if mainOnly n
+        then !(cs.${n}.environment ? MC_VHOST) && cs.${n}.environment.OWNER_UUIDS == e.OWNER_UUIDS
+        else !(cs.${n}.environment ? MC_VHOST) && cs.${n}.environment.OWNER_UUIDS == e.OWNER_UUIDS)
+      bots
+      && lib.all (b: !lib.elem b mains) (lib.splitString "," (e.BOARD_BOTS or ""))
+      && e.RCON_HOST == gw
+      && (e.OWNER_UUIDS or "") != ""
+      && (e.PROTECTED_AREAS or "") != ""
+  ) "every mcbots container plays on main (no MC_VHOST; all helpers on main since bandit-craft a0e8d25) and obeys only the owner; a guest worker (GUEST_BOTS) also obeys the owner; MAIN_BOTS get no board job; protected areas set";
+  # Phase 5.6: the Docker Minecraft stack is gone. Only the mcbots containers (and the two networks they join) remain.
+  assert lib.assertMsg (lib.all (n: !(lab.virtualisation.oci-containers.containers ? ${n}) && !(units ? ${"docker-" + n})) ["minecraft" "velocity" "minecraft-sandbox"]) "the Docker Minecraft containers (minecraft, velocity, minecraft-sandbox) and their docker-* units no longer exist";
+  assert lib.assertMsg (!(units ? minecraft-plugin-check) && !(lab.sops.templates ? "minecraft-velocity.env")) "the Docker-only plugin retry and the Docker velocity env template no longer exist";
+  assert lib.assertMsg (units.minecraft-plugins.wantedBy == [] && units.minecraft-plugins.requiredBy == [] && units.minecraft-rcon-seed.requiredBy == [] && units.minecraft-sandbox-seed.requiredBy == []) "the dormant Docker-era oneshots (minecraft-plugins, minecraft-rcon-seed, minecraft-sandbox-seed) are required by nothing";
+  # Nothing may delete data on activation, and the cold Docker copy is no longer created by tmpfiles.
+  assert lib.assertMsg (lib.all (r: !(lib.hasInfix "/srv/containers/velocity" r) && !(lib.hasInfix "/srv/containers/minecraft/data" r) && !((lib.hasInfix "/srv/containers" r || lib.hasInfix "/srv/minecraft" r) && lib.any (t: lib.hasPrefix "${t} " r) ["R" "r" "D"])) lab.systemd.tmpfiles.rules) "no tmpfiles rule creates the Docker data or proxy directories, and none removes anything under /srv/containers or /srv/minecraft";
+  assert lib.assertMsg (lab.systemd.timers ? minecraft-backup && !(lab.systemd.services.minecraft-backup.environment ? MC_UNIT) && lib.hasInfix "MC_UNIT:-minecraft-server-paper" (builtins.readFile "${craft}/hosts/bandit-lab/services/minecraft/snapshot.sh") && lib.hasInfix "MC_DATA:-/srv/minecraft/paper" (builtins.readFile "${craft}/hosts/bandit-lab/services/minecraft/snapshot.sh") && !(lib.hasInfix "docker" (builtins.readFile "${craft}/hosts/bandit-lab/services/minecraft/snapshot.sh"))) "the daily backup snapshots the nix-minecraft server by default (snapshot.sh has no Docker backend)";
   # Listening addresses: only Velocity listens beyond loopback; no backend sits on its port.
   assert lib.assertMsg (paper.serverProperties.server-ip == "127.0.0.1" && sbx.serverProperties.server-ip == "127.0.0.1") "both Paper servers listen on loopback only";
   assert lib.assertMsg (lib.hasInfix ''bind = "0.0.0.0:25565"'' velToml && velPort == "25565") "Velocity binds all addresses on 25565 (tailnet and bridge, the firewall decides)";
@@ -175,7 +140,7 @@ in
   assert lib.assertMsg (units.minecraft-server-sandbox.serviceConfig.EnvironmentFile == [sharedEnv "/run/minecraft-sandbox-rcon/rcon.env"] && units.minecraft-server-paper.serviceConfig.EnvironmentFile == sharedEnv && lib.elem "minecraft-server-sandbox.service" units.minecraft-sandbox-rcon-seed.requiredBy) "the sandbox reads its own RCON password after the shared environment file";
   assert lib.assertMsg (!(lib.hasInfix "VELOCITY_FORWARDING_SECRET" (builtins.toJSON [paper.environment vel.environment]))) "the forwarding secret reaches the servers only through the sops env file";
   assert lib.assertMsg (paper.managementSystem.systemd-socket.enable && !paper.managementSystem.tmux.enable) "Paper's console is the systemd socket";
-  assert lib.assertMsg (paper.package.version == "${c.environment.VERSION}-build.${c.environment.PAPER_BUILD}" && sbx.package == paper.package) "both Paper servers are the build the Docker one was: ${paper.package.version}";
+  assert lib.assertMsg (sbx.package == paper.package) "both Paper servers run the same build: ${paper.package.version}";
     pkgs.runCommand "lab-minecraft" {} ''
       export PATH=${lib.makeBinPath [pkgs.coreutils pkgs.gnugrep pkgs.gnused]}:$PATH
       data=$TMPDIR/data

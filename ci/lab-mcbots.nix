@@ -1,6 +1,6 @@
 # mcbots contract: the bot container publishes only on loopback, stays
 # unprivileged without docker.sock, joins the dedicated `mcbots` network plus
-# `minecraft` (kept until phase 5.6), reaches the host's Velocity, both RCONs and the map on the mcbots
+# `minecraft` (the Docker network stays for mcbots), reaches the host's Velocity, both RCONs and the map on the mcbots
 # gateway (phase 5.5), and every bot name matches BotGate's pattern (otherwise Velocity refuses it).
 {
   pkgs,
