@@ -28,7 +28,10 @@
     "iptables -w -D DOCKER-USER -i ve-mc-public ! -o enp44s0 -j DROP || true"
     "iptables -w -D DOCKER-USER -o ve-mc-public -m conntrack --ctstate NEW -j DROP || true"
   ];
-  vethLines = lib.filter (lib.hasInfix "ve-mc-public") (lib.splitString "\n" fw.extraCommands);
+  # networking.nat writes two lines of its own for an internal interface (the mark for masquerading and the
+  # forward accept towards the uplink only); every other mention must be one of fwLines.
+  natLines = ["-i 've-mc-public' -j MARK --set-mark 1" "-i 've-mc-public' -o enp44s0 -j ACCEPT"];
+  vethLines = lib.filter (l: lib.hasInfix "ve-mc-public" l && !(lib.elem (lib.trim l) natLines)) (lib.splitString "\n" fw.extraCommands);
 
   # Inside the container.
   innerFw = inner.networking.firewall;
