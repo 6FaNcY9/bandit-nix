@@ -30,7 +30,7 @@ in
   assert lib.assertMsg (c.config.systemd.services.tailscaled-autoconnect.serviceConfig.TimeoutStartSec == "30s") "container autoconnect must time out so the container reports READY without a tailnet login";
   assert lib.assertMsg (lib.elem "container@jerry.service" lab.systemd.services.jerry-ssh-watch.bindsTo) "jerry-ssh-watch must be bound to the container";
   assert lib.assertMsg (svc.CPUQuota == "100%" && svc.MemoryMax == "2G" && svc.MemorySwapMax == "0" && svc.TasksMax == 512) "container@jerry must carry CPU, memory, swap and task limits";
-  assert lib.assertMsg (lab.networking.nat.internalInterfaces == ["ve-jerry"]) "NAT must serve ve-jerry only";
+  assert lib.assertMsg (lib.sort lib.lessThan lab.networking.nat.internalInterfaces == ["ve-jerry" "ve-mc-public"]) "NAT must serve ve-jerry and ve-mc-public (ci/lab-mc-public.nix) only";
   assert lib.assertMsg (lib.all (l: lib.hasInfix l fw) fwLines) "firewall must refuse ve-jerry on the host and drop its LAN/bots/docker forwards";
   assert lib.assertMsg (lib.all (l: lib.hasInfix l lab.networking.firewall.extraStopCommands) stopLines) "firewall stop commands must mirror every jerry rule";
   assert lib.assertMsg (c.config.networking.nameservers == ["9.9.9.9" "1.1.1.1"]) "jerry must use fixed nameservers, not the host resolv.conf";

@@ -266,6 +266,13 @@
         lab = self.nixosConfigurations.bandit-lab.config;
       };
 
+      lab-mc-public = import ./ci/lab-mc-public.nix {
+        inherit pkgs;
+        craft = inputs.bandit-craft;
+        inherit (nixpkgs) lib;
+        lab = self.nixosConfigurations.bandit-lab.config;
+      };
+
       lab-mcbots = import ./ci/lab-mcbots.nix {
         inherit pkgs repoConfig;
         inherit (nixpkgs) lib;

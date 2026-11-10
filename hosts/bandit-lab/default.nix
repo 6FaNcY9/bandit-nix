@@ -27,6 +27,7 @@ in {
     "${craft}/mcbots"
     ./services/ntfy
     ./services/jerry-box
+    ./services/mc-public
     "${craft}/ollama"
     "${craft}/llamacpp"
     "${craft}/mcagents"
