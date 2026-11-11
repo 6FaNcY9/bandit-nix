@@ -17,7 +17,7 @@ in {
       margin = "8,8";
       padding = "12,14";
       border-size = 3;
-      border-radius = 8;
+      border-radius = 2;
       icons = true;
       max-icon-size = 48;
       markup = true;
@@ -25,7 +25,7 @@ in {
       default-timeout = 10000;
 
       background-color = colors.base00;
-      border-color = colors.base0D;
+      border-color = colors.base0C;
       text-color = colors.base05;
       progress-color = "over ${colors.base02}";
 

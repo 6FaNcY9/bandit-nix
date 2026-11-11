@@ -22,7 +22,7 @@
       mkdir --parents "$directory"
       cp ${kvconfig} "$directory/BanditGruvboxKvantum.kvconfig"
       ${pkgs.gnused}/bin/sed -i \
-        's/^highlight\.color=.*/highlight.color=${colors.base0D}/' \
+        's/^highlight\.color=.*/highlight.color=${colors.base0C}/' \
         "$directory/BanditGruvboxKvantum.kvconfig"
       cp ${svg} "$directory/BanditGruvboxKvantum.svg"
     '';
@@ -70,8 +70,8 @@ in {
     btop.enable = true;
   };
 
-  # Modern flat chrome: no bevels or shadows, 8 px radius on controls,
-  # one focus colour (blue base0D) for focus, selection and active tabs.
+  # Flat chrome: no bevels or shadows, 2 px radius on controls,
+  # one focus colour (teal base0C) for focus, selection and active tabs.
   # Windows stay square; Hyprland rounds their corners.
   stylix.targets.gtk.extraCss = ''
     * { transition: none; }
@@ -88,7 +88,7 @@ in {
 
     button, entry, spinbutton, textview, popover, popover.background,
     popover > contents, tooltip {
-      border-radius: 8px;
+      border-radius: 2px;
       box-shadow: none;
       background-image: none;
     }
@@ -101,7 +101,7 @@ in {
 
     .menu, menu, menuitem, menubar { border-radius: 0; }
     menuitem:hover {
-      background-color: ${colors.base0D};
+      background-color: ${colors.base0C};
       color: ${colors.base00};
     }
 
@@ -110,25 +110,25 @@ in {
 
     scrollbar { border-radius: 0; }
     scrollbar slider {
-      border-radius: 8px;
+      border-radius: 2px;
       min-width: 12px;
       min-height: 12px;
       background-color: ${colors.base02};
     }
 
     button:focus, entry:focus, textview:focus {
-      outline: 2px solid ${colors.base0D};
+      outline: 2px solid ${colors.base0C};
       outline-offset: -2px;
     }
     selection, *:selected {
-      background-color: ${colors.base0D};
+      background-color: ${colors.base0C};
       color: ${colors.base00};
     }
     scrollbar slider:hover, scrollbar slider:active {
-      background-color: ${colors.base0D};
+      background-color: ${colors.base0C};
     }
     notebook > header tabs tab:checked {
-      border-bottom: 2px solid ${colors.base0D};
+      border-bottom: 2px solid ${colors.base0C};
     }
   '';
 

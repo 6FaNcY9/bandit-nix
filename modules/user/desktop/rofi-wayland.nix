@@ -9,7 +9,7 @@
   bg2 = colors.base02;
   fg = colors.base05;
   fg2 = colors.base03;
-  blue = colors.base0D;
+  focus = colors.base0C;
   red = colors.base08;
   green = colors.base0B;
   interfaceFont = config.stylix.fonts.sansSerif.name;
@@ -27,8 +27,8 @@ in {
     window {
         background-color: ${bg};
         border:           3px;
-        border-color:     ${blue};
-        border-radius:    8px;
+        border-color:     ${focus};
+        border-radius:    2px;
         width:            44em;
         padding:          0;
     }
@@ -50,7 +50,7 @@ in {
 
     prompt {
         background-color: transparent;
-        text-color:       ${blue};
+        text-color:       ${focus};
         font:             "${boldFont}";
     }
 
@@ -109,9 +109,9 @@ in {
     }
 
     element.selected.normal {
-        background-color: ${blue};
+        background-color: ${focus};
         text-color:       ${bg};
-        border-radius:    6px;
+        border-radius:    2px;
     }
 
     element.selected.urgent {
@@ -122,7 +122,7 @@ in {
     element.selected.active {
         background-color: ${green};
         text-color:       ${bg};
-        border-radius:    6px;
+        border-radius:    2px;
     }
 
     element.alternate.normal {
@@ -152,7 +152,7 @@ in {
         background-color: ${bg};
         border:           3px;
         border-color:     ${red};
-        border-radius:    8px;
+        border-radius:    2px;
         width:            14em;
         padding:          0;
         location:         center;
@@ -201,7 +201,7 @@ in {
     element.selected.normal {
         background-color: ${red};
         text-color:       ${bg};
-        border-radius:    6px;
+        border-radius:    2px;
     }
   '';
 

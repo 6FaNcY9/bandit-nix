@@ -32,9 +32,9 @@ in {
 
       config = {
         general = {
-          # 8 px everywhere: 2 x 4 between tiles, 8 to the bar and screen edges.
-          gaps_in = 4;
-          gaps_out = 8;
+          # 6 px to the screen and bar edges, 2 x 3 between tiles.
+          gaps_in = 3;
+          gaps_out = 6;
           border_size = 3;
           layout = "dwindle";
           resize_on_border = true;
@@ -42,9 +42,9 @@ in {
           hover_icon_on_border = true;
 
           col = {
-            # One focus colour (blue), readable from a distance; the rainbow
+            # One focus colour (teal), readable from a distance; the rainbow
             # stays a signature in Waybar, hyprlock and the wallpaper.
-            active_border = rgb colors.base0D;
+            active_border = rgb colors.base0C;
             inactive_border = rgb colors.base02;
             nogroup_border = rgb colors.base02;
             nogroup_border_active = rgb colors.base0E;
@@ -52,14 +52,14 @@ in {
 
           snap = {
             enabled = true;
-            window_gap = 8;
-            monitor_gap = 8;
+            window_gap = 6;
+            monitor_gap = 6;
             respect_gaps = true;
           };
         };
 
         decoration = {
-          rounding = 8;
+          rounding = 2;
           dim_inactive = true;
           dim_strength = 0.15;
           blur.enabled = false;
@@ -68,6 +68,12 @@ in {
 
         dwindle = {
           preserve_split = true;
+        };
+
+        master = {
+          mfact = 0.66;
+          new_status = "slave";
+          orientation = "left";
         };
 
         group = {
@@ -79,7 +85,7 @@ in {
           merge_groups_on_groupbar = true;
 
           col = {
-            border_active = rgb colors.base0D;
+            border_active = rgb colors.base0C;
             border_inactive = rgb colors.base02;
             border_locked_active = rgb colors.base0E;
             border_locked_inactive = rgb colors.base02;
@@ -90,15 +96,15 @@ in {
             font_family = config.stylix.fonts.monospace.name;
             # Same text size as Waybar (Stylix desktop size, pt -> px).
             font_size = builtins.floor (config.stylix.fonts.sizes.desktop * 4 / 3);
-            # Filled tabs: the active one is blue with dark text, the rest grey.
+            # Filled tabs: the active one is teal with dark text, the rest grey.
             gradients = true;
             height = builtins.floor (config.stylix.fonts.sizes.desktop * 4 / 3 * 1.6);
             indicator_height = 0;
             stacked = false;
             render_titles = true;
             scrolling = true;
-            rounding = 6;
-            gradient_rounding = 6;
+            rounding = 2;
+            gradient_rounding = 2;
             gaps_in = 2;
             gaps_out = 2;
             text_color = rgb colors.base00;
@@ -107,8 +113,8 @@ in {
             text_color_locked_inactive = rgb colors.base04;
 
             col = {
-              active = rgb colors.base0D;
-              inactive = rgb colors.base02;
+              active = rgb colors.base0C;
+              inactive = rgb colors.base01;
               locked_active = rgb colors.base0E;
               locked_inactive = rgb colors.base02;
             };

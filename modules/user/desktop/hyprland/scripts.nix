@@ -13,7 +13,7 @@ in {
         [General]
         savePath=${bandit.workstation.homeDirectory}/Pictures/Screenshots
         ; Theme colours instead of Flameshot's default purple.
-        uiColor=${colors.base0D}
+        uiColor=${colors.base0C}
         contrastUiColor=${colors.base01}
         drawColor=${colors.base08}
       '';
