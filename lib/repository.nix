@@ -21,6 +21,9 @@ in {
     username = "vino";
     homeDirectory = "/home/vino";
     repoPath = "/home/vino/src/bandit-nix";
+    # Tailscale IP of the owner phone; the only peer allowed to reach sshd on
+    # `bandit` (modules/desktop/phone-link.nix).
+    phoneTailscaleIp = "100.123.34.41";
   };
 
   lab = {

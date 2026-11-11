@@ -13,5 +13,6 @@
     ./keybinds-menu.nix
     ./obsidian.nix
     ./discord.nix
+    ./phone-link.nix
   ];
 }

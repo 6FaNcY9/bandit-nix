@@ -14,6 +14,7 @@ in {
       username = str repo.workstation.username;
       homeDirectory = str repo.workstation.homeDirectory;
       repoPath = str repo.workstation.repoPath;
+      phoneTailscaleIp = str repo.workstation.phoneTailscaleIp;
     };
 
     lab = {

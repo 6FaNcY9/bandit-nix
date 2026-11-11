@@ -3,9 +3,6 @@
   config,
   ...
 }: {
-  # SSH server disabled — this machine only connects out, never accepts incoming.
-  services.openssh.enable = false;
-
   # Laptop-only user groups (VMs, audio, adb) — declared next to the tooling
   # that needs them; see modules/system/users.nix for the base set shared with
   # bandit-lab.
