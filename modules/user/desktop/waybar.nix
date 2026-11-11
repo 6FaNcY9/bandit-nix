@@ -6,8 +6,7 @@
   ...
 }: let
   colors = config.lib.stylix.colors.withHashtag;
-  # The proportional-icon Nerd Font variant: bar glyphs get two cells, not one.
-  barFont = config.stylix.fonts.sansSerif.name;
+  barFont = config.stylix.fonts.monospace.name;
   barSize = config.stylix.fonts.sizes.desktop;
   kitty = "${pkgs.kitty}/bin/kitty";
 
@@ -115,66 +114,42 @@ in {
       margin-bottom = 0;
       margin-left = 0;
 
-      modules-left = ["custom/host" "hyprland/workspaces" "hyprland/window"];
+      modules-left = ["custom/host" "hyprland/workspaces"];
       modules-center = ["clock"];
-      modules-right = [
-        "privacy"
-        "group/admin"
-        "network"
-        "group/system"
-        "pulseaudio"
-        "bluetooth"
-        "battery"
-        "group/traydrawer"
-      ];
+      modules-right = ["hyprland/window"];
 
       "custom/host" = {
-        format = "󱄅 ${osConfig.networking.hostName}";
+        format = osConfig.networking.hostName;
         on-click = "${config.programs.rofi.package}/bin/rofi -show drun";
         tooltip = false;
       };
 
       "hyprland/workspaces" = {
         # dwm style: only occupied workspaces and the active one.
-        # Window icons a third smaller than the workspace icon.
-        format = "{icon}<span size='66.667%'> {windows}</span>";
-        format-window-separator = " ";
-        # Nerd Font Material Design glyphs; workspace layout in hyprland/rules.nix.
+        format = "{icon}";
+        # Layout in hyprland/rules.nix.
         format-icons = {
-          "1" = "󰆍"; # U+F018D console
-          "2" = "󰖟"; # U+F059F web
-          "3" = "󰈙"; # U+F0219 file-document
-          "4" = "󰊗"; # U+F0297 gamepad-variant
-          "5" = "󰅩"; # U+F0169 code-braces
-          "6" = "󰊌"; # U+F028C forum
-          "7" = "󰉋"; # U+F024B folder
-          "8" = "󰝚"; # U+F075A music
-          "9" = "󰄜"; # U+F011C cellphone
-          default = "󰇘"; # U+F01D8 dots-horizontal
-        };
-        window-rewrite-default = "󰣆";
-        window-rewrite = {
-          "class<kitty>" = "󰄛";
-          "class<firefox>" = "󰈹";
-          "class<brave-browser>" = "󰖟";
-          "class<org.kde.okular>" = "󰈦";
-          "class<obsidian>" = "󰠮";
-          "class<libreoffice.*>" = "󰈬";
-          "class<org.prismlauncher.PrismLauncher>" = "󰆧";
-          "class<[Mm]inecraft.*>" = "󰍳";
-          "class<thunderbird>" = "󰇮";
-          "class<vesktop>" = "󰙯";
-          "class<pcmanfm>" = "󰉋";
-          "class<mpv>" = "󰎁";
-          "class<.*scrcpy.*>" = "󰄜";
-          "class<[Bb]itwarden>" = "󰌆";
-          "class<.*pavucontrol>" = "󰕾";
+          "1" = "1 term";
+          "2" = "2 web";
+          "3" = "3 doc";
+          "4" = "4 game";
+          "5" = "5 code";
+          "6" = "6 chat";
+          "7" = "7 files";
+          "8" = "8 music";
+          "9" = "9 phone";
+          default = "+";
         };
         on-click = "activate";
       };
 
       "hyprland/window" = {
         format = "{title}";
+        # Drop the spinner symbol Claude Code prepends to the terminal title.
+        # Literal alternation: Waybar's std::regex works on bytes, no \x{..} ranges.
+        rewrite = {
+          "^(◐|◓|◑|◒|✳|✶|✻|✽|✢|·|\\*) (.*)" = "$2";
+        };
         max-length = 32;
         separate-outputs = true;
       };
@@ -391,7 +366,10 @@ in {
       window#waybar {
         background-color: ${colors.base00};
         color: ${colors.base05};
-        border-bottom: 2px solid ${colors.base02};
+      }
+
+      window#waybar.top {
+        border-bottom: 1px solid ${colors.base02};
       }
 
       tooltip {
@@ -435,21 +413,10 @@ in {
         padding: 0 6px;
       }
 
-      /* The retro signature: the six Apple stripes stacked on the left edge. */
       #custom-host {
-        padding: 0 10px 0 16px;
+        padding: 0 12px;
         color: ${colors.base05};
         border-left: 0;
-        background-image: linear-gradient(to bottom,
-          ${colors.base0B} 0%, ${colors.base0B} 16.67%,
-          ${colors.base0A} 16.67%, ${colors.base0A} 33.33%,
-          ${colors.base09} 33.33%, ${colors.base09} 50%,
-          ${colors.base08} 50%, ${colors.base08} 66.67%,
-          ${colors.base0E} 66.67%, ${colors.base0E} 83.33%,
-          ${colors.base0D} 83.33%, ${colors.base0D} 100%);
-        background-size: 6px 100%;
-        background-position: left;
-        background-repeat: no-repeat;
       }
 
       #workspaces {
@@ -458,29 +425,37 @@ in {
         border-left: 1px solid ${colors.base02};
       }
 
-      #workspaces button {
-        margin: 6px 2px;
+      /* window#waybar outranks Stylix's .modules-left rules (3 px border, urgent fill). */
+      window#waybar #workspaces button {
+        margin: 0 2px;
         padding: 0 8px;
-        border-radius: 6px;
-        color: ${colors.base04};
+        color: ${colors.base03};
         background: transparent;
+        border: none;
       }
 
-      #workspaces button:hover {
+      window#waybar #workspaces button:hover {
         color: ${colors.base05};
-        background: ${colors.base01};
       }
 
-      /* Active workspace: the focus colour, like the window border. */
-      #workspaces button.active {
-        color: ${colors.base00};
-        background: ${colors.base0D};
+      /* Active workspace: bold text over a 3 px rainbow line. */
+      window#waybar #workspaces button.active {
+        color: ${colors.base05};
         font-weight: bold;
+        background-image: linear-gradient(to right,
+          ${colors.base0B} 0%, ${colors.base0B} 16.67%,
+          ${colors.base0A} 16.67%, ${colors.base0A} 33.33%,
+          ${colors.base09} 33.33%, ${colors.base09} 50%,
+          ${colors.base08} 50%, ${colors.base08} 66.67%,
+          ${colors.base0E} 66.67%, ${colors.base0E} 83.33%,
+          ${colors.base0D} 83.33%, ${colors.base0D} 100%);
+        background-size: 100% 3px;
+        background-position: bottom;
+        background-repeat: no-repeat;
       }
 
-      #workspaces button.urgent {
-        color: ${colors.base00};
-        background: ${colors.base08};
+      window#waybar #workspaces button.urgent {
+        color: ${colors.base08};
       }
 
       #window {
