@@ -72,7 +72,7 @@
     ["werkzeug" "H" "Air Place · Block in die Luft"]
     ["werkzeug" "N" "Safe Walk · nicht von Kanten fallen"]
     ["werkzeug" "," "Flight · fliegen"]
-    ["werkzeug" "Alt+C" "Free Look · halten, C zuerst loslassen"]
+    ["werkzeug" "Alt+C" "Free Look · an/aus"]
     ["sehen" "J" "ESP · Spieler und Mobs markieren"]
     ["sehen" "K" "Storage ESP · Kisten finden"]
     ["sehen" "I" "X-Ray"]
