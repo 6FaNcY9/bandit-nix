@@ -32,7 +32,7 @@ text=$(jq -r '
 text=$(tail -c 24000 <<<"$text")
 
 project=$(basename "${cwd:-unknown}" | tr -c 'A-Za-z0-9._\n-' '-')
-device=$(hostname | tr -c 'A-Za-z0-9._\n-' '-')
+device=$(printf "%s\n" "${MEMORY_DEVICE:-$(hostname)}" | tr -c 'A-Za-z0-9._\n-' '-')
 name="$(date +%F)-$device-$project-${sid:0:8}"
 
 mcp() { # mcp <json> [session]: one JSON-RPC message; prints headers then body
