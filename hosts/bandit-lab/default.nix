@@ -31,6 +31,7 @@ in {
     "${craft}/ollama"
     "${craft}/llamacpp"
     "${craft}/mcagents"
+    "${craft}/discord-admin"
     ./power.nix
     ./services/aiia
     ./services/auto-rebuild
