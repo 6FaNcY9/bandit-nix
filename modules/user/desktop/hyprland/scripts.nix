@@ -59,8 +59,16 @@ in {
             rm -f "$dir/$id"
           else
             set_layout master
+            # The work window (most recently focused tiled non-log window) becomes master, never the log pane.
             # ignoremaster: a focused master stays; "master" would swap it out again.
-            hyprctl dispatch 'hl.dsp.layout("swapwithmaster ignoremaster")' >/dev/null
+            work=$($jq -r --argjson id "$id" '
+              [.[] | select(.workspace.id == $id and (.floating | not) and (.hidden | not) and .class != "cockpit-log")]
+              | sort_by(.focusHistoryID) | .[0].address // empty
+            ' <<<"$clients")
+            if [ -n "$work" ]; then
+              hyprctl dispatch "hl.dsp.focus({ window = \"address:$work\" })" >/dev/null
+              hyprctl dispatch 'hl.dsp.layout("swapwithmaster ignoremaster")' >/dev/null
+            fi
             # One tiled window or group alone and no log yet: add the log pane (opens right).
             read -r slots logs < <($jq -r --argjson id "$id" '
               [.[] | select(.workspace.id == $id and (.floating | not))]

@@ -86,11 +86,13 @@
       center = true;
     }
     {
-      # Cockpit log pane (hypr-cockpit): auto_group must not turn it into a tab.
+      # Cockpit log pane (hypr-cockpit): auto_group must not turn it into a tab,
+      # and it must not take focus from the work window.
       name = "cockpit-log";
       match.class = "^cockpit-log$";
       group = "deny";
       tile = true;
+      no_initial_focus = true;
     }
     # Fixed workspaces; the waybar workspace labels in ../waybar.nix follow this layout.
     {
