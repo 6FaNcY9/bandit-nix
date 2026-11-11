@@ -16,30 +16,56 @@
     exec ${pkgs.rofi-bluetooth}/bin/rofi-bluetooth -theme retro-eighties
   '';
 
-  # Glyph in an accent colour, label stays in the bar's calm foreground.
-  glyph = color: icon: "<span color='${color}'>${icon}</span>";
-  # Same for markup built inside the scripts' single-quoted jq programs.
-  jqGlyph = color: icon: ''<span color=\"${color}\">${icon}</span>'';
-
-  # Failed systemd units (system + user) and journal errors since boot.
+  # Health line: failed units (system + user), else journal errors of the last 15 minutes.
   barLogs = pkgs.writeShellApplication {
     name = "waybar-logs";
     runtimeInputs = [pkgs.jq pkgs.gawk pkgs.coreutils pkgs.gnused pkgs.gnugrep];
     text = ''
-      failed=$( { systemctl --failed --no-legend --plain; systemctl --user --failed --no-legend --plain; } | awk '{print $1}')
+      # A hung systemd or journal call must not hang the bar (124 is timeout's exit status).
+      tmo=""
+      hung() { [ $? -ne 124 ] || tmo="(journal timeout)"; }
+      sys=$(timeout 5 systemctl --failed --no-legend --plain) || { hung; sys=""; }
+      usr=$(timeout 5 systemctl --user --failed --no-legend --plain) || { hung; usr=""; }
+      errs=$(timeout 5 journalctl -p err --since -15min -q --no-pager -o cat) || { hung; errs=""; }
+      last=$(timeout 5 journalctl -p err -b -q --no-pager -n 5 -o short) || { hung; last=""; }
+      failed=$(printf '%s\n%s\n' "$sys" "$usr" | awk 'NF {print $1}')
       units=$(printf '%s' "$failed" | grep -c . || true)
-      errors=$(journalctl -p err -b -q --no-pager -o cat | wc -l)
-      recent=$(journalctl -p err -b -q --no-pager -n 5 -o short | sed -E 's/^(\S+ \S+ \S+) \S+ /\1 /' | cut -c1-110)
-      if [ "$units" -gt 0 ]; then unit_color='${colors.base08}' class=failed; else unit_color='${colors.base0B}' class=ok; fi
-      jq -cn --arg units "$units" --arg errors "$errors" --arg failed "$failed" --arg recent "$recent" \
-        --arg uc "$unit_color" --arg class "$class" '
+      errors=$(printf '%s' "$errs" | grep -c . || true)
+      recent=$(printf '%s' "$last" | sed -E 's/^(\S+ \S+ \S+) \S+ /\1 /' | cut -c1-110)
+      if [ "$units" -gt 0 ]; then
+        class=failed text="$units FAILED · $(awk 'NR == 1' <<<"$failed")"
+      elif [ "$errors" -gt 0 ]; then
+        class=warn text="$errors ERR 15m"
+      else
+        class=ok text="all quiet"
+      fi
+      jq -cn --arg text "$text" --arg class "$class" --arg units "$units" --arg errors "$errors" \
+        --arg failed "$failed" --arg recent "$recent" --arg tmo "$tmo" '
         def esc: gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
         {
-          text: "<span color=\"\($uc)\">󰒓</span> \($units) ${jqGlyph colors.base03 "│"} <span color=\"${colors.base0A}\">󰀦</span> \($errors)",
+          text: ($text | esc),
           tooltip: ("Failed units: \($units)\n" + (if $failed == "" then "  none" else ($failed | esc | split("\n") | map("  " + .) | join("\n")) end)
-            + "\n\nJournal errors this boot: \($errors)\n" + ($recent | esc)),
+            + "\n\nJournal errors, last 15 min: \($errors)\n\nLast errors this boot:\n" + ($recent | esc)
+            + (if $tmo == "" then "" else "\n" + $tmo end)),
           class: $class
         }'
+    '';
+  };
+
+  # MIC while an app records audio, SCREEN while a screen share runs; empty text hides the module.
+  barPrivacy = pkgs.writeShellApplication {
+    name = "waybar-privacy";
+    runtimeInputs = [pkgs.pipewire pkgs.jq pkgs.coreutils];
+    text = ''
+      while true; do
+        timeout 5 pw-dump 2>/dev/null | jq -c '
+          [.[] | select(.type == "PipeWire:Interface:Node" and .info.state == "running") | .info.props] as $n
+          | [ (if any($n[]; .["media.class"] == "Stream/Input/Audio") then "MIC" else empty end),
+              (if any($n[]; .["media.class"] == "Video/Source" and ((.["node.name"] // "") | startswith("xdph"))) then "SCREEN" else empty end) ]
+          | if length > 0 then {text: join(" "), class: "active"} else {text: ""} end
+        ' || echo '{"text":""}'
+        sleep 3
+      done
     '';
   };
 
@@ -52,16 +78,16 @@
       names=""
       # Only ask docker when its daemon already runs, so the poll never starts it.
       if systemctl --user --quiet is-active docker.service && command -v docker >/dev/null; then
-        names+=$(timeout 3 docker ps --format '󰡨 {{.Names}} ({{.Image}})' 2>/dev/null || true)$'\n'
+        names+=$(timeout 3 docker ps --format '{{.Names}} ({{.Image}})' 2>/dev/null || true)$'\n'
       fi
       if command -v podman >/dev/null; then
-        names+=$(timeout 3 podman ps --format '󰡨 {{.Names}} ({{.Image}}) [podman]' 2>/dev/null || true)
+        names+=$(timeout 3 podman ps --format '{{.Names}} ({{.Image}}) [podman]' 2>/dev/null || true)
       fi
       names=$(printf '%s' "$names" | grep . || true)
       count=$(printf '%s' "$names" | grep -c . || true)
       if [ "$count" -eq 0 ]; then echo '{"text":""}'; exit 0; fi
       jq -cn --arg n "$count" --arg names "$names" '{
-        text: "${jqGlyph colors.base0D "󰡨"} \($n)",
+        text: "CTR \($n)",
         tooltip: ($names | gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;"))
       }'
     '';
@@ -92,8 +118,7 @@
       gw=$(ip -4 route show default | awk '{print $3 " (" $5 ")"; exit}')
       addrs=$(ip -o addr show | awk '$2 != "lo" {if ($2 != last) {printf "%s%s\n", (last != "" ? "\n" : ""), $2; last = $2} printf "  %s\n", $4}')
       jq -cn --arg lan "''${lan:---}" --arg ts "$ts" --arg addrs "$addrs" --arg gw "''${gw:-none}" '{
-        text: ("${jqGlyph colors.base0C "󰩟"} \($lan) ${jqGlyph colors.base03 "│"} "
-          + (if $ts == "" then "<span color=\"${colors.base08}\">󰖂 --</span>" else "${jqGlyph colors.base0C "󰖂"} \($ts)" end)),
+        text: "LAN \($lan) │ TS \(if $ts == "" then "--" else $ts end)",
         tooltip: ($addrs + "\ngateway \($gw)"),
         class: (if $ts == "" then "no-tailscale" else "ok" end)
       }'
@@ -171,14 +196,26 @@ in {
           };
         };
       };
+    };
 
-      privacy = {
-        icon-size = builtins.floor (barSize * 4 / 3);
-        icon-spacing = 6;
-        modules = [
-          {type = "screenshare";}
-          {type = "audio-in";}
-        ];
+    settings.bottomBar = {
+      layer = "top";
+      position = "bottom";
+      # 1.75x the text height, a little slimmer than the top bar.
+      height = builtins.floor (barSize * 4 / 3 * 1.75);
+      spacing = 0;
+      margin-top = 0;
+      margin-right = 0;
+      margin-bottom = 0;
+      margin-left = 0;
+
+      modules-left = ["group/admin"];
+      modules-right = ["custom/privacy" "network" "group/system" "pulseaudio" "bluetooth" "battery" "group/traydrawer"];
+
+      "custom/privacy" = {
+        exec = "${barPrivacy}/bin/waybar-privacy";
+        return-type = "json";
+        tooltip = false;
       };
 
       "custom/logs" = {
@@ -205,9 +242,9 @@ in {
 
       network = {
         # Network name lives in the tooltip; the bar keeps the traffic.
-        format-wifi = "${glyph colors.base0B "󰖩"} ↓{bandwidthDownBytes} ↑{bandwidthUpBytes}";
-        format-ethernet = "${glyph colors.base0B "󰈀"} {ifname} ↓{bandwidthDownBytes} ↑{bandwidthUpBytes}";
-        format-linked = "${glyph colors.base0B "󰈀"} LINK";
+        format-wifi = "󰖩 ↓{bandwidthDownBytes} ↑{bandwidthUpBytes}";
+        format-ethernet = "󰈀 {ifname} ↓{bandwidthDownBytes} ↑{bandwidthUpBytes}";
+        format-linked = "󰈀 LINK";
         format-disconnected = "󰖪 OFF";
         tooltip-format-wifi = "{essid} ({signalStrength}%)\n{ipaddr}/{cidr}";
         tooltip-format-ethernet = "{ifname}\n{ipaddr}/{cidr}";
@@ -217,7 +254,7 @@ in {
 
       cpu = {
         # Total load only: the per-core sparkline no longer fits at the larger size.
-        format = "${glyph colors.base04 "󰻠"} {usage}%";
+        format = "CPU {usage}%";
         interval = 5;
         states = {
           warning = 70;
@@ -227,7 +264,7 @@ in {
       };
 
       memory = {
-        format = "${glyph colors.base04 "󰍛"} {percentage}%";
+        format = "MEM {percentage}%";
         interval = 5;
         states = {
           warning = 70;
@@ -259,13 +296,13 @@ in {
       };
 
       "power-profiles-daemon" = {
-        format = "{icon}";
+        format = "PWR {icon}";
         tooltip-format = "Power profile: {profile}";
         format-icons = {
-          default = "󰾅";
-          performance = "󱐋";
-          balanced = "󰾅";
-          power-saver = "󰌪";
+          default = "bal";
+          performance = "perf";
+          balanced = "bal";
+          power-saver = "save";
         };
       };
 
@@ -275,35 +312,32 @@ in {
         input-filename = "temp1_input";
         critical-threshold = 85;
         interval = 10;
-        format = "${glyph colors.base08 "󰔏"} {temperatureC}°C";
+        format = "TEMP {temperatureC}°C";
       };
 
       disk = {
         path = "/";
         interval = 120;
-        format = "${glyph colors.base04 "󰋊"} {percentage_used}%";
+        format = "DISK {percentage_used}%";
         tooltip-format = "/ {used} of {total} ({free} free)";
       };
 
       pulseaudio = {
-        format = "{icon} {volume}%";
-        format-muted = "󰝟 MUTE";
-        format-icons = {
-          default = map (glyph colors.base0D) ["󰕿" "󰖀" "󰕾"];
-        };
+        format = "VOL {volume}%";
+        format-muted = "VOL MUTE";
         on-click = "${pkgs.pulseaudio}/bin/pactl set-sink-mute @DEFAULT_SINK@ toggle";
         on-click-right = "${pkgs.pavucontrol}/bin/pavucontrol";
         on-scroll-up = "${pkgs.pulseaudio}/bin/pactl set-sink-volume @DEFAULT_SINK@ +5%";
         on-scroll-down = "${pkgs.pulseaudio}/bin/pactl set-sink-volume @DEFAULT_SINK@ -5%";
       };
 
-      # Icon (+ headset battery) only; device names in the tooltip.
+      # State word (+ headset battery) only; device names in the tooltip.
       bluetooth = {
-        format = "${glyph colors.base0D "󰂯"}";
-        format-off = "󰂲";
-        format-disabled = "󰂲";
-        format-connected = "${glyph colors.base0D "󰂱"}";
-        format-connected-battery = "${glyph colors.base0D "󰂱"} {device_battery_percentage}%";
+        format = "BT";
+        format-off = "BT OFF";
+        format-disabled = "BT OFF";
+        format-connected = "BT ON";
+        format-connected-battery = "BT {device_battery_percentage}%";
         tooltip-format = "Bluetooth: {status}";
         tooltip-format-connected = "{device_enumerate}";
         tooltip-format-enumerate-connected = "{device_alias}";
@@ -319,10 +353,10 @@ in {
           critical = 15;
         };
         format = "{icon} {capacity}%";
-        format-charging = "${glyph colors.base0B "󰂄"} {capacity}%";
-        format-plugged = "${glyph colors.base0B "󰂄"} {capacity}%";
-        format-full = "${glyph colors.base0B "󰁹"} {capacity}%";
-        format-icons = map (glyph colors.base0E) ["󰁺" "󰁻" "󰁼" "󰁽" "󰁾" "󰁿" "󰂀" "󰂁" "󰂂" "󰁹"];
+        format-charging = "󰂄 {capacity}%";
+        format-plugged = "󰂄 {capacity}%";
+        format-full = "󰁹 {capacity}%";
+        format-icons = ["󰁺" "󰁻" "󰁼" "󰁽" "󰁾" "󰁿" "󰂀" "󰂁" "󰂂" "󰁹"];
         tooltip-format = "{timeTo} · {power} W";
         interval = 30;
       };
@@ -339,7 +373,7 @@ in {
       };
 
       "custom/tray-handle" = {
-        format = "󰅁";
+        format = "&lt;";
         tooltip = false;
       };
 
@@ -372,6 +406,10 @@ in {
         border-bottom: 1px solid ${colors.base02};
       }
 
+      window#waybar.bottom {
+        border-top: 1px solid ${colors.base02};
+      }
+
       tooltip {
         color: ${colors.base05};
         background-color: ${colors.base01};
@@ -385,7 +423,7 @@ in {
       #custom-host,
       #window,
       #clock,
-      #privacy,
+      #custom-privacy,
       #admin,
       #network,
       #system,
@@ -397,6 +435,11 @@ in {
         padding: 0 8px;
         background-color: transparent;
         border-left: 1px solid ${colors.base02};
+      }
+
+      /* First module of the bottom bar: no separator at the screen edge. */
+      #admin {
+        border-left: 0;
       }
 
       /* Drawer children sit inside their group's frame. */
@@ -474,8 +517,32 @@ in {
         border-right: 1px solid ${colors.base02};
       }
 
-      #privacy-item {
-        padding: 0 4px;
+      /* Bottom bar: values are dim, colour only marks a state. */
+      #custom-logs,
+      #custom-ip,
+      #custom-containers,
+      #cpu,
+      #memory,
+      #temperature,
+      #disk,
+      #power-profiles-daemon,
+      #network,
+      #pulseaudio,
+      #bluetooth,
+      #battery,
+      #custom-tray-handle {
+        color: ${colors.base04};
+      }
+
+      #custom-logs.ok {
+        color: ${colors.base03};
+      }
+
+      #custom-logs.warn,
+      #cpu.warning,
+      #memory.warning,
+      #battery.warning {
+        color: ${colors.base0A};
       }
 
       #custom-logs.failed,
@@ -488,34 +555,8 @@ in {
         color: ${colors.base08};
       }
 
-      #cpu.warning,
-      #memory.warning,
-      #battery.warning {
-        color: ${colors.base0A};
-      }
-
-      #cpu {
-        color: ${colors.base04};
-      }
-
-      #pulseaudio.muted {
-        color: ${colors.base03};
-      }
-
-      #power-profiles-daemon {
+      #custom-privacy.active {
         color: ${colors.base0E};
-      }
-
-      #power-profiles-daemon.power-saver {
-        color: ${colors.base0B};
-      }
-
-      #power-profiles-daemon.performance {
-        color: ${colors.base09};
-      }
-
-      #custom-tray-handle {
-        color: ${colors.base04};
       }
 
       /* Opened drawer modules sit on a raised surface. */
