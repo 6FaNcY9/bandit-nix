@@ -24,7 +24,7 @@
   # Cloudflare R2: account-scoped S3 endpoint, the bucket, and the public
   # domain the bucket is served from (also the ASSET_ORIGIN the web image was
   # built with, see the runbook).
-  r2Endpoint = "https://REPLACE-ACCOUNT-ID.r2.cloudflarestorage.com";
+  r2Endpoint = "https://812eb80b2ffe7e6ce3beb8ac39f8cd81.r2.cloudflarestorage.com";
   r2Bucket = "aiia-designs";
   assetBase = "https://cdn.aiia.at";
 in {
