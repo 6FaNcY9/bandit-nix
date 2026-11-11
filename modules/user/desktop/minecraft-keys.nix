@@ -137,8 +137,8 @@ in {
       pkill -x rofi && exit 0
       cat <<'ROWS' | ${rofi} -dmenu -i -markup-rows -no-custom -no-show-icons \
         -p "󰍳 Tasten" -mesg "Tippen = suchen   ·   Esc = zu" \
-        -theme retro-eighties -font "FiraCode Nerd Font Mono SemiBold 15" \
-        -theme-str 'window { width: 62%; } listview { lines: 16; } prompt { font: "FiraCode Nerd Font Bold 15"; } textbox { font: "FiraCode Nerd Font 13"; }' >/dev/null
+        -theme retro-eighties \
+        -theme-str 'window { width: 62%; } listview { lines: 16; }' >/dev/null
       ${lib.concatMapStringsSep "\n" row rows}
       ROWS
     '';

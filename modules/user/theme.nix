@@ -22,7 +22,7 @@
       mkdir --parents "$directory"
       cp ${kvconfig} "$directory/BanditGruvboxKvantum.kvconfig"
       ${pkgs.gnused}/bin/sed -i \
-        's/^highlight\.color=.*/highlight.color=${colors.base0A}/' \
+        's/^highlight\.color=.*/highlight.color=${colors.base0D}/' \
         "$directory/BanditGruvboxKvantum.kvconfig"
       cp ${svg} "$directory/BanditGruvboxKvantum.svg"
     '';
@@ -70,95 +70,65 @@ in {
     btop.enable = true;
   };
 
-  # Warm retro aesthetic — mostly-flat chrome with a gentle bevel, softened
-  # from the old high-contrast 90s look to match Gruvbox's mellower
-  # warmth. Headerbars/menus/scrollbars stay hard-edged; buttons/entries/
-  # popovers get a small radius and a lighter, blended-tone shadow.
+  # Modern flat chrome: no bevels or shadows, 8 px radius on controls,
+  # one focus colour (blue base0D) for focus, selection and active tabs.
+  # Windows stay square; Hyprland rounds their corners.
   stylix.targets.gtk.extraCss = ''
-    * {
-      border-radius: 3px;
-      transition: none;
-    }
+    * { transition: none; }
 
     window, dialog, .background { border-radius: 0; }
-    window.csd { border-radius: 0; }
+    window.csd, .csd .titlebar { border-radius: 0; }
 
-    /* Title bars — hard line, no shadow, flat */
     headerbar, headerbar.titlebar, .titlebar {
       border-radius: 0;
       border-bottom: 2px solid ${colors.base02};
       box-shadow: none;
       background-image: none;
     }
-    .csd .titlebar { border-radius: 0; }
 
-    /* Softly beveled buttons — raised normal, sunken when pressed */
+    button, entry, spinbutton, textview, popover, popover.background,
+    popover > contents, tooltip {
+      border-radius: 8px;
+      box-shadow: none;
+      background-image: none;
+    }
     button {
-      border-radius: 3px;
-      box-shadow:
-        inset -1px -1px 0 ${colors.base02},
-        inset  1px  1px 0 ${colors.base03};
+      background-color: ${colors.base01};
+      border: 1px solid ${colors.base02};
     }
-    button:active, button:checked {
-      box-shadow:
-        inset  1px  1px 0 ${colors.base02},
-        inset -1px -1px 0 ${colors.base03};
-    }
+    button:hover { background-color: ${colors.base02}; }
+    entry, spinbutton { border: 1px solid ${colors.base02}; }
 
-    /* Gently sunken entries (text inputs inset into the surface) */
-    entry, spinbutton, textview {
-      border-radius: 3px;
-      box-shadow:
-        inset 1px 1px 0 ${colors.base02},
-        inset -1px -1px 0 ${colors.base03};
-    }
-
-    /* Popovers / menus — mostly square, softly flat */
-    popover, popover.background, popover > contents { border-radius: 3px; }
-    .menu, menu, menuitem { border-radius: 0; }
-    menubar { border-radius: 0; }
+    .menu, menu, menuitem, menubar { border-radius: 0; }
     menuitem:hover {
-      background-color: ${colors.base0A};
+      background-color: ${colors.base0D};
       color: ${colors.base00};
     }
-
-    tooltip { border-radius: 3px; }
 
     notebook > header tabs tab { border-radius: 0; }
     treeview.view { border-radius: 0; }
 
-    /* Chunky, softly beveled scrollbars */
     scrollbar { border-radius: 0; }
     scrollbar slider {
-      border-radius: 3px;
-      min-width: 14px;
-      min-height: 14px;
+      border-radius: 8px;
+      min-width: 12px;
+      min-height: 12px;
       background-color: ${colors.base02};
-      box-shadow:
-        inset -1px -1px 0 ${colors.base01},
-        inset  1px  1px 0 ${colors.base03};
     }
-    scrollbar.horizontal slider { min-height: 14px; }
-    scrollbar.vertical   slider { min-width: 14px; }
 
-    /* Warm amber primary and teal secondary accents from Gruvbox. */
     button:focus, entry:focus, textview:focus {
-      outline: 2px solid ${colors.base0A};
+      outline: 2px solid ${colors.base0D};
       outline-offset: -2px;
     }
-    button:hover {
-      background-color: ${colors.base0C};
-      color: ${colors.base00};
-    }
     selection, *:selected {
-      background-color: ${colors.base0A};
+      background-color: ${colors.base0D};
       color: ${colors.base00};
     }
     scrollbar slider:hover, scrollbar slider:active {
-      background-color: ${colors.base0A};
+      background-color: ${colors.base0D};
     }
     notebook > header tabs tab:checked {
-      border-bottom: 2px solid ${colors.base0A};
+      border-bottom: 2px solid ${colors.base0D};
     }
   '';
 

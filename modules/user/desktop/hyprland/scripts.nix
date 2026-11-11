@@ -1,14 +1,21 @@
 {
+  config,
   pkgs,
   bandit,
   ...
-}: {
+}: let
+  colors = config.lib.stylix.colors.withHashtag;
+in {
   home = {
     file = {
       "Pictures/Screenshots/.keep".text = "";
       ".config/flameshot/flameshot.ini".text = ''
         [General]
         savePath=${bandit.workstation.homeDirectory}/Pictures/Screenshots
+        ; Theme colours instead of Flameshot's default purple.
+        uiColor=${colors.base0D}
+        contrastUiColor=${colors.base01}
+        drawColor=${colors.base08}
       '';
 
       # ─── Region screenshot: capture, save, copy, notify ───
@@ -75,6 +82,8 @@
 
           LAYOUT (dwindle)
             Mod+E               toggle split orientation
+            Mod+V               next window opens below
+            Mod+B               next window opens right
             Mod+Ctrl+E          swap split branches
             Mod+S               toggle tab group
             Mod+Ctrl+S          lock active group

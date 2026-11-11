@@ -38,6 +38,14 @@
       center = true;
     }
     {
+      # Bluetooth TUI opened from the Waybar Bluetooth module.
+      name = "bluetui";
+      match.class = "^(bluetui)$";
+      float = true;
+      size = "1100 700";
+      center = true;
+    }
+    {
       name = "blueman-manager";
       match.class = "^(blueman-manager)$";
       float = true;
@@ -52,10 +60,12 @@
     }
     {
       # Flameshot's capture overlay must cover the screen untouched by tiling.
+      # Matched by title: Flameshot 14 maps with an empty class, so a class rule
+      # never floated it; the tiled overlay joined the focused tab group and its
+      # fullscreen passed to the next tab on close.
       name = "flameshot";
-      match.class = "^(flameshot)$";
+      match.title = "^(flameshot)$";
       float = true;
-      pin = true;
       move = "0 0";
       no_anim = true;
     }

@@ -6,8 +6,16 @@
   ...
 }: let
   colors = config.lib.stylix.colors.withHashtag;
-  monospaceFont = config.stylix.fonts.monospace.name;
+  # The proportional-icon Nerd Font variant: bar glyphs get two cells, not one.
+  barFont = config.stylix.fonts.sansSerif.name;
+  barSize = config.stylix.fonts.sizes.desktop;
   kitty = "${pkgs.kitty}/bin/kitty";
+
+  # Bluetooth menu in the same rofi look as the other menus.
+  btMenu = pkgs.writeShellScript "bt-menu" ''
+    PATH=${config.programs.rofi.package}/bin:$PATH
+    exec ${pkgs.rofi-bluetooth}/bin/rofi-bluetooth -theme retro-eighties
+  '';
 
   # Glyph in an accent colour, label stays in the bar's calm foreground.
   glyph = color: icon: "<span color='${color}'>${icon}</span>";
@@ -99,9 +107,8 @@ in {
     settings.mainBar = {
       layer = "top";
       position = "top";
-      # DepartureMono is drawn on an 11 px grid; 1.5x (16.5 px text, 33 px
-      # bar) is the size that fits all modules in 2256 px. 2x (22 px) did not.
-      height = 33;
+      # Text is Stylix's desktop size (pt); the bar is twice the text height.
+      height = builtins.floor (barSize * 4 / 3 * 2);
       spacing = 0;
       margin-top = 0;
       margin-right = 0;
@@ -112,14 +119,11 @@ in {
       modules-center = ["clock"];
       modules-right = [
         "privacy"
-        "custom/logs"
-        "custom/containers"
-        "custom/ip"
+        "group/admin"
         "network"
-        "cpu"
-        "memory"
         "group/system"
         "pulseaudio"
+        "bluetooth"
         "battery"
         "group/traydrawer"
       ];
@@ -132,7 +136,7 @@ in {
 
       "hyprland/workspaces" = {
         # dwm style: only occupied workspaces and the active one.
-        # Window icons at 11 px, DepartureMono's native size, so they stay sharp.
+        # Window icons a third smaller than the workspace icon.
         format = "{icon}<span size='66.667%'> {windows}</span>";
         format-window-separator = " ";
         # Nerd Font Material Design glyphs; workspace layout in hyprland/rules.nix.
@@ -171,7 +175,7 @@ in {
 
       "hyprland/window" = {
         format = "{title}";
-        max-length = 40;
+        max-length = 32;
         separate-outputs = true;
       };
 
@@ -187,14 +191,14 @@ in {
             months = "<span color='${colors.base05}'>{}</span>";
             days = "<span color='${colors.base04}'>{}</span>";
             weeks = "<span color='${colors.base03}'>W{}</span>";
-            weekdays = "<span color='${colors.base0A}'>{}</span>";
+            weekdays = "<span color='${colors.base04}'>{}</span>";
             today = "<span color='${colors.base08}'><b>{}</b></span>";
           };
         };
       };
 
       privacy = {
-        icon-size = 18;
+        icon-size = builtins.floor (barSize * 4 / 3);
         icon-spacing = 6;
         modules = [
           {type = "screenshare";}
@@ -225,7 +229,8 @@ in {
       };
 
       network = {
-        format-wifi = "${glyph colors.base0B "󰖩"} {essid} ↓{bandwidthDownBytes} ↑{bandwidthUpBytes}";
+        # Network name lives in the tooltip; the bar keeps the traffic.
+        format-wifi = "${glyph colors.base0B "󰖩"} ↓{bandwidthDownBytes} ↑{bandwidthUpBytes}";
         format-ethernet = "${glyph colors.base0B "󰈀"} {ifname} ↓{bandwidthDownBytes} ↑{bandwidthUpBytes}";
         format-linked = "${glyph colors.base0B "󰈀"} LINK";
         format-disconnected = "󰖪 OFF";
@@ -236,9 +241,8 @@ in {
       };
 
       cpu = {
-        # One sparkline bar per core (Framework 13: 12 threads).
-        format = "${glyph colors.base0A "󰻠"} {icon0}{icon1}{icon2}{icon3}{icon4}{icon5}{icon6}{icon7}{icon8}{icon9}{icon10}{icon11} {usage}%";
-        format-icons = ["▁" "▂" "▃" "▄" "▅" "▆" "▇" "█"];
+        # Total load only: the per-core sparkline no longer fits at the larger size.
+        format = "${glyph colors.base04 "󰻠"} {usage}%";
         interval = 5;
         states = {
           warning = 70;
@@ -248,13 +252,24 @@ in {
       };
 
       memory = {
-        format = "${glyph colors.base09 "󰍛"} {percentage}%";
+        format = "${glyph colors.base04 "󰍛"} {percentage}%";
         interval = 5;
         states = {
           warning = 70;
           critical = 90;
         };
         tooltip-format = "Memory: {used:0.1f} / {total:0.1f} GiB";
+      };
+
+      # Errors stay visible; IPs and containers open on hover (room for the larger text).
+      "group/admin" = {
+        orientation = "inherit";
+        drawer = {
+          transition-duration = 200;
+          transition-left-to-right = true;
+          children-class = "drawer-child";
+        };
+        modules = ["custom/logs" "custom/ip" "custom/containers"];
       };
 
       "group/system" = {
@@ -264,7 +279,8 @@ in {
           transition-left-to-right = false;
           children-class = "drawer-child";
         };
-        modules = ["power-profiles-daemon" "temperature" "disk"];
+        # CPU stays visible; memory, temperature, disk and power profile on hover.
+        modules = ["cpu" "memory" "temperature" "disk" "power-profiles-daemon"];
       };
 
       "power-profiles-daemon" = {
@@ -290,7 +306,7 @@ in {
       disk = {
         path = "/";
         interval = 120;
-        format = "${glyph colors.base0F "󰋊"} {percentage_used}%";
+        format = "${glyph colors.base04 "󰋊"} {percentage_used}%";
         tooltip-format = "/ {used} of {total} ({free} free)";
       };
 
@@ -304,6 +320,22 @@ in {
         on-click-right = "${pkgs.pavucontrol}/bin/pavucontrol";
         on-scroll-up = "${pkgs.pulseaudio}/bin/pactl set-sink-volume @DEFAULT_SINK@ +5%";
         on-scroll-down = "${pkgs.pulseaudio}/bin/pactl set-sink-volume @DEFAULT_SINK@ -5%";
+      };
+
+      # Icon (+ headset battery) only; device names in the tooltip.
+      bluetooth = {
+        format = "${glyph colors.base0D "󰂯"}";
+        format-off = "󰂲";
+        format-disabled = "󰂲";
+        format-connected = "${glyph colors.base0D "󰂱"}";
+        format-connected-battery = "${glyph colors.base0D "󰂱"} {device_battery_percentage}%";
+        tooltip-format = "Bluetooth: {status}";
+        tooltip-format-connected = "{device_enumerate}";
+        tooltip-format-enumerate-connected = "{device_alias}";
+        tooltip-format-enumerate-connected-battery = "{device_alias} {device_battery_percentage}%";
+        # Full device list + pairing in a terminal TUI; quick connect via rofi.
+        on-click = "${kitty} --class bluetui -e ${pkgs.bluetui}/bin/bluetui";
+        on-click-right = "${btMenu}";
       };
 
       battery = {
@@ -338,17 +370,15 @@ in {
 
       tray = {
         spacing = 8;
-        "icon-size" = 18;
+        "icon-size" = builtins.floor (barSize * 4 / 3);
       };
     };
 
     # Flat rail: edge-to-edge, no raised panels, shadows, or 3D effects.
     style = ''
       * {
-        font-family: "DepartureMono Nerd Font", "${monospaceFont}";
-        /* 1.5 x DepartureMono's 11 px grid; keep in sync with `height`.
-           Regular only: a synthetic bold smears the pixel shapes. */
-        font-size: 16.5px;
+        font-family: "${barFont}";
+        font-size: ${toString barSize}pt;
         font-weight: normal;
         border: none;
         border-radius: 0;
@@ -361,7 +391,7 @@ in {
       window#waybar {
         background-color: ${colors.base00};
         color: ${colors.base05};
-        border-bottom: 1px solid ${colors.base02};
+        border-bottom: 2px solid ${colors.base02};
       }
 
       tooltip {
@@ -378,14 +408,11 @@ in {
       #window,
       #clock,
       #privacy,
-      #custom-logs,
-      #custom-containers,
-      #custom-ip,
+      #admin,
       #network,
-      #cpu,
-      #memory,
       #system,
       #pulseaudio,
+      #bluetooth,
       #battery,
       #traydrawer {
         margin: 0;
@@ -395,6 +422,11 @@ in {
       }
 
       /* Drawer children sit inside their group's frame. */
+      #custom-logs,
+      #custom-ip,
+      #custom-containers,
+      #cpu,
+      #memory,
       #power-profiles-daemon,
       #temperature,
       #disk,
@@ -405,7 +437,7 @@ in {
 
       /* The retro signature: the six Apple stripes stacked on the left edge. */
       #custom-host {
-        padding: 0 8px 0 14px;
+        padding: 0 10px 0 16px;
         color: ${colors.base05};
         border-left: 0;
         background-image: linear-gradient(to bottom,
@@ -427,21 +459,23 @@ in {
       }
 
       #workspaces button {
-        margin: 0;
-        padding: 0 6px;
+        margin: 6px 2px;
+        padding: 0 8px;
+        border-radius: 6px;
         color: ${colors.base04};
         background: transparent;
       }
 
       #workspaces button:hover {
         color: ${colors.base05};
-        background: ${colors.base02};
+        background: ${colors.base01};
       }
 
-      /* Classic Mac menu highlight: inverted platinum. */
+      /* Active workspace: the focus colour, like the window border. */
       #workspaces button.active {
         color: ${colors.base00};
-        background: ${colors.base05};
+        background: ${colors.base0D};
+        font-weight: bold;
       }
 
       #workspaces button.urgent {
@@ -460,6 +494,7 @@ in {
 
       #clock {
         padding: 0 16px;
+        font-weight: bold;
         color: ${colors.base05};
         border-right: 1px solid ${colors.base02};
       }
@@ -508,6 +543,11 @@ in {
         color: ${colors.base04};
       }
 
+      /* Opened drawer modules sit on a raised surface. */
+      .drawer-child {
+        background-color: ${colors.base01};
+      }
+
       #tray > .passive {
         -gtk-icon-effect: dim;
       }
@@ -516,5 +556,5 @@ in {
     systemd.enable = true;
   };
 
-  home.packages = [pkgs.pavucontrol pkgs.nerd-fonts.departure-mono];
+  home.packages = [pkgs.pavucontrol];
 }

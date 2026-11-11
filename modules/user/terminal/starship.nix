@@ -57,7 +57,7 @@ in {
       git_branch = {
         style = "color_yellow bold";
         format = "[\\[ $symbol$branch \\]]($style)[─](color_bg3)";
-        symbol = " ";
+        symbol = " ";
       };
 
       git_status = {
@@ -70,7 +70,8 @@ in {
         untracked = "?";
         staged = "+";
         deleted = "✘";
-        format = "[\\[ $all_status$ahead_behind \\]]($style)[─](color_bg3)";
+        # ( ) hides the box when the repo is clean; it showed as an empty red [  ].
+        format = "([\\[ $all_status$ahead_behind \\]]($style)[─](color_bg3))";
       };
 
       nix_shell = {

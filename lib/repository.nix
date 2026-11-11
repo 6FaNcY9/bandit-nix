@@ -91,7 +91,7 @@ in {
     };
     geometry = {
       unit = 4;
-      radius = 0;
+      radius = 8;
       divider = 1;
       focus = 2;
       structure = 3;
@@ -145,27 +145,33 @@ in {
     enable = true;
     base16Scheme = ../themes/material-sand-dark.yaml;
     polarity = "dark";
-    image = ../themes/sand_minimal_space.png;
+    # Rendered from source at build time, like the rest of the system.
+    image = pkgs.runCommandLocal "free-net-wallpaper.png" {} ''
+      ${pkgs.resvg}/bin/resvg --skip-system-fonts --use-fonts-dir ${pkgs.nerd-fonts.jetbrains-mono}/share/fonts \
+        --width 2256 ${../themes/free-net.svg} "$out"
+    '';
     fonts = {
+      # JetBrains Mono everywhere: tall x-height, 0/O and 1/l/I clearly
+      # different, code ligatures, Nerd Font icons; reads well from a distance.
       monospace = {
-        package = pkgs.nerd-fonts.fira-code;
-        name = "FiraCode Nerd Font Mono";
+        package = pkgs.nerd-fonts.jetbrains-mono;
+        name = "JetBrainsMono Nerd Font Mono";
       };
       sansSerif = {
-        package = pkgs.nerd-fonts.fira-code;
-        name = "FiraCode Nerd Font";
+        package = pkgs.nerd-fonts.jetbrains-mono;
+        name = "JetBrainsMono Nerd Font";
       };
       serif = {
-        package = pkgs.nerd-fonts.fira-code;
-        name = "FiraCode Nerd Font";
+        package = pkgs.nerd-fonts.jetbrains-mono;
+        name = "JetBrainsMono Nerd Font";
       };
       sizes = {
         terminal = 18;
         applications = 18;
+        # One size everywhere (owner sits far from the screen); Waybar keeps
+        # IPs and containers in a hover drawer so 18 still fits 2256 px.
         desktop = 18;
-        # Was 10 — rofi/mako/tooltip text was barely readable on the
-        # Framework 13's high-DPI panel at scale 1.
-        popups = 14;
+        popups = 18;
       };
     };
     cursor = {

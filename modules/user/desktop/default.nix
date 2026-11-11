@@ -15,5 +15,6 @@
     ./obsidian.nix
     ./discord.nix
     ./phone-link.nix
+    ./keyring-unlock.nix
   ];
 }

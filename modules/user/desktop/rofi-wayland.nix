@@ -9,11 +9,13 @@
   bg2 = colors.base02;
   fg = colors.base05;
   fg2 = colors.base03;
-  yellow = colors.base0A;
   blue = colors.base0D;
   red = colors.base08;
-  cyan = colors.base0C;
+  green = colors.base0B;
   interfaceFont = config.stylix.fonts.sansSerif.name;
+  # One size for every menu: Stylix popups (also notifications, tooltips).
+  font = "${interfaceFont} ${toString config.stylix.fonts.sizes.popups}";
+  boldFont = "${interfaceFont} Bold ${toString config.stylix.fonts.sizes.popups}";
 in {
   # ── Main launcher theme ───────────────────────────────────────
   xdg.configFile."rofi/themes/retro-eighties.rasi".text = ''
@@ -24,10 +26,10 @@ in {
 
     window {
         background-color: ${bg};
-        border:           2px;
-        border-color:     ${yellow};
-        border-radius:    0;
-        width:            640px;
+        border:           3px;
+        border-color:     ${blue};
+        border-radius:    8px;
+        width:            44em;
         padding:          0;
     }
 
@@ -40,7 +42,7 @@ in {
     inputbar {
         background-color: ${bg1};
         border:           0 0 2px 0;
-        border-color:     ${yellow};
+        border-color:     ${bg2};
         padding:          10px 14px;
         spacing:          8px;
         children:         [ prompt, entry ];
@@ -48,8 +50,8 @@ in {
 
     prompt {
         background-color: transparent;
-        text-color:       ${cyan};
-        font:             "${interfaceFont} Bold 11";
+        text-color:       ${blue};
+        font:             "${boldFont}";
     }
 
     entry {
@@ -69,15 +71,15 @@ in {
 
     textbox {
         text-color: ${fg2};
-        font:       "${interfaceFont} 9";
+        font:       "${font}";
     }
 
     listview {
         background-color: ${bg};
         border:           0;
-        padding:          6px 0;
+        padding:          6px 6px;
         spacing:          0;
-        lines:            12;
+        lines:            10;
         scrollbar:        false;
         fixed-height:     true;
     }
@@ -103,14 +105,13 @@ in {
 
     element.normal.active {
         background-color: transparent;
-        text-color:       ${blue};
+        text-color:       ${green};
     }
 
     element.selected.normal {
-        background-color: ${bg1};
-        text-color:       ${yellow};
-        border:           0 0 0 4px;
-        border-color:     ${yellow};
+        background-color: ${blue};
+        text-color:       ${bg};
+        border-radius:    6px;
     }
 
     element.selected.urgent {
@@ -119,10 +120,9 @@ in {
     }
 
     element.selected.active {
-        background-color: ${bg1};
-        text-color:       ${blue};
-        border:           0 0 0 4px;
-        border-color:     ${blue};
+        background-color: ${green};
+        text-color:       ${bg};
+        border-radius:    6px;
     }
 
     element.alternate.normal {
@@ -131,7 +131,7 @@ in {
     }
 
     element-icon {
-        size:             22px;
+        size:             1.4em;
         background-color: transparent;
     }
 
@@ -150,10 +150,10 @@ in {
 
     window {
         background-color: ${bg};
-        border:           2px;
+        border:           3px;
         border-color:     ${red};
-        border-radius:    0;
-        width:            280px;
+        border-radius:    8px;
+        width:            14em;
         padding:          0;
         location:         center;
         anchor:           center;
@@ -176,12 +176,12 @@ in {
     prompt {
         background-color: transparent;
         text-color:       ${red};
-        font:             "${interfaceFont} Bold 11";
+        font:             "${boldFont}";
     }
 
     listview {
         background-color: ${bg};
-        padding:          6px 0;
+        padding:          6px 6px;
         spacing:          0;
         lines:            5;
         scrollbar:        false;
@@ -191,7 +191,7 @@ in {
     element {
         padding:          8px 18px;
         spacing:          10px;
-        font:             "${interfaceFont} 11";
+        font:             "${font}";
     }
 
     element.normal.normal {
@@ -199,10 +199,9 @@ in {
     }
 
     element.selected.normal {
-        background-color: ${bg1};
-        text-color:       ${red};
-        border:           0 0 0 4px;
-        border-color:     ${red};
+        background-color: ${red};
+        text-color:       ${bg};
+        border-radius:    6px;
     }
   '';
 
@@ -213,6 +212,7 @@ in {
     theme = "retro-eighties";
 
     settings = {
+      inherit font;
       modi = "drun,run,window";
       show-icons = true;
       drun-display-format = "{name}";
