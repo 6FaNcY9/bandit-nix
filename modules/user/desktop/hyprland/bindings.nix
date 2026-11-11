@@ -104,6 +104,7 @@
 
     (execBinding "${mod} + F1" "~/.local/bin/hyprland-cheatsheet-show" "shortcut cheatsheet")
     (execBinding "${mod} + F2" "~/.local/bin/keybinds-menu" "keybinding search (rofi, incl. Neovim)")
+    (execBinding "${mod} + h" "~/.local/bin/keybinds-menu" "keybinding search (no F-key needed)")
 
     (execBinding "Print" "~/.local/bin/hypr-screenshot" "region screenshot")
     (execBinding "F11" "~/.local/bin/hypr-screenshot" "region screenshot")

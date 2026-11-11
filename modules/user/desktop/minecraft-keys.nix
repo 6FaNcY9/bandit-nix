@@ -108,6 +108,7 @@
     ["menue" "Rücktaste" "Sprachchat-Menü"]
     ["menue" "Pos1" "Mikro stumm"]
     ["menue" "Super+M" "diese Hilfe"]
+    ["menue" "Super+H" "alle Tasten vom Laptop suchen"]
     ["spiel" "W A S D" "laufen"]
     ["spiel" "Leertaste" "springen"]
     ["spiel" "Links-Shift" "schleichen"]
@@ -116,8 +117,8 @@
     ["spiel" "Tab" "Spielerliste"]
     ["spiel" "V" "Perspektive"]
     ["spiel" "L" "Fortschritte"]
-    ["spiel" "F1" "HUD aus"]
-    ["spiel" "F3" "Debug-Anzeige"]
+    ["spiel" "F1" "HUD aus · K6: Fn2+1"]
+    ["spiel" "F3" "Debug-Anzeige · K6: Fn2+3"]
   ];
 
   # Nix strings are bytes; count the few multibyte glyphs used here as one
