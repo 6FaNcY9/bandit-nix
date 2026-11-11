@@ -5,11 +5,7 @@
 # under /srv/comfyui; the owner drops model files into models/ without sudo.
 # Runbook: docs/runbooks/comfyui.md. The GPU (16 GB) is shared with Ollama:
 # a generation while Andy-4.2 is resident ends in a CUDA OOM, not in a crash.
-{
-  config,
-  repoConfig,
-  ...
-}: let
+{repoConfig, ...}: let
   username = repoConfig.workstation.username;
 in {
   hardware.nvidia-container-toolkit.enable = true; # CDI spec for nvidia.com/gpu
