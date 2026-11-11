@@ -70,6 +70,15 @@
       no_anim = true;
     }
     {
+      # Hyprland allows one fullscreen window per workspace, so Flameshot's own
+      # fullscreen request ended a fullscreen game's; cover the screen without it.
+      name = "flameshot-over-fullscreen";
+      match.title = "^(flameshot)$";
+      match.workspace = "f[0]";
+      suppress_event = "fullscreen";
+      size = "monitor_w monitor_h";
+    }
+    {
       name = "hyprland-shortcuts";
       match.title = "^(Hyprland Shortcuts)$";
       float = true;
