@@ -110,6 +110,8 @@ in {
   users.users.${repoConfig.workstation.username}.openssh.authorizedKeys.keys = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHOfT8hlUovvRJtHh5YKJzBhHZSK05WLGERQIq0H7GDt vino@bandit-homelab"
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICJrs3e5pVxii8m//+jkERrWMM02MdfCisnPE+BLZvUx phone@bandit-lab"
+    # Owner phone (Termux); the same key opens the laptop (modules/desktop/phone-link.nix).
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBtD+QBx9uxrRUIc03jxejS62Mdhl2kgz4mRbkPyeq8S phone@pong"
   ];
 
   system.stateVersion = "25.11";
