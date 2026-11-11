@@ -37,6 +37,27 @@
     "-I DOCKER-USER 1 -o ${veth} -m conntrack --ctstate NEW -j DROP"
   ];
   delete = r: "iptables -w ${builtins.replaceStrings ["-I nixos-fw 1" "-I DOCKER-USER 1"] ["-D nixos-fw" "-D DOCKER-USER"] r} || true";
+
+  # The tunnel to the public address (bandit-craft PUBLIC.md, "Phase 2"): playit.gg's agent runs on the HOST,
+  # not in the container. An IPv4-only container gets an IPv6 relay from playit and cannot reach it (the agent
+  # has no IPv4 fallback, GH#194); the host has working IPv6. The agent dials out and forwards to the
+  # container's Velocity over the veth (10.251.1.2:25565, PROXY v2 set in the playit account), so neither the
+  # router nor a rented relay is involved and the home address stays private. Upstream's static release
+  # binaries, pinned by hash; not in nixpkgs. 1.2.0 (2026-10-29) on purpose, not the 2.0 line.
+  playit = pkgs.stdenvNoCC.mkDerivation {
+    pname = "playit";
+    version = "1.2.0";
+    daemon = pkgs.fetchurl {
+      url = "https://github.com/playit-cloud/playit-agent/releases/download/v1.2.0/playit-linux-amd64";
+      hash = "sha256-YC3qMojVutTDrdunDs9lNbmuCFuNTy/C/pzekTvaeNA=";
+    };
+    cli = pkgs.fetchurl {
+      url = "https://github.com/playit-cloud/playit-agent/releases/download/v1.2.0/playit-cli-linux-amd64";
+      hash = "sha256-oQzXeGa92Bg3hIrQi2YpASY38mYufAt9kxC822Gf7r0=";
+    };
+    dontUnpack = true;
+    installPhase = "install -Dm755 $daemon $out/bin/playitd; install -Dm755 $cli $out/bin/playit-cli";
+  };
 in {
   sops.secrets."mc-public-tailscale-authkey" = {};
 
@@ -66,10 +87,13 @@ in {
       networking = {
         useHostResolvConf = false;
         nameservers = ["9.9.9.9" "1.1.1.1"];
-        # Velocity binds every address; only the tailnet interface admits the game port. Paper is loopback.
+        # Velocity binds every address; the game port is admitted on the tailnet interface (testers) and on
+        # the veth (eth0), where only the host's tunnel agent reaches it (the host forwards nothing new in,
+        # DOCKER-USER rule above). Paper is loopback.
         firewall = {
           enable = true;
           interfaces.tailscale0.allowedTCPPorts = [25565];
+          interfaces.eth0.allowedTCPPorts = [25565];
         };
       };
       # No systemd-resolved, and a static /etc/resolv.conf written by hand. With resolved, the container's
@@ -115,7 +139,38 @@ in {
     firewall.extraStopCommands = lib.concatMapStringsSep "\n" delete rules;
   };
 
+  # playit-cli for the one-time claim (bandit-craft PUBLIC.md), and a system user for the agent.
+  environment.systemPackages = [playit];
+  users.users.playit = {
+    isSystemUser = true;
+    group = "playit";
+  };
+  users.groups.playit = {};
+
   systemd.services = {
+    # The tunnel agent (derivation above). It waits for its secret (the owner places the claimed
+    # /var/lib/playit/playit.toml) and then forwards the public address to the container's Velocity over the
+    # veth. Outbound only: it needs no inbound port on the host, and reaches nothing of the private stack.
+    playit = {
+      description = "playit.gg tunnel agent for the public Minecraft address";
+      wantedBy = ["multi-user.target"];
+      after = ["network-online.target" "container@mc-public.service"];
+      wants = ["network-online.target"];
+      serviceConfig = {
+        ExecStart = "${playit}/bin/playitd --secret-path /var/lib/playit/playit.toml --socket-path /run/playit/playit.sock";
+        User = "playit";
+        Group = "playit";
+        StateDirectory = "playit";
+        StateDirectoryMode = "0700";
+        RuntimeDirectory = "playit";
+        Restart = "always";
+        RestartSec = "10s";
+        NoNewPrivileges = true;
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        PrivateTmp = true;
+      };
+    };
     # The design's caps, on the whole container: 6G heap for Paper, 512M for Velocity, the rest is JVM
     # overhead and tailscaled. They keep a lag machine away from the private world and Vaultwarden.
     "container@mc-public".serviceConfig = {

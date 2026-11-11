@@ -1,7 +1,8 @@
 # bandit-lab public Minecraft container, phase 1 (bandit-craft docs/specs/2026-11-10-public-anarchy-world.md):
 # the box (pinned user namespace, caps, veth rules, own tailnet node) and what runs inside it (one Velocity,
 # one Paper: exact plugin list, no operators, no RCON, premium accounts only, own forwarding secret, game
-# port on the container's tailscale0 only). Evaluation-time assertions only; velocity.toml and ops.json are
+# port on the container's tailscale0 and its veth only; the tunnel agent runs on the host, not inside).
+# Evaluation-time assertions only; velocity.toml and ops.json are
 # read from the store, as lab-minecraft reads the private velocity.toml. Nothing is started or contacted.
 {
   pkgs,
@@ -67,7 +68,8 @@ in
   assert lib.assertMsg (inner.systemd.services.tailscaled-autoconnect.serviceConfig.TimeoutStartSec == "30s") "container autoconnect must time out so the container reports READY without a tailnet login";
   assert lib.assertMsg (lib.hasInfix lab.sops.secrets."mc-public-tailscale-authkey".path prepare.script && lib.elem "container@mc-public.service" prepare.requiredBy && lib.elem "container@mc-public.service" prepare.before) "the tailnet auth key is placed from sops before the container starts";
   assert lib.assertMsg (innerFw.enable && innerFw.trustedInterfaces == ["lo"] && innerFw.allowedTCPPorts == [] && innerFw.allowedUDPPorts == [] && innerFw.allowedTCPPortRanges == [] && innerFw.allowedUDPPortRanges == []) "the container's firewall is on, trusts only lo and opens nothing globally";
-  assert lib.assertMsg (lib.attrNames innerFw.interfaces == ["tailscale0"] && innerFw.interfaces.tailscale0.allowedTCPPorts == [25565] && innerFw.interfaces.tailscale0.allowedUDPPorts == []) "the game port (25565/tcp) is open on the container's tailscale0 only, and nothing else is";
+  assert lib.assertMsg (lib.attrNames innerFw.interfaces == ["eth0" "tailscale0"] && innerFw.interfaces.tailscale0.allowedTCPPorts == [25565] && innerFw.interfaces.tailscale0.allowedUDPPorts == [] && innerFw.interfaces.eth0.allowedTCPPorts == [25565] && innerFw.interfaces.eth0.allowedUDPPorts == []) "the game port (25565/tcp) is open on the container's tailscale0 (testers) and eth0 (the host's tunnel agent over the veth, nothing new is forwarded in) only, and nothing else is";
+  assert lib.assertMsg (lab.systemd.services.playit.serviceConfig.User == "playit" && lab.systemd.services.playit.serviceConfig.NoNewPrivileges && !(lib.elem 25565 fw.allowedTCPPorts)) "the host's tunnel agent runs as the unprivileged playit user and opens no inbound port on the host (it dials out)";
   assert lib.assertMsg (!paper.openFirewall && !velocity.openFirewall && !mc.openFirewall) "nix-minecraft must not open any firewall port by itself";
   # One Velocity, one Paper.
   assert lib.assertMsg (lib.attrNames mc.servers == ["paper" "velocity"] && paper.enable && velocity.enable) "the container runs exactly one Paper and one Velocity";
