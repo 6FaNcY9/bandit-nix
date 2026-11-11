@@ -1,11 +1,97 @@
 {
   config,
+  osConfig,
   pkgs,
   bandit,
   ...
 }: let
   colors = config.lib.stylix.colors.withHashtag;
   monospaceFont = config.stylix.fonts.monospace.name;
+  kitty = "${pkgs.kitty}/bin/kitty";
+
+  # Glyph in an accent colour, label stays in the bar's calm foreground.
+  glyph = color: icon: "<span color='${color}'>${icon}</span>";
+  # Same for markup built inside the scripts' single-quoted jq programs.
+  jqGlyph = color: icon: ''<span color=\"${color}\">${icon}</span>'';
+
+  # Failed systemd units (system + user) and journal errors since boot.
+  barLogs = pkgs.writeShellApplication {
+    name = "waybar-logs";
+    runtimeInputs = [pkgs.jq pkgs.gawk pkgs.coreutils pkgs.gnused pkgs.gnugrep];
+    text = ''
+      failed=$( { systemctl --failed --no-legend --plain; systemctl --user --failed --no-legend --plain; } | awk '{print $1}')
+      units=$(printf '%s' "$failed" | grep -c . || true)
+      errors=$(journalctl -p err -b -q --no-pager -o cat | wc -l)
+      recent=$(journalctl -p err -b -q --no-pager -n 5 -o short | sed -E 's/^(\S+ \S+ \S+) \S+ /\1 /' | cut -c1-110)
+      if [ "$units" -gt 0 ]; then unit_color='${colors.base08}' class=failed; else unit_color='${colors.base0B}' class=ok; fi
+      jq -cn --arg units "$units" --arg errors "$errors" --arg failed "$failed" --arg recent "$recent" \
+        --arg uc "$unit_color" --arg class "$class" '
+        def esc: gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
+        {
+          text: "<span color=\"\($uc)\">󰒓</span> \($units) ${jqGlyph colors.base03 "│"} <span color=\"${colors.base0A}\">󰀦</span> \($errors)",
+          tooltip: ("Failed units: \($units)\n" + (if $failed == "" then "  none" else ($failed | esc | split("\n") | map("  " + .) | join("\n")) end)
+            + "\n\nJournal errors this boot: \($errors)\n" + ($recent | esc)),
+          class: $class
+        }'
+    '';
+  };
+
+  # Running docker (rootless) + podman containers; empty text hides the module.
+  barContainers = pkgs.writeShellApplication {
+    name = "waybar-containers";
+    runtimeInputs = [pkgs.jq pkgs.coreutils pkgs.gnugrep];
+    # docker/podman come from the system PATH so the CLI matches the daemon.
+    text = ''
+      names=""
+      # Only ask docker when its daemon already runs, so the poll never starts it.
+      if systemctl --user --quiet is-active docker.service && command -v docker >/dev/null; then
+        names+=$(timeout 3 docker ps --format '󰡨 {{.Names}} ({{.Image}})' 2>/dev/null || true)$'\n'
+      fi
+      if command -v podman >/dev/null; then
+        names+=$(timeout 3 podman ps --format '󰡨 {{.Names}} ({{.Image}}) [podman]' 2>/dev/null || true)
+      fi
+      names=$(printf '%s' "$names" | grep . || true)
+      count=$(printf '%s' "$names" | grep -c . || true)
+      if [ "$count" -eq 0 ]; then echo '{"text":""}'; exit 0; fi
+      jq -cn --arg n "$count" --arg names "$names" '{
+        text: "${jqGlyph colors.base0D "󰡨"} \($n)",
+        tooltip: ($names | gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;"))
+      }'
+    '';
+  };
+
+  # LAN (default-route interface) and Tailscale IPv4; `copy lan|ts` puts one on the clipboard.
+  barIp = pkgs.writeShellApplication {
+    name = "waybar-ip";
+    runtimeInputs = [pkgs.jq pkgs.iproute2 pkgs.gawk pkgs.wl-clipboard pkgs.libnotify];
+    text = ''
+      v4() { ip -4 -o addr show dev "$1" 2>/dev/null | awk '{split($4, a, "/"); print a[1]; exit}'; }
+      lan_dev=$(ip -4 route show default | awk '{for (i = 1; i < NF; i++) if ($i == "dev") {print $(i + 1); exit}}')
+      lan=""; [ -n "$lan_dev" ] && lan=$(v4 "$lan_dev")
+      ts=$(v4 tailscale0)
+
+      if [ "''${1:-}" = copy ]; then
+        case "''${2:-}" in
+          lan) ip=$lan label="LAN IP" ;;
+          ts) ip=$ts label="Tailscale IP" ;;
+          *) echo "usage: waybar-ip [copy lan|ts]" >&2; exit 2 ;;
+        esac
+        if [ -z "$ip" ]; then notify-send -t 2000 "$label" "no address"; exit 1; fi
+        printf '%s' "$ip" | wl-copy
+        notify-send -t 2000 "$label copied" "$ip"
+        exit 0
+      fi
+
+      gw=$(ip -4 route show default | awk '{print $3 " (" $5 ")"; exit}')
+      addrs=$(ip -o addr show | awk '$2 != "lo" {if ($2 != last) {printf "%s%s\n", (last != "" ? "\n" : ""), $2; last = $2} printf "  %s\n", $4}')
+      jq -cn --arg lan "''${lan:---}" --arg ts "$ts" --arg addrs "$addrs" --arg gw "''${gw:-none}" '{
+        text: ("${jqGlyph colors.base0C "󰩟"} \($lan) ${jqGlyph colors.base03 "│"} "
+          + (if $ts == "" then "<span color=\"${colors.base08}\">󰖂 --</span>" else "${jqGlyph colors.base0C "󰖂"} \($ts)" end)),
+        tooltip: ($addrs + "\ngateway \($gw)"),
+        class: (if $ts == "" then "no-tailscale" else "ok" end)
+      }'
+    '';
+  };
 in {
   programs.waybar = {
     enable = true;
@@ -13,35 +99,42 @@ in {
     settings.mainBar = {
       layer = "top";
       position = "top";
-      # Framework 13's 2256x1504 panel runs at scale 1, so keep the bar
-      # tall enough to read comfortably; font-size below tracks this.
-      height = 44;
+      # DepartureMono is drawn on an 11 px grid; 1.5x (16.5 px text, 33 px
+      # bar) is the size that fits all modules in 2256 px. 2x (22 px) did not.
+      height = 33;
       spacing = 0;
       margin-top = 0;
       margin-right = 0;
       margin-bottom = 0;
       margin-left = 0;
 
-      modules-left = ["custom/nix" "hyprland/workspaces" "hyprland/window"];
+      modules-left = ["custom/host" "hyprland/workspaces" "hyprland/window"];
       modules-center = ["clock"];
       modules-right = [
+        "privacy"
+        "custom/logs"
+        "custom/containers"
+        "custom/ip"
+        "network"
         "cpu"
         "memory"
-        "network"
+        "group/system"
         "pulseaudio"
-        "power-profiles-daemon"
         "battery"
-        "tray"
+        "group/traydrawer"
       ];
 
-      "custom/nix" = {
-        format = "󱄅 BANDIT";
+      "custom/host" = {
+        format = "󱄅 ${osConfig.networking.hostName}";
         on-click = "${config.programs.rofi.package}/bin/rofi -show drun";
         tooltip = false;
       };
 
       "hyprland/workspaces" = {
-        format = "{icon}";
+        # dwm style: only occupied workspaces and the active one.
+        # Window icons at 11 px, DepartureMono's native size, so they stay sharp.
+        format = "{icon}<span size='66.667%'> {windows}</span>";
+        format-window-separator = " ";
         # Nerd Font Material Design glyphs; workspace layout in hyprland/rules.nix.
         format-icons = {
           "1" = "󰆍"; # U+F018D console
@@ -55,38 +148,108 @@ in {
           "9" = "󰄜"; # U+F011C cellphone
           default = "󰇘"; # U+F01D8 dots-horizontal
         };
-        persistent-workspaces = {"*" = 9;};
+        window-rewrite-default = "󰣆";
+        window-rewrite = {
+          "class<kitty>" = "󰄛";
+          "class<firefox>" = "󰈹";
+          "class<brave-browser>" = "󰖟";
+          "class<org.kde.okular>" = "󰈦";
+          "class<obsidian>" = "󰠮";
+          "class<libreoffice.*>" = "󰈬";
+          "class<org.prismlauncher.PrismLauncher>" = "󰆧";
+          "class<[Mm]inecraft.*>" = "󰍳";
+          "class<thunderbird>" = "󰇮";
+          "class<vesktop>" = "󰙯";
+          "class<pcmanfm>" = "󰉋";
+          "class<mpv>" = "󰎁";
+          "class<.*scrcpy.*>" = "󰄜";
+          "class<[Bb]itwarden>" = "󰌆";
+          "class<.*pavucontrol>" = "󰕾";
+        };
         on-click = "activate";
       };
 
       "hyprland/window" = {
-        format = "󰣆  {title}";
-        max-length = 48;
+        format = "{title}";
+        max-length = 40;
         separate-outputs = true;
-        rewrite = {
-          "^$" = "DESKTOP";
-        };
       };
 
       clock = {
-        format = "{:%a %d  ▪  %H:%M}";
+        # Waybar's chrono format has no %^a; Pango uppercases instead.
+        format = "<span text_transform='uppercase'>{:%a %d · %H:%M}</span>";
         interval = 10;
-        tooltip-format = "{:%Y-%m-%d %H:%M:%S}";
+        tooltip-format = "<tt>{calendar}</tt>";
+        calendar = {
+          mode = "month";
+          weeks-pos = "left";
+          format = {
+            months = "<span color='${colors.base05}'>{}</span>";
+            days = "<span color='${colors.base04}'>{}</span>";
+            weeks = "<span color='${colors.base03}'>W{}</span>";
+            weekdays = "<span color='${colors.base0A}'>{}</span>";
+            today = "<span color='${colors.base08}'><b>{}</b></span>";
+          };
+        };
+      };
+
+      privacy = {
+        icon-size = 18;
+        icon-spacing = 6;
+        modules = [
+          {type = "screenshare";}
+          {type = "audio-in";}
+        ];
+      };
+
+      "custom/logs" = {
+        exec = "${barLogs}/bin/waybar-logs";
+        return-type = "json";
+        interval = 30;
+        on-click = "${kitty} journalctl -p err -b -f";
+        on-click-right = "${kitty} --hold sh -c 'systemctl --failed; systemctl --user --failed'";
+      };
+
+      "custom/containers" = {
+        exec = "${barContainers}/bin/waybar-containers";
+        return-type = "json";
+        interval = 30;
+      };
+
+      "custom/ip" = {
+        exec = "${barIp}/bin/waybar-ip";
+        return-type = "json";
+        interval = 15;
+        on-click = "${barIp}/bin/waybar-ip copy lan";
+        on-click-right = "${barIp}/bin/waybar-ip copy ts";
+      };
+
+      network = {
+        format-wifi = "${glyph colors.base0B "󰖩"} {essid} ↓{bandwidthDownBytes} ↑{bandwidthUpBytes}";
+        format-ethernet = "${glyph colors.base0B "󰈀"} {ifname} ↓{bandwidthDownBytes} ↑{bandwidthUpBytes}";
+        format-linked = "${glyph colors.base0B "󰈀"} LINK";
+        format-disconnected = "󰖪 OFF";
+        tooltip-format-wifi = "{essid} ({signalStrength}%)\n{ipaddr}/{cidr}";
+        tooltip-format-ethernet = "{ifname}\n{ipaddr}/{cidr}";
+        on-click = "${bandit.workstation.homeDirectory}/.local/bin/net-menu";
+        interval = 5;
       };
 
       cpu = {
-        format = "󰻠 {usage}%";
-        interval = 2;
+        # One sparkline bar per core (Framework 13: 12 threads).
+        format = "${glyph colors.base0A "󰻠"} {icon0}{icon1}{icon2}{icon3}{icon4}{icon5}{icon6}{icon7}{icon8}{icon9}{icon10}{icon11} {usage}%";
+        format-icons = ["▁" "▂" "▃" "▄" "▅" "▆" "▇" "█"];
+        interval = 5;
         states = {
           warning = 70;
           critical = 90;
         };
-        tooltip-format = "CPU load: {usage}%";
+        tooltip-format = "CPU load: {usage}%  ·  {avg_frequency} GHz";
       };
 
       memory = {
-        format = "󰍛 {percentage}%";
-        interval = 3;
+        format = "${glyph colors.base09 "󰍛"} {percentage}%";
+        interval = 5;
         states = {
           warning = 70;
           critical = 90;
@@ -94,27 +257,14 @@ in {
         tooltip-format = "Memory: {used:0.1f} / {total:0.1f} GiB";
       };
 
-      network = {
-        format-wifi = "󰖩 {signalStrength}%";
-        format-ethernet = "󰈀 {ifname}";
-        format-linked = "󰈀 LINK";
-        format-disconnected = "󰖪 OFF";
-        tooltip-format-wifi = "{essid}\n{ipaddr}/{cidr}\n⇣ {bandwidthDownBytes}  ⇡ {bandwidthUpBytes}";
-        tooltip-format-ethernet = "{ifname}\n{ipaddr}/{cidr}\n⇣ {bandwidthDownBytes}  ⇡ {bandwidthUpBytes}";
-        on-click = "${bandit.workstation.homeDirectory}/.local/bin/net-menu";
-        interval = 2;
-      };
-
-      pulseaudio = {
-        format = "{icon} {volume}%";
-        format-muted = "󰝟 MUTE";
-        format-icons = {
-          default = ["󰕿" "󰖀" "󰕾"];
+      "group/system" = {
+        orientation = "inherit";
+        drawer = {
+          transition-duration = 200;
+          transition-left-to-right = false;
+          children-class = "drawer-child";
         };
-        on-click = "${pkgs.pulseaudio}/bin/pactl set-sink-mute @DEFAULT_SINK@ toggle";
-        on-click-right = "${pkgs.pavucontrol}/bin/pavucontrol";
-        on-scroll-up = "${pkgs.pulseaudio}/bin/pactl set-sink-volume @DEFAULT_SINK@ +5%";
-        on-scroll-down = "${pkgs.pulseaudio}/bin/pactl set-sink-volume @DEFAULT_SINK@ -5%";
+        modules = ["power-profiles-daemon" "temperature" "disk"];
       };
 
       "power-profiles-daemon" = {
@@ -128,36 +278,78 @@ in {
         };
       };
 
+      temperature = {
+        # k10temp Tctl by PCI path; hwmonN numbering changes between boots.
+        hwmon-path-abs = "/sys/devices/pci0000:00/0000:00:18.3/hwmon";
+        input-filename = "temp1_input";
+        critical-threshold = 85;
+        interval = 10;
+        format = "${glyph colors.base08 "󰔏"} {temperatureC}°C";
+      };
+
+      disk = {
+        path = "/";
+        interval = 120;
+        format = "${glyph colors.base0F "󰋊"} {percentage_used}%";
+        tooltip-format = "/ {used} of {total} ({free} free)";
+      };
+
+      pulseaudio = {
+        format = "{icon} {volume}%";
+        format-muted = "󰝟 MUTE";
+        format-icons = {
+          default = map (glyph colors.base0D) ["󰕿" "󰖀" "󰕾"];
+        };
+        on-click = "${pkgs.pulseaudio}/bin/pactl set-sink-mute @DEFAULT_SINK@ toggle";
+        on-click-right = "${pkgs.pavucontrol}/bin/pavucontrol";
+        on-scroll-up = "${pkgs.pulseaudio}/bin/pactl set-sink-volume @DEFAULT_SINK@ +5%";
+        on-scroll-down = "${pkgs.pulseaudio}/bin/pactl set-sink-volume @DEFAULT_SINK@ -5%";
+      };
+
       battery = {
         states = {
           warning = 30;
           critical = 15;
         };
         format = "{icon} {capacity}%";
-        format-charging = "󰂄 {capacity}%";
-        format-plugged = "󰂄 {capacity}%";
-        format-full = "󰁹 {capacity}%";
-        format-icons = ["󰁺" "󰁻" "󰁼" "󰁽" "󰁾" "󰁿" "󰂀" "󰂁" "󰂂" "󰁹"];
+        format-charging = "${glyph colors.base0B "󰂄"} {capacity}%";
+        format-plugged = "${glyph colors.base0B "󰂄"} {capacity}%";
+        format-full = "${glyph colors.base0B "󰁹"} {capacity}%";
+        format-icons = map (glyph colors.base0E) ["󰁺" "󰁻" "󰁼" "󰁽" "󰁾" "󰁿" "󰂀" "󰂁" "󰂂" "󰁹"];
         tooltip-format = "{timeTo} · {power} W";
         interval = 30;
       };
 
+      # Named traydrawer: a group called "tray" would share the tray's CSS id.
+      "group/traydrawer" = {
+        orientation = "inherit";
+        drawer = {
+          transition-duration = 200;
+          transition-left-to-right = false;
+          children-class = "drawer-child";
+        };
+        modules = ["custom/tray-handle" "tray"];
+      };
+
+      "custom/tray-handle" = {
+        format = "󰅁";
+        tooltip = false;
+      };
+
       tray = {
-        spacing = 6;
+        spacing = 8;
         "icon-size" = 18;
       };
     };
 
-    # Flat Gruvbox rail: edge-to-edge, compact, and colorful without raised
-    # panels, shadows, or other three-dimensional effects.
+    # Flat rail: edge-to-edge, no raised panels, shadows, or 3D effects.
     style = ''
       * {
-        font-family: "${monospaceFont}";
-        /* Slightly larger than the old 14px so module text stays legible
-           at the panel's native resolution; keep in sync with `height`. */
-        font-size: 16px;
-        font-weight: bold;
-        font-feature-settings: "tnum";
+        font-family: "DepartureMono Nerd Font", "${monospaceFont}";
+        /* 1.5 x DepartureMono's 11 px grid; keep in sync with `height`.
+           Regular only: a synthetic bold smears the pixel shapes. */
+        font-size: 16.5px;
+        font-weight: normal;
         border: none;
         border-radius: 0;
         box-shadow: none;
@@ -167,85 +359,94 @@ in {
       }
 
       window#waybar {
-        background-color: ${colors.base01};
+        background-color: ${colors.base00};
         color: ${colors.base05};
-        border-bottom: 2px solid ${colors.base03};
-        box-shadow: none;
+        border-bottom: 1px solid ${colors.base02};
       }
 
       tooltip {
         color: ${colors.base05};
         background-color: ${colors.base01};
         border: 1px solid ${colors.base03};
-        box-shadow: none;
       }
 
       tooltip label {
         padding: 4px 6px;
       }
 
-      #custom-nix,
+      #custom-host,
       #window,
       #clock,
+      #privacy,
+      #custom-logs,
+      #custom-containers,
+      #custom-ip,
+      #network,
       #cpu,
       #memory,
-      #network,
+      #system,
       #pulseaudio,
-      #power-profiles-daemon,
       #battery,
-      #tray {
+      #traydrawer {
         margin: 0;
-        padding: 0 7px;
+        padding: 0 8px;
         background-color: transparent;
         border-left: 1px solid ${colors.base02};
-        box-shadow: none;
       }
 
-      #custom-nix {
-        padding-left: 9px;
+      /* Drawer children sit inside their group's frame. */
+      #power-profiles-daemon,
+      #temperature,
+      #disk,
+      #custom-tray-handle,
+      #tray {
+        padding: 0 6px;
+      }
+
+      /* The retro signature: the six Apple stripes stacked on the left edge. */
+      #custom-host {
+        padding: 0 8px 0 14px;
         color: ${colors.base05};
         border-left: 0;
+        background-image: linear-gradient(to bottom,
+          ${colors.base0B} 0%, ${colors.base0B} 16.67%,
+          ${colors.base0A} 16.67%, ${colors.base0A} 33.33%,
+          ${colors.base09} 33.33%, ${colors.base09} 50%,
+          ${colors.base08} 50%, ${colors.base08} 66.67%,
+          ${colors.base0E} 66.67%, ${colors.base0E} 83.33%,
+          ${colors.base0D} 83.33%, ${colors.base0D} 100%);
+        background-size: 6px 100%;
+        background-position: left;
+        background-repeat: no-repeat;
       }
 
       #workspaces {
         margin: 0;
         padding: 0;
-        background-color: transparent;
         border-left: 1px solid ${colors.base02};
       }
 
       #workspaces button {
-        min-width: 34px;
         margin: 0;
         padding: 0 6px;
         color: ${colors.base04};
         background: transparent;
-        border: 0;
-        border-bottom: 2px solid transparent;
-        box-shadow: none;
-        text-shadow: none;
-      }
-
-      #workspaces button.empty {
-        opacity: 0.45;
       }
 
       #workspaces button:hover {
         color: ${colors.base05};
-        background-color: ${colors.base02};
-        box-shadow: none;
+        background: ${colors.base02};
       }
 
+      /* Classic Mac menu highlight: inverted platinum. */
       #workspaces button.active {
-        color: ${colors.base05};
-        background-color: transparent;
-        border-bottom-color: ${colors.base03};
+        color: ${colors.base00};
+        background: ${colors.base05};
       }
 
       #workspaces button.urgent {
-        color: ${colors.base08};
-        background-color: transparent;
-        border-bottom-color: ${colors.base08};
+        color: ${colors.base00};
+        background: ${colors.base08};
       }
 
       #window {
@@ -254,46 +455,41 @@ in {
 
       #window.empty {
         padding: 0;
+        border-left: 0;
       }
 
       #clock {
-        padding: 0 12px;
+        padding: 0 16px;
         color: ${colors.base05};
         border-right: 1px solid ${colors.base02};
       }
 
-      #cpu {
-        color: ${colors.base0C};
+      #privacy-item {
+        padding: 0 4px;
       }
 
-      #memory {
-        color: ${colors.base0A};
+      #custom-logs.failed,
+      #custom-ip.no-tailscale,
+      #network.disconnected,
+      #cpu.critical,
+      #memory.critical,
+      #temperature.critical,
+      #battery.critical {
+        color: ${colors.base08};
       }
 
       #cpu.warning,
-      #memory.warning {
-        color: ${colors.base0E};
+      #memory.warning,
+      #battery.warning {
+        color: ${colors.base0A};
       }
 
-      #cpu.critical,
-      #memory.critical {
-        color: ${colors.base08};
-      }
-
-      #network {
-        color: ${colors.base0B};
-      }
-
-      #network.disconnected {
-        color: ${colors.base08};
-      }
-
-      #pulseaudio {
-        color: ${colors.base0D};
+      #cpu {
+        color: ${colors.base04};
       }
 
       #pulseaudio.muted {
-        color: ${colors.base04};
+        color: ${colors.base03};
       }
 
       #power-profiles-daemon {
@@ -305,29 +501,11 @@ in {
       }
 
       #power-profiles-daemon.performance {
-        color: ${colors.base08};
+        color: ${colors.base09};
       }
 
-      #battery {
-        color: ${colors.base0E};
-      }
-
-      #battery.charging,
-      #battery.plugged,
-      #battery.full {
-        color: ${colors.base0B};
-      }
-
-      #battery.warning {
-        color: ${colors.base0A};
-      }
-
-      #battery.critical {
-        color: ${colors.base08};
-      }
-
-      #tray {
-        padding-right: 9px;
+      #custom-tray-handle {
+        color: ${colors.base04};
       }
 
       #tray > .passive {
@@ -338,5 +516,5 @@ in {
     systemd.enable = true;
   };
 
-  home.packages = [pkgs.pavucontrol];
+  home.packages = [pkgs.pavucontrol pkgs.nerd-fonts.departure-mono];
 }
