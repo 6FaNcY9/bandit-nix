@@ -151,19 +151,19 @@ in {
         --width 2256 ${../themes/free-net.svg} "$out"
     '';
     fonts = {
-      # JetBrains Mono everywhere: tall x-height, 0/O and 1/l/I clearly
-      # different, code ligatures, Nerd Font icons; reads well from a distance.
+      # 0xProto everywhere: one face for all UI; the Mono variant gives every
+      # Nerd Font icon the same width.
       monospace = {
-        package = pkgs.nerd-fonts.jetbrains-mono;
-        name = "JetBrainsMono Nerd Font Mono";
+        package = pkgs.nerd-fonts._0xproto;
+        name = "0xProto Nerd Font Mono";
       };
       sansSerif = {
-        package = pkgs.nerd-fonts.jetbrains-mono;
-        name = "JetBrainsMono Nerd Font";
+        package = pkgs.nerd-fonts._0xproto;
+        name = "0xProto Nerd Font Mono";
       };
       serif = {
-        package = pkgs.nerd-fonts.jetbrains-mono;
-        name = "JetBrainsMono Nerd Font";
+        package = pkgs.nerd-fonts._0xproto;
+        name = "0xProto Nerd Font Mono";
       };
       sizes = {
         terminal = 18;
