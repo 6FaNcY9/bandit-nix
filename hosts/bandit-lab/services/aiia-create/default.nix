@@ -129,7 +129,8 @@ in {
             TURNSTILE_EXPECTED_HOSTNAMES = ''["aiia.at"]'';
             # Stage 2 (checkout): stays off until the image carries real variant
             # ids in config/shopify-variants.json (REPLACE_ME answers "not set up").
-            SHOPIFY_STORE_DOMAIN = "srdwjq-br.myshopify.com";
+            # Off until the shop can sell and stage 3 is agreed: uncomment to open checkout.
+            # SHOPIFY_STORE_DOMAIN = "srdwjq-br.myshopify.com";
             # Stage 3 (printing): ORDERS_ENABLED = "true" plus the values listed
             # in the runbook. Until then every order route answers 404.
           };
