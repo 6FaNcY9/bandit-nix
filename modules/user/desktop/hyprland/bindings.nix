@@ -65,7 +65,7 @@
     (bind "${mod} + CTRL + Tab" "hl.dsp.group.move_window({ forward = true })" "move window forward in group")
     (bind "${mod} + CTRL + SHIFT + Tab" "hl.dsp.group.move_window({ forward = false })" "move window backward in group")
     (bind "${mod} + CTRL + o" "hl.dsp.window.move({ out_of_group = true })" "remove window from group")
-    (bind "${mod} + SHIFT + s" ''hl.dsp.group.lock_active({ action = "toggle" })'' "lock active group")
+    (bind "${mod} + CTRL + s" ''hl.dsp.group.lock_active({ action = "toggle" })'' "lock active group")
     (bind "${mod} + p" "hl.dsp.window.pseudo()" "toggle pseudotile")
     (bind "${mod} + SHIFT + SPACE" ''hl.dsp.window.float({ action = "toggle" })'' "toggle floating")
     (bind "${mod} + CTRL + SPACE" ''hl.dsp.window.pin({ action = "toggle" })'' "pin floating window")
@@ -106,6 +106,7 @@
 
     (execBinding "Print" "~/.local/bin/hypr-screenshot" "region screenshot")
     (execBinding "F11" "~/.local/bin/hypr-screenshot" "region screenshot")
+    (execBinding "${mod} + SHIFT + s" "${pkgs.flameshot}/bin/flameshot gui" "screenshot with drawing (flameshot)")
 
     # Mako notification controls
     (execBinding "${mod} + grave" "${pkgs.mako}/bin/makoctl restore" "restore last notification")

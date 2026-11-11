@@ -15,6 +15,8 @@
     "${pkgs.blueman}/bin/blueman-applet"
     "${pkgs.wl-clipboard}/bin/wl-paste --type text --watch ${pkgs.cliphist}/bin/cliphist store"
     "${pkgs.wl-clipboard}/bin/wl-paste --type image --watch ${pkgs.cliphist}/bin/cliphist store"
+    # Resident daemon keeps copied screenshots in the Wayland clipboard after the capture UI closes.
+    "${pkgs.flameshot}/bin/flameshot"
   ];
   startupHandler = lib.concatMapStringsSep "\n" (command: "  hl.exec_cmd(${builtins.toJSON command})") startupCommands;
 
@@ -47,6 +49,15 @@
       match.title = "^(Picture-in-Picture)$";
       float = true;
       pin = true;
+    }
+    {
+      # Flameshot's capture overlay must cover the screen untouched by tiling.
+      name = "flameshot";
+      match.class = "^(flameshot)$";
+      float = true;
+      pin = true;
+      move = "0 0";
+      no_anim = true;
     }
     {
       name = "hyprland-shortcuts";
