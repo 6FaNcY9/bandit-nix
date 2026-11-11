@@ -4,35 +4,57 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gedächtnis</title>
 <style>
-  :root { --bg:#f6f3ea; --fg:#1d1b16; --dim:#6b655a; --card:#fffdf7; --line:#d8d1c0; --acc:#b4541a; }
+  :root { --bg:#f6f3ea; --fg:#1d1b16; --dim:#5f5a4f; --card:#fffdf7; --line:#d8d1c0; --acc:#b4541a; --late:#b3261e; --ok:#2e7d32; --doing:#1f5fa8; }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#16140f; --fg:#ece6d6; --dim:#9a927f; --card:#201d16; --line:#3a352a; --acc:#f0a35e; }
+    :root { --bg:#16140f; --fg:#ece6d6; --dim:#a9a18d; --card:#201d16; --line:#3a352a; --acc:#f0a35e; --late:#ff8a80; --ok:#81c784; --doing:#90caf9; }
   }
   * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--fg); font:18px/1.6 system-ui, sans-serif; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:19px/1.6 system-ui, sans-serif; }
   header { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:12px 16px; border-bottom:1px solid var(--line); }
-  header h1 { font-size:20px; margin:0 12px 0 0; }
-  button { font:inherit; color:var(--fg); background:var(--card); border:1px solid var(--line); border-radius:8px; padding:6px 14px; cursor:pointer; }
+  header h1 { font-size:22px; margin:0 12px 0 0; }
+  button, select { font:inherit; color:var(--fg); background:var(--card); border:1px solid var(--line); border-radius:8px; padding:6px 14px; cursor:pointer; min-height:44px; }
   button[aria-pressed=true] { border-color:var(--acc); color:var(--acc); font-weight:600; }
-  main { max-width:1000px; margin:0 auto; padding:16px; }
+  main { max-width:1100px; margin:0 auto; padding:16px; }
+  main.wide { max-width:none; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 18px; margin:0 0 14px; }
-  .card h2 { margin:0 0 4px; font-size:22px; }
-  .dim { color:var(--dim); font-size:15px; }
-  a, .link { color:var(--acc); cursor:pointer; text-decoration:underline; background:none; border:0; padding:0; font:inherit; }
+  .card h2 { margin:0 0 4px; font-size:24px; }
+  .dim { color:var(--dim); font-size:16px; }
+  a, .link { color:var(--acc); cursor:pointer; text-decoration:underline; background:none; border:0; padding:0; font:inherit; min-height:0; }
   ul { padding-left:22px; margin:6px 0; }
   pre { overflow:auto; background:var(--bg); padding:10px; border-radius:8px; }
   code { font-size:.9em; }
-  svg { width:100%; height:70vh; background:var(--card); border:1px solid var(--line); border-radius:12px; touch-action:none; }
-  svg text { fill:var(--fg); font-size:12px; pointer-events:none; }
-  svg line { stroke:var(--line); }
-  svg circle { cursor:pointer; }
+  .pills { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0; }
+  .pill { border:2px solid var(--line); border-radius:999px; padding:2px 12px; font-weight:600; }
+  .pill.doing { border-color:var(--doing); color:var(--doing); }
+  .pill.done { border-color:var(--ok); color:var(--ok); }
+  .pill.late, .late .due { border-color:var(--late); color:var(--late); }
+  .state { border-left:4px solid var(--acc); padding-left:12px; margin:10px 0; }
+  .state h3 { margin:0; font-size:18px; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:8px 0; }
+  .board { display:grid; grid-template-columns:repeat(3, 1fr); gap:14px; align-items:start; }
+  @media (max-width: 760px) { .board { grid-template-columns:1fr; } }
+  .col { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px; min-height:120px; }
+  .col.over { border-color:var(--acc); }
+  .col h2 { margin:0 0 8px; font-size:22px; }
+  .tcard { background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin:0 0 10px; }
+  .tcard.late { border:2px solid var(--late); }
+  .tcard .moves { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  .tcard .moves button { font-size:16px; padding:4px 10px; }
+  svg { width:100%; height:75vh; background:var(--card); border:1px solid var(--line); border-radius:12px; touch-action:none; user-select:none; }
+  svg text { fill:var(--fg); font-size:var(--fs); pointer-events:none; text-anchor:middle; }
+  svg text.grp { font-size:var(--gs); font-weight:700; fill:var(--acc); }
+  svg.far text.lbl { display:none; }
+  svg line { stroke:var(--line); stroke-width:3; }
+  svg circle { cursor:pointer; stroke:var(--card); stroke-width:3; }
   .task { text-decoration:none; color:var(--fg); text-align:left; }
-  input { font:inherit; color:var(--fg); background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:6px 10px; width:min(100%, 26em); }
+  input { font:inherit; color:var(--fg); background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:6px 10px; width:min(100%, 26em); min-height:44px; }
   form { margin:8px 0; }
+  #status.bad { color:var(--late); font-weight:600; }
 </style>
 <header>
   <h1>Gedächtnis</h1>
-  <button data-view="projects">Projekte</button>
+  <button data-view="status">Übersicht</button>
+  <button data-view="board">Aufgaben</button>
   <button data-view="notes">Notizen</button>
   <button data-view="map">Karte</button>
   <span class="dim" id="status"></span>
@@ -41,11 +63,13 @@
 <script>
 // shortcut: loads every note into the browser, fine for some hundred notes; give the lab an index endpoint when it gets slow.
 const $ = (s) => document.querySelector(s);
-const esc = (s) => s.replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let notes = [], shown = null, view = ['notes', 'map'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'projects';
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const VIEWS = ['status', 'board', 'notes', 'map'];
+let notes = [], shown = null, view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'status', boardProject = '';
+const today = () => new Date().toLocaleDateString('sv'); // YYYY-MM-DD in local time
 
 async function walk(dir) {
-  const res = await fetch('/notes/' + dir, {headers: {Accept: 'application/json'}});
+  const res = await fetch('/notes/' + dir, {headers: {Accept: 'application/json'}, cache: 'no-store'});
   if (!res.ok) throw new Error('Speicher antwortet nicht (' + res.status + ')');
   const out = [];
   for (const e of await res.json()) {
@@ -57,6 +81,21 @@ async function walk(dir) {
   return out;
 }
 
+// Task lines: "- [ ] open", "- [/] in progress" (Obsidian Tasks), "- [x] done", optional "(who, YYYY-MM-DD)" at the end.
+const BOX = {' ': 'open', '/': 'doing', x: 'done', X: 'done'}, MARK = {open: ' ', doing: '/', done: 'x'};
+const LABEL = {open: 'Offen', doing: 'In Arbeit', done: 'Fertig'};
+function parseTask(raw, box, text) {
+  const m = /\s*\(([^()]{1,60})\)\s*$/.exec(text);
+  const parts = m ? m[1].split(',').map((s) => s.trim()).filter(Boolean) : [];
+  const due = parts.find((p) => /^\d{4}-\d{2}-\d{2}$/.test(p)) || '';
+  const state = BOX[box];
+  return {raw, state, text, title: m ? text.slice(0, m.index) : text, who: parts.filter((p) => p !== due).join(', '), due,
+    late: !!due && due < today() && state !== 'done'};
+}
+const sha256 = async (text) => crypto.subtle
+  ? [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map((b) => b.toString(16).padStart(2, '0')).join('')
+  : undefined; // plain http off localhost has no WebCrypto; edits then rely on the exact line match alone
+
 function parse(n, text) {
   const m = /^---\n([\s\S]*?)\n---\n?/.exec(text);
   const fm = m ? m[1] : '';
@@ -66,13 +105,17 @@ function parse(n, text) {
   n.tags = [...fm.matchAll(/^- (.+)$/gm)].map((x) => x[1]);
   n.links = [...n.body.matchAll(/\[\[([^\]]+)\]\]/g)].map((x) => x[1]);
   n.slug = n.path.replace(/\.md$/, '').split('/').pop();
-  // Tasks are Markdown checkboxes anywhere in a note: "- [ ] text" open, "- [x] text" done.
-  n.tasks = [...n.body.matchAll(/^\s*[-*] \[([ xX])\] (.+)$/gm)].map((x) => ({done: x[1] !== ' ', text: x[2]}));
+  n.tasks = [...n.body.matchAll(/^([ \t]*[-*] \[([ xX/])\] (.+))$/gm)].map((x) => ({...parseTask(x[1], x[2], x[3]), note: n}));
   // Session notes are named <day>-<device>-<project>-<id> and tagged session, device, project.
   if (n.type === 'session') { n.day = n.slug.slice(0, 10); n.device = n.tags[1] || '?'; n.project = n.tags[2] || '?'; }
 }
 const section = (n, name) => ((new RegExp('^## ' + name + '\\n([\\s\\S]*?)(?=^## |\\Z)', 'm').exec(n.body + '\n## ') || [])[1] || '').trim();
 const bullets = (t) => t.split('\n').filter((l) => /^\s*[-*] /.test(l)).map((l) => l.replace(/^\s*[-*] /, ''));
+// The note's state section: "## State …", "## Stand …" or "## Status …" (heading text kept, e.g. "State 2026-11-11").
+function stateSection(n) {
+  const m = /^## ((?:State|Stand|Status)\b[^\n]*)\n([\s\S]*?)(?=^## |(?![\s\S]))/m.exec(n.body);
+  return m && m[2].trim() ? {head: m[1], text: m[2].trim()} : null;
+}
 
 // The page edits notes through the same MCP endpoint the agents use (/mcp, same origin).
 let session;
@@ -92,19 +135,29 @@ async function tool(name, args) {
     await rpc({jsonrpc: '2.0', method: 'notifications/initialized'});
   }
   const r = await rpc({jsonrpc: '2.0', id: 1, method: 'tools/call', params: {name, arguments: {project: 'main', ...args}}});
-  if (!r || r.error || r.result.isError) throw new Error(r && r.result ? r.result.content[0].text.split('\n')[0] : 'keine Antwort');
+  if (!r || r.error || r.result.isError) {
+    const msg = r && r.result ? r.result.content[0].text : (r && r.error && r.error.message) || 'keine Antwort';
+    let text = msg;
+    try { text = JSON.parse(msg).message || msg; } catch {} // json output_format wraps errors as {error, message}
+    const found = /but found (\d+)/.exec(text);
+    throw new Error(/REVISION_CONFLICT|checksum/i.test(msg) || (found && found[1] === '0') ? 'Die Notiz wurde inzwischen geändert. Sie ist neu geladen, bitte nochmal.'
+      : found ? 'Diese Aufgabe steht mehrmals in der Notiz. Bitte direkt in der Notiz ändern.' : text.split('\n')[0]);
+  }
+  return r.result.content[0].text;
 }
-const taskLine = (t) => '- [' + (t.done ? 'x' : ' ') + '] ' + t.text;
-// Flip one checkbox line; fails (and says so) if the same line is in the note twice.
-const toggleTask = (n, i) => tool('bm_edit', {identifier: n.path, command: 'find_replace', find_text: taskLine(n.tasks[i]), content: taskLine({...n.tasks[i], done: !n.tasks[i].done})});
+// Every edit names the revision the page loaded (expected_checksum), so a change someone made meanwhile is never overwritten.
+const edit = (n, args) => tool('bm_edit', {identifier: n.path, expected_checksum: n.sum, output_format: 'json', ...args});
+// Move one task line to another column; fails (and says so) if the same line is in the note twice.
+const moveTask = (t, state) => edit(t.note, {command: 'find_replace', find_text: t.raw, content: t.raw.replace(/\[[ xX/]\]/, '[' + MARK[state] + ']')});
 function addTask(project, text) {
   const n = find('projects/' + project + '.md'), line = '- [ ] ' + text.replace(/\s+/g, ' ').trim();
-  if (!n) return tool('bm_write', {title: project, directory: 'projects', content: '## Tasks\n' + line + '\n'});
-  return /^## Tasks\s*$/m.test(n.body)
-    ? tool('bm_edit', {identifier: n.path, command: 'find_replace', find_text: '## Tasks', content: '## Tasks\n' + line})
-    : tool('bm_edit', {identifier: n.path, command: 'append', content: '\n## Tasks\n' + line + '\n'});
+  if (!n) return tool('bm_write', {title: project, directory: 'projects', output_format: 'json', content: '## Tasks\n' + line + '\n'});
+  return ("\n" + n.body).split('\n## Tasks\n').length === 2
+    ? edit(n, {command: 'find_replace', find_text: '\n## Tasks\n', content: '\n## Tasks\n' + line + '\n'})
+    : edit(n, {command: 'append', content: '\n## Tasks\n' + line + '\n'});
 }
-const taskButton = (n, i) => `<button class="link task" data-note="${esc(n.path)}" data-task="${i}">${n.tasks[i].done ? '☑' : '☐'} ${esc(n.tasks[i].text)}</button>`;
+const BOXSIGN = {open: '☐', doing: '◐', done: '☑'};
+const taskButton = (n, i) => `<button class="link task" data-note="${esc(n.path)}" data-task="${i}">${BOXSIGN[n.tasks[i].state]} ${esc(n.tasks[i].text)}</button>`;
 
 // Small Markdown renderer: everything is escaped first, so note text can never inject HTML.
 function md(src) {
@@ -115,42 +168,75 @@ function md(src) {
     if (line.startsWith('```')) { html += code ? '</pre>' : (list ? '</ul>' : '') + '<pre>'; code = !code; list = false; continue; }
     if (code) { html += esc(line) + '\n'; continue; }
     const li = /^\s*[-*] (.*)/.exec(line), h = /^(#{1,4}) (.*)/.exec(line);
-    if (li) { const box = /^\[([ xX])\] (.*)/.exec(li[1]); html += (list ? '' : '<ul>') + '<li>' + (box ? (box[1] === ' ' ? '☐ ' : '☑ ') + inline(box[2]) : inline(li[1])) + '</li>'; list = true; continue; }
+    if (li) { const box = /^\[([ xX/])\] (.*)/.exec(li[1]); html += (list ? '' : '<ul>') + '<li>' + (box ? BOXSIGN[BOX[box[1]]] + ' ' + inline(box[2]) : inline(li[1])) + '</li>'; list = true; continue; }
     if (list) { html += '</ul>'; list = false; }
     if (h) html += `<h${h[1].length + 1}>${inline(h[2])}</h${h[1].length + 1}>`;
     else if (line.trim()) html += '<p>' + inline(line) + '</p>';
   }
   return html + (list ? '</ul>' : '') + (code ? '</pre>' : '');
 }
-const find = (name) => notes.find((n) => n.slug === name || n.title === name || n.path === name);
-const open = (n) => `<button class="link" data-open="${esc(n.path)}">${esc(n.title)}</button>`;
+// Paths win over titles over file names (imports/claude-mem/bandit-nix.md must not shadow projects/bandit-nix.md).
+const find = (name) => notes.find((n) => n.path === name) || notes.find((n) => n.title === name) || notes.find((n) => n.slug === name);
+const open = (n, label) => `<button class="link" data-open="${esc(n.path)}">${esc(label || n.title)}</button>`;
 
-function projects() {
+// Projects are the projects/* notes plus every project a session note names.
+function projectList() {
   const by = {};
   for (const n of notes) {
     if (n.type === 'session') (by[n.project] ||= {sessions: []}).sessions.push(n);
     else if (n.path.startsWith('projects/')) (by[n.slug] ||= {sessions: []}).note = n;
   }
-  const cards = Object.entries(by).map(([name, p]) => {
+  return Object.entries(by).map(([name, p]) => {
     p.sessions.sort((a, b) => b.day.localeCompare(a.day) || b.changed.localeCompare(a.changed));
-    const last = p.sessions[0];
-    return {name, p, last, when: last ? last.day : (p.note.changed || '').slice(0, 10)};
+    const last = [p.note && p.note.changed, p.sessions[0] && p.sessions[0].changed].filter(Boolean).sort().pop() || '';
+    const tasks = p.note ? p.note.tasks : [];
+    const count = (s) => tasks.filter((t) => t.state === s).length;
+    return {name, ...p, when: last, tasks, open: count('open'), doing: count('doing'), done: count('done'), late: tasks.filter((t) => t.late).length};
   }).sort((a, b) => b.when.localeCompare(a.when));
-  if (!cards.length) return '<p>Noch keine Projekte. Sie erscheinen nach der ersten gespeicherten Sitzung.</p>';
-  return cards.map(({name, p, last, when}) => {
+}
+const when = (iso) => iso ? iso.slice(0, 16).replace('T', ' ') : '?';
+
+function status() {
+  const ps = projectList();
+  if (!ps.length) return '<p>Noch keine Projekte. Sie erscheinen nach der ersten gespeicherten Sitzung.</p>';
+  const late = ps.reduce((s, p) => s + p.late, 0);
+  return (late ? `<p class="pill late" style="display:inline-block">${late} Aufgabe(n) überfällig</p>` : '') + ps.map((p) => {
+    const st = p.note && stateSection(p.note), last = p.sessions[0];
     const openItems = last ? bullets(section(last, 'Open')) : [];
-    const devices = [...new Set(p.sessions.map((s) => s.device))].join(', ');
-    const tasks = p.note ? p.note.tasks : [], todo = tasks.filter((t) => !t.done);
-    return `<div class="card"><h2>${esc(name)}</h2>
-      <div class="dim">Zuletzt: ${esc(when)}${devices ? ' · Geräte: ' + esc(devices) : ''}${p.note ? ' · ' + open(p.note).replace(/>[^<]*</, '>Projekt-Notiz<') : ''}</div>
-      ${last ? '<p><b>Ziel:</b> ' + esc(section(last, 'Goal').replace(/^[-*] /gm, '').split('\n')[0] || '') + '</p>' : ''}
-      ${tasks.length ? '<b>Aufgaben:</b> ' + (tasks.length - todo.length) + ' von ' + tasks.length + ' erledigt<ul>' + tasks.map((t, i) => t.done ? '' : '<li>' + taskButton(p.note, i) + '</li>').join('') + '</ul>' : ''}
-      <form data-add="${esc(name)}"><input name="text" placeholder="Neue Aufgabe …" required> <button>Hinzufügen</button></form>
-      ${openItems.length ? '<b>Offen laut letzter Sitzung:</b><ul>' + openItems.map((b) => '<li>' + esc(b) + '</li>').join('') + '</ul>' : ''}
-      ${p.sessions.length ? '<details><summary>' + p.sessions.length + ' Sitzung(en)</summary><ul>' +
-        p.sessions.map((s) => `<li>${esc(s.day)} · ${esc(s.device)} · ${open(s).replace(/>[^<]*</, '>ansehen<')}</li>`).join('') + '</ul></details>' : ''}
+    return `<div class="card"><h2>${esc(p.name)}</h2>
+      <div class="dim">Zuletzt geändert: ${esc(when(p.when))}</div>
+      <div class="pills"><span class="pill">Offen ${p.open}</span><span class="pill doing">In Arbeit ${p.doing}</span><span class="pill done">Fertig ${p.done}</span>${p.late ? `<span class="pill late">${p.late} überfällig</span>` : ''}</div>
+      ${st ? `<div class="state"><h3>${esc(st.head)}</h3>${md(st.text)}</div>` : ''}
+      ${p.sessions.length ? '<b>Letzte Sitzungen:</b><ul>' + p.sessions.slice(0, 3).map((s) =>
+        `<li>${esc(s.day)} · ${esc(s.device)} · ${open(s, 'ansehen')}<br><span class="dim">${esc(section(s, 'Goal').replace(/^[-*] /gm, '').split('\n')[0] || '')}</span></li>`).join('') + '</ul>' : ''}
+      ${openItems.length ? '<details><summary>Offen laut letzter Sitzung (' + openItems.length + ')</summary><ul>' + openItems.map((b) => '<li>' + esc(b) + '</li>').join('') + '</ul></details>' : ''}
+      <div class="row">${p.tasks.length ? `<button data-board="${esc(p.name)}">Aufgaben ansehen</button>` : ''}${p.note ? open(p.note, 'Projekt-Notiz') : ''}${p.sessions.length > 3 ? `<span class="dim">${p.sessions.length} Sitzungen</span>` : ''}</div>
+      <form data-add="${esc(p.name)}"><input name="text" placeholder="Neue Aufgabe …" required> <button>Hinzufügen</button></form>
     </div>`;
   }).join('');
+}
+
+function board() {
+  const ps = projectList().filter((p) => p.tasks.length);
+  if (boardProject && !ps.some((p) => p.name === boardProject)) boardProject = '';
+  const tasks = ps.filter((p) => !boardProject || p.name === boardProject).flatMap((p) => p.tasks.map((t) => ({t, p: p.name})));
+  const order = (a, b) => (b.t.late - a.t.late) || (a.t.due || '9999').localeCompare(b.t.due || '9999');
+  const card = ({t, p}) => {
+    const i = t.note.tasks.indexOf(t);
+    const meta = [boardProject ? '' : '<b>' + esc(p) + '</b>', t.who ? 'Wer: ' + esc(t.who) : '',
+      t.due ? `<span class="due">${t.state === 'done' ? 'Erledigt' : 'Bis'}: ${esc(t.due)}${t.late ? ' – überfällig' : ''}</span>` : ''].filter(Boolean).join(' · ');
+    return `<div class="tcard${t.late ? ' late' : ''}" draggable="true" data-note="${esc(t.note.path)}" data-i="${i}">
+      <div>${esc(t.title)}</div>${meta ? `<div class="dim">${meta}</div>` : ''}
+      <div class="moves">${Object.keys(LABEL).filter((s) => s !== t.state).map((s) => `<button data-move="${s}">→ ${LABEL[s]}</button>`).join('')}</div></div>`;
+  };
+  return `<div class="row"><label for="bp"><b>Projekt:</b></label> <select id="bp"><option value="">Alle Projekte</option>${ps.map((p) =>
+      `<option${p.name === boardProject ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
+      <span class="dim">Karte antippen: Knöpfe verschieben sie. Mit der Maus geht auch Ziehen.</span></div>
+    ${boardProject ? `<form data-add="${esc(boardProject)}"><input name="text" placeholder="Neue Aufgabe (wer, 2026-12-31) …" required> <button>Hinzufügen</button></form>` : ''}
+    <div class="board">${Object.entries(LABEL).map(([s, label]) => {
+      const col = tasks.filter(({t}) => t.state === s).sort(order);
+      return `<div class="col" data-drop="${s}"><h2>${label} (${col.length})</h2>${col.map(card).join('') || '<p class="dim">Nichts.</p>'}</div>`;
+    }).join('')}</div>`;
 }
 
 function list() {
@@ -160,64 +246,177 @@ function list() {
     ns.sort((a, b) => b.changed.localeCompare(a.changed)).map((n) => `<li>${open(n)} <span class="dim">${esc(n.changed.slice(0, 10))}</span></li>`).join('') + '</ul></div>').join('');
 }
 
+// Map: one cluster per project, the project in the middle and its notes on rings around it.
+function groupOf(n) {
+  if (n.path.startsWith('projects/')) return n.slug;
+  if (n.type === 'session') return n.project;
+  if (n.path.startsWith('imports/claude-mem/')) return n.slug;
+  const p = n.links.map(find).find((t) => t && t.path.startsWith('projects/'));
+  return p ? p.slug : n.path.includes('/') ? n.path.split('/')[0] : 'allgemein';
+}
+let fitBox = [0, 0, 1000, 600];
 function map() {
-  // Nodes are notes plus link targets that have no note yet; edges are [[links]] and session -> project.
   const nodes = new Map(), edges = [];
-  const node = (id, note) => nodes.get(id) || nodes.set(id, {id, note, x: Math.random() * 800 + 100, y: Math.random() * 500 + 50, vx: 0, vy: 0}).get(id);
-  for (const n of notes) node(n.slug, n);
-  for (const n of notes) for (const t of [...n.links, ...(n.project ? [n.project] : [])]) {
+  const node = (id, note, group) => nodes.get(id) || nodes.set(id, {id, note, group, label: note ? (note.type === 'session' ? note.day.slice(5) + ' ' + note.device : note.title) : id}).get(id);
+  for (const n of notes) node(n.path, n, groupOf(n));
+  for (const n of notes) for (const t of n.links) {
     const target = find(t);
-    edges.push([node(n.slug, n), node(target ? target.slug : t, target)]);
+    edges.push([nodes.get(n.path), target ? nodes.get(target.path) : node('?' + t, null, groupOf(n))]);
+  }
+  for (const n of notes) if (n.type === 'session') { // a session belongs to its project's note (or a grey stand-in)
+    const p = find('projects/' + n.project + '.md');
+    edges.push([nodes.get(n.path), p ? nodes.get(p.path) : node('?' + n.project, null, n.project)]);
+  }
+  const groups = new Map();
+  for (const a of nodes.values()) (groups.get(a.group) || groups.set(a.group, []).get(a.group)).push(a);
+  // Font sizes in map units: bigger on narrow screens, where the whole map is shrunk more (G project names, L note labels).
+  const G = Math.max(48, Math.round(48 * 640 / innerWidth)), L = Math.max(26, Math.round(26 * 640 / innerWidth));
+  const RING = Math.max(160, L * 6), clusters = [...groups].map(([name, ms]) => {
+    const center = ms.find((a) => a.note ? a.note.path === 'projects/' + name + '.md' : a.id === '?' + name);
+    const rest = ms.filter((a) => a !== center).sort((a, b) => a.label.localeCompare(b.label));
+    let ring = 0, left = rest.length;
+    while (left > 0) { ring++; left -= 6 * ring; }
+    const r = RING * ring + 60;
+    return {name, center, rest, r, w: Math.max(2 * r, name.length * G * .62 + 40), h: 2 * r + G + 32}; // w and the top band fit the project name
+  }).sort((a, b) => b.h - a.h || a.name.localeCompare(b.name));
+  // Row packing: clusters left to right, wrapped so the whole map has about the shape of the screen.
+  const aspect = Math.min(3, Math.max(.5, innerWidth / (innerHeight * .75)));
+  const width = Math.max(0, ...clusters.map((c) => c.w), Math.sqrt(clusters.reduce((s, c) => s + (c.w + 40) * (c.h + 40), 0) * aspect));
+  let x = 0, y = 0, rowH = 0;
+  for (const c of clusters) {
+    if (x > 0 && x + c.w > width) { x = 0; y += rowH + 40; rowH = 0; }
+    c.x = x + c.w / 2; c.y = y + G + 32 + c.r; x += c.w + 40; rowH = Math.max(rowH, c.h);
+    if (c.center) Object.assign(c.center, {x: c.x, y: c.y});
+    let i = 0;
+    for (let ring = 1; i < c.rest.length; ring++) {
+      const k = Math.min(6 * ring, c.rest.length - i);
+      for (let j = 0; j < k; j++, i++) {
+        const ang = -Math.PI / 2 + Math.PI * (2 * j + 1 + (ring % 2 ? 0 : 1)) / k; // odd rings half a step off the top, even rings shifted again
+        Object.assign(c.rest[i], {x: c.x + RING * ring * Math.cos(ang), y: c.y + RING * ring * Math.sin(ang)});
+      }
+    }
   }
   const all = [...nodes.values()];
-  for (let i = 0; i < 300; i++) { // plain force layout: push apart, pull along edges, drift to the middle
-    for (const a of all) for (const b of all) if (a !== b) {
-      const dx = a.x - b.x, dy = a.y - b.y, d2 = dx * dx + dy * dy + 1;
-      a.vx += dx / d2 * 900; a.vy += dy / d2 * 900;
+  const xs = clusters.flatMap((c) => [c.x - c.w / 2, c.x + c.w / 2]), ys = clusters.flatMap((c) => [c.y - c.r - G - 32, c.y + c.r + L + 20]);
+  fitBox = all.length ? [Math.min(...xs) - 20, Math.min(...ys) - 20, Math.max(...xs) - Math.min(...xs) + 40, Math.max(...ys) - Math.min(...ys) + 40] : [0, 0, 1000, 600];
+  const color = (a) => !a.note ? 'var(--dim)' : a.note.type === 'session' ? 'var(--doing)' : a.note.path.startsWith('projects/') ? 'var(--acc)' : 'var(--ok)';
+  return `<div class="row"><button data-zoom="in" aria-label="Näher">＋ Näher</button><button data-zoom="out" aria-label="Weiter weg">－ Weiter</button><button data-zoom="fit">Ganz zeigen</button>
+      <span class="dim">Orange: Projekt · Grün: Notiz · Blau: Sitzung · Grau: noch ohne Notiz. Ziehen verschiebt, Rad oder zwei Finger zoomen, Antippen öffnet.</span></div>
+    <svg id="map" viewBox="${fitBox.join(' ')}" data-l="${L}" style="--fs:${L}px;--gs:${G}px">` +
+    edges.map(([a, b]) => `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>`).join('') +
+    all.map((a) => `<circle ${a.note ? `data-open="${esc(a.note.path)}"` : ''} cx="${a.x}" cy="${a.y}" data-r="${clusters.some((c) => c.center === a) ? 34 : 20}" fill="${color(a)}"><title>${esc(a.label)}</title></circle>`).join('') +
+    all.filter((a) => !clusters.some((c) => c.center === a)).map((a) => `<text class="lbl" x="${a.x}" y="${a.y + 26 + L}">${esc(a.label.length > 22 ? a.label.slice(0, 21) + '…' : a.label)}</text>`).join('') +
+    clusters.map((c) => `<text class="grp" x="${c.x}" y="${c.y - c.r - 24}">${esc(c.name)}</text>`).join('') + '</svg>';
+}
+function setupMap() {
+  const svg = $('#map');
+  if (!svg) return;
+  let vb = fitBox.slice(), moved = 0;
+  const pts = new Map();
+  const apply = () => {
+    svg.setAttribute('viewBox', vb.join(' '));
+    // Note labels hide below 13 px on screen (zoomed far out); project names always stay.
+    const upp = Math.max(vb[2] / (svg.clientWidth || 1000), vb[3] / (svg.clientHeight || 600));
+    svg.classList.toggle('far', svg.dataset.l / upp < 13);
+    // Dots too: at least 26 px (projects 40 px) across on screen, so a finger can hit them.
+    svg.querySelectorAll('circle').forEach((c) => c.setAttribute('r', Math.max(+c.dataset.r, (c.dataset.r > 30 ? 20 : 13) * upp)));
+  };
+  const user = (cx, cy) => { const m = svg.getScreenCTM(); return m ? new DOMPoint(cx, cy).matrixTransform(m.inverse()) : {x: 0, y: 0}; };
+  const zoom = (f, p) => {
+    f = Math.min(Math.max(f, 120 / vb[2]), fitBox[2] * 4 / vb[2]); // not closer than 120 units, not farther than 4x the whole map
+    vb = [p.x - (p.x - vb[0]) * f, p.y - (p.y - vb[1]) * f, vb[2] * f, vb[3] * f]; apply();
+  };
+  const middle = () => { const r = svg.getBoundingClientRect(); return user(r.left + r.width / 2, r.top + r.height / 2); };
+  document.querySelectorAll('[data-zoom]').forEach((b) => b.onclick = () => {
+    if (b.dataset.zoom === 'fit') { vb = fitBox.slice(); apply(); } else zoom(b.dataset.zoom === 'in' ? 1 / 1.5 : 1.5, middle());
+  });
+  svg.addEventListener('wheel', (e) => { e.preventDefault(); zoom(e.deltaY > 0 ? 1.2 : 1 / 1.2, user(e.clientX, e.clientY)); }, {passive: false});
+  svg.addEventListener('pointerdown', (e) => { if (!pts.size) moved = 0; pts.set(e.pointerId, {x: e.clientX, y: e.clientY}); });
+  svg.addEventListener('pointermove', (e) => {
+    const prev = pts.get(e.pointerId);
+    if (!prev) return;
+    const cur = {x: e.clientX, y: e.clientY};
+    if (pts.size === 1) {
+      const a = user(prev.x, prev.y), b = user(cur.x, cur.y);
+      vb[0] -= b.x - a.x; vb[1] -= b.y - a.y; apply();
+    } else if (pts.size === 2) {
+      const other = [...pts].find(([id]) => id !== e.pointerId)[1];
+      const d0 = Math.hypot(prev.x - other.x, prev.y - other.y), d1 = Math.hypot(cur.x - other.x, cur.y - other.y);
+      if (d0 > 0 && d1 > 0) zoom(d0 / d1, user((cur.x + other.x) / 2, (cur.y + other.y) / 2));
     }
-    for (const [a, b] of edges) { const dx = b.x - a.x, dy = b.y - a.y; a.vx += dx * .01; a.vy += dy * .01; b.vx -= dx * .01; b.vy -= dy * .01; }
-    for (const a of all) { a.vx += (500 - a.x) * .002; a.vy += (300 - a.y) * .002; a.x += a.vx *= .6; a.y += a.vy *= .6; }
-  }
-  const xs = all.map((a) => a.x), ys = all.map((a) => a.y);
-  const box = [Math.min(...xs) - 60, Math.min(...ys) - 30, Math.max(...xs) - Math.min(...xs) + 160, Math.max(...ys) - Math.min(...ys) + 60];
-  const color = (a) => !a.note ? 'var(--dim)' : a.note.type === 'session' ? 'var(--line)' : 'var(--acc)';
-  return `<p class="dim">Orange: Notizen · Hell: Sitzungen · Grau: verlinkt, aber noch ohne Notiz. Antippen öffnet die Notiz.</p>
-    <svg viewBox="${box.join(' ')}">` + edges.map(([a, b]) => `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>`).join('') +
-    all.map((a) => `<circle ${a.note ? `data-open="${esc(a.note.path)}"` : ''} cx="${a.x}" cy="${a.y}" r="${a.note && a.note.type !== 'session' ? 9 : 5}" fill="${color(a)}"/>` +
-      (a.note && a.note.type === 'session' ? '' : `<text x="${a.x + 12}" y="${a.y + 4}">${esc(a.id)}</text>`)).join('') + '</svg>';
+    moved += Math.hypot(cur.x - prev.x, cur.y - prev.y);
+    pts.set(e.pointerId, cur);
+  });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) svg.addEventListener(ev, (e) => pts.delete(e.pointerId));
+  svg.addEventListener('click', (e) => { if (moved > 6) e.stopPropagation(); }, true); // a drag is not a tap
+  apply();
 }
 
 function show(n) {
+  $('#main').className = '';
   $('#main').innerHTML = `<p><button data-view="${view}">← zurück</button></p><div class="card"><h2>${esc(n.title)}</h2>
-    <div class="dim">${esc(n.path)} · geändert ${esc(n.changed.slice(0, 16).replace('T', ' '))}</div>${n.tasks.length ? '<ul>' + n.tasks.map((t, i) => '<li>' + taskButton(n, i) + '</li>').join('') + '</ul><hr>' : ''}${md(n.body)}</div>`;
+    <div class="dim">${esc(n.path)} · geändert ${esc(when(n.changed))}</div>${n.tasks.length ? '<ul>' + n.tasks.map((t, i) => '<li>' + taskButton(n, i) + '</li>').join('') + '</ul><hr>' : ''}${md(n.body)}</div>`;
   shown = n.path;
 }
 function render() {
   document.querySelectorAll('header button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.view === view));
-  $('#main').innerHTML = {projects, notes: list, map}[view]();
+  $('#main').className = view === 'board' || view === 'map' ? 'wide' : '';
+  $('#main').innerHTML = {status, board, notes: list, map}[view]();
+  if (view === 'map') setupMap();
+}
+// The MCP call answers before the file is on disk (~0.1 s); wait until /notes/ serves the new revision, else the reload shows the old one.
+async function landed(result) {
+  let r = {};
+  try { r = JSON.parse(result); } catch {}
+  for (let i = 0; r.file_path && r.checksum && crypto.subtle && i < 30; i++) {
+    if (await sha256(await (await fetch('/notes/' + r.file_path, {cache: 'no-store'})).text()) === r.checksum) return;
+    await new Promise((ok) => setTimeout(ok, 100));
+  }
 }
 async function change(action) {
-  try { await action; await load(); }
-  catch (e) { $('#status').textContent = 'Nicht gespeichert: ' + e.message; }
+  $('#status').className = '';
+  try { await landed(await action()); $('#status').textContent = 'Gespeichert.'; }
+  catch (e) { $('#status').textContent = 'Nicht gespeichert: ' + e.message; $('#status').className = 'bad'; }
+  await load(true);
 }
+const taskOf = (el) => { const n = find(el.dataset.note); return n && n.tasks[+(el.dataset.task ?? el.dataset.i)]; };
 document.addEventListener('submit', (e) => {
   e.preventDefault();
-  change(addTask(e.target.dataset.add, new FormData(e.target).get('text')));
+  change(() => addTask(e.target.dataset.add, new FormData(e.target).get('text')));
 });
+document.addEventListener('change', (e) => { if (e.target.id === 'bp') { boardProject = e.target.value; render(); } });
 document.addEventListener('click', (e) => {
   const task = e.target.closest('[data-task]');
-  if (task) return change(toggleTask(find(task.dataset.note), +task.dataset.task));
-  const t = e.target.closest('[data-view],[data-open]');
+  if (task) { const t = taskOf(task); return t && change(() => moveTask(t, t.state === 'done' ? 'open' : 'done')); }
+  const mv = e.target.closest('[data-move]');
+  if (mv) { const t = taskOf(mv.closest('.tcard')); return t && change(() => moveTask(t, mv.dataset.move)); }
+  const t = e.target.closest('[data-view],[data-open],[data-board]');
   if (!t) return;
-  if (t.dataset.view) { view = t.dataset.view; shown = null; location.hash = view; render(); }
-  else { const n = find(t.dataset.open); if (n) show(n); }
+  if (t.dataset.board) { boardProject = t.dataset.board; view = 'board'; shown = null; location.hash = view; render(); window.scrollTo(0, 0); }
+  else if (t.dataset.view) { view = t.dataset.view; shown = null; location.hash = view; render(); }
+  else { const n = find(t.dataset.open); if (n) { show(n); window.scrollTo(0, 0); } }
 });
-async function load() {
+// Drag and drop between board columns (mouse); the buttons on each card do the same on touch screens.
+document.addEventListener('dragstart', (e) => { const c = e.target.closest && e.target.closest('.tcard'); if (c) e.dataTransfer.setData('text/plain', c.dataset.note + '\n' + c.dataset.i); });
+document.addEventListener('dragover', (e) => { const col = e.target.closest && e.target.closest('[data-drop]'); if (col) { e.preventDefault(); col.classList.add('over'); } });
+document.addEventListener('dragleave', (e) => { const col = e.target.closest && e.target.closest('[data-drop]'); if (col) col.classList.remove('over'); });
+document.addEventListener('drop', (e) => {
+  const col = e.target.closest && e.target.closest('[data-drop]');
+  if (!col) return;
+  e.preventDefault();
+  const [note, i] = e.dataTransfer.getData('text/plain').split('\n'), t = taskOf({dataset: {note, i}});
+  if (t && t.state !== col.dataset.drop) change(() => moveTask(t, col.dataset.drop)); else col.classList.remove('over');
+});
+async function load(keepStatus) {
   try {
     const fresh = await walk('');
-    await Promise.all(fresh.map(async (n) => parse(n, await (await fetch('/notes/' + n.path, {cache: 'no-store'})).text())));
+    await Promise.all(fresh.map(async (n) => {
+      const text = await (await fetch('/notes/' + n.path, {cache: 'no-store'})).text();
+      parse(n, text);
+      n.sum = await sha256(text);
+    }));
     notes = fresh;
-    $('#status').textContent = notes.length + ' Notizen';
+    if (!keepStatus) $('#status').textContent = notes.length + ' Notizen';
     const n = shown && find(shown);
     n ? show(n) : render();
   } catch (e) { $('#main').textContent = 'Fehler: ' + e.message; }
