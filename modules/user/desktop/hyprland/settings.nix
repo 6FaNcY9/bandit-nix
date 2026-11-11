@@ -41,7 +41,11 @@ in {
           hover_icon_on_border = true;
 
           col = {
-            active_border = rgb colors.base09;
+            # Apple rainbow, stripe order green→blue; Lua configs take a table, not "a b 45deg".
+            active_border = {
+              colors = map rgb [colors.base0B colors.base0A colors.base09 colors.base08 colors.base0E colors.base0D];
+              angle = 45;
+            };
             inactive_border = rgb colors.base03;
             nogroup_border = rgb colors.base08;
             nogroup_border_active = rgb colors.base0A;
