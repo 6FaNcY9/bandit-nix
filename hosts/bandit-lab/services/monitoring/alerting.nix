@@ -49,7 +49,7 @@
               conditions:
                 - evaluator: {type: ${op}, params: [${toString threshold}]}
     '');
-  backupUnits = "restic-backups-peer.service|minecraft-backup.service|postgresqlBackup.service";
+  backupUnits = "restic-backups-peer.service|restic-backups-mc-public.service|minecraft-backup.service|postgresqlBackup.service";
   # Datasource + dashboard provider + alert rules, file-provisioned so the
   # stack is reproducible from a fresh volume. NOTE: the result must contain
   # real files (cp -L), not symlinkJoin/linkFarm links — Docker bind-mounts
@@ -276,7 +276,7 @@
         severity = "critical";
         summary = "The {{ $labels.name }} has not fired for more than 36 hours";
         # A timer that has not fired since boot reports 0: count from boot then, so a reboot does not page.
-        expr = ''time() - (node_systemd_timer_last_trigger_seconds{name=~"restic-backups-peer.timer|minecraft-backup.timer|postgresqlBackup.timer"} > 0 or on(name) (node_systemd_timer_last_trigger_seconds{name=~"restic-backups-peer.timer|minecraft-backup.timer|postgresqlBackup.timer"} * 0 + on() group_left() max(node_boot_time_seconds)))'';
+        expr = ''time() - (node_systemd_timer_last_trigger_seconds{name=~"restic-backups-peer.timer|restic-backups-mc-public.timer|minecraft-backup.timer|postgresqlBackup.timer"} > 0 or on(name) (node_systemd_timer_last_trigger_seconds{name=~"restic-backups-peer.timer|restic-backups-mc-public.timer|minecraft-backup.timer|postgresqlBackup.timer"} * 0 + on() group_left() max(node_boot_time_seconds)))'';
         op = "gt";
         threshold = 129600;
         noData = "Alerting";

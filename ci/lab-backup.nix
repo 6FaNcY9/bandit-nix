@@ -13,6 +13,7 @@
   provisioningOf = cfg:
     lib.head (lib.splitString ":" (lib.findFirst (v: lib.hasSuffix ":/etc/grafana/provisioning:ro" v) (throw "no grafana provisioning volume") cfg.virtualisation.quadlet.containers.grafana.containerConfig.volumes));
   b = labOn.services.restic.backups.lab;
+  pub = labOff.services.restic.backups.mc-public;
   prepare = b.backupPrepareCommand;
   secretNames = lib.filter (n: lib.hasPrefix "restic-" n && !lib.hasPrefix "restic-peer-" n) (lib.attrNames labOn.sops.secrets);
   expectedSecrets = ["restic-password" "restic-repository" "restic-s3-access-key-id" "restic-s3-secret-access-key"];
@@ -30,11 +31,21 @@ in
   assert lib.assertMsg (lib.hasInfix "MC_UNIT=minecraft-server-paper MC_DATA=/srv/minecraft/paper /nix/store/" prepare) "the restic job must snapshot the nix-minecraft server (MC_UNIT/MC_DATA)";
   assert lib.assertMsg (lib.elem "minecraft-server-paper.service" labOn.systemd.services.restic-backups-lab.after && !(lib.elem "docker-minecraft.service" labOn.systemd.services.restic-backups-lab.after)) "the restic job runs after the nix-minecraft server, not the stopped Docker one";
   assert lib.assertMsg (!(lib.hasInfix " -p" prepare)) "no inline database password on a command line";
+  # The public world: its own job (a failed flush there must not fail the run that carries Vaultwarden), taken
+  # through the container-aware snapshot, into the peer repository, and nothing else in it.
+  assert lib.assertMsg (!(lib.hasInfix "mc-public" prepare) && !(lib.hasInfix "mc-public" labOff.services.restic.backups.peer.backupPrepareCommand)) "the public world must not be part of the lab or peer job";
+  assert lib.assertMsg (lib.hasInfix "MC_MACHINE=mc-public MC_UNIT=minecraft-server-paper MC_DATA=/srv/mc-public/data/paper" pub.backupPrepareCommand && lib.hasInfix "minecraft-snapshot" pub.backupPrepareCommand) "the public world must be captured through the save-flushing snapshot inside its container";
+  assert lib.assertMsg (pub.paths == ["/var/backup/restic-staging-mc-public"] && pub.repositoryFile == labOff.services.restic.backups.peer.repositoryFile && lib.hasPrefix "/run/secrets/" pub.passwordFile) "the public world's job backs up its staging copy only, into the peer repository";
   assert lib.assertMsg (labOn.systemd.timers ? restic-check && lib.hasInfix "--read-data-subset" labOn.systemd.services.restic-check.script) "the weekly integrity check must exist";
     pkgs.runCommand "lab-backup" {nativeBuildInputs = [pkgs.gnugrep];} ''
       # Missing backup metrics must alert once backups are on, and stay quiet
       # while they are off (the series do not exist yet).
       grep -q 'noDataState: Alerting' ${provisioningOf labOn}/alerting/bandit-lab.yaml
+      # A failed or stale public-world backup alerts like the others.
+      # An older bandit-craft ignores MC_MACHINE and would flush the PRIVATE server while copying the public world.
+      grep -q 'MC_MACHINE' "$(grep -o '/nix/store/[^ ]*/bin/minecraft-snapshot' ${pkgs.writeText "mc-public-backup-prepare" pub.backupPrepareCommand} | head -1)"
+      grep -q 'restic-backups-mc-public.service' ${provisioningOf labOff}/alerting/bandit-lab.yaml
+      grep -q 'restic-backups-mc-public.timer' ${provisioningOf labOff}/alerting/bandit-lab.yaml
       grep -q 'noDataState: OK' ${provisioningOf labOff}/alerting/bandit-lab.yaml
       ! grep -q 'noDataState: Alerting' ${provisioningOf labOff}/alerting/bandit-lab.yaml
       touch "$out"
