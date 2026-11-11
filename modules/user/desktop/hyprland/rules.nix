@@ -60,10 +60,11 @@
     }
     {
       # Flameshot's capture overlay must cover the screen untouched by tiling.
-      # Not pinned: a pinned window's fullscreen request was handed to the next
-      # focused window when the overlay closed (seen in socket2 events).
+      # Matched by title: Flameshot 14 maps with an empty class, so a class rule
+      # never floated it; the tiled overlay joined the focused tab group and its
+      # fullscreen passed to the next tab on close.
       name = "flameshot";
-      match.class = "^(flameshot)$";
+      match.title = "^(flameshot)$";
       float = true;
       move = "0 0";
       no_anim = true;
