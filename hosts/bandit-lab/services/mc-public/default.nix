@@ -75,7 +75,10 @@ in {
       services.tailscale = {
         enable = true;
         authKeyFile = "/var/lib/tailscale/authkey";
-        extraUpFlags = ["--ssh=false" "--advertise-tags=tag:mc-public"];
+        # --accept-dns=false: the tailnet has no DNS servers set, so MagicDNS would take over the
+        # container's systemd-resolved and leave public names unresolvable (api.playit.gg for the tunnel).
+        # This box reaches its peers by address, never by tailnet name, so it loses nothing.
+        extraUpFlags = ["--ssh=false" "--advertise-tags=tag:mc-public" "--accept-dns=false"];
       };
       # As for jerry-box: fail fast and retry, or a missing tailnet login holds the boot until the host kills the container.
       systemd.services.tailscaled-autoconnect.serviceConfig = {
