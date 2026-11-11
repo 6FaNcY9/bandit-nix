@@ -52,7 +52,8 @@ in {
       # R2 API token (object read and write on the one bucket).
       "aiia-create-s3-access-key-id" = {mode = "0400";};
       "aiia-create-s3-secret-access-key" = {mode = "0400";};
-      # Stage 2 (checkout):  "aiia-create-shopify-storefront-token"
+      # Stage 2 (checkout): private Storefront API token of the Headless channel.
+      "aiia-create-shopify-storefront-token" = {mode = "0400";};
       # Stage 3 (printing):  "aiia-create-shopify-admin-client-secret",
       #                      "aiia-create-gelato-webhook-secret"
       #                      (the Gelato key is the shop's "aiia-gelato-api-key")
@@ -69,6 +70,7 @@ in {
           TURNSTILE_SECRET=${config.sops.placeholder."aiia-create-turnstile-secret"}
           S3_ACCESS_KEY_ID=${config.sops.placeholder."aiia-create-s3-access-key-id"}
           S3_SECRET_ACCESS_KEY=${config.sops.placeholder."aiia-create-s3-secret-access-key"}
+          SHOPIFY_STOREFRONT_PRIVATE_TOKEN=${config.sops.placeholder."aiia-create-shopify-storefront-token"}
         '';
       };
 
@@ -125,8 +127,9 @@ in {
             S3_BUCKET = r2Bucket;
             PUBLIC_ASSET_BASE_URL = assetBase;
             TURNSTILE_EXPECTED_HOSTNAMES = ''["aiia.at"]'';
-            # Stage 2 (checkout): SHOPIFY_STORE_DOMAIN and, in the env template,
-            # SHOPIFY_STOREFRONT_PRIVATE_TOKEN.
+            # Stage 2 (checkout): stays off until the image carries real variant
+            # ids in config/shopify-variants.json (REPLACE_ME answers "not set up").
+            SHOPIFY_STORE_DOMAIN = "srdwjq-br.myshopify.com";
             # Stage 3 (printing): ORDERS_ENABLED = "true" plus the values listed
             # in the runbook. Until then every order route answers 404.
           };
