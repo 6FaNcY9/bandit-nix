@@ -1,6 +1,7 @@
 {pkgs, ...}: {
   home.packages = [
     pkgs.ffmpegthumbnailer
+    pkgs.kdePackages.okular
     pkgs.mpv
     pkgs.pcmanfm
     pkgs.poppler-utils
@@ -53,7 +54,7 @@
       enable = true;
       defaultApplications = {
         "inode/directory" = ["pcmanfm.desktop"];
-        "application/pdf" = ["nvim-pdf.desktop"];
+        "application/pdf" = ["okularApplication_pdf.desktop" "nvim-pdf.desktop"];
 
         "image/bmp" = ["viewnior.desktop"];
         "image/gif" = ["viewnior.desktop"];
