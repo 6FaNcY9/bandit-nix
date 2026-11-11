@@ -85,7 +85,7 @@ file name, rename the scheme to "Grey Console"):
 | background | `#0d0d0e` |
 | panel / bars | `#18181a` |
 | inactive border, separators | `#303034` |
-| dim text | `#808084` |
+| dim text | `#848488` (was #808084; raised for 4.5:1 on the panel) |
 | text | `#d0d0d0` |
 | focus / active (replaces blue) | `#00a99d` teal |
 | warning | `#fdb827` |
