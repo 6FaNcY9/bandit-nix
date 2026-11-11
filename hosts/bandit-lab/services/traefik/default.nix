@@ -67,6 +67,13 @@
           entryPoints = ["web"];
           service = "aiia";
         };
+        # Design generator (services/aiia-create): public like the shop. The web
+        # app in the pod is the only entry; it proxies to its API itself.
+        aiia-create = {
+          rule = "Host(`create.aiia.at`)";
+          entryPoints = ["web"];
+          service = "aiia-create";
+        };
         vaultwarden = {
           rule = "Host(`vault.atmosphaere.at`) || Host(`vault.bandit-lab.mrija.org`)";
           entryPoints = ["web"];
@@ -77,6 +84,7 @@
         grafana.loadBalancer.servers = [{url = "http://127.0.0.1:3000";}];
         mrija-archive.loadBalancer.servers = [{url = "http://127.0.0.1:8081";}];
         aiia.loadBalancer.servers = [{url = "http://127.0.0.1:2368";}];
+        aiia-create.loadBalancer.servers = [{url = "http://127.0.0.1:3080";}];
         vaultwarden.loadBalancer.servers = [{url = "http://127.0.0.1:8222";}];
       };
       # CrowdSec bouncer plugin: see the plugin stanza above.

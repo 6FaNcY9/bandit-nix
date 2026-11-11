@@ -33,6 +33,10 @@
         # both hostnames route to the same Traefik service.
         "aiia.at" = "http://localhost:80";
         "www.aiia.at" = "http://localhost:80";
+        # AiiA design generator (services/aiia-create), public like the shop.
+        # Mirror only: add the hostname in the dashboard first
+        # (docs/runbooks/aiia-create.md).
+        "create.aiia.at" = "http://localhost:80";
         "grafana.bandit-lab.mrija.org" = "http://localhost:80";
         "grafana.atmosphaere.at" = "http://localhost:80";
         "mail-archive.bandit-lab.mrija.org" = "http://localhost:80";

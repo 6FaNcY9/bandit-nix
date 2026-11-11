@@ -66,6 +66,14 @@ in
   "restic-backups-peer must order after the quadlet units and dump aiia-mysql with podman exec";
   assert lib.assertMsg (let s = lab.systemd.services.mrija-archive-sync; in !(lib.elem "mrija-archive.service" s.requires) && lib.elem "mrija-archive.service" s.wants)
   "mrija-archive-sync must only want the container: requires would stop the sync whenever the container restarts";
+  assert lib.assertMsg (lab.virtualisation.quadlet.pods.aiia-create.podConfig.publishPorts == ["127.0.0.1:3080:3000"])
+  "the aiia-create pod must publish the web app on loopback only";
+  assert lib.assertMsg (lib.all (n: lab.virtualisation.quadlet.containers.${n}.containerConfig.pull == "never") ["aiia-create-api" "aiia-create-web"])
+  "the aiia-create images are loaded by hand and must never be pulled";
+  assert lib.assertMsg (!(lab.virtualisation.quadlet.pods.aiia-create.podConfig ? networks) || lab.virtualisation.quadlet.pods.aiia-create.podConfig.networks == [])
+  "the aiia-create pod must not join the proxy network: redis and the API would be reachable from other containers";
+  assert lib.assertMsg (lab.services.traefik.dynamicConfigOptions.http.services.aiia-create.loadBalancer.servers == [{url = "http://127.0.0.1:3080";}])
+  "traefik must route create.aiia.at to the aiia-create pod's loopback port";
   assert lib.assertMsg (rootContainers == [])
   "every lab quadlet container must set containerConfig.user and no userns (found: ${toString rootContainers})";
   assert lib.assertMsg (podman.enable && !podman.dockerCompat && !podman.dockerSocket.enable)

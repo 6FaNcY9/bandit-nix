@@ -34,6 +34,7 @@ in {
     "${craft}/discord-admin"
     ./power.nix
     ./services/aiia
+    ./services/aiia-create
     ./services/auto-rebuild
     ./services/crowdsec
     ./services/health-check
