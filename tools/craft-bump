@@ -7,6 +7,13 @@
 set -euo pipefail
 
 repo=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)
+# Without REV: main as git sees it. `nix flake update` asks GitHub's API, and when that is rate limited it quietly
+# takes a cached, older main and the input moves backwards.
+want=${1:-$(git ls-remote https://github.com/6FaNcY9/bandit-craft.git refs/heads/main | cut -f1)}
+[[ -n $want ]] || {
+  echo "cannot read bandit-craft's main from GitHub" >&2
+  exit 1
+}
 git -C "$repo" fetch -q origin
 wt=$(mktemp -d /tmp/craft-bump-XXXX)
 git -C "$repo" worktree add -q --detach "$wt" origin/main
@@ -14,11 +21,7 @@ cd "$wt"
 
 rev() { jq -r '.nodes["bandit-craft"].locked.rev' flake.lock; }
 old=$(rev)
-if [[ $# -ge 1 ]]; then
-  nix flake lock --override-input bandit-craft "github:6FaNcY9/bandit-craft/$1"
-else
-  nix flake update bandit-craft
-fi
+nix flake lock --override-input bandit-craft "github:6FaNcY9/bandit-craft/$want"
 new=$(rev)
 if [[ $old == "$new" ]]; then
   echo "bandit-craft is already at ${new:0:7}; nothing to do (remove $wt with: git -C $repo worktree remove $wt)"
