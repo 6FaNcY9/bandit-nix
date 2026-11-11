@@ -47,7 +47,7 @@ still succeeds; restart it after the console is ready.
 | https://beszel.tail7facc9.ts.net | Beszel | 127.0.0.1:8090 | `lab-services` |
 | https://cockpit.tail7facc9.ts.net | Cockpit | https://127.0.0.1:9090 | `lab-services` |
 | https://comfyui.tail7facc9.ts.net | ComfyUI | 127.0.0.1:8188 | `lab-services` |
-| https://memory.tail7facc9.ts.net/mcp | Shared LLM memory (Basic Memory MCP) | 127.0.0.1:8765 | `lab-services` |
+| https://memory.tail7facc9.ts.net (page), `/mcp` (agents) | Shared LLM memory (Basic Memory) | 127.0.0.1:8766 | `lab-services` |
 | https://bandit-lab.tail7facc9.ts.net:8443 | Minecraft map | 127.0.0.1:8100 | `minecraft-panel-https` (bandit-craft), per-port serve, not a Service |
 | https://bandit-lab.tail7facc9.ts.net:8445 | mcbots dashboard | mcbots | `mcbots-https` (bandit-craft), per-port serve, not a Service |
 | https://bandit-lab.tail7facc9.ts.net:8446 | mcbots worker API | mcbots | `mcbots-https` (bandit-craft), per-port serve, not a Service |

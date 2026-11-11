@@ -54,4 +54,45 @@ in {
       OnUnitActiveSec = "2min";
     };
   };
+
+  # One loopback front for the Tailscale Service: the page for people at /,
+  # the notes read-only at /notes/, and the agents' MCP endpoint at /mcp.
+  systemd.services.memory-web = {
+    description = "Shared memory web page and MCP front";
+    wantedBy = ["multi-user.target"];
+    after = ["memory.service"];
+    serviceConfig = {
+      User = username;
+      StateDirectory = "memory-web";
+      Environment = ["XDG_DATA_HOME=/var/lib/memory-web" "XDG_CONFIG_HOME=/var/lib/memory-web"];
+      ExecStart = "${pkgs.caddy}/bin/caddy run --adapter caddyfile --config ${pkgs.writeText "memory-web.Caddyfile" ''
+        {
+        	admin off
+        	auto_https off
+        }
+        http://:8766 {
+        	bind 127.0.0.1
+        	@mcp path /mcp /mcp/*
+        	handle @mcp {
+        		reverse_proxy 127.0.0.1:8765 {
+        			flush_interval -1
+        		}
+        	}
+        	handle_path /notes/* {
+        		root * /srv/containers/memory/data/basic-memory
+        		file_server browse
+        	}
+        	handle {
+        		root * ${./ui}
+        		file_server
+        	}
+        }
+      ''}";
+      Restart = "on-failure";
+      NoNewPrivileges = true;
+      ProtectSystem = "strict";
+      ProtectHome = true;
+      PrivateTmp = true;
+    };
+  };
 }
