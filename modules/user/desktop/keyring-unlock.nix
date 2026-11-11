@@ -19,10 +19,8 @@ in {
       LoadCredentialEncrypted = "keyring:%h/.local/state/keyring.cred";
       # Two collections: "Default Keyring" (the alias) and "Login", where gh
       # (go-keyring) keeps its tokens and would prompt on every call.
-      ExecStart = [
-        "${pkgs.bash}/bin/bash -c '${keyringUnlock}/bin/keyring-unlock < \"$CREDENTIALS_DIRECTORY/keyring\"'"
-        "${pkgs.bash}/bin/bash -c '${keyringUnlock}/bin/keyring-unlock /org/freedesktop/secrets/collection/login < \"$CREDENTIALS_DIRECTORY/keyring\"'"
-      ];
+      # Both always run; the unit fails if either failed. The Login path is hardcoded for this laptop.
+      ExecStart = "${pkgs.bash}/bin/bash -c 'rc=0; ${keyringUnlock}/bin/keyring-unlock < \"$CREDENTIALS_DIRECTORY/keyring\" || rc=1; ${keyringUnlock}/bin/keyring-unlock /org/freedesktop/secrets/collection/login < \"$CREDENTIALS_DIRECTORY/keyring\" || rc=1; exit $rc'";
     };
     Install.WantedBy = ["graphical-session.target"];
   };

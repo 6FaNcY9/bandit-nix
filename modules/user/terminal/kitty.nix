@@ -15,7 +15,7 @@ in {
 
     settings = {
       # ── Ligatures ────────────────────────────────────────────
-      # JetBrains Mono's programming ligatures (=>, !=, >=) stay enabled.
+      # The font's programming ligatures (=>, !=, >=) stay enabled.
       disable_ligatures = "never";
 
       # ── Scrollback ─────────────────────────────────────────

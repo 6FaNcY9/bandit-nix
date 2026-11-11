@@ -116,7 +116,7 @@ in {
               active = rgb colors.base0C;
               inactive = rgb colors.base01;
               locked_active = rgb colors.base0E;
-              locked_inactive = rgb colors.base02;
+              locked_inactive = rgb colors.base01;
             };
           };
         };

@@ -58,6 +58,12 @@ in {
               done
             rm -f "$dir/$id"
           else
+            # Only floating windows: nothing to tile, and a full-size log would become the only tile.
+            read -r slots logs < <($jq -r --argjson id "$id" '
+              [.[] | select(.workspace.id == $id and (.floating | not))]
+              | "\([.[] | select(.class != "cockpit-log") | .grouped[0] // .address] | unique | length) \([.[] | select(.class == "cockpit-log")] | length)"
+            ' <<<"$clients")
+            [ "$slots" -gt 0 ] || exit 0
             set_layout master
             # The work window (most recently focused tiled non-log window) becomes master, never the log pane.
             # ignoremaster: a focused master stays; "master" would swap it out again.
@@ -70,10 +76,6 @@ in {
               hyprctl dispatch 'hl.dsp.layout("swapwithmaster ignoremaster")' >/dev/null
             fi
             # One tiled window or group alone and no log yet: add the log pane (opens right).
-            read -r slots logs < <($jq -r --argjson id "$id" '
-              [.[] | select(.workspace.id == $id and (.floating | not))]
-              | "\([.[] | select(.class != "cockpit-log") | .grouped[0] // .address] | unique | length) \([.[] | select(.class == "cockpit-log")] | length)"
-            ' <<<"$clients")
             if [ "$slots" -le 1 ] && [ "$logs" -eq 0 ]; then
               setsid -f ${pkgs.kitty}/bin/kitty --class cockpit-log journalctl -f >/dev/null 2>&1
             fi

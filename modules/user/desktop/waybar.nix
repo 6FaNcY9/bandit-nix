@@ -21,13 +21,17 @@
     name = "waybar-logs";
     runtimeInputs = [pkgs.jq pkgs.gawk pkgs.coreutils pkgs.gnused pkgs.gnugrep];
     text = ''
-      # A hung systemd or journal call must not hang the bar (124 is timeout's exit status).
-      tmo=""
-      hung() { [ $? -ne 124 ] || tmo="(journal timeout)"; }
-      sys=$(timeout 5 systemctl --failed --no-legend --plain) || { hung; sys=""; }
-      usr=$(timeout 5 systemctl --user --failed --no-legend --plain) || { hung; usr=""; }
-      errs=$(timeout 5 journalctl -p err --since -15min -q --no-pager -o cat) || { hung; errs=""; }
-      last=$(timeout 5 journalctl -p err -b -q --no-pager -n 5 -o short) || { hung; last=""; }
+      # A hung or failing systemd/journal call must not hang the bar or read as "all quiet":
+      # fail() records which call broke (124 is timeout's exit status) and the bar shows "health ?".
+      bad=""
+      fail() {
+        local rc=$?
+        if [ "$rc" -eq 124 ]; then bad+="$1 timed out"$'\n'; else bad+="$1 failed (exit $rc)"$'\n'; fi
+      }
+      sys=$(timeout 5 systemctl --failed --no-legend --plain) || { fail "systemctl"; sys=""; }
+      usr=$(timeout 5 systemctl --user --failed --no-legend --plain) || { fail "systemctl --user"; usr=""; }
+      errs=$(timeout 5 journalctl -p err --since -15min -q --no-pager -o cat) || { fail "journalctl (15 min)"; errs=""; }
+      last=$(timeout 5 journalctl -p err -b -q --no-pager -n 5 -o short) || { fail "journalctl (this boot)"; last=""; }
       failed=$(printf '%s\n%s\n' "$sys" "$usr" | awk 'NF {print $1}')
       units=$(printf '%s' "$failed" | grep -c . || true)
       errors=$(printf '%s' "$errs" | grep -c . || true)
@@ -36,17 +40,19 @@
         class=failed text="$units FAILED · $(awk 'NR == 1' <<<"$failed")"
       elif [ "$errors" -gt 0 ]; then
         class=warn text="$errors ERR 15m"
+      elif [ -n "$bad" ]; then
+        class=warn text="health ?"
       else
         class=ok text="all quiet"
       fi
       jq -cn --arg text "$text" --arg class "$class" --arg units "$units" --arg errors "$errors" \
-        --arg failed "$failed" --arg recent "$recent" --arg tmo "$tmo" '
+        --arg failed "$failed" --arg recent "$recent" --arg bad "$bad" '
         def esc: gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
         {
           text: ($text | esc),
           tooltip: ("Failed units: \($units)\n" + (if $failed == "" then "  none" else ($failed | esc | split("\n") | map("  " + .) | join("\n")) end)
             + "\n\nJournal errors, last 15 min: \($errors)\n\nLast errors this boot:\n" + ($recent | esc)
-            + (if $tmo == "" then "" else "\n" + $tmo end)),
+            + (if $bad == "" then "" else "\n\nHealth check incomplete:\n" + ($bad | rtrimstr("\n") | esc | split("\n") | map("  " + .) | join("\n")) end)),
           class: $class
         }'
     '';

@@ -69,9 +69,11 @@ and the per-window icons.
 `pkgs.nerd-fonts._0xproto`, family `0xProto Nerd Font Mono`. All Stylix
 slots (monospace, sansSerif, serif) use this one family, Mono variant,
 size 18 as now. It ships Regular, Bold and Italic only, so nothing may ask
-for Medium/SemiBold (bold clock = Bold). `ci/theme-contract.nix:31` asserts
-the font name and changes with it; the wallpaper render
-(`lib/repository.nix` resvg `--use-fonts-dir` JetBrains) is left alone.
+for Medium/SemiBold (bold clock = Bold). The legacy `workstationTheme` in
+`lib/repository.nix` (JetBrainsMono, radius 8) and `ci/theme-contract.nix`,
+which asserts it, are left untouched on purpose: they do not drive Stylix.
+The wallpaper render (`lib/repository.nix` resvg `--use-fonts-dir` JetBrains)
+is left alone too.
 Thunderbird and Firefox read the sansSerif/serif slots; they show JetBrains
 Mono today and will show 0xProto. That is intended.
 
@@ -107,8 +109,9 @@ rainbow line keeps all six colours since it is one thin line.
 ### Shape
 
 - Corner radius 2 px everywhere: windows, group tabs, rofi, mako, GTK
-  (`lib/repository.nix:94`, `rofi-wayland.nix:31,114,125,155`,
-  `mako.nix:20`, `ci/theme-contract.nix:28` asserts 8 today).
+  (`rofi-wayland.nix:31,114,125,155`, `mako.nix:20`). The legacy
+  `workstationTheme` radius 8 (`lib/repository.nix:94`) and its assertion
+  (`ci/theme-contract.nix:28`) stay as they are: they do not drive Stylix.
 - Borders 3 px. Active border solid teal, inactive `#303034`.
 - Gaps: 6 px to the screen edge and 6 px between windows
   (builder's call: Hyprland `gaps_out = 6`, `gaps_in = 3`).
@@ -141,13 +144,14 @@ At 2256x1504, scale 1:
     last 15 minutes, in yellow `3 ERR 15m`. Neither: `all quiet` in dim text.
     Click keeps today's action (open the log view).
   - right, all text: privacy as purple text `MIC` / `SCREEN`, only while
-    in use (replaces the image-based privacy module; `waybar-privacy` polls
-    `pw-dump`: MIC = running `Stream/Input/Audio` node, which also fires for
-    level meters such as pavucontrol; SCREEN = running `Video/Source` node
-    named `xdph*`, not yet seen on a real share), network
+    in use (replaces the image-based privacy module), network
     (glyph + `↓35.7k ↑13.1k`), `CPU 19%`, `VOL 10%`, `BT`, battery
     (glyph + `80%`), tray drawer. The existing hover drawers (IPs/containers,
     memory/temperature/disk/power) stay, with text labels.
+    - Privacy detail: `waybar-privacy` polls `pw-dump`. MIC = running
+      `Stream/Input/Audio` node (also fires for level meters such as
+      pavucontrol). SCREEN = running `Video/Source` node named `xdph*`, not
+      yet seen on a real share.
   - Normal values in dim text; only warning/critical states get colour.
 
 Workspace names (builder keeps the existing 1–9 categories from
@@ -169,11 +173,16 @@ dyslexia — my call): `1 term`, `2 web`, `3 doc`, `4 game`, `5 code`,
 - **As built:** Hyprland 0.56.2 switches one workspace at runtime
   (`hl.workspace_rule` via `hyprctl eval`, back to `dwindle` on toggle off), so
   no global toggle. The focused window is made master with
-  `swapwithmaster ignoremaster`. The log kitty has `no_initial_focus` and
-  `group = "deny"`, so focus stays on the work window and the log is never
-  swapped into master. Script: `~/.local/bin/hypr-cockpit`
+  `swapwithmaster ignoremaster`; the script, not a window rule, keeps the log
+  pane from ever becoming master. The log kitty has `no_initial_focus`, which
+  only keeps focus on the work window, and `group = "deny"`, which keeps it
+  out of a tab group. A workspace with only floating windows is left alone.
+  Script: `~/.local/bin/hypr-cockpit`
   (`modules/user/desktop/hyprland/scripts.nix`); state in
-  `$XDG_RUNTIME_DIR/hypr-cockpit/<workspace id>`.
+  `$XDG_RUNTIME_DIR/hypr-cockpit/<workspace id>`. A config reload
+  (`Super+Shift+C` or a Home Manager switch) drops the workspace rule, so
+  Cockpit ends and the log pane stays as an ordinary tile until `Super+C` is
+  pressed again.
 
 ### Rofi, mako, GTK, Kvantum
 
@@ -194,7 +203,8 @@ stays red. Mako critical stays a red border with normal text.
 ## Checks
 
 - `Hyprland --verify-config` on the generated `hyprland.lua`.
-- `checks.theme-contract` with the new radius and font.
+- `checks.theme-contract` stays unchanged: it covers the legacy
+  `workstationTheme`, which this work does not touch.
 - Run both Waybars for 5 s, screenshot at 2256 px: nothing clipped, one icon
   size, no fallback glyphs.
 - `fc-match` for the chosen family resolves to the Nerd Font Mono file.
