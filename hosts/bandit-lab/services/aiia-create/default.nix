@@ -147,6 +147,10 @@ in {
           # The image's own unprivileged user (uid 100, gid 101).
           user = "100:101";
           memory = "512m";
+          # The image's own HEALTHCHECK is off: its first run, a second after
+          # the start, fails as a transient unit, and the deploy counts that as
+          # a failed switch and rolls back (2026-11-11).
+          healthCmd = "none";
           # Next.js writes its image and fetch cache under /app/.next/cache.
           readOnly = false;
           environments = {
