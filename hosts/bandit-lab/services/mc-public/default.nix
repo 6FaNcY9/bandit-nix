@@ -29,8 +29,12 @@
   # tailnet peers through the uplink and never to the host. The last rule is the other direction: nothing
   # is forwarded into the box unless the box opened the connection, so the game port does not depend on
   # the container's own firewall alone (replies to its NATed traffic are not NEW and pass).
+  # One exception sits above the refuse: replies to connections the host itself opens to the box (the
+  # tunnel agent -> Velocity on 10.251.1.2:25565) must come back, or the handshake never completes. The box
+  # still cannot open anything to the host (a NEW packet from the veth is not ESTABLISHED and hits refuse).
   rules = [
     "-I nixos-fw 1 -i ${veth} -j nixos-fw-refuse"
+    "-I nixos-fw 1 -i ${veth} -m conntrack --ctstate ESTABLISHED,RELATED -j nixos-fw-accept"
     "-I DOCKER-USER 1 -i ${veth} -d 192.168.0.0/24 -j DROP" # the LAN
     "-I DOCKER-USER 1 -i ${veth} -d 10.250.77.0/29 -j DROP" # the mcbots bridge (bandit-craft minecraft/default.nix mcbotsSubnet)
     "-I DOCKER-USER 1 -i ${veth} ! -o ${uplink} -j DROP" # everything else that is not the uplink
