@@ -26,6 +26,9 @@
   svg text { fill:var(--fg); font-size:12px; pointer-events:none; }
   svg line { stroke:var(--line); }
   svg circle { cursor:pointer; }
+  .task { text-decoration:none; color:var(--fg); text-align:left; }
+  input { font:inherit; color:var(--fg); background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:6px 10px; width:min(100%, 26em); }
+  form { margin:8px 0; }
 </style>
 <header>
   <h1>Gedächtnis</h1>
@@ -39,7 +42,7 @@
 // shortcut: loads every note into the browser, fine for some hundred notes; give the lab an index endpoint when it gets slow.
 const $ = (s) => document.querySelector(s);
 const esc = (s) => s.replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let notes = [], view = ['notes', 'map'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'projects';
+let notes = [], shown = null, view = ['notes', 'map'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'projects';
 
 async function walk(dir) {
   const res = await fetch('/notes/' + dir, {headers: {Accept: 'application/json'}});
@@ -70,6 +73,38 @@ function parse(n, text) {
 }
 const section = (n, name) => ((new RegExp('^## ' + name + '\\n([\\s\\S]*?)(?=^## |\\Z)', 'm').exec(n.body + '\n## ') || [])[1] || '').trim();
 const bullets = (t) => t.split('\n').filter((l) => /^\s*[-*] /.test(l)).map((l) => l.replace(/^\s*[-*] /, ''));
+
+// The page edits notes through the same MCP endpoint the agents use (/mcp, same origin).
+let session;
+async function rpc(body) {
+  const headers = {'Content-Type': 'application/json', Accept: 'application/json, text/event-stream'};
+  if (session) headers['mcp-session-id'] = session;
+  const res = await fetch('/mcp', {method: 'POST', headers, body: JSON.stringify(body)});
+  if (body.method === 'initialize') session = res.headers.get('mcp-session-id');
+  const text = await res.text();
+  if (!res.ok) throw new Error('Speicher: ' + res.status);
+  const data = text.split(/\r?\n/).filter((l) => l.startsWith('data:')).map((l) => l.slice(5)).pop() || text;
+  return data.trim() ? JSON.parse(data) : null;
+}
+async function tool(name, args) {
+  if (!session) {
+    await rpc({jsonrpc: '2.0', id: 0, method: 'initialize', params: {protocolVersion: '2025-06-18', capabilities: {}, clientInfo: {name: 'memory-page', version: '1'}}});
+    await rpc({jsonrpc: '2.0', method: 'notifications/initialized'});
+  }
+  const r = await rpc({jsonrpc: '2.0', id: 1, method: 'tools/call', params: {name, arguments: {project: 'main', ...args}}});
+  if (!r || r.error || r.result.isError) throw new Error(r && r.result ? r.result.content[0].text.split('\n')[0] : 'keine Antwort');
+}
+const taskLine = (t) => '- [' + (t.done ? 'x' : ' ') + '] ' + t.text;
+// Flip one checkbox line; fails (and says so) if the same line is in the note twice.
+const toggleTask = (n, i) => tool('bm_edit', {identifier: n.path, command: 'find_replace', find_text: taskLine(n.tasks[i]), content: taskLine({...n.tasks[i], done: !n.tasks[i].done})});
+function addTask(project, text) {
+  const n = find('projects/' + project + '.md'), line = '- [ ] ' + text.replace(/\s+/g, ' ').trim();
+  if (!n) return tool('bm_write', {title: project, directory: 'projects', content: '## Tasks\n' + line + '\n'});
+  return /^## Tasks\s*$/m.test(n.body)
+    ? tool('bm_edit', {identifier: n.path, command: 'find_replace', find_text: '## Tasks', content: '## Tasks\n' + line})
+    : tool('bm_edit', {identifier: n.path, command: 'append', content: '\n## Tasks\n' + line + '\n'});
+}
+const taskButton = (n, i) => `<button class="link task" data-note="${esc(n.path)}" data-task="${i}">${n.tasks[i].done ? '☑' : '☐'} ${esc(n.tasks[i].text)}</button>`;
 
 // Small Markdown renderer: everything is escaped first, so note text can never inject HTML.
 function md(src) {
@@ -109,7 +144,8 @@ function projects() {
     return `<div class="card"><h2>${esc(name)}</h2>
       <div class="dim">Zuletzt: ${esc(when)}${devices ? ' · Geräte: ' + esc(devices) : ''}${p.note ? ' · ' + open(p.note).replace(/>[^<]*</, '>Projekt-Notiz<') : ''}</div>
       ${last ? '<p><b>Ziel:</b> ' + esc(section(last, 'Goal').replace(/^[-*] /gm, '').split('\n')[0] || '') + '</p>' : ''}
-      ${tasks.length ? '<b>Aufgaben:</b> ' + (tasks.length - todo.length) + ' von ' + tasks.length + ' erledigt<ul>' + todo.map((t) => '<li>☐ ' + esc(t.text) + '</li>').join('') + '</ul>' : ''}
+      ${tasks.length ? '<b>Aufgaben:</b> ' + (tasks.length - todo.length) + ' von ' + tasks.length + ' erledigt<ul>' + tasks.map((t, i) => t.done ? '' : '<li>' + taskButton(p.note, i) + '</li>').join('') + '</ul>' : ''}
+      <form data-add="${esc(name)}"><input name="text" placeholder="Neue Aufgabe …" required> <button>Hinzufügen</button></form>
       ${openItems.length ? '<b>Offen laut letzter Sitzung:</b><ul>' + openItems.map((b) => '<li>' + esc(b) + '</li>').join('') + '</ul>' : ''}
       ${p.sessions.length ? '<details><summary>' + p.sessions.length + ' Sitzung(en)</summary><ul>' +
         p.sessions.map((s) => `<li>${esc(s.day)} · ${esc(s.device)} · ${open(s).replace(/>[^<]*</, '>ansehen<')}</li>`).join('') + '</ul></details>' : ''}
@@ -153,25 +189,39 @@ function map() {
 
 function show(n) {
   $('#main').innerHTML = `<p><button data-view="${view}">← zurück</button></p><div class="card"><h2>${esc(n.title)}</h2>
-    <div class="dim">${esc(n.path)} · geändert ${esc(n.changed.slice(0, 16).replace('T', ' '))}</div>${md(n.body)}</div>`;
+    <div class="dim">${esc(n.path)} · geändert ${esc(n.changed.slice(0, 16).replace('T', ' '))}</div>${n.tasks.length ? '<ul>' + n.tasks.map((t, i) => '<li>' + taskButton(n, i) + '</li>').join('') + '</ul><hr>' : ''}${md(n.body)}</div>`;
+  shown = n.path;
 }
 function render() {
   document.querySelectorAll('header button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.view === view));
   $('#main').innerHTML = {projects, notes: list, map}[view]();
 }
+async function change(action) {
+  try { await action; await load(); }
+  catch (e) { $('#status').textContent = 'Nicht gespeichert: ' + e.message; }
+}
+document.addEventListener('submit', (e) => {
+  e.preventDefault();
+  change(addTask(e.target.dataset.add, new FormData(e.target).get('text')));
+});
 document.addEventListener('click', (e) => {
+  const task = e.target.closest('[data-task]');
+  if (task) return change(toggleTask(find(task.dataset.note), +task.dataset.task));
   const t = e.target.closest('[data-view],[data-open]');
   if (!t) return;
-  if (t.dataset.view) { view = t.dataset.view; location.hash = view; render(); }
+  if (t.dataset.view) { view = t.dataset.view; shown = null; location.hash = view; render(); }
   else { const n = find(t.dataset.open); if (n) show(n); }
 });
-(async () => {
+async function load() {
   try {
-    notes = await walk('');
-    await Promise.all(notes.map(async (n) => parse(n, await (await fetch('/notes/' + n.path)).text())));
+    const fresh = await walk('');
+    await Promise.all(fresh.map(async (n) => parse(n, await (await fetch('/notes/' + n.path, {cache: 'no-store'})).text())));
+    notes = fresh;
     $('#status').textContent = notes.length + ' Notizen';
-    render();
+    const n = shown && find(shown);
+    n ? show(n) : render();
   } catch (e) { $('#main').textContent = 'Fehler: ' + e.message; }
-})();
+}
+load();
 </script>
 </html>
