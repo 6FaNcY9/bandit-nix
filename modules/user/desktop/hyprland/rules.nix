@@ -66,20 +66,68 @@
       size = "800 560";
       center = true;
     }
+    # Fixed workspaces; the waybar glyphs in ../waybar.nix follow this layout.
     {
-      name = "firefox-workspace";
-      match.class = "^(firefox)$";
-      workspace = "1";
+      name = "web";
+      match.class = "^(firefox|brave-browser)$";
+      workspace = "2";
     }
     {
-      name = "pcmanfm-workspace";
-      match.class = "^(pcmanfm)$";
+      name = "docs";
+      match.class = "^(org.kde.okular|obsidian|libreoffice.*|soffice.*)$";
       workspace = "3";
     }
     {
-      name = "thunderbird-workspace";
-      match.class = "^(thunderbird)$";
+      # The main window tiles by default; only its title starts with the version.
+      name = "prism";
+      match.class = "^(org.prismlauncher.PrismLauncher)$";
       workspace = "4";
+    }
+    {
+      # Mod downloads, instance settings, console and crash log float.
+      name = "prism-dialogs";
+      match.class = "^(org.prismlauncher.PrismLauncher)$";
+      match.title = "negative:^Prism Launcher [0-9].*$";
+      float = true;
+      center = true;
+    }
+    {
+      # hypridle locks after 600 s; AFK in game must not lock the session.
+      name = "minecraft";
+      match.class = "^(com.mojang.minecraft.*|Minecraft.*)$";
+      workspace = "4";
+      fullscreen = true;
+      idle_inhibit = "focus";
+    }
+    {
+      # Started in the background; must not steal focus.
+      name = "comms";
+      match.class = "^(thunderbird|vesktop)$";
+      workspace = "6 silent";
+    }
+    {
+      name = "files";
+      match.class = "^(pcmanfm)$";
+      workspace = "7";
+    }
+    {
+      name = "media";
+      match.class = "^(mpv)$";
+      workspace = "8";
+    }
+    {
+      name = "scrcpy";
+      match.class = "^(.scrcpy-wrapped|scrcpy)$";
+      workspace = "9";
+      float = true;
+      center = true;
+    }
+    {
+      name = "bitwarden";
+      match.class = "^(Bitwarden|bitwarden)$";
+      float = true;
+      size = "1000 700";
+      center = true;
     }
   ];
 in {
