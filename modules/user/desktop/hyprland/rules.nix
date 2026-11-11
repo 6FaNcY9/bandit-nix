@@ -85,7 +85,14 @@
       size = "800 560";
       center = true;
     }
-    # Fixed workspaces; the waybar glyphs in ../waybar.nix follow this layout.
+    {
+      # Cockpit log pane (hypr-cockpit): auto_group must not turn it into a tab.
+      name = "cockpit-log";
+      match.class = "^cockpit-log$";
+      group = "deny";
+      tile = true;
+    }
+    # Fixed workspaces; the waybar workspace labels in ../waybar.nix follow this layout.
     {
       name = "web";
       match.class = "^(firefox|brave-browser)$";

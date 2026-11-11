@@ -33,6 +33,48 @@ in {
         '';
       };
 
+      # ─── Cockpit (Mod+C): master layout with a log pane, per workspace ───
+      ".local/bin/hypr-cockpit" = {
+        executable = true;
+        text = ''
+          #!/usr/bin/env bash
+          # Spike, Hyprland 0.56.2: a workspace_rule with layout re-tiles a live workspace at once, so Cockpit is per workspace.
+          set -euo pipefail
+          jq=${pkgs.jq}/bin/jq
+          dir="''${XDG_RUNTIME_DIR:-/tmp}/hypr-cockpit"
+          ws=$(hyprctl activeworkspace -j)
+          id=$($jq .id <<<"$ws")
+          # Empty workspace or a fullscreen window: nothing to do.
+          [ "$($jq '.windows > 0 and (.hasfullscreen | not)' <<<"$ws")" = true ] || exit 0
+          set_layout() { hyprctl eval "hl.workspace_rule({ workspace = \"$id\", layout = \"$1\" })" >/dev/null; }
+          clients=$(hyprctl clients -j)
+
+          # A state file without the master layout is stale: a config reload drops the rule.
+          if [ -e "$dir/$id" ] && [ "$($jq -r .tiledLayout <<<"$ws")" = master ]; then
+            set_layout dwindle
+            $jq -r --argjson id "$id" '.[] | select(.workspace.id == $id and .class == "cockpit-log") | .address' <<<"$clients" |
+              while read -r addr; do
+                hyprctl dispatch "hl.dsp.window.close({ window = \"address:$addr\" })" >/dev/null
+              done
+            rm -f "$dir/$id"
+          else
+            set_layout master
+            # ignoremaster: a focused master stays; "master" would swap it out again.
+            hyprctl dispatch 'hl.dsp.layout("swapwithmaster ignoremaster")' >/dev/null
+            # One tiled window or group alone and no log yet: add the log pane (opens right).
+            read -r slots logs < <($jq -r --argjson id "$id" '
+              [.[] | select(.workspace.id == $id and (.floating | not))]
+              | "\([.[] | select(.class != "cockpit-log") | .grouped[0] // .address] | unique | length) \([.[] | select(.class == "cockpit-log")] | length)"
+            ' <<<"$clients")
+            if [ "$slots" -le 1 ] && [ "$logs" -eq 0 ]; then
+              setsid -f ${pkgs.kitty}/bin/kitty --class cockpit-log journalctl -f >/dev/null 2>&1
+            fi
+            mkdir -p "$dir"
+            touch "$dir/$id"
+          fi
+        '';
+      };
+
       # ─── Shortcut cheatsheet launcher (Mod+F1) ────────────
       ".local/bin/hyprland-cheatsheet-show" = {
         executable = true;
@@ -85,6 +127,7 @@ in {
             Mod+V               next window opens below
             Mod+B               next window opens right
             Mod+Ctrl+E          swap split branches
+            Mod+C               cockpit: master + log on/off
             Mod+S               toggle tab group
             Mod+Ctrl+S          lock active group
             Mod+P               toggle pseudotile

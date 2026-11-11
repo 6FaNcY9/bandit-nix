@@ -98,6 +98,7 @@
 
     (bind "${mod} + SHIFT + q" "hl.dsp.window.close()" "close window")
     (execBinding "${mod} + SHIFT + c" "hyprctl reload" "reload Hyprland config")
+    (execBinding "${mod} + c" "~/.local/bin/hypr-cockpit" "cockpit: master + log on/off")
     (bind "${mod} + r" ''hl.dsp.submap("resize")'' "enter resize mode")
     (execBinding "${mod} + SHIFT + x" "${pkgs.hyprlock}/bin/hyprlock" "lock screen")
 
