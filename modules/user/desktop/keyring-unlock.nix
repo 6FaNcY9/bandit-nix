@@ -17,7 +17,12 @@ in {
     Service = {
       Type = "oneshot";
       LoadCredentialEncrypted = "keyring:%h/.local/state/keyring.cred";
-      ExecStart = "${pkgs.bash}/bin/bash -c '${keyringUnlock}/bin/keyring-unlock < \"$CREDENTIALS_DIRECTORY/keyring\"'";
+      # Two collections: "Default Keyring" (the alias) and "Login", where gh
+      # (go-keyring) keeps its tokens and would prompt on every call.
+      ExecStart = [
+        "${pkgs.bash}/bin/bash -c '${keyringUnlock}/bin/keyring-unlock < \"$CREDENTIALS_DIRECTORY/keyring\"'"
+        "${pkgs.bash}/bin/bash -c '${keyringUnlock}/bin/keyring-unlock /org/freedesktop/secrets/collection/login < \"$CREDENTIALS_DIRECTORY/keyring\"'"
+      ];
     };
     Install.WantedBy = ["graphical-session.target"];
   };
