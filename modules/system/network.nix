@@ -44,4 +44,8 @@
       "216.239.35.4" # Google
     ];
   };
+
+  # ply.gg (playit tunnel of the public Minecraft world) fails DNSSEC validation, so resolved refuses it.
+  # A negative trust anchor skips validation for that domain only.
+  environment.etc."dnssec-trust-anchors.d/ply.gg.negative".text = "ply.gg\n";
 }
