@@ -10,6 +10,7 @@
     ./waybar.nix
     ./libreoffice.nix
     ./powermenu.nix
+    ./minecraft-keys.nix
     ./keybinds-menu.nix
     ./obsidian.nix
     ./discord.nix

@@ -100,6 +100,7 @@
 
     (execBinding "XF86PowerOff" "~/.local/bin/powermenu" "power menu")
     (execBinding "${mod} + Escape" "~/.local/bin/powermenu" "power menu")
+    (execBinding "${mod} + m" "~/.local/bin/mc-keys" "Minecraft key help")
 
     (execBinding "${mod} + F1" "~/.local/bin/hyprland-cheatsheet-show" "shortcut cheatsheet")
     (execBinding "${mod} + F2" "~/.local/bin/keybinds-menu" "keybinding search (rofi, incl. Neovim)")
