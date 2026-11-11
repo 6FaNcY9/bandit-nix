@@ -121,7 +121,8 @@ At 2256x1504, scale 1:
 - **Top bar**, 48 px:
   - left: `bandit │ 1 term │ 2 web │ …` — host name as text (no NixOS glyph),
     then workspaces as `N name`, only occupied ones plus the active one
-    (dwm style). Active one in text colour with a 3 px six-colour rainbow
+    (dwm style); the special (scratchpad) workspace stays hidden, workspaces
+    above 9 show `+`. Active one in text colour with a 3 px six-colour rainbow
     line under it; others dim. No window icons.
   - centre: clock `WED 11 · 19:18`, bold.
   - right: title of the focused window, at most 32 characters. Waybar
@@ -140,7 +141,10 @@ At 2256x1504, scale 1:
     last 15 minutes, in yellow `3 ERR 15m`. Neither: `all quiet` in dim text.
     Click keeps today's action (open the log view).
   - right, all text: privacy as purple text `MIC` / `SCREEN`, only while
-    in use (replaces the image-based privacy module), network
+    in use (replaces the image-based privacy module; `waybar-privacy` polls
+    `pw-dump`: MIC = running `Stream/Input/Audio` node, which also fires for
+    level meters such as pavucontrol; SCREEN = running `Video/Source` node
+    named `xdph*`, not yet seen on a real share), network
     (glyph + `↓35.7k ↑13.1k`), `CPU 19%`, `VOL 10%`, `BT`, battery
     (glyph + `80%`), tray drawer. The existing hover drawers (IPs/containers,
     memory/temperature/disk/power) stay, with text labels.
@@ -162,9 +166,14 @@ dyslexia — my call): `1 term`, `2 web`, `3 doc`, `4 game`, `5 code`,
   stack on the right. If the workspace has no other window, the toggle opens
   a kitty with `journalctl -f` on the right.
 - **Toggle off:** back to dwindle; the log kitty that Cockpit opened closes.
-- If Hyprland 0.56.2 cannot switch the layout of one workspace at runtime,
-  a global toggle is acceptable (my call; the owner works on one workspace
-  at a time).
+- **As built:** Hyprland 0.56.2 switches one workspace at runtime
+  (`hl.workspace_rule` via `hyprctl eval`, back to `dwindle` on toggle off), so
+  no global toggle. The focused window is made master with
+  `swapwithmaster ignoremaster`. The log kitty has `no_initial_focus` and
+  `group = "deny"`, so focus stays on the work window and the log is never
+  swapped into master. Script: `~/.local/bin/hypr-cockpit`
+  (`modules/user/desktop/hyprland/scripts.nix`); state in
+  `$XDG_RUNTIME_DIR/hypr-cockpit/<workspace id>`.
 
 ### Rofi, mako, GTK, Kvantum
 
