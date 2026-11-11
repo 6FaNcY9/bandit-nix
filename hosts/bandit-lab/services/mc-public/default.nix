@@ -20,6 +20,9 @@
   uidBase = 589824;
   owner = toString uidBase;
   authkey = "/var/lib/nixos-containers/mc-public/var/lib/tailscale/authkey";
+  # The chat bridge's Discord token (bandit-craft minecraft-public reads /var/lib/discord-bridge/token inside; the
+  # check keeps the two in step). The only Discord secret in the box: it can read and write #ingame-chat.
+  bridgeToken = "/var/lib/nixos-containers/mc-public/var/lib/discord-bridge/token";
   # The world of record lives outside the container's rootfs, so removing the container never removes it.
   worldDir = "/srv/mc-public/data";
   # Each rule goes to the top of its chain. nixos-fw: nothing from the veth reaches a host address, whatever
@@ -64,6 +67,7 @@
   };
 in {
   sops.secrets."mc-public-tailscale-authkey" = {};
+  sops.secrets."discord-bridge-token" = {};
 
   containers.mc-public = {
     autoStart = true;
@@ -199,6 +203,7 @@ in {
       script = ''
         [ -d ${worldDir} ] || install -d -m 0755 -o ${owner} -g ${owner} ${worldDir}
         install -D -m 0400 -o ${owner} -g ${owner} ${config.sops.secrets."mc-public-tailscale-authkey".path} ${authkey}
+        install -D -m 0400 -o ${owner} -g ${owner} ${config.sops.secrets."discord-bridge-token".path} ${bridgeToken}
       '';
     };
   };
