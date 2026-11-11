@@ -58,7 +58,7 @@
   rows = [
     ["kampf" "↑" "PvP AN · Kill Aura, Totem, Gapple, Crits"]
     ["kampf" "↓" "PvP AUS"]
-    ["kampf" "Alt+C" "Crystal Aura · Kristalle setzen + zünden"]
+    ["kampf" "Maus hinten" "Crystal Aura · Kristalle setzen + zünden"]
     ["kampf" "Alt+X" "Surround · Obsidian um die Füße"]
     ["kampf" "Alt+Y" "Self Trap · Obsidian über den Kopf"]
     ["kampf" "Alt+Z" "Auto Trap · Gegner einsperren"]
@@ -72,7 +72,7 @@
     ["werkzeug" "H" "Air Place · Block in die Luft"]
     ["werkzeug" "N" "Safe Walk · nicht von Kanten fallen"]
     ["werkzeug" "," "Flight · fliegen"]
-    ["werkzeug" "Maus hinten" "Free Look · halten = umschauen"]
+    ["werkzeug" "Alt+C" "Free Look · halten, C zuerst loslassen"]
     ["sehen" "J" "ESP · Spieler und Mobs markieren"]
     ["sehen" "K" "Storage ESP · Kisten finden"]
     ["sehen" "I" "X-Ray"]
