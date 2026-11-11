@@ -20,6 +20,7 @@
     cockpit = "https+insecure://127.0.0.1:9090"; # self-signed cert on loopback
     ntopng = "http://127.0.0.1:3003"; # services/ntopng.nix
     comfyui = "http://127.0.0.1:8188"; # services/comfyui, Jerry may reach this one (policy grant svc:comfyui)
+    memory = "http://127.0.0.1:8765"; # services/memory, MCP endpoint at /mcp (no auth of its own: the policy grant is the access control)
   };
   serve = name: target: ''
     if ! timeout 30 tailscale serve --service=svc:${name} --https=443 ${target}; then

@@ -37,6 +37,8 @@ in {
     "/srv/containers/aiia/content-data"
     # Mrija archive mail; the SQLite index is snapshotted into staging.
     "/srv/containers/mrija-archive/maildir"
+    # Shared LLM memory notes (plain Markdown; the index is rebuildable).
+    "/srv/containers/memory/data"
   ];
 
   # Consistent snapshots, taken just before restic reads the staging area.

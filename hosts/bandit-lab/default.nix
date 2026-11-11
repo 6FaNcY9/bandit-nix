@@ -21,6 +21,7 @@ in {
     ./services/ntopng.nix
     ./services/beszel
     ./services/vaultwarden
+    ./services/memory
     "${craft}/minecraft"
     "${craft}/minecraft/sandbox.nix"
     "${craft}/minecraft/nix-minecraft.nix"
