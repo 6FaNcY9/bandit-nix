@@ -27,7 +27,8 @@ fi
 
 echo "bandit-craft ${old:0:7} -> ${new:0:7}:"
 gh api "repos/6FaNcY9/bandit-craft/compare/$old...$new" \
-  -q '.commits[] | "  " + .sha[0:7] + " " + (.commit.message | split("\n")[0])'
+  -q '.commits[] | "  " + .sha[0:7] + " " + (.commit.message | split("\n")[0])' ||
+  echo "  (no commit list: GitHub refused the request; the bump goes on)" # the list is only for reading
 
 git commit -q --no-gpg-sign -m "chore(flake): bandit-craft ${old:0:7} -> ${new:0:7}" -- flake.lock
 sha=$(git rev-parse HEAD)
