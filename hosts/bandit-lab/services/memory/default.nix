@@ -1,5 +1,6 @@
 {
   config,
+  pkgs,
   repoConfig,
   ...
 }: let
@@ -31,6 +32,26 @@ in {
     environments = {
       HOME = "/home/appuser";
       BASIC_MEMORY_DEFAULT_PROJECT = "main";
+    };
+  };
+
+  # Devices drop raw session transcripts into inbox/ through the MCP endpoint;
+  # this turns them into session notes with the lab's Ollama (no extra port).
+  systemd.services.memory-summarise = {
+    description = "Summarise session transcripts in the shared memory inbox";
+    after = ["memory.service"];
+    path = [pkgs.coreutils pkgs.curl pkgs.jq pkgs.gawk pkgs.gnugrep];
+    serviceConfig = {
+      Type = "oneshot";
+      User = username;
+      ExecStart = pkgs.writeShellScript "memory-summarise" (builtins.readFile ./summarise.sh);
+    };
+  };
+  systemd.timers.memory-summarise = {
+    wantedBy = ["timers.target"];
+    timerConfig = {
+      OnBootSec = "5min";
+      OnUnitActiveSec = "2min";
     };
   };
 }
