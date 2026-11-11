@@ -279,8 +279,6 @@
         lab = self.nixosConfigurations.bandit-lab.config;
       };
 
-      inherit (inputs.bandit-craft.checks.${system}) mcagents-tests;
-
       lab-containers = import ./ci/lab-containers.nix {
         inherit pkgs repoConfig;
         inherit (nixpkgs) lib;

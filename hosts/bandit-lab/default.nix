@@ -31,7 +31,6 @@ in {
     ./services/mc-public
     "${craft}/ollama"
     "${craft}/llamacpp"
-    "${craft}/mcagents"
     "${craft}/discord-admin"
     ./power.nix
     ./services/aiia
@@ -98,8 +97,8 @@ in {
   # deploy back. Firmware on the lab is updated by hand, so the timer is not needed.
   systemd.timers.fwupd-refresh.enable = false;
 
-  # Andy-4.2 also runs on the owner's gaming PCs when they are free (bandit-craft tools/slayer/README.md);
-  # each tunnel makes it a loopback port here and mcagents shares the work with Ollama.
+  # The owner's gaming PCs serve llama-server when they are free (bandit-craft tools/slayer/README.md); each
+  # tunnel makes it a loopback port here. Its user, mcagents, was retired on 2026-11-11 (tunnel kept for now).
   bandit-lab.slayerTunnel.enable = true;
   bandit-lab.inferenceHosts.albert = {
     enable = true;
