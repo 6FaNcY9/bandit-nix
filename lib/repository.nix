@@ -143,9 +143,9 @@ in {
 
   mkStylixTheme = pkgs: {
     enable = true;
-    base16Scheme = ../themes/gruvbox-dark.yaml;
+    base16Scheme = ../themes/material-sand-dark.yaml;
     polarity = "dark";
-    image = ../themes/gruvbox_minimal_space.png;
+    image = ../themes/sand_minimal_space.png;
     fonts = {
       monospace = {
         package = pkgs.nerd-fonts.fira-code;
