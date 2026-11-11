@@ -3,10 +3,14 @@
 # firewall admits just its tailnet /32 on tailscale0, key-only, no root.
 {config, ...}: let
   inherit (config.bandit.workstation) username phoneTailscaleIp;
-  rule = "-i tailscale0 -s ${phoneTailscaleIp}/32 -p tcp --dport 22 -j nixos-fw-accept";
+  # Not 22: Tailscale SSH answers there on the tailnet address and asks for a
+  # browser check, which a phone script cannot pass.
+  port = 2222;
+  rule = "-i tailscale0 -s ${phoneTailscaleIp}/32 -p tcp --dport ${toString port} -j nixos-fw-accept";
 in {
   services.openssh = {
     enable = true;
+    ports = [port];
     openFirewall = false;
     settings = {
       PasswordAuthentication = false;
