@@ -73,7 +73,9 @@ in
   assert lib.assertMsg (!(lab.virtualisation.quadlet.pods.aiia-create.podConfig ? networks) || lab.virtualisation.quadlet.pods.aiia-create.podConfig.networks == [])
   "the aiia-create pod must not join the proxy network: redis and the API would be reachable from other containers";
   assert lib.assertMsg (lab.services.traefik.dynamicConfigOptions.http.services.aiia-create.loadBalancer.servers == [{url = "http://127.0.0.1:3080";}])
-  "traefik must route create.aiia.at to the aiia-create pod's loopback port";
+  "traefik must route aiia.at to the aiia-create pod's loopback port";
+  assert lib.assertMsg (let r = lab.services.traefik.dynamicConfigOptions.http.routers; in r.aiia-create.rule == "Host(`aiia.at`)" && !(r ? aiia))
+  "aiia.at must reach the generator only: the Ghost shop has no public route";
   assert lib.assertMsg (rootContainers == [])
   "every lab quadlet container must set containerConfig.user and no userns (found: ${toString rootContainers})";
   assert lib.assertMsg (podman.enable && !podman.dockerCompat && !podman.dockerSocket.enable)

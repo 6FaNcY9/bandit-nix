@@ -1,4 +1,4 @@
-# AiiA design generator ("Create your character") at https://create.aiia.at.
+# AiiA design generator ("Create your character") at https://aiia.at.
 #
 # Evaluated and checked (2026-11-11), not deployed yet: the lab build fails
 # until the five secrets below are in secrets/lab.yaml, so this stays off main
@@ -17,7 +17,7 @@
   username = repoConfig.workstation.username;
   inherit (config.virtualisation.quadlet) pods;
 
-  origin = "https://create.aiia.at";
+  origin = "https://aiia.at";
 
   # Not secret, but they must be filled in before the first deploy: the API
   # refuses to start in production with incomplete storage settings.
@@ -124,7 +124,7 @@ in {
             S3_REGION = "auto";
             S3_BUCKET = r2Bucket;
             PUBLIC_ASSET_BASE_URL = assetBase;
-            TURNSTILE_EXPECTED_HOSTNAMES = ''["create.aiia.at"]'';
+            TURNSTILE_EXPECTED_HOSTNAMES = ''["aiia.at"]'';
             # Stage 2 (checkout): SHOPIFY_STORE_DOMAIN and, in the env template,
             # SHOPIFY_STOREFRONT_PRIVATE_TOKEN.
             # Stage 3 (printing): ORDERS_ENABLED = "true" plus the values listed

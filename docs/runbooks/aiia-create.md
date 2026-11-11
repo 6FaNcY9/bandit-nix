@@ -1,5 +1,10 @@
 # AiiA design generator runbook (bandit-lab)
 
+**Address change 2026-11-11:** the generator is the main site at
+`https://aiia.at`. `create.aiia.at`, `www.aiia.at` and the old lab hostname
+redirect there in Traefik. Where this runbook says `create.aiia.at`, read
+`aiia.at`. The Ghost shop is off the net; its pod and data stay on the host.
+
 **Status: evaluated, not deployed.** The module
 `hosts/bandit-lab/services/aiia-create/default.nix` evaluates and passes the
 `lab-containers`, `lab-surface` and `lab-backup` checks (2026-11-11); port 3080

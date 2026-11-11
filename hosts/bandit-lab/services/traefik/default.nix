@@ -62,17 +62,21 @@
           entryPoints = ["web"];
           service = "mrija-archive";
         };
-        aiia = {
-          rule = "Host(`aiia.at`) || Host(`www.aiia.at`) || Host(`aiia.bandit-lab.mrija.org`)";
-          entryPoints = ["web"];
-          service = "aiia";
-        };
-        # Design generator (services/aiia-create): public like the shop. The web
-        # app in the pod is the only entry; it proxies to its API itself.
+        # aiia.at is the design generator (services/aiia-create) since
+        # 2026-11-11. The web app in the pod is the only entry; it proxies to
+        # its API itself. The Ghost shop (services/aiia) has no route any more:
+        # its pod still runs so the data and the nightly dump stay intact.
         aiia-create = {
-          rule = "Host(`create.aiia.at`)";
+          rule = "Host(`aiia.at`)";
           entryPoints = ["web"];
           service = "aiia-create";
+        };
+        # Former addresses of the generator and the shop land on aiia.at.
+        aiia-canonical = {
+          rule = "Host(`www.aiia.at`) || Host(`create.aiia.at`) || Host(`aiia.bandit-lab.mrija.org`)";
+          entryPoints = ["web"];
+          middlewares = ["aiia-canonical"];
+          service = "noop@internal";
         };
         vaultwarden = {
           rule = "Host(`vault.atmosphaere.at`) || Host(`vault.bandit-lab.mrija.org`)";
@@ -83,9 +87,12 @@
       services = {
         grafana.loadBalancer.servers = [{url = "http://127.0.0.1:3000";}];
         mrija-archive.loadBalancer.servers = [{url = "http://127.0.0.1:8081";}];
-        aiia.loadBalancer.servers = [{url = "http://127.0.0.1:2368";}];
         aiia-create.loadBalancer.servers = [{url = "http://127.0.0.1:3080";}];
         vaultwarden.loadBalancer.servers = [{url = "http://127.0.0.1:8222";}];
+      };
+      middlewares.aiia-canonical.redirectRegex = {
+        regex = "^https?://[^/]+/(.*)";
+        replacement = "https://aiia.at/\${1}";
       };
       # CrowdSec bouncer plugin: see the plugin stanza above.
       middlewares.crowdsec-bouncer.plugin.bouncer = {
