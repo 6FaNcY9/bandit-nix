@@ -91,7 +91,7 @@ in {
     };
     geometry = {
       unit = 4;
-      radius = 0;
+      radius = 8;
       divider = 1;
       focus = 2;
       structure = 3;

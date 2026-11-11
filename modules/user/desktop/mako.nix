@@ -14,10 +14,10 @@ in {
       layer = "overlay";
       width = 520;
       height = 260;
-      margin = "12,12";
+      margin = "8,8";
       padding = "12,14";
-      border-size = 2;
-      border-radius = 0;
+      border-size = 3;
+      border-radius = 8;
       icons = true;
       max-icon-size = 48;
       markup = true;
@@ -30,14 +30,14 @@ in {
       progress-color = "over ${colors.base02}";
 
       "urgency=low" = {
-        border-color = colors.base01;
-        text-color = colors.base03;
+        border-color = colors.base02;
+        text-color = colors.base04;
         default-timeout = 5000;
       };
 
       "urgency=critical" = {
         border-color = colors.base08;
-        text-color = colors.base08;
+        text-color = colors.base05;
         default-timeout = 0;
       };
 

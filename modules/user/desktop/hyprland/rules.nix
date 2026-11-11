@@ -38,6 +38,14 @@
       center = true;
     }
     {
+      # Bluetooth TUI opened from the Waybar Bluetooth module.
+      name = "bluetui";
+      match.class = "^(bluetui)$";
+      float = true;
+      size = "1100 700";
+      center = true;
+    }
+    {
       name = "blueman-manager";
       match.class = "^(blueman-manager)$";
       float = true;
@@ -52,10 +60,11 @@
     }
     {
       # Flameshot's capture overlay must cover the screen untouched by tiling.
+      # Not pinned: a pinned window's fullscreen request was handed to the next
+      # focused window when the overlay closed (seen in socket2 events).
       name = "flameshot";
       match.class = "^(flameshot)$";
       float = true;
-      pin = true;
       move = "0 0";
       no_anim = true;
     }

@@ -121,8 +121,6 @@ in {
         "privacy"
         "group/admin"
         "network"
-        "cpu"
-        "memory"
         "group/system"
         "pulseaudio"
         "bluetooth"
@@ -177,7 +175,7 @@ in {
 
       "hyprland/window" = {
         format = "{title}";
-        max-length = 28;
+        max-length = 32;
         separate-outputs = true;
       };
 
@@ -193,7 +191,7 @@ in {
             months = "<span color='${colors.base05}'>{}</span>";
             days = "<span color='${colors.base04}'>{}</span>";
             weeks = "<span color='${colors.base03}'>W{}</span>";
-            weekdays = "<span color='${colors.base0A}'>{}</span>";
+            weekdays = "<span color='${colors.base04}'>{}</span>";
             today = "<span color='${colors.base08}'><b>{}</b></span>";
           };
         };
@@ -244,7 +242,7 @@ in {
 
       cpu = {
         # Total load only: the per-core sparkline no longer fits at the larger size.
-        format = "${glyph colors.base0A "󰻠"} {usage}%";
+        format = "${glyph colors.base04 "󰻠"} {usage}%";
         interval = 5;
         states = {
           warning = 70;
@@ -254,7 +252,7 @@ in {
       };
 
       memory = {
-        format = "${glyph colors.base09 "󰍛"} {percentage}%";
+        format = "${glyph colors.base04 "󰍛"} {percentage}%";
         interval = 5;
         states = {
           warning = 70;
@@ -281,7 +279,8 @@ in {
           transition-left-to-right = false;
           children-class = "drawer-child";
         };
-        modules = ["power-profiles-daemon" "temperature" "disk"];
+        # CPU stays visible; memory, temperature, disk and power profile on hover.
+        modules = ["cpu" "memory" "temperature" "disk" "power-profiles-daemon"];
       };
 
       "power-profiles-daemon" = {
@@ -307,7 +306,7 @@ in {
       disk = {
         path = "/";
         interval = 120;
-        format = "${glyph colors.base0F "󰋊"} {percentage_used}%";
+        format = "${glyph colors.base04 "󰋊"} {percentage_used}%";
         tooltip-format = "/ {used} of {total} ({free} free)";
       };
 
@@ -334,8 +333,9 @@ in {
         tooltip-format-connected = "{device_enumerate}";
         tooltip-format-enumerate-connected = "{device_alias}";
         tooltip-format-enumerate-connected-battery = "{device_alias} {device_battery_percentage}%";
-        on-click = "${btMenu}";
-        on-click-right = "${pkgs.blueman}/bin/blueman-manager";
+        # Full device list + pairing in a terminal TUI; quick connect via rofi.
+        on-click = "${kitty} --class bluetui -e ${pkgs.bluetui}/bin/bluetui";
+        on-click-right = "${btMenu}";
       };
 
       battery = {
@@ -391,7 +391,7 @@ in {
       window#waybar {
         background-color: ${colors.base00};
         color: ${colors.base05};
-        border-bottom: 1px solid ${colors.base02};
+        border-bottom: 2px solid ${colors.base02};
       }
 
       tooltip {
@@ -410,8 +410,6 @@ in {
       #privacy,
       #admin,
       #network,
-      #cpu,
-      #memory,
       #system,
       #pulseaudio,
       #bluetooth,
@@ -427,6 +425,8 @@ in {
       #custom-logs,
       #custom-ip,
       #custom-containers,
+      #cpu,
+      #memory,
       #power-profiles-daemon,
       #temperature,
       #disk,
@@ -459,21 +459,23 @@ in {
       }
 
       #workspaces button {
-        margin: 0;
-        padding: 0 6px;
+        margin: 6px 2px;
+        padding: 0 8px;
+        border-radius: 6px;
         color: ${colors.base04};
         background: transparent;
       }
 
       #workspaces button:hover {
         color: ${colors.base05};
-        background: ${colors.base02};
+        background: ${colors.base01};
       }
 
-      /* Active workspace: inverted colours. */
+      /* Active workspace: the focus colour, like the window border. */
       #workspaces button.active {
         color: ${colors.base00};
-        background: ${colors.base05};
+        background: ${colors.base0D};
+        font-weight: bold;
       }
 
       #workspaces button.urgent {
@@ -492,6 +494,7 @@ in {
 
       #clock {
         padding: 0 16px;
+        font-weight: bold;
         color: ${colors.base05};
         border-right: 1px solid ${colors.base02};
       }
@@ -538,6 +541,11 @@ in {
 
       #custom-tray-handle {
         color: ${colors.base04};
+      }
+
+      /* Opened drawer modules sit on a raised surface. */
+      .drawer-child {
+        background-color: ${colors.base01};
       }
 
       #tray > .passive {

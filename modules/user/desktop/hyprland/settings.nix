@@ -32,9 +32,9 @@ in {
 
       config = {
         general = {
-          gaps_in = 6;
-          # Small gap to the bar and screen edges, same as between tiles.
-          gaps_out = 6;
+          # 8 px everywhere: 2 x 4 between tiles, 8 to the bar and screen edges.
+          gaps_in = 4;
+          gaps_out = 8;
           border_size = 3;
           layout = "dwindle";
           resize_on_border = true;
@@ -42,14 +42,12 @@ in {
           hover_icon_on_border = true;
 
           col = {
-            # Apple rainbow, stripe order green→blue; Lua configs take a table, not "a b 45deg".
-            active_border = {
-              colors = map rgb [colors.base0B colors.base0A colors.base09 colors.base08 colors.base0E colors.base0D];
-              angle = 45;
-            };
-            inactive_border = rgb colors.base03;
-            nogroup_border = rgb colors.base08;
-            nogroup_border_active = rgb colors.base0A;
+            # One focus colour (blue), readable from a distance; the rainbow
+            # stays a signature in Waybar, hyprlock and the wallpaper.
+            active_border = rgb colors.base0D;
+            inactive_border = rgb colors.base02;
+            nogroup_border = rgb colors.base02;
+            nogroup_border_active = rgb colors.base0E;
           };
 
           snap = {
@@ -61,7 +59,9 @@ in {
         };
 
         decoration = {
-          rounding = 0;
+          rounding = 8;
+          dim_inactive = true;
+          dim_strength = 0.15;
           blur.enabled = false;
           shadow.enabled = false;
         };
@@ -80,8 +80,8 @@ in {
 
           col = {
             border_active = rgb colors.base0D;
-            border_inactive = rgb colors.base03;
-            border_locked_active = rgb colors.base0A;
+            border_inactive = rgb colors.base02;
+            border_locked_active = rgb colors.base0E;
             border_locked_inactive = rgb colors.base02;
           };
 
@@ -93,24 +93,24 @@ in {
             # Filled tabs: the active one is blue with dark text, the rest grey.
             gradients = true;
             height = builtins.floor (config.stylix.fonts.sizes.desktop * 4 / 3 * 1.6);
-            indicator_height = 3;
+            indicator_height = 0;
             stacked = false;
             render_titles = true;
             scrolling = true;
-            rounding = 0;
-            gradient_rounding = 0;
-            gaps_in = 1;
-            gaps_out = 0;
+            rounding = 6;
+            gradient_rounding = 6;
+            gaps_in = 2;
+            gaps_out = 2;
             text_color = rgb colors.base00;
-            text_color_inactive = rgb colors.base05;
+            text_color_inactive = rgb colors.base04;
             text_color_locked_active = rgb colors.base00;
             text_color_locked_inactive = rgb colors.base04;
 
             col = {
               active = rgb colors.base0D;
               inactive = rgb colors.base02;
-              locked_active = rgb colors.base0A;
-              locked_inactive = rgb colors.base03;
+              locked_active = rgb colors.base0E;
+              locked_inactive = rgb colors.base02;
             };
           };
         };
