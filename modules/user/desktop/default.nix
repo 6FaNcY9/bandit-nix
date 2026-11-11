@@ -12,5 +12,6 @@
     ./powermenu.nix
     ./keybinds-menu.nix
     ./obsidian.nix
+    ./discord.nix
   ];
 }
