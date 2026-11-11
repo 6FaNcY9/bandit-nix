@@ -41,7 +41,21 @@ in {
       };
 
       "hyprland/workspaces" = {
-        format = "{id}";
+        format = "{icon}";
+        # Nerd Font Material Design glyphs; workspace layout in hyprland/rules.nix.
+        format-icons = {
+          "1" = "󰆍"; # U+F018D console
+          "2" = "󰖟"; # U+F059F web
+          "3" = "󰈙"; # U+F0219 file-document
+          "4" = "󰊗"; # U+F0297 gamepad-variant
+          "5" = "󰅩"; # U+F0169 code-braces
+          "6" = "󰊌"; # U+F028C forum
+          "7" = "󰉋"; # U+F024B folder
+          "8" = "󰝚"; # U+F075A music
+          "9" = "󰄜"; # U+F011C cellphone
+          default = "󰇘"; # U+F01D8 dots-horizontal
+        };
+        persistent-workspaces = {"*" = 9;};
         on-click = "activate";
       };
 
@@ -210,6 +224,10 @@ in {
         border-bottom: 2px solid transparent;
         box-shadow: none;
         text-shadow: none;
+      }
+
+      #workspaces button.empty {
+        opacity: 0.45;
       }
 
       #workspaces button:hover {
