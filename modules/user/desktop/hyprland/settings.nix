@@ -33,7 +33,8 @@ in {
       config = {
         general = {
           gaps_in = 6;
-          gaps_out = 0;
+          # Small gap to the bar and screen edges, same as between tiles.
+          gaps_out = 6;
           border_size = 3;
           layout = "dwindle";
           resize_on_border = true;
@@ -78,7 +79,7 @@ in {
           merge_groups_on_groupbar = true;
 
           col = {
-            border_active = rgb colors.base09;
+            border_active = rgb colors.base0D;
             border_inactive = rgb colors.base03;
             border_locked_active = rgb colors.base0A;
             border_locked_inactive = rgb colors.base02;
@@ -87,12 +88,11 @@ in {
           groupbar = {
             enabled = true;
             font_family = config.stylix.fonts.monospace.name;
-            # Was 10px/20px — unreadable on the Framework 13 panel and
-            # visually disconnected from Waybar. 13px/26px lands between
-            # Waybar's 16px text and the window content scale.
-            font_size = 13;
-            gradients = false;
-            height = 26;
+            # Same text size as Waybar (Stylix desktop size, pt -> px).
+            font_size = builtins.floor (config.stylix.fonts.sizes.desktop * 4 / 3);
+            # Filled tabs: the active one is blue with dark text, the rest grey.
+            gradients = true;
+            height = builtins.floor (config.stylix.fonts.sizes.desktop * 4 / 3 * 1.6);
             indicator_height = 3;
             stacked = false;
             render_titles = true;
@@ -107,7 +107,7 @@ in {
             text_color_locked_inactive = rgb colors.base04;
 
             col = {
-              active = rgb colors.base09;
+              active = rgb colors.base0D;
               inactive = rgb colors.base02;
               locked_active = rgb colors.base0A;
               locked_inactive = rgb colors.base03;

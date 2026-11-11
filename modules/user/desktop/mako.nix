@@ -9,17 +9,17 @@ in {
     enable = true;
 
     settings = {
-      font = "${config.stylix.fonts.sansSerif.name} 10";
+      font = "${config.stylix.fonts.sansSerif.name} ${toString config.stylix.fonts.sizes.popups}";
       anchor = "top-right";
       layer = "overlay";
-      width = 380;
-      height = 200;
+      width = 520;
+      height = 260;
       margin = "12,12";
       padding = "12,14";
       border-size = 2;
       border-radius = 0;
       icons = true;
-      max-icon-size = 32;
+      max-icon-size = 48;
       markup = true;
       actions = true;
       default-timeout = 10000;

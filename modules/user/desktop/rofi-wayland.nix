@@ -14,6 +14,9 @@
   red = colors.base08;
   cyan = colors.base0C;
   interfaceFont = config.stylix.fonts.sansSerif.name;
+  # One size for every menu: Stylix popups (also notifications, tooltips).
+  font = "${interfaceFont} ${toString config.stylix.fonts.sizes.popups}";
+  boldFont = "${interfaceFont} Bold ${toString config.stylix.fonts.sizes.popups}";
 in {
   # ── Main launcher theme ───────────────────────────────────────
   xdg.configFile."rofi/themes/retro-eighties.rasi".text = ''
@@ -27,7 +30,7 @@ in {
         border:           2px;
         border-color:     ${yellow};
         border-radius:    0;
-        width:            640px;
+        width:            44em;
         padding:          0;
     }
 
@@ -49,7 +52,7 @@ in {
     prompt {
         background-color: transparent;
         text-color:       ${cyan};
-        font:             "${interfaceFont} Bold 11";
+        font:             "${boldFont}";
     }
 
     entry {
@@ -69,7 +72,7 @@ in {
 
     textbox {
         text-color: ${fg2};
-        font:       "${interfaceFont} 9";
+        font:       "${font}";
     }
 
     listview {
@@ -131,7 +134,7 @@ in {
     }
 
     element-icon {
-        size:             22px;
+        size:             1.4em;
         background-color: transparent;
     }
 
@@ -153,7 +156,7 @@ in {
         border:           2px;
         border-color:     ${red};
         border-radius:    0;
-        width:            280px;
+        width:            14em;
         padding:          0;
         location:         center;
         anchor:           center;
@@ -176,7 +179,7 @@ in {
     prompt {
         background-color: transparent;
         text-color:       ${red};
-        font:             "${interfaceFont} Bold 11";
+        font:             "${boldFont}";
     }
 
     listview {
@@ -191,7 +194,7 @@ in {
     element {
         padding:          8px 18px;
         spacing:          10px;
-        font:             "${interfaceFont} 11";
+        font:             "${font}";
     }
 
     element.normal.normal {
@@ -213,6 +216,7 @@ in {
     theme = "retro-eighties";
 
     settings = {
+      inherit font;
       modi = "drun,run,window";
       show-icons = true;
       drun-display-format = "{name}";

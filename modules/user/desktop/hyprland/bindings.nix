@@ -58,6 +58,9 @@
     (bind "${mod} + f" "hl.dsp.window.fullscreen()" "toggle fullscreen")
     (bind "${mod} + CTRL + f" ''hl.dsp.window.fullscreen_state({ internal = 2, client = 0, action = "toggle" })'' "fullscreen without app mode")
     (bind "${mod} + e" ''hl.dsp.layout("togglesplit")'' "toggle split orientation")
+    # i3's split v / split h: choose where the next window opens.
+    (bind "${mod} + v" ''hl.dsp.layout("preselect d")'' "next window opens below")
+    (bind "${mod} + b" ''hl.dsp.layout("preselect r")'' "next window opens right")
     (bind "${mod} + CTRL + e" ''hl.dsp.layout("swapsplit")'' "swap split branches")
     (bind "${mod} + s" "hl.dsp.group.toggle()" "toggle tab group")
     (bind "${mod} + Tab" "hl.dsp.group.next()" "next window in group")
