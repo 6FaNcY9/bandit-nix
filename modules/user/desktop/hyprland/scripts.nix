@@ -6,6 +6,10 @@
   home = {
     file = {
       "Pictures/Screenshots/.keep".text = "";
+      ".config/flameshot/flameshot.ini".text = ''
+        [General]
+        savePath=${bandit.workstation.homeDirectory}/Pictures/Screenshots
+      '';
 
       # ─── Region screenshot: capture, save, copy, notify ───
       ".local/bin/hypr-screenshot" = {
@@ -73,7 +77,7 @@
             Mod+E               toggle split orientation
             Mod+Ctrl+E          swap split branches
             Mod+S               toggle tab group
-            Mod+Shift+S         lock active group
+            Mod+Ctrl+S          lock active group
             Mod+P               toggle pseudotile
 
           GROUPS / STACKS
@@ -105,6 +109,7 @@
 
           SCREENSHOTS
             Print / F11         region screenshot (grim + slurp)
+            Mod+Shift+S         screenshot with drawing (flameshot)
 
           MEDIA
             XF86AudioRaise/Lower  volume ±5%
