@@ -72,11 +72,20 @@ in {
           interfaces.tailscale0.allowedTCPPorts = [25565];
         };
       };
-      # No systemd-resolved: with it, the container's /etc/resolv.conf is the stub (127.0.0.53) and the
-      # resolver never found a working upstream (tailscale had taken DNS over, the tailnet sets no servers),
-      # so api.playit.gg did not resolve. Off, NixOS writes a static resolv.conf from `nameservers` above
-      # and glibc queries 9.9.9.9 directly over the uplink. The box needs no tailnet-name resolution.
+      # No systemd-resolved, and a static /etc/resolv.conf written by hand. With resolved, the container's
+      # resolv.conf was the stub (127.0.0.53) and the resolver found no working upstream (tailscale had taken
+      # DNS over, the tailnet sets no servers), so api.playit.gg did not resolve. Disabling resolved alone
+      # left the stale stub file in place (it is mutable, not a NixOS symlink); forcing the file is what makes
+      # glibc query 9.9.9.9 directly. UDP:53 to it works from here (measured). No tailnet-name resolution.
       services.resolved.enable = lib.mkForce false;
+      networking.resolvconf.enable = lib.mkForce false;
+      environment.etc."resolv.conf" = lib.mkForce {
+        text = ''
+          nameserver 9.9.9.9
+          nameserver 1.1.1.1
+        '';
+        mode = "0444";
+      };
       services.tailscale = {
         enable = true;
         authKeyFile = "/var/lib/tailscale/authkey";
