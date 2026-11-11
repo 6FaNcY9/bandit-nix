@@ -1,8 +1,8 @@
 # bandit-lab public Minecraft container, phase 1 (bandit-craft docs/specs/2026-11-10-public-anarchy-world.md):
 # the box (pinned user namespace, caps, veth rules, own tailnet node) and what runs inside it (one Velocity,
-# one Paper: exact plugin list, no operators, no RCON, premium accounts only, own forwarding secret, game
+# one Paper: exact plugin list, the owner as the only operator, no RCON, premium accounts only, own forwarding secret, game
 # port on the container's tailscale0 and its veth only; the tunnel agent runs on the host, not inside).
-# Evaluation-time assertions only; velocity.toml and ops.json are
+# Evaluation-time assertions only; velocity.toml is
 # read from the store, as lab-minecraft reads the private velocity.toml. Nothing is started or contacted.
 {
   pkgs,
@@ -80,7 +80,7 @@ in
   assert lib.assertMsg (lib.hasInfix ''bind = "0.0.0.0:25565"'' velToml && lib.hasInfix ''main = "127.0.0.1:${toString props.server-port}"'' velToml && lib.hasInfix ''try = ["main"]'' velToml && lib.hasInfix "haproxy-protocol = true" velToml) "Velocity listens on 25565, sends everyone to the loopback Paper and takes connections from the relay only (PROXY v2, phase 2)";
   assert lib.assertMsg (props.server-ip == "127.0.0.1" && props.server-port != 25565 && !props.online-mode) "Paper listens on loopback only, behind Velocity";
   assert lib.assertMsg (!props.enable-rcon && !props.enable-query && !(props ? "rcon.port") && !(props ? "rcon.password")) "the public Paper has no RCON and no query port";
-  assert lib.assertMsg (paper.operators == {} && builtins.readFile paper.files."ops.json" == "[]\n") "the public Paper has no operators, and an empty ops.json is put back on every start";
+  assert lib.assertMsg (lib.attrNames paper.operators == ["fancy8869"] && paper.operators.fancy8869.uuid == "623c7ee4-71ca-487a-b92a-a4564e43fbb9" && !(paper.files ? "ops.json")) "the public Paper's only operator is the owner, and nix-minecraft writes ops.json from that on every start";
   assert lib.assertMsg (lib.attrNames paper.symlinks == lib.sort lib.lessThan (["plugins/ChatBridge.jar"] ++ map (p: "plugins/${p.file}") [plugins.chunky plugins.smoderation])) "the public Paper loads exactly Chunky, SModeration and the chat bridge: ${toString (lib.attrNames paper.symlinks)}";
   # The chat bridge: its token comes from sops through the prepare unit and the box's generated environment file,
   # never through the unit's own (world-readable) environment, which carries the channel id only.
