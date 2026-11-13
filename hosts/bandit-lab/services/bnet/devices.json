@@ -1,0 +1,7 @@
+[
+  {"host": "albert", "kind": "pc", "agent": "http://100.98.68.118:47800"},
+  {"host": "slayer", "kind": "pc", "tailnet": "slayerpc", "agent": "http://100.76.40.98:47800"},
+  {"host": "bandit-lab", "kind": "server"},
+  {"host": "bandit", "kind": "laptop"},
+  {"host": "pong", "kind": "phone"}
+]

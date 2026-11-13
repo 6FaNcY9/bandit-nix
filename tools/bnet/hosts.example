@@ -1,0 +1,7 @@
+# bnet hosts: copy to ~/.config/bnet/hosts on pong and the laptop and fill in the admin accounts (Task 7).
+# name        ssh target                    groups
+albert        <admin>@100.98.68.118         pcs workers
+slayer        <admin>@100.76.40.98          pcs workers
+bandit        vino@100.102.247.30           laptops
+bandit-lab    vino@100.125.161.81           servers
+pong          u0_a417@100.123.34.41         phones
