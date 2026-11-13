@@ -24,7 +24,8 @@
       ${pkgs.gnused}/bin/sed -i \
         's/^highlight\.color=.*/highlight.color=${colors.base0C}/' \
         "$directory/BanditGruvboxKvantum.kvconfig"
-      cp ${svg} "$directory/BanditGruvboxKvantum.svg"
+      # Widget fills (sliders, progress, checks) follow the teal focus colour, not blue.
+      ${pkgs.gnused}/bin/sed 's/${colors.base0D}/${colors.base0C}/g' ${svg} > "$directory/BanditGruvboxKvantum.svg"
     '';
 in {
   home = {

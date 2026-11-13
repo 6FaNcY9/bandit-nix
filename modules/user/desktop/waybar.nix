@@ -31,7 +31,11 @@
       sys=$(timeout 5 systemctl --failed --no-legend --plain) || { fail "systemctl"; sys=""; }
       usr=$(timeout 5 systemctl --user --failed --no-legend --plain) || { fail "systemctl --user"; usr=""; }
       errs=$(timeout 5 journalctl -p err --since -15min -q --no-pager -o cat) || { fail "journalctl (15 min)"; errs=""; }
-      last=$(timeout 5 journalctl -p err -b -q --no-pager -n 5 -o short) || { fail "journalctl (this boot)"; last=""; }
+      last=$(timeout 5 journalctl -p err -b -q --no-pager -n 200 -o short) || { fail "journalctl (this boot)"; last=""; }
+      # dbus-broker logs this as an error for every service file on each switch; it is harmless.
+      noise="Ignoring duplicate name '"
+      errs=$(grep -vF "$noise" <<<"$errs" || true)
+      last=$(grep -vF "$noise" <<<"$last" | tail -n 5 || true)
       failed=$(printf '%s\n%s\n' "$sys" "$usr" | awk 'NF {print $1}')
       units=$(printf '%s' "$failed" | grep -c . || true)
       errors=$(printf '%s' "$errs" | grep -c . || true)
