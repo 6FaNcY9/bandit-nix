@@ -1,6 +1,7 @@
 {
   pkgs,
   config,
+  lib,
   ...
 }: {
   # Laptop-only user groups (VMs, audio, adb) — declared next to the tooling
@@ -24,6 +25,11 @@
       flake = config.bandit.workstation.repoPath;
     };
   };
+
+  # The rootless unit is a global user unit; skip system users such as greetd's
+  # greeter, which has no subuid range and failed four times on every boot.
+  # @system includes root, so this replaces the module's "!root".
+  systemd.user.services.docker.unitConfig.ConditionUser = lib.mkForce "!@system";
 
   virtualisation = {
     docker.rootless = {
