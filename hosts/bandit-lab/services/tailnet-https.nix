@@ -21,6 +21,7 @@
     ntopng = "http://127.0.0.1:3003"; # services/ntopng.nix
     comfyui = "http://127.0.0.1:8188"; # services/comfyui, Jerry may reach this one (policy grant svc:comfyui)
     memory = "http://127.0.0.1:8766"; # services/memory: page at /, MCP at /mcp (no login of its own: the policy grant is the access control)
+    bnet = "http://127.0.0.1:47810"; # services/bnet: device list + Ollama routing (bearer token on top of the policy grant)
   };
   serve = name: target: ''
     if ! timeout 30 tailscale serve --service=svc:${name} --https=443 ${target}; then
