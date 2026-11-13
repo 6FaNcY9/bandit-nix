@@ -1,7 +1,7 @@
 BeforeAll {
     Import-Module (Join-Path $PSScriptRoot '..' 'BnetJobs.psm1') -Force
     function Cfg([bool]$silence) {
-        @{ Silence = $silence; SilencePowerPct = 40; SessionDir = $TestDrive; Job = $null; SilenceOk = $true }
+        @{ Silence = $silence; SilencePowerPct = 40; SilenceCpuPct = 50; StatusDir = $TestDrive; Job = $null; SilenceOk = $true }
     }
 }
 
@@ -14,6 +14,8 @@ Describe 'Start-BnetJob' {
         Mock -ModuleName BnetJobs Start-BnetService {}
         Mock -ModuleName BnetJobs Stop-BnetService {}
         Mock -ModuleName BnetJobs Invoke-BnetOllama { @{ Code = 0; Out = '' } }
+        Mock -ModuleName BnetJobs Test-BnetOllamaReady { $true }
+        Mock -ModuleName BnetJobs Set-BnetCpuCap {}
     }
     It 'with silence it sets the power limit to 40 % of the default before starting ollama' {
         $c = Cfg $true
@@ -33,6 +35,17 @@ Describe 'Start-BnetJob' {
         $c.SilenceOk | Should -BeFalse
         $c.Job | Should -BeNullOrEmpty
     }
+    It 'with silence it also caps the CPU so its fans stay quiet' {
+        Start-BnetJob 'ollama' (Cfg $true) | Out-Null
+        Should -Invoke -ModuleName BnetJobs Set-BnetCpuCap -ParameterFilter { $Pct -eq 50 }
+    }
+    It 'a job whose Ollama never answers is stopped again and refused' {
+        Mock -ModuleName BnetJobs Test-BnetOllamaReady { $false }
+        Mock -ModuleName BnetJobs Stop-BnetJob {}
+        $c = Cfg $false
+        Start-BnetJob 'ollama' $c -ReadyTimeoutSec 0 | Should -BeFalse
+        Should -Invoke -ModuleName BnetJobs Stop-BnetJob -Times 1
+    }
     It 'without silence it does not touch the power limit' {
         Start-BnetJob 'ollama' (Cfg $false) | Should -BeTrue
         Should -Invoke -ModuleName BnetJobs Invoke-BnetNvidia -Times 0 -ParameterFilter { $Arguments -contains '-pl' }
@@ -51,6 +64,7 @@ Describe 'Stop-BnetJob' {
             @{ Code = 0; Out = '' }
         }
         Mock -ModuleName BnetJobs Stop-BnetService {}
+        Mock -ModuleName BnetJobs Set-BnetCpuCap {}
         Mock -ModuleName BnetJobs Invoke-BnetOllama {
             if ($Arguments[0] -eq 'ps') { return @{ Code = 0; Out = "NAME          ID    SIZE   PROCESSOR  UNTIL`nqwen3:32b     abc   20 GB  100% GPU   4 minutes from now`nllama3:8b     def   5 GB   100% GPU   now" } }
             @{ Code = 0; Out = '' }
@@ -64,6 +78,7 @@ Describe 'Stop-BnetJob' {
         Should -Invoke -ModuleName BnetJobs Invoke-BnetOllama -ParameterFilter { $Arguments -join ' ' -eq 'stop llama3:8b' }
         Should -Invoke -ModuleName BnetJobs Stop-BnetService -ParameterFilter { $Name -eq 'ollama' }
         Should -Invoke -ModuleName BnetJobs Invoke-BnetNvidia -ParameterFilter { $Arguments -join ' ' -eq '-pl 575' }
+        Should -Invoke -ModuleName BnetJobs Set-BnetCpuCap -ParameterFilter { $Pct -eq 100 }
         Join-Path $TestDrive 'job.json' | Should -Not -Exist
         $c.Job | Should -BeNullOrEmpty
     }
@@ -87,11 +102,15 @@ Describe 'Update-BnetJob' {
 Describe 'Get-BnetJobAllowed' {
     It 'is false on a silent PC whose power limit failed' {
         $c = Cfg $true; $c.SilenceOk = $false
-        Get-BnetJobAllowed ([pscustomobject]@{ JobAllowed = $true }) $c | Should -BeFalse
+        Get-BnetJobAllowed ([pscustomobject]@{ State = 'idle'; JobAllowed = $true }) $c | Should -BeFalse
+    }
+    It 'a silent PC takes work only when idle, never next to a user' {
+        Get-BnetJobAllowed ([pscustomobject]@{ State = 'light'; JobAllowed = $true }) (Cfg $true) | Should -BeFalse
+        Get-BnetJobAllowed ([pscustomobject]@{ State = 'idle'; JobAllowed = $true }) (Cfg $true) | Should -BeTrue
     }
     It 'follows the classifier otherwise' {
-        Get-BnetJobAllowed ([pscustomobject]@{ JobAllowed = $true }) (Cfg $true) | Should -BeTrue
-        Get-BnetJobAllowed ([pscustomobject]@{ JobAllowed = $false }) (Cfg $false) | Should -BeFalse
+        Get-BnetJobAllowed ([pscustomobject]@{ State = 'light'; JobAllowed = $true }) (Cfg $false) | Should -BeTrue
+        Get-BnetJobAllowed ([pscustomobject]@{ State = 'idle'; JobAllowed = $false }) (Cfg $false) | Should -BeFalse
     }
 }
 
@@ -101,12 +120,23 @@ Describe 'Get-BnetUserLoad' {
         $l.CpuPct | Should -Be 90
         $l.GpuPct | Should -Be 95
     }
-    It 'while our job runs its own CPU share and the GPU do not count' {
-        $l = Get-BnetUserLoad -CpuTotal 90 -CpuOllama 70 -Gpu 95 -JobRunning $true
+    It 'while our job runs only its own CPU and GPU share is taken off' {
+        $l = Get-BnetUserLoad -CpuTotal 90 -CpuOllama 70 -Gpu 95 -GpuOllama 60 -JobRunning $true
         $l.CpuPct | Should -Be 20
-        $l.GpuPct | Should -Be 0
+        $l.GpuPct | Should -Be 35
     }
     It 'never goes below zero' {
         (Get-BnetUserLoad -CpuTotal 10 -CpuOllama 30 -Gpu 0 -JobRunning $true).CpuPct | Should -Be 0
+    }
+}
+
+Describe 'Get-BnetModels' {
+    It 'lists name:tag from the Ollama manifest tree, library models without the registry prefix' {
+        $m = Join-Path $TestDrive 'models/manifests'
+        New-Item -ItemType File -Force (Join-Path $m 'registry.ollama.ai/library/qwen3/32b'), (Join-Path $m 'registry.ollama.ai/library/llama3/latest'), (Join-Path $m 'registry.ollama.ai/someone/tool/v1') | Out-Null
+        Get-BnetModels (Join-Path $TestDrive 'models') | Should -Be @('llama3:latest', 'qwen3:32b', 'someone/tool:v1')
+    }
+    It 'an empty or missing store is an empty list' {
+        @(Get-BnetModels (Join-Path $TestDrive 'nothing')).Count | Should -Be 0
     }
 }

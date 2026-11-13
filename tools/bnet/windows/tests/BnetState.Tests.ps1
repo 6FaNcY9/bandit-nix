@@ -51,6 +51,9 @@ Describe 'Get-BnetState' {
         $r = Get-BnetState (S @{ InputIdleSec = 600 }) (Prev 'idle' $t.AddSeconds(-61)) $t
         $r.JobAllowed | Should -BeTrue
     }
+    It 'no input but high load (gamepad game, render) is heavy, not idle' {
+        (Get-BnetState (S @{ InputIdleSec = 700; CpuPct = 20; GpuPct = 85 }) (Hist 20 85) $t).State | Should -Be 'heavy'
+    }
     It 'light to idle keeps the clock running' {
         $r = Get-BnetState (S @{ InputIdleSec = 600 }) (Prev 'light' $t.AddSeconds(-90)) $t
         $r.JobAllowed | Should -BeTrue

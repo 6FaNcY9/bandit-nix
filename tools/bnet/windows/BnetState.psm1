@@ -17,11 +17,13 @@ function Get-BnetState {
     $state =
         if (-not $Sample.SessionActive -or $Sample.Locked) { 'unavailable' }
         elseif ($Sample.MediaPlaying -or $Sample.DisplayRequired -or $Sample.Fullscreen) { 'media' }
-        elseif ($Sample.InputIdleSec -ge $IdleAfterSec) { 'idle' }
         else {
+            # Load is checked before idle: a gamepad game or a long render has no mouse/keyboard input.
             $window = @($History | Where-Object { $_ -and ($Now - $_.Time).TotalSeconds -le $WindowSec }) + $Sample
             $peak = ($window | ForEach-Object { [math]::Max([double]$_.CpuPct, [double]$_.GpuPct) } | Measure-Object -Maximum).Maximum
-            if ($peak -ge $LoadLimitPct) { 'heavy' } else { 'light' }
+            if ($peak -ge $LoadLimitPct) { 'heavy' }
+            elseif ($Sample.InputIdleSec -ge $IdleAfterSec) { 'idle' }
+            else { 'light' }
         }
 
     # idle and light both allow work, so moving between them keeps the settle clock running.

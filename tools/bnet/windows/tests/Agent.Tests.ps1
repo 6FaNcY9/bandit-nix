@@ -11,6 +11,7 @@ BeforeAll {
             Silence  = $true
             Job      = $null
             Started  = 0
+            Models   = @('qwen3:32b')
             GetState = { [pscustomobject]@{ State = 'idle'; JobAllowed = $allowed; Since = $n; CpuPct = 4; GpuPct = 3 } }.GetNewClosure()
         }
         $c.StartJob = { param($kind) $c.Started++; $c.Job = $kind; $true }.GetNewClosure()
@@ -34,7 +35,8 @@ Describe 'Invoke-BnetRequest' {
         $r = Invoke-BnetRequest (Req GET /state) (Ctx)
         $r.Status | Should -Be 200
         $b = $r.Body | ConvertFrom-Json -AsHashtable
-        foreach ($k in 'host', 'state', 'job_allowed', 'since', 'gpu_pct', 'cpu_pct', 'job', 'silence') { $b.Keys | Should -Contain $k }
+        foreach ($k in 'host', 'state', 'job_allowed', 'since', 'gpu_pct', 'cpu_pct', 'job', 'silence', 'models') { $b.Keys | Should -Contain $k }
+        $b.models | Should -Be @('qwen3:32b')
         $b.host | Should -Be 'albert'
         $b.state | Should -Be 'idle'
     }
@@ -98,6 +100,16 @@ Describe 'Get-BnetPowerRequests' {
         $r = Get-BnetPowerRequests $t
         $r.DisplayRequired | Should -BeFalse
         $r.MediaPlaying | Should -BeFalse
+    }
+    It 'German output: Keine. is empty, a driver under SYSTEM is audio' {
+        $t = "ANZEIGE:`nKeine.`n`nSYSTEM:`n[TREIBER] Realtek High Definition Audio (HDAUDIO\FUNC_01)`nEin Audiodatenstrom wird zurzeit verwendet.`n`nAWAYMODE:`nKeine.`n"
+        $r = Get-BnetPowerRequests $t
+        $r.DisplayRequired | Should -BeFalse
+        $r.MediaPlaying | Should -BeTrue
+    }
+    It 'German output: a process under ANZEIGE is display required' {
+        $t = "ANZEIGE:`n[PROZESS] \Device\HarddiskVolume3\Program Files\VLC\vlc.exe`nVideowiedergabe`n`nSYSTEM:`nKeine.`n"
+        (Get-BnetPowerRequests $t).DisplayRequired | Should -BeTrue
     }
     It 'a system request without audio is not media' {
         $t = "DISPLAY:`nNone.`n`nSYSTEM:`n[SERVICE] \Device\HarddiskVolume3\Windows\System32\svchost.exe (wuauserv)`nWindows Update`n"

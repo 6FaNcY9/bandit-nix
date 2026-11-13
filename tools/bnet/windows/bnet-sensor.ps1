@@ -3,6 +3,7 @@
 # (session\ is user-writable; the token in C:\ProgramData\bnet stays SYSTEM/Administrators only).
 $ErrorActionPreference = 'Stop'
 $Dir = 'C:\ProgramData\bnet\session'
+$StatusDir = 'C:\ProgramData\bnet\status'   # job.json, written by the SYSTEM agent, read-only for us
 
 Add-Type @'
 using System; using System.Runtime.InteropServices;
@@ -39,22 +40,25 @@ $tray.Icon = [Drawing.SystemIcons]::Information
 $tray.Text = 'bandit-lab rechnet hier (stoppt bei Nutzung)'   # max 63 chars
 
 while ($true) {
-    $busy = Test-Path "$Dir\job.json"
-    if ($busy -and -not $tray.Visible) {
-        $tray.Visible = $true
-        $tray.ShowBalloonTip(5000, 'bandit-lab', 'Dieser PC rechnet gerade im Leerlauf fuer das Lab.', 'Info')
-    } elseif (-not $busy -and $tray.Visible) { $tray.Visible = $false }
-    [Windows.Forms.Application]::DoEvents()
-
-    $locked = [bool](Get-Process LogonUI -ErrorAction SilentlyContinue)
-    @{
-        Time          = (Get-Date).ToString('o')
-        SessionActive = $true
-        Locked        = $locked
-        InputIdleSec  = [int][BnetWin]::IdleSeconds()
-        Fullscreen    = (-not $locked) -and [BnetWin]::ForegroundIsFullscreen()
-        MediaPlaying  = $false   # the SYSTEM agent adds audio/display requests from powercfg
-    } | ConvertTo-Json -Compress | Set-Content -Path "$Dir\session.json.tmp" -Encoding utf8
-    Move-Item -Force "$Dir\session.json.tmp" "$Dir\session.json"
+    # One bad tick (agent reading the file at the same moment, a window closing mid-call) must not end
+    # the sensor: it only restarts at the next logon.
+    try {
+        $busy = Test-Path "$StatusDir\job.json"
+        if ($busy -and -not $tray.Visible) {
+            $tray.Visible = $true
+            $tray.ShowBalloonTip(5000, 'bandit-lab', 'Dieser PC rechnet gerade für das Lab. Es stoppt, sobald du ihn brauchst.', 'Info')
+        } elseif (-not $busy -and $tray.Visible) { $tray.Visible = $false }
+        [Windows.Forms.Application]::DoEvents()
+        $locked = [bool](Get-Process LogonUI -ErrorAction SilentlyContinue)
+        @{
+            Time          = (Get-Date).ToString('o')
+            SessionActive = $true
+            Locked        = $locked
+            InputIdleSec  = [int][BnetWin]::IdleSeconds()
+            Fullscreen    = (-not $locked) -and [BnetWin]::ForegroundIsFullscreen()
+            MediaPlaying  = $false   # the SYSTEM agent adds audio/display requests from powercfg
+        } | ConvertTo-Json -Compress | Set-Content -Path "$Dir\session.json.tmp" -Encoding utf8
+        Move-Item -Force "$Dir\session.json.tmp" "$Dir\session.json"
+    } catch { }
     Start-Sleep -Seconds 5
 }

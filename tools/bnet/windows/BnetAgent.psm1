@@ -25,7 +25,7 @@ function Invoke-BnetRequest {
             return & $json 200 ([ordered]@{
                 host = $Context.HostName; state = $s.State; job_allowed = [bool]$s.JobAllowed
                 since = $s.Since.ToString('o'); gpu_pct = $s.GpuPct; cpu_pct = $s.CpuPct
-                job = $Context.Job; silence = [bool]$Context.Silence })
+                job = $Context.Job; silence = [bool]$Context.Silence; models = @($Context.Models) })
         }
         '^POST /job/start$' {
             if (-not $s.JobAllowed) { return & $json 409 @{ error = "not allowed in state $($s.State)" } }
@@ -55,18 +55,19 @@ function Read-BnetSession {
 }
 
 function Get-BnetPowerRequests {
-    # Parses `powercfg /requests` (needs admin): a DISPLAY request means video/fullscreen keep-awake,
-    # an "audio stream" line under SYSTEM means sound is playing. Either way somebody is watching/listening.
+    # Parses `powercfg /requests` (needs admin). The output is translated ("ANZEIGE", "Keine.", "[TREIBER]"),
+    # so only language-neutral parts are used: the section order (1st DISPLAY, 2nd SYSTEM), request lines
+    # starting with "[", and audio device instance paths in parentheses.
     param([Parameter(Mandatory, Position = 0)][AllowEmptyString()][string]$Text)
-    $sections = @{}; $cur = $null
+    $sections = [Collections.Generic.List[object]]::new()
     foreach ($line in $Text -split "`r?`n") {
-        if ($line -match '^([A-Z]+):\s*$') { $cur = $Matches[1]; $sections[$cur] = @(); continue }
-        if ($cur -and $line.Trim()) { $sections[$cur] += $line.Trim() }
+        if ($line -match '^\S[^\[]*:\s*$') { $sections.Add([Collections.Generic.List[string]]::new()); continue }
+        if ($sections.Count -and $line.Trim()) { $sections[$sections.Count - 1].Add($line.Trim()) }
     }
-    $busy = { param($name) $l = $sections[$name]; $l -and -not ($l.Count -eq 1 -and $l[0] -eq 'None.') }
+    $requests = { param($i) if ($i -lt $sections.Count) { @($sections[$i] | Where-Object { $_.StartsWith('[') }) } else { @() } }
     @{
-        DisplayRequired = [bool](& $busy 'DISPLAY')
-        MediaPlaying    = [bool](@($sections['SYSTEM']) -match 'audio stream')
+        DisplayRequired = [bool](& $requests 0).Count
+        MediaPlaying    = [bool](@(& $requests 1) -match '\((HDAUDIO|INTELAUDIO|USB|BTHENUM|BTHHFENUM|SWD)\\').Count
     }
 }
 
