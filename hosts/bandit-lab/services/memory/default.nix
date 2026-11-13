@@ -65,6 +65,8 @@ in {
       User = username;
       StateDirectory = "memory-web";
       Environment = ["XDG_DATA_HOME=/var/lib/memory-web" "XDG_CONFIG_HOME=/var/lib/memory-web"];
+      # BNET_TOKEN=... for the /bnet/devices route; optional (leading -) so the page never depends on bnet.
+      EnvironmentFile = "-/etc/bnet/router.env";
       ExecStart = "${pkgs.caddy}/bin/caddy run --adapter caddyfile --config ${pkgs.writeText "memory-web.Caddyfile" ''
         {
         	admin off
@@ -76,6 +78,14 @@ in {
         	handle @mcp {
         		reverse_proxy 127.0.0.1:8765 {
         			flush_interval -1
+        		}
+        	}
+        	# bandit-net device list (services/bnet): read-only, the router token is added here so the
+        	# browser never holds it. Without /etc/bnet/router.env the route just answers 401.
+        	handle /bnet/devices {
+        		rewrite * /devices
+        		reverse_proxy 127.0.0.1:47810 {
+        			header_up Authorization "Bearer {env.BNET_TOKEN}"
         		}
         	}
         	handle_path /notes/* {
