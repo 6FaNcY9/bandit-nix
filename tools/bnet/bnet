@@ -1,0 +1,67 @@
+#!/bin/sh
+# bnet — steer the user's devices from pong or the laptop (docs/specs/bnet).
+#   bnet status                              device list from the lab router
+#   bnet run <host|group> -- <command>       run on each host over ssh, output prefixed with [host]
+#   bnet run --disruptive <host|group> -- <command>
+#                                            first warns whoever sits at a PC that is in use, waits 2 min
+# Config: $BNET_HOSTS (default ~/.config/bnet/hosts: "name ssh-target groups..."),
+#         $BNET_TOKEN or ~/.config/bnet/token, $BNET_URL (default https://bnet.tail7facc9.ts.net).
+set -u
+hosts_file=${BNET_HOSTS:-$HOME/.config/bnet/hosts}
+url=${BNET_URL:-https://bnet.tail7facc9.ts.net}
+wait_s=${BNET_NOTICE_WAIT:-120}
+
+token() { [ -n "${BNET_TOKEN:-}" ] && { printf %s "$BNET_TOKEN"; return; }; cat "$HOME/.config/bnet/token"; }
+devices() { curl -fsS -H "Authorization: Bearer $(token)" "$url/devices"; }
+
+# Prints "name target" for every host whose name or group matches $1.
+resolve() {
+  awk -v want="$1" '!/^[[:space:]]*(#|$)/ { for (i = 3; i <= NF; i++) if ($i == want) g = 1
+                                            if ($1 == want || g) print $1, $2; g = 0 }' "$hosts_file"
+}
+
+cmd_status() {
+  devices | python3 -c '
+import json, sys
+for d in json.load(sys.stdin):
+    st = d.get("state") or ("online" if d.get("online") else "offline")
+    h, k, j = d["host"], d["kind"], d.get("job") or "-"
+    print(f"{h:<12} {k:<7} {st:<12} {j}")'
+}
+
+cmd_run() {
+  disruptive=0
+  [ "${1:-}" = --disruptive ] && { disruptive=1; shift; }
+  sel=${1:-}; shift
+  [ "${1:-}" = -- ] && shift
+  [ -n "$sel" ] && [ $# -gt 0 ] || { echo "usage: bnet run [--disruptive] <host|group> -- <command>" >&2; exit 2; }
+  targets=$(resolve "$sel")
+  [ -n "$targets" ] || { echo "bnet: unknown host or group: $sel" >&2; exit 2; }
+
+  if [ $disruptive = 1 ]; then
+    # Only PCs somebody is using get the notice; idle/unavailable/unknown-to-router ones do not.
+    busy=$(devices 2>/dev/null | python3 -c '
+import json, sys
+for d in json.load(sys.stdin):
+    if d.get("online") and d.get("state") in ("light", "heavy", "media"): print(d["host"])' 2>/dev/null)
+    warned=0
+    echo "$targets" | while read -r name target; do
+      if echo "$busy" | grep -qx "$name"; then
+        ssh "$target" msg '*' "/TIME:$wait_s" "bandit-lab: Wartung an diesem PC in $((wait_s / 60)) Minuten. Bitte speichern." >/dev/null 2>&1
+        echo "[$name] notice sent, waiting ${wait_s}s (Ctrl-C aborts)"
+      fi
+    done
+    [ -n "$busy" ] && sleep "$wait_s"
+  fi
+
+  echo "$targets" | while read -r name target; do
+    ssh "$target" "$*" 2>&1 | sed "s/^/[$name] /" &
+  done
+  wait
+}
+
+case "${1:-}" in
+  status) cmd_status ;;
+  run) shift; cmd_run "$@" ;;
+  *) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac
