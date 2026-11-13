@@ -22,15 +22,23 @@ import urllib.request
 STALE_SEC = 15
 POLL_SEC = 5
 RELAY_ERRORS = (urllib.error.URLError, http.client.HTTPException, ConnectionError, TimeoutError, OSError)
+# Only real work goes to the PCs; listing, pulling or deleting models always means the lab's own Ollama.
+WORK_PATHS = ("/api/generate", "/api/chat", "/api/embed", "/api/embeddings")
 
 
-def pick_worker(states, order, now, exclude=()):
-    """First host in config order whose fresh state allows a job; None means: use the lab."""
+def _model_key(name):
+    return name if ":" in name else name + ":latest"
+
+
+def pick_worker(states, order, now, exclude=(), model=None):
+    """First host in config order whose fresh state allows a job and that has the model; None means: the lab."""
     for host in order:
         s = states.get(host)
         if host in exclude or not s:
             continue
         if now - s.get("fetched", 0) > STALE_SEC:
+            continue
+        if model and _model_key(model) not in {_model_key(m) for m in s.get("models") or []}:
             continue
         if s.get("job_allowed"):
             return host
@@ -38,10 +46,10 @@ def pick_worker(states, order, now, exclude=()):
 
 
 class Router:
-    def __init__(self, devices, token, agent_token, lab_ollama, timeout=3):
+    def __init__(self, devices, token, agent_tokens, lab_ollama, timeout=3):
         self.devices = devices
         self.token = token
-        self.agent_token = agent_token
+        self.agent_tokens = agent_tokens  # one per PC: a friend who reads his PC's token can't steer the other
         self.lab_ollama = lab_ollama.rstrip("/")
         self.timeout = timeout
         self.states = {}
@@ -62,7 +70,7 @@ class Router:
 
     def _agent(self, d, method, path, body=None, timeout=None):
         req = urllib.request.Request(d["agent"].rstrip("/") + path, method=method, data=body)
-        req.add_header("Authorization", f"Bearer {self.agent_token}")
+        req.add_header("Authorization", f"Bearer {self.agent_tokens[d['host']]}")
         if body is not None:
             req.add_header("Content-Type", "application/json")
         return urllib.request.urlopen(req, timeout=timeout or self.timeout)
@@ -105,12 +113,16 @@ class Router:
     # --- forwarding ----------------------------------------------------------------------------
     def open_upstream(self, method, path, body):
         """Response from the first worker that takes the request, else from the lab Ollama."""
-        order = [d["host"] for d in self.devices if d.get("agent")]
+        order = [d["host"] for d in self.devices if d.get("agent")] if path in WORK_PATHS else []
         by_host = {d["host"]: d for d in self.devices}
+        try:
+            model = json.loads(body or b"{}").get("model")
+        except (ValueError, AttributeError):
+            model = None
         tried = set()
         while True:
             with self.lock:
-                host = pick_worker(self.states, order, time.time(), exclude=tried)
+                host = pick_worker(self.states, order, time.time(), exclude=tried, model=model)
             if host is None:
                 break
             tried.add(host)
@@ -118,11 +130,10 @@ class Router:
             try:
                 self._agent(d, "POST", "/job/start", b'{"kind":"ollama"}').close()
                 return self._agent(d, method, "/ollama" + path, body, timeout=1800)
-            except urllib.error.HTTPError as e:
-                if e.code != 409:
-                    raise
             except RELAY_ERRORS:
-                pass  # worker went away (sleep, network): try the next one
+                # Refused (409), not ready or killed by the user returning (502), model gone (404), bad token:
+                # whatever went wrong on this PC, the next PC or the lab answers instead. HTTPError is a URLError.
+                pass
         req = urllib.request.Request(self.lab_ollama + path, method=method, data=body)
         if body is not None:
             req.add_header("Content-Type", "application/json")
@@ -185,7 +196,11 @@ def main():
     a = ap.parse_args()
     token = open(a.token_file).read().strip()
     devices = json.load(open(a.devices))
-    r = Router(devices, token=token, agent_token=token, lab_ollama=a.lab_ollama)
+    cred = os.path.dirname(a.token_file)
+    # $CREDENTIALS_DIRECTORY/agent-<host>: each PC's own token (systemd LoadCredential, see default.nix).
+    agent_tokens = {d["host"]: open(os.path.join(cred, "agent-" + d["host"])).read().strip()
+                    for d in devices if d.get("agent")}
+    r = Router(devices, token=token, agent_tokens=agent_tokens, lab_ollama=a.lab_ollama)
 
     def poll():
         while True:
