@@ -7,12 +7,26 @@ hardware numbers (CPU, RAM, GPU, temperatures); bandit-net (`services/bnet`) sup
 
 ```sh
 install -d -m 0700 /etc/bnet
-openssl rand -hex 32 > /etc/bnet/token && chmod 0600 /etc/bnet/token
-printf 'BNET_TOKEN=%s\n' "$(cat /etc/bnet/token)" > /etc/bnet/router.env && chmod 0600 /etc/bnet/router.env
-systemctl restart bnet-router memory-web
+for f in token agent-albert agent-slayer; do openssl rand -hex 32 > /etc/bnet/$f; done
+chmod 0600 /etc/bnet/*
+# memory-web shows /bnet/devices only when this file exists (decide first who may see presence):
+# printf "BNET_TOKEN=%s\n" "$(cat /etc/bnet/token)" > /etc/bnet/router.env && chmod 0600 /etc/bnet/router.env
+systemctl restart bnet-router
 ```
 
-The same token goes to each PC with `install.ps1 -Token` (tools/bnet/windows).
+Each PC gets only its own token: copy `/etc/bnet/agent-albert` to albert (e.g. over ssh into a temp file),
+run `install.ps1 -Config config.albert.json -TokenFile <file>`, delete the temp file. Same for slayer.
+`~/.config/bnet/token` on pong and the laptop holds `/etc/bnet/token` (the router token).
+
+## Models on the PCs
+
+The lab Ollama on each PC has its own empty store (`C:\ProgramData\bnet\models`). The router only sends a
+request to a PC that has the model. Pull models once while nobody uses the PC, as admin at the PC:
+
+```powershell
+$env:OLLAMA_HOST = '127.0.0.1:11435'; Start-ScheduledTask bnet-ollama; Start-Sleep 5
+ollama pull <model>; Stop-ScheduledTask bnet-ollama
+```
 
 ## Tailscale Service svc:bnet
 
