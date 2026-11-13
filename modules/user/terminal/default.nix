@@ -5,6 +5,7 @@
     ./tools.nix
     ./automation.nix
     ./zsh.nix
+    ./sec-lab.nix
   ];
 
   # kimi-code CLI is installed imperatively under ~/.kimi-code by its own
