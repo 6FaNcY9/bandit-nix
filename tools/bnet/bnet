@@ -38,25 +38,35 @@ cmd_run() {
   targets=$(resolve "$sel")
   [ -n "$targets" ] || { echo "bnet: unknown host or group: $sel" >&2; exit 2; }
 
+  skip=""
   if [ $disruptive = 1 ]; then
-    # Only PCs somebody is using get the notice; idle/unavailable/unknown-to-router ones do not.
-    busy=$(devices 2>/dev/null | python3 -c '
+    # Warn everyone the router does not positively report as idle or unavailable (nobody there): when the
+    # router is down or a PC's state is unknown, warning is the safe side. A PC whose notice fails is skipped.
+    states=$(devices 2>/dev/null | python3 -c '
 import json, sys
-for d in json.load(sys.stdin):
-    if d.get("online") and d.get("state") in ("light", "heavy", "media"): print(d["host"])' 2>/dev/null)
+for d in json.load(sys.stdin): print(d["host"], d.get("state") or "unknown")' 2>/dev/null)
     warned=0
-    echo "$targets" | while read -r name target; do
-      if echo "$busy" | grep -qx "$name"; then
-        ssh "$target" msg '*' "/TIME:$wait_s" "bandit-lab: Wartung an diesem PC in $((wait_s / 60)) Minuten. Bitte speichern." >/dev/null 2>&1
-        echo "[$name] notice sent, waiting ${wait_s}s (Ctrl-C aborts)"
+    while read -r name target; do
+      st=$(echo "$states" | awk -v h="$name" '$1 == h { print $2 }')
+      case "$st" in idle | unavailable) continue ;; esac
+      if ssh -n "$target" msg '*' "/TIME:$wait_s" "bandit-lab: Wartung an diesem PC in $((wait_s / 60)) Minuten. Bitte speichern."; then
+        echo "[$name] notice sent"; warned=1
+      else
+        echo "[$name] notice failed, skipping this host" >&2; skip="$skip $name"
       fi
-    done
-    [ -n "$busy" ] && sleep "$wait_s"
+    done <<EOF
+$targets
+EOF
+    [ $warned = 1 ] && { echo "waiting ${wait_s}s (Ctrl-C aborts)"; sleep "$wait_s"; }
   fi
 
-  echo "$targets" | while read -r name target; do
-    ssh "$target" "$*" 2>&1 | sed "s/^/[$name] /" &
-  done
+  while read -r name target; do
+    case " $skip " in *" $name "*) continue ;; esac
+    # -n: ssh must not eat the host list this loop reads from stdin
+    ssh -n "$target" "$*" 2>&1 | sed "s/^/[$name] /" &
+  done <<EOF
+$targets
+EOF
   wait
 }
 
