@@ -17,10 +17,11 @@ in {
     Service = {
       Type = "oneshot";
       LoadCredentialEncrypted = "keyring:%h/.local/state/keyring.cred";
-      # Two collections: "Default Keyring" (the alias) and "Login", where gh
-      # (go-keyring) keeps its tokens and would prompt on every call.
-      # Both always run; the unit fails if either failed. The Login path is hardcoded for this laptop.
-      ExecStart = "${pkgs.bash}/bin/bash -c 'rc=0; ${keyringUnlock}/bin/keyring-unlock < \"$CREDENTIALS_DIRECTORY/keyring\" || rc=1; ${keyringUnlock}/bin/keyring-unlock /org/freedesktop/secrets/collection/login < \"$CREDENTIALS_DIRECTORY/keyring\" || rc=1; exit $rc'";
+      # Unlock only the TPM-sealed "Default Keyring" (the alias), used by Brave
+      # and Claude's Safe Storage. The separate "Login" collection was removed
+      # (its password drifted and prompted); gh (go-keyring) now falls back to
+      # the Default alias, so there is nothing else to unlock here.
+      ExecStart = "${pkgs.bash}/bin/bash -c '${keyringUnlock}/bin/keyring-unlock < \"$CREDENTIALS_DIRECTORY/keyring\"'";
     };
     Install.WantedBy = ["graphical-session.target"];
   };
