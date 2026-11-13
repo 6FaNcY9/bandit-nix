@@ -2,7 +2,7 @@
 # The Windows-only parts (sensors, listener loop, service) live in bnet-agent.ps1 / bnet-sensor.ps1.
 
 $SensorMaxAgeSec = 30
-$OllamaLocal = 'http://127.0.0.1:11434'
+$OllamaLocal = 'http://127.0.0.1:11435'   # own instance, so a user's Ollama app on 11434 is untouched
 
 function Test-BnetToken([hashtable]$Headers, [string]$Token) {
     $auth = $Headers['Authorization']

@@ -32,7 +32,20 @@ public static class BnetWin {
 }
 '@
 
+# Visible notice: a tray icon while the lab uses this PC (job.json is written by the SYSTEM agent).
+Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+$tray = [Windows.Forms.NotifyIcon]::new()
+$tray.Icon = [Drawing.SystemIcons]::Information
+$tray.Text = 'bandit-lab rechnet hier (stoppt bei Nutzung)'   # max 63 chars
+
 while ($true) {
+    $busy = Test-Path "$Dir\job.json"
+    if ($busy -and -not $tray.Visible) {
+        $tray.Visible = $true
+        $tray.ShowBalloonTip(5000, 'bandit-lab', 'Dieser PC rechnet gerade im Leerlauf fuer das Lab.', 'Info')
+    } elseif (-not $busy -and $tray.Visible) { $tray.Visible = $false }
+    [Windows.Forms.Application]::DoEvents()
+
     $locked = [bool](Get-Process LogonUI -ErrorAction SilentlyContinue)
     @{
         Time          = (Get-Date).ToString('o')

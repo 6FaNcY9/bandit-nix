@@ -54,7 +54,7 @@ Describe 'Invoke-BnetRequest' {
     It 'ollama path with a running job is handed to the local ollama' {
         $c = Ctx; $c.Job = 'ollama'
         $r = Invoke-BnetRequest (Req POST /ollama/api/generate) $c
-        $r.ProxyTo | Should -Be 'http://127.0.0.1:11434/api/generate'
+        $r.ProxyTo | Should -Be 'http://127.0.0.1:11435/api/generate'
     }
     It 'ollama path without token is 401' {
         $c = Ctx; $c.Job = 'ollama'
