@@ -29,6 +29,21 @@
       webPort = 8770;
     }
   ];
+  # vino's notes that staff may read in firma: memory-mirror copies them there
+  # every 10 minutes and overwrites staff edits (paths relative to the store).
+  mirroredNotes = [
+    "projects/bandit-craft.md"
+    "projects/ingame-bots.md"
+    "projects/bot-backlog.md"
+    "projects/bot-menus-2b.md"
+    "projects/fleet-control.md"
+    "projects/highway.md"
+    "projects/minecraft-phase-5-5.md"
+    "projects/misabot-v2.md"
+    "projects/combat-retreat-fix.md"
+    "projects/discord-platform.md"
+    "projects/prismlauncher-minecraft.md"
+  ];
   dir = s: "/srv/containers/${s.name}";
   forStores = f: lib.listToAttrs (map f stores);
   # vino's front only. A plain string: alejandra would strip the leading tabs of a nested '' string.
@@ -92,6 +107,24 @@ in {
           ExecStart = pkgs.writeShellScript "memory-summarise" (builtins.readFile ./summarise.sh);
         };
       };
+      # One-way copy vino -> firma (mirror.sh); the source is read-only to this unit.
+      memory-mirror = {
+        description = "Mirror listed vino memory notes read-only into the firma store";
+        after = ["memory-firma.service"];
+        path = [pkgs.coreutils pkgs.gawk pkgs.diffutils];
+        environment.MEMORY_NOTES = lib.concatStringsSep " " mirroredNotes;
+        serviceConfig = {
+          Type = "oneshot";
+          User = username;
+          ExecStart = pkgs.writeShellScript "memory-mirror" (builtins.readFile ./mirror.sh);
+          NoNewPrivileges = true;
+          ProtectSystem = "strict";
+          ProtectHome = true;
+          PrivateTmp = true;
+          PrivateNetwork = true;
+          ReadWritePaths = ["/srv/containers/memory-firma/data/basic-memory"];
+        };
+      };
     }
     # One loopback front per store for its Tailscale Service: the page for people at /,
     # the notes read-only at /notes/, and the agents' MCP endpoint at /mcp.
@@ -142,6 +175,13 @@ in {
     timerConfig = {
       OnBootSec = "5min";
       OnUnitActiveSec = "2min";
+    };
+  };
+  systemd.timers.memory-mirror = {
+    wantedBy = ["timers.target"];
+    timerConfig = {
+      OnBootSec = "5min";
+      OnUnitActiveSec = "10min";
     };
   };
 }

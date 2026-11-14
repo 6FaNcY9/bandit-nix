@@ -107,6 +107,13 @@ CORS headers. The page links stores with `[[firma:path]]`, `[[vino:path]]`,
 `[[albert:path]]`; a viewer without access gets a failed page. All data dirs
 are in the restic backup (the only undo for an overwritten note).
 
+`memory-mirror.timer` (every 10 min, `services/memory/mirror.sh`) copies the
+owner's Minecraft project notes one way from vino into firma, same path, with a
+"Nur lesen" banner line, so staff can read them. Any change to a copy in firma
+is overwritten on the next run; edit the original in vino. To mirror another
+note, add its path to `mirroredNotes` in `services/memory/default.nix` and deploy.
+Removing a path stops the copy but leaves the old copy in firma (delete it by hand).
+
 Owner steps (design steps 3-7, in order; 1 and 2 must pass before Albert gets any address):
 
 1. Tailscale console, policy: add `tagOwners` `"tag:albert": ["autogroup:admin"]`;
