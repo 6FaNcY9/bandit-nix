@@ -6,11 +6,12 @@
 // messages); enough for tool calls. Drop it once Termux resolves *.ts.net.
 const https = require('https');
 const HOST = 'memory.tail7facc9.ts.net', ADDR = process.env.MEMORY_ADDR || '100.103.202.198';
-let session, queue = Promise.resolve();
+let session, initLine, queue = Promise.resolve();
 
-const post = (line) => new Promise((resolve) => {
+const post = (line, quiet = false) => new Promise((resolve) => {
   // Only initialize opens a session: Claude first sends a discovery probe the server rejects.
   const init = /"method"\s*:\s*"initialize"/.test(line);
+  if (init) initLine = line;
   const headers = {'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', Host: HOST};
   if (session && !init) headers["mcp-session-id"] = session;
   const fail = (msg) => {
@@ -23,6 +24,14 @@ const post = (line) => new Promise((resolve) => {
     if (init && res.headers["mcp-session-id"]) session = res.headers["mcp-session-id"];
     let body = '';
     res.setEncoding('utf8').on('data', (c) => (body += c)).on('end', () => {
+      // Server restarted and forgot our session: log in again with the saved initialize, then retry once.
+      if (res.statusCode === 404 && !init && !quiet && initLine && body.includes('Session not found')) {
+        session = undefined;
+        return post(initLine, true)
+          .then(() => post('{"jsonrpc":"2.0","method":"notifications/initialized"}', true))
+          .then(() => post(line, true)).then(resolve);
+      }
+      if (quiet && init) return resolve();  // replayed initialize: its reply must not reach Claude
       if (res.statusCode >= 400) return fail(`memory server: HTTP ${res.statusCode} ${body.slice(0, 200)}`);
       const sse = String(res.headers['content-type']).includes('text/event-stream');
       const msgs = sse ? body.split(/\r?\n/).filter((l) => l.startsWith('data:')).map((l) => l.slice(5).trim()) : [body.trim()];

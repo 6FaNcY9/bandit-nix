@@ -24,3 +24,4 @@ hosts/bandit/windows/
 
 # Generated code-graph output (graphify); rebuilt locally, machine-specific.
 graphify-out/
+__pycache__/

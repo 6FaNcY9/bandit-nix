@@ -50,21 +50,26 @@
   input { font:inherit; color:var(--fg); background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:6px 10px; width:min(100%, 26em); min-height:44px; }
   form { margin:8px 0; }
   #status.bad { color:var(--late); font-weight:600; }
+  #stores { margin-right:12px; } #stores a[aria-current] { font-weight:700; text-decoration:none; }
 </style>
 <header>
   <h1>Gedächtnis</h1>
+  <nav id="stores" class="dim" aria-label="Speicher"></nav>
   <button data-view="status">Übersicht</button>
   <button data-view="board">Aufgaben</button>
   <button data-view="notes">Notizen</button>
   <button data-view="map">Karte</button>
+  <button data-view="devices">Geräte</button>
   <span class="dim" id="status"></span>
 </header>
 <main id="main">Lade Notizen …</main>
+<script src="devices.js"></script>
+<script src="stores.js"></script>
 <script>
 // shortcut: loads every note into the browser, fine for some hundred notes; give the lab an index endpoint when it gets slow.
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const VIEWS = ['status', 'board', 'notes', 'map'];
+const VIEWS = ['status', 'board', 'notes', 'map', 'devices'];
 let notes = [], shown = null, view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'status', boardProject = '';
 const today = () => new Date().toLocaleDateString('sv'); // YYYY-MM-DD in local time
 
@@ -161,8 +166,7 @@ const taskButton = (n, i) => `<button class="link task" data-note="${esc(n.path)
 
 // Small Markdown renderer: everything is escaped first, so note text can never inject HTML.
 function md(src) {
-  const inline = (s) => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
-    .replace(/\[\[([^\]]+)\]\]/g, (_, t) => `<button class="link" data-open="${t}">${t}</button>`);
+  const inline = (s) => wikiLinks(storeLinks(esc(s).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')));
   let html = '', list = false, code = false;
   for (const line of src.split('\n')) {
     if (line.startsWith('```')) { html += code ? '</pre>' : (list ? '</ul>' : '') + '<pre>'; code = !code; list = false; continue; }
@@ -361,7 +365,7 @@ function show(n) {
 function render() {
   document.querySelectorAll('header button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.view === view));
   $('#main').className = view === 'board' || view === 'map' ? 'wide' : '';
-  $('#main').innerHTML = {status, board, notes: list, map}[view]();
+  $('#main').innerHTML = {status, board, notes: list, map, devices: () => devicesHtml(devList)}[view]();
   if (view === 'map') setupMap();
 }
 // The MCP call answers before the file is on disk (~0.1 s); wait until /notes/ serves the new revision, else the reload shows the old one.
@@ -421,6 +425,16 @@ async function load(keepStatus) {
     n ? show(n) : render();
   } catch (e) { $('#main').textContent = 'Fehler: ' + e.message; }
 }
+// bandit-net devices: refreshed every 10 s, only while that view is open.
+let devList = [];
+async function loadDevices() {
+  try { const r = await fetch('/bnet/devices', {cache: 'no-store'}); devList = r.ok ? await r.json() : null; }
+  catch { devList = null; }
+  if (view === 'devices' && !shown) render();
+}
+$('#stores').innerHTML = switcherHtml(location.host);
+setInterval(() => { if (view === 'devices') loadDevices(); }, 10000);
+loadDevices();
 load();
 </script>
 </html>

@@ -31,6 +31,8 @@ in {
     "/srv/containers/mrija-archive/maildir"
     # Shared LLM memory notes (plain Markdown; the index is rebuildable).
     "/srv/containers/memory/data"
+    "/srv/containers/memory-albert/data"
+    "/srv/containers/memory-firma/data"
   ];
 
   # Consistent snapshots, taken just before restic reads the staging area.

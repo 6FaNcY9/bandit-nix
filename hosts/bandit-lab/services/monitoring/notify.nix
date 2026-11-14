@@ -69,9 +69,13 @@
       touch "$stamp"
   '';
   criticalUnits =
-    ["minecraft-server-paper" "minecraft-server-velocity" "restic-backups-peer" "minecraft-backup" "postgresqlBackup"]
+    ["minecraft-server-paper" "minecraft-server-velocity" "restic-backups-peer" "restic-backups-mc-public" "minecraft-backup" "postgresqlBackup"]
+    ++ ["memory-web" "memory-albert-web" "memory-firma-web" "memory-summarise"]
     ++ lib.optional config.bandit-lab.mcbots.enable "docker-mcbots";
 in {
+  # The memory*.service units come from the podman quadlet generator, so their OnFailure goes in the .container file.
+  virtualisation.quadlet.containers = lib.genAttrs ["memory" "memory-albert" "memory-firma"] (_: {unitConfig.OnFailure = "notify-failure@%n.service";});
+
   systemd.services =
     {
       grafana-ntfy =
