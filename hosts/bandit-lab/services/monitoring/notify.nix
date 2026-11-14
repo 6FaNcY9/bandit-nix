@@ -70,7 +70,7 @@
   '';
   criticalUnits =
     ["minecraft-server-paper" "minecraft-server-velocity" "restic-backups-peer" "restic-backups-mc-public" "minecraft-backup" "postgresqlBackup"]
-    ++ ["memory-web" "memory-albert-web" "memory-firma-web" "memory-summarise" "memory-mirror"]
+    ++ ["memory-web" "memory-albert-web" "memory-firma-web" "memory-summarise" "memory-mirror" "memory-index"]
     ++ lib.optional config.bandit-lab.mcbots.enable "docker-mcbots";
 in {
   # The memory*.service units come from the podman quadlet generator, so their OnFailure goes in the .container file.

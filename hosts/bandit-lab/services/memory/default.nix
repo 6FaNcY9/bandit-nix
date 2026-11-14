@@ -45,6 +45,27 @@
     "projects/prismlauncher-minecraft.md"
   ];
   dir = s: "/srv/containers/${s.name}";
+  notesDir = id: "${dir (lib.findFirst (s: s.id == id) null stores)}/data/basic-memory";
+  # memory-index (index.sh) runs: each store's lagebild.md lists only the stores named
+  # here, its own first. vino also sees firma, minus vino's own notes mirrored there.
+  indexRuns = [
+    {
+      dst = "vino";
+      sources = ["vino" "firma"];
+      skip = mirroredNotes;
+    }
+    {
+      dst = "firma";
+      sources = ["firma"];
+      skip = [];
+    }
+    {
+      dst = "albert";
+      sources = ["albert"];
+      skip = [];
+    }
+  ];
+  indexScript = pkgs.writeShellScript "memory-index-one" (builtins.readFile ./index.sh);
   forStores = f: lib.listToAttrs (map f stores);
   # vino's front only. A plain string: alejandra would strip the leading tabs of a nested '' string.
   bnetRoute = "	# bandit-net device list (services/bnet): read-only, the router token is added here so the
@@ -57,6 +78,14 @@
 	}
 ";
 in {
+  # The mirror would overwrite firma's generated lagebild with vino's.
+  assertions = [
+    {
+      assertion = !(lib.elem "lagebild.md" mirroredNotes);
+      message = "services/memory: lagebild.md is generated per store and must not be in mirroredNotes";
+    }
+  ];
+
   # Shared LLM memory for every tailnet device: Basic Memory's MCP server over
   # streamable HTTP. The endpoint has NO authentication of its own, so it is
   # only published on loopback and reached as the Tailscale Service svc:memory
@@ -125,6 +154,34 @@ in {
           ReadWritePaths = ["/srv/containers/memory-firma/data/basic-memory"];
         };
       };
+      # lagebild.md per store (index.sh); reads the sources, writes only into the stores' note dirs.
+      memory-index = {
+        description = "Write the lagebild overview note into each memory store";
+        after = map (s: "${s.name}.service") stores;
+        path = [pkgs.coreutils pkgs.gawk pkgs.diffutils];
+        serviceConfig = {
+          Type = "oneshot";
+          User = username;
+          # All three runs even when one fails; the unit then fails and alerts.
+          ExecStart = pkgs.writeShellScript "memory-index" ''
+            status=0
+            ${lib.concatMapStrings (r: ''
+                MEMORY_INDEX_DST=${notesDir r.dst} \
+                MEMORY_INDEX_SOURCES=${lib.escapeShellArg (lib.concatMapStringsSep " " (id: "${id}=${notesDir id}") r.sources)} \
+                MEMORY_INDEX_SKIP=${lib.escapeShellArg (lib.concatStringsSep " " r.skip)} \
+                ${indexScript} || status=1
+              '')
+              indexRuns}
+            exit "$status"
+          '';
+          NoNewPrivileges = true;
+          ProtectSystem = "strict";
+          ProtectHome = true;
+          PrivateTmp = true;
+          PrivateNetwork = true;
+          ReadWritePaths = map (r: notesDir r.dst) indexRuns;
+        };
+      };
     }
     # One loopback front per store for its Tailscale Service: the page for people at /,
     # the notes read-only at /notes/, and the agents' MCP endpoint at /mcp.
@@ -175,6 +232,13 @@ in {
     timerConfig = {
       OnBootSec = "5min";
       OnUnitActiveSec = "2min";
+    };
+  };
+  systemd.timers.memory-index = {
+    wantedBy = ["timers.target"];
+    timerConfig = {
+      OnBootSec = "5min";
+      OnUnitActiveSec = "5min";
     };
   };
   systemd.timers.memory-mirror = {

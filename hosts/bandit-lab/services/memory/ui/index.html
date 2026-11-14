@@ -45,11 +45,20 @@
   svg text.grp { font-size:var(--gs); font-weight:700; fill:var(--acc); }
   svg.far text.lbl { display:none; }
   svg line { stroke:var(--line); stroke-width:3; }
+  svg rect { fill:none; stroke:var(--line); stroke-width:3; }
   svg circle { cursor:pointer; stroke:var(--card); stroke-width:3; }
   .task { text-decoration:none; color:var(--fg); text-align:left; }
   input { font:inherit; color:var(--fg); background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:6px 10px; width:min(100%, 26em); min-height:44px; }
   form { margin:8px 0; }
   #status.bad { color:var(--late); font-weight:600; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(250px, 1fr)); gap:14px; align-items:start; margin:10px 0 14px; }
+  .grid .card { margin:0; }
+  .grid .card h2 { font-size:21px; overflow-wrap:anywhere; }
+  .card .head { display:flex; justify-content:space-between; gap:8px; align-items:baseline; }
+  .tag { border:1px solid var(--line); border-radius:999px; padding:0 8px; font-size:15px; color:var(--dim); }
+  .card .foot { display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; margin-top:6px; }
+  ol.wait { padding-left:28px; } .wait .late, .card .late { color:var(--late); font-weight:600; }
+  summary { cursor:pointer; min-height:32px; }
   #stores { margin-right:12px; } #stores a[aria-current] { font-weight:700; text-decoration:none; }
 </style>
 <header>
@@ -95,7 +104,7 @@ function parseTask(raw, box, text) {
   const due = parts.find((p) => /^\d{4}-\d{2}-\d{2}$/.test(p)) || '';
   const state = BOX[box];
   return {raw, state, text, title: m ? text.slice(0, m.index) : text, who: parts.filter((p) => p !== due).join(', '), due,
-    late: !!due && due < today() && state !== 'done'};
+    late: isLate(due, state, today())};
 }
 const sha256 = async (text) => crypto.subtle
   ? [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map((b) => b.toString(16).padStart(2, '0')).join('')
@@ -107,6 +116,7 @@ function parse(n, text) {
   n.body = m ? text.slice(m[0].length) : text;
   n.title = (/^title:\s*(.+)$/m.exec(fm) || [])[1] || n.path.replace(/\.md$/, '');
   n.type = (/^type:\s*(.+)$/m.exec(fm) || [])[1] || 'note';
+  n.status = (/^status:\s*["']?(active|paused|done)\b/m.exec(fm) || [])[1] || 'active';
   n.tags = [...fm.matchAll(/^- (.+)$/gm)].map((x) => x[1]);
   n.links = [...n.body.matchAll(/\[\[([^\]]+)\]\]/g)].map((x) => x[1]);
   n.slug = n.path.replace(/\.md$/, '').split('/').pop();
@@ -200,24 +210,46 @@ function projectList() {
 }
 const when = (iso) => iso ? iso.slice(0, 16).replace('T', ' ') : '?';
 
+// Übersicht: what waits for a person, then one card per project. Own projects come live from the loaded notes;
+// other stores' projects only from this store's generated lagebild note, as read-only links (no fetch to another store).
+const shortDay = (iso) => iso ? iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' : '?';
 function status() {
-  const ps = projectList();
-  if (!ps.length) return '<p>Noch keine Projekte. Sie erscheinen nach der ersten gespeicherten Sitzung.</p>';
-  const late = ps.reduce((s, p) => s + p.late, 0);
-  return (late ? `<p class="pill late" style="display:inline-block">${late} Aufgabe(n) überfällig</p>` : '') + ps.map((p) => {
-    const st = p.note && stateSection(p.note), last = p.sessions[0];
-    const openItems = last ? bullets(section(last, 'Open')) : [];
-    return `<div class="card"><h2>${esc(p.name)}</h2>
-      <div class="dim">Zuletzt geändert: ${esc(when(p.when))}</div>
+  const own = storeOf(location.host) || 'vino', lage = find('lagebild.md');
+  const cards = projectList().map((p) => {
+    const {human, claude} = nextSteps(p.tasks);
+    return {p, name: p.name, store: own, status: p.note ? p.note.status : 'active', open: p.open, doing: p.doing, late: p.late,
+      human: human ? human.title : '', humanLate: !!(human && human.late), claude: claude ? claude.title : '', changed: p.when.slice(0, 10)};
+  }).concat(lage ? parseLagebild(lage.body).filter((r) => r.store !== own).map((r) => ({...r, name: r.project})) : [])
+    .filter((c) => c.status !== 'done')
+    .sort((a, b) => b.late - a.late || b.changed.localeCompare(a.changed) || a.name.localeCompare(b.name));
+  if (!cards.length) return '<p>Noch keine Projekte. Sie erscheinen nach der ersten gespeicherten Sitzung.</p>';
+  const active = cards.filter((c) => c.status !== 'paused'), resting = cards.filter((c) => c.status === 'paused');
+  const waiting = active.filter((c) => c.human).sort((a, b) => b.humanLate - a.humanLate);
+  const grid = (cs) => '<div class="grid">' + cs.map(card).join('') + '</div>';
+  return (waiting.length ? `<h2>Wartet auf dich (${waiting.length})</h2><ol class="wait">` + waiting.map((c) =>
+      `<li><b>${esc(c.name)}</b>${c.store !== own ? ' · ' + esc(c.store) : ''} – ${esc(c.human)}${c.humanLate ? ' <span class="late">! überfällig</span>' : ''}</li>`).join('') + '</ol>' : '')
+    + grid(active)
+    + (resting.length ? `<details><summary>${resting.length} ruhende Projekte</summary>${grid(resting)}</details>` : '');
+}
+function card(c) {
+  const counts = [`Offen ${c.open}`, c.doing ? `in Arbeit ${c.doing}` : '', c.late ? `<span class="late">${c.late} überfällig</span>` : ''].filter(Boolean).join(' · ');
+  return `<div class="card"><div class="head"><h2>${esc(c.name)}</h2><span class="tag">${esc(c.store)}</span></div>
+    <div>${counts}</div>${c.human ? `<div>Du: ${esc(c.human)}</div>` : ''}${c.claude ? `<div>Claude: ${esc(c.claude)}</div>` : ''}
+    <div class="foot"><span class="dim">geändert ${esc(shortDay(c.changed))}</span>${c.p ? '' : `<a href="${esc(STORES[c.store])}">→ in ${esc(c.store)} öffnen</a>`}</div>
+    ${c.p ? `<details><summary>Mehr</summary>${more(c.p)}</details>` : ''}</div>`;
+}
+// What the old Übersicht card showed: state, last sessions, buttons and the add-task form.
+function more(p) {
+  const st = p.note && stateSection(p.note), last = p.sessions[0];
+  const openItems = last ? bullets(section(last, 'Open')) : [];
+  return `<div class="dim">Zuletzt geändert: ${esc(when(p.when))}</div>
       <div class="pills"><span class="pill">Offen ${p.open}</span><span class="pill doing">In Arbeit ${p.doing}</span><span class="pill done">Fertig ${p.done}</span>${p.late ? `<span class="pill late">${p.late} überfällig</span>` : ''}</div>
       ${st ? `<div class="state"><h3>${esc(st.head)}</h3>${md(st.text)}</div>` : ''}
       ${p.sessions.length ? '<b>Letzte Sitzungen:</b><ul>' + p.sessions.slice(0, 3).map((s) =>
         `<li>${esc(s.day)} · ${esc(s.device)} · ${open(s, 'ansehen')}<br><span class="dim">${esc(section(s, 'Goal').replace(/^[-*] /gm, '').split('\n')[0] || '')}</span></li>`).join('') + '</ul>' : ''}
       ${openItems.length ? '<details><summary>Offen laut letzter Sitzung (' + openItems.length + ')</summary><ul>' + openItems.map((b) => '<li>' + esc(b) + '</li>').join('') + '</ul></details>' : ''}
       <div class="row">${p.tasks.length ? `<button data-board="${esc(p.name)}">Aufgaben ansehen</button>` : ''}${p.note ? open(p.note, 'Projekt-Notiz') : ''}${p.sessions.length > 3 ? `<span class="dim">${p.sessions.length} Sitzungen</span>` : ''}</div>
-      <form data-add="${esc(p.name)}"><input name="text" placeholder="Neue Aufgabe …" required> <button>Hinzufügen</button></form>
-    </div>`;
-  }).join('');
+      <form data-add="${esc(p.name)}"><input name="text" placeholder="Neue Aufgabe …" required> <button>Hinzufügen</button></form>`;
 }
 
 function board() {
@@ -250,26 +282,24 @@ function list() {
     ns.sort((a, b) => b.changed.localeCompare(a.changed)).map((n) => `<li>${open(n)} <span class="dim">${esc(n.changed.slice(0, 10))}</span></li>`).join('') + '</ul></div>').join('');
 }
 
-// Map: one cluster per project, the project in the middle and its notes on rings around it.
+// Map: one boxed cluster per project, the project in the middle and its notes on rings around it.
+// Sessions are no dots, only a count in the project's name; every group without a projects/ note is "Importe".
 function groupOf(n) {
   if (n.path.startsWith('projects/')) return n.slug;
-  if (n.type === 'session') return n.project;
-  if (n.path.startsWith('imports/claude-mem/')) return n.slug;
-  const p = n.links.map(find).find((t) => t && t.path.startsWith('projects/'));
-  return p ? p.slug : n.path.includes('/') ? n.path.split('/')[0] : 'allgemein';
+  const p = n.type === 'session' ? n.project : n.path.startsWith('imports/claude-mem/') ? n.slug
+    : (n.links.map(find).find((t) => t && t.path.startsWith('projects/')) || {}).slug;
+  return p && find('projects/' + p + '.md') ? p : 'Importe';
 }
 let fitBox = [0, 0, 1000, 600];
 function map() {
   const nodes = new Map(), edges = [];
   const node = (id, note, group) => nodes.get(id) || nodes.set(id, {id, note, group, label: note ? (note.type === 'session' ? note.day.slice(5) + ' ' + note.device : note.title) : id}).get(id);
-  for (const n of notes) node(n.path, n, groupOf(n));
-  for (const n of notes) for (const t of n.links) {
-    const target = find(t);
-    edges.push([nodes.get(n.path), target ? nodes.get(target.path) : node('?' + t, null, groupOf(n))]);
-  }
-  for (const n of notes) if (n.type === 'session') { // a session belongs to its project's note (or a grey stand-in)
-    const p = find('projects/' + n.project + '.md');
-    edges.push([nodes.get(n.path), p ? nodes.get(p.path) : node('?' + n.project, null, n.project)]);
+  const shownNotes = notes.filter((n) => n.type !== 'session' && n.path !== 'lagebild.md'), sessions = {};
+  for (const n of notes) if (n.type === 'session') sessions[groupOf(n)] = (sessions[groupOf(n)] || 0) + 1;
+  for (const n of shownNotes) node(n.path, n, groupOf(n));
+  for (const n of shownNotes) for (const t of n.links) {
+    const target = find(t), b = target ? nodes.get(target.path) : node('?' + t, null, groupOf(n));
+    if (b && b.group === groupOf(n)) edges.push([nodes.get(n.path), b]); // lines across clusters only cluttered the map
   }
   const groups = new Map();
   for (const a of nodes.values()) (groups.get(a.group) || groups.set(a.group, []).get(a.group)).push(a);
@@ -280,8 +310,8 @@ function map() {
     const rest = ms.filter((a) => a !== center).sort((a, b) => a.label.localeCompare(b.label));
     let ring = 0, left = rest.length;
     while (left > 0) { ring++; left -= 6 * ring; }
-    const r = RING * ring + 60;
-    return {name, center, rest, r, w: Math.max(2 * r, name.length * G * .62 + 40), h: 2 * r + G + 32}; // w and the top band fit the project name
+    const r = RING * ring + 60, k = sessions[name], label = name + (k ? ` · ${k} ${k === 1 ? 'Sitzung' : 'Sitzungen'}` : '');
+    return {name, label, center, rest, r, w: Math.max(2 * r + 12 * L, label.length * G * .62 + 40), h: 2 * r + G + 32 + L}; // the box holds the label on top and the note labels on the sides and bottom
   }).sort((a, b) => b.h - a.h || a.name.localeCompare(b.name));
   // Row packing: clusters left to right, wrapped so the whole map has about the shape of the screen.
   const aspect = Math.min(3, Math.max(.5, innerWidth / (innerHeight * .75)));
@@ -301,16 +331,17 @@ function map() {
     }
   }
   const all = [...nodes.values()];
-  const xs = clusters.flatMap((c) => [c.x - c.w / 2, c.x + c.w / 2]), ys = clusters.flatMap((c) => [c.y - c.r - G - 32, c.y + c.r + L + 20]);
+  const xs = clusters.flatMap((c) => [c.x - c.w / 2, c.x + c.w / 2]), ys = clusters.flatMap((c) => [c.y - c.r - G - 32, c.y - c.r - G - 32 + c.h]);
   fitBox = all.length ? [Math.min(...xs) - 20, Math.min(...ys) - 20, Math.max(...xs) - Math.min(...xs) + 40, Math.max(...ys) - Math.min(...ys) + 40] : [0, 0, 1000, 600];
-  const color = (a) => !a.note ? 'var(--dim)' : a.note.type === 'session' ? 'var(--doing)' : a.note.path.startsWith('projects/') ? 'var(--acc)' : 'var(--ok)';
+  const color = (a) => !a.note ? 'var(--dim)' : a.note.path.startsWith('projects/') ? 'var(--acc)' : 'var(--ok)';
   return `<div class="row"><button data-zoom="in" aria-label="Näher">＋ Näher</button><button data-zoom="out" aria-label="Weiter weg">－ Weiter</button><button data-zoom="fit">Ganz zeigen</button>
-      <span class="dim">Orange: Projekt · Grün: Notiz · Blau: Sitzung · Grau: noch ohne Notiz. Ziehen verschiebt, Rad oder zwei Finger zoomen, Antippen öffnet.</span></div>
+      <span class="dim">Orange: Projekt · Grün: Notiz · Grau: noch ohne Notiz. Ziehen verschiebt, Rad oder zwei Finger zoomen, Antippen öffnet.</span></div>
     <svg id="map" viewBox="${fitBox.join(' ')}" data-l="${L}" style="--fs:${L}px;--gs:${G}px">` +
+    clusters.map((c) => `<rect x="${c.x - c.w / 2}" y="${c.y - c.r - G - 32}" width="${c.w}" height="${c.h}" rx="24"/>`).join('') +
     edges.map(([a, b]) => `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>`).join('') +
     all.map((a) => `<circle ${a.note ? `data-open="${esc(a.note.path)}"` : ''} cx="${a.x}" cy="${a.y}" data-r="${clusters.some((c) => c.center === a) ? 34 : 20}" fill="${color(a)}"><title>${esc(a.label)}</title></circle>`).join('') +
     all.filter((a) => !clusters.some((c) => c.center === a)).map((a) => `<text class="lbl" x="${a.x}" y="${a.y + 26 + L}">${esc(a.label.length > 22 ? a.label.slice(0, 21) + '…' : a.label)}</text>`).join('') +
-    clusters.map((c) => `<text class="grp" x="${c.x}" y="${c.y - c.r - 24}">${esc(c.name)}</text>`).join('') + '</svg>';
+    clusters.map((c) => `<text class="grp" x="${c.x}" y="${c.y - c.r - 24}">${esc(c.label)}</text>`).join('') + '</svg>';
 }
 function setupMap() {
   const svg = $('#map');

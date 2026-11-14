@@ -114,6 +114,15 @@ is overwritten on the next run; edit the original in vino. To mirror another
 note, add its path to `mirroredNotes` in `services/memory/default.nix` and deploy.
 Removing a path stops the copy but leaves the old copy in firma (delete it by hand).
 
+`memory-index.timer` (every 5 min, `services/memory/index.sh`) writes the note
+`lagebild.md` into each store's root: who waits for what, then one table row per
+project from `projects/*.md`. It is generated; edits are overwritten, change the
+project note instead. vino's lagebild also lists firma's projects (minus the
+mirrored copies); firma's and albert's list only their own. Two optional front
+matter keys in a project note feed it: `status: active|paused|done` (done is
+hidden, paused folds away on the page) and `repo: ~/src/<repo> <branch>`. The
+page's Übersicht shows other stores' rows from it as links, never fetched live.
+
 Owner steps (design steps 3-7, in order; 1 and 2 must pass before Albert gets any address):
 
 1. Tailscale console, policy: add `tagOwners` `"tag:albert": ["autogroup:admin"]`;
