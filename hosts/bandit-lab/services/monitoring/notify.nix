@@ -69,7 +69,7 @@
       touch "$stamp"
   '';
   criticalUnits =
-    ["minecraft-server-paper" "minecraft-server-velocity" "restic-backups-peer" "minecraft-backup" "postgresqlBackup"]
+    ["minecraft-server-paper" "minecraft-server-velocity" "restic-backups-peer" "restic-backups-mc-public" "minecraft-backup" "postgresqlBackup"]
     ++ ["memory-web" "memory-summarise"]
     ++ lib.optional config.bandit-lab.mcbots.enable "docker-mcbots";
 in {
