@@ -18,8 +18,10 @@ args=()
 for i in "${!sources[@]}"; do
   name=${sources[i]%%=*} dir=${sources[i]#*=}
   [[ $name =~ ^[a-z0-9-]+$ ]] || { echo "bad store name $name" >&2; exit 1; }
+  [ ! -L "$dir/projects" ] || { echo "skip $dir/projects: symlink" >&2; continue; }
   for f in "$dir"/projects/*.md; do
-    [ -f "$f" ] || continue
+    # No symlinks: a link in a staff-writable store could point into another store.
+    [ -f "$f" ] && [ ! -L "$f" ] || continue
     base=${f##*/}
     # Names go to awk as file operands: refuse anything awk could read as var=value.
     [[ $base =~ ^[A-Za-z0-9._-]+\.md$ ]] || { echo "skip $f: odd name" >&2; continue; }
@@ -32,7 +34,7 @@ tmp=$(mktemp "$dst/.lagebild.XXXXXX") || exit 1
 trap 'rm -f "$tmp"' EXIT
 if ! gawk -v today="$(date +%F)" '
   function clean(s, n) {
-    gsub(/[\r\n\t]/, " ", s); gsub(/\|/, "/", s); gsub(/\[\[|\]\]/, "", s)
+    gsub(/[\r\n\t]/, " ", s); gsub(/\|/, "/", s); while (gsub(/\[\[|\]\]/, "", s));
     sub(/^ +/, "", s); sub(/ +$/, "", s)
     return length(s) > n ? substr(s, 1, n - 1) "…" : s
   }
@@ -41,11 +43,11 @@ if ! gawk -v today="$(date +%F)" '
     k = sprintf("%06d\t%s\t%s\t%s", 999999 - late, 99999999 - gensub(/-/, "", "g", chg), proj, sto)
     w = htitle[1] != "" ? 1 : htitle[2] != "" ? 2 : 0
     c = ctitle[1] != "" ? 1 : ctitle[2] != "" ? 2 : 0
-    row[k] = "| " clean(proj, 80) " | " sto " | " st " | " open " | " doing " | " late " | " \
+    row[k] = "| " proj " | " sto " | " st " | " open " | " doing " | " late " | " \
       (w ? clean(htitle[w], 80) : "-") " | " (c ? clean(ctitle[c], 80) : "-") " | " clean(repo, 80) " | " chg " |"
     # Paused projects wait for nobody; one step per project, the step cut so "LATE <date>" survives.
     if (w && st != "paused") {
-      head = clean(proj, 30) " (" sto "): "
+      head = proj " (" sto "): "
       tail = (hwho[w] != "" ? " (" clean(hwho[w], 30) ")" : "") (hlate[w] ? " LATE " hdue[w] : hdue[w] != "" ? " " hdue[w] : "")
       wait[sprintf("%d\t%s", !hlate[w], k)] = head clean(htitle[w], 76 - length(head) - length(tail)) tail
     }
@@ -56,6 +58,7 @@ if ! gawk -v today="$(date +%F)" '
     sto = store; chg = changed; st = "active"; repo = "-"; fm = 0; open = doing = late = 0
     split("", htitle); split("", ctitle); split("", hwho); split("", hdue); split("", hlate)
   }
+  { sub(/\r$/, "") }
   FNR == 1 && $0 == "---" { fm = 1; next }
   fm && $0 == "---" { fm = 0; next }
   fm && /^status:/ { v = $0; sub(/^status:[ \t]*/, "", v); gsub(/["\047 \t\r]/, "", v); if (v ~ /^(active|paused|done)$/) st = v; next }

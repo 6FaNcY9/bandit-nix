@@ -19,9 +19,14 @@ printf -- '---\nstatus: paused\n---\n- [ ] PAUSED-STEP (owner)\n' > "$f/projects
 # The mirrored copy in firma: listed in firma's own view, skipped in vino's.
 printf -- '- [ ] mirrored step (owner)\n' > "$f/projects/bandit-craft.md"
 
+# A symlink into the vino store must not be read; CRLF notes parse like LF ones.
+ln -s "$v/projects/secret.md" "$f/projects/link.md"
+printf -- '---\r\nstatus: done\r\n---\r\n- [ ] CRLF-HIDDEN (owner)\r\n' > "$f/projects/crlf.md"
+
 export MEMORY_INDEX_DST=$f MEMORY_INDEX_SOURCES="firma=$f" MEMORY_INDEX_SKIP=
 run > /dev/null || fail "firma run failed"
 out=$(cat "$f/lagebild.md")
+case $out in *CRLF-HIDDEN*|*"| link |"*) fail "symlink or CRLF note listed" ;; esac
 [[ $out != *CANARY* && $out != *secret* ]] || fail "vino content in firma's lagebild"
 [[ $out == *"| bandit-craft | firma |"* ]] || fail "firma's own mirrored copy missing from its view"
 
