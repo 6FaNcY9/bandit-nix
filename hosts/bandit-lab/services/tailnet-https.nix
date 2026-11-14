@@ -21,11 +21,13 @@
     ntopng = "http://127.0.0.1:3003"; # services/ntopng.nix
     comfyui = "http://127.0.0.1:8188"; # services/comfyui, Jerry may reach this one (policy grant svc:comfyui)
     memory = "http://127.0.0.1:8766"; # services/memory: page at /, MCP at /mcp (no login of its own: the policy grant is the access control)
+    memory-albert = "http://127.0.0.1:8768"; # services/memory: Albert's store, same front
+    memory-firma = "http://127.0.0.1:8770"; # services/memory: shared company store, same front
     bnet = "http://127.0.0.1:47810"; # services/bnet: device list + Ollama routing (bearer token on top of the policy grant)
   };
   serve = name: target: ''
     if ! timeout 30 tailscale serve --service=svc:${name} --https=443 ${target}; then
-      echo "WARNING: could not advertise svc:${name} (${target}); define the service with tag:lab-svc in the Tailscale admin console and check that bandit-lab carries tag:lab, then restart lab-services" >&2
+      echo "WARNING: could not advertise svc:${name} (${target}); define the service (tag:lab-svc, memory stores tag:lab-mem) in the Tailscale admin console and check that bandit-lab carries tag:lab, then restart lab-services" >&2
     fi
   '';
 in {

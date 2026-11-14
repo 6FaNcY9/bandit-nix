@@ -48,6 +48,8 @@ still succeeds; restart it after the console is ready.
 | https://cockpit.tail7facc9.ts.net | Cockpit | https://127.0.0.1:9090 | `lab-services` |
 | https://comfyui.tail7facc9.ts.net | ComfyUI | 127.0.0.1:8188 | `lab-services` |
 | https://memory.tail7facc9.ts.net (page), `/mcp` (agents) | Shared LLM memory (Basic Memory) | 127.0.0.1:8766 | `lab-services` |
+| https://memory-albert.tail7facc9.ts.net (page), `/mcp` | Albert's memory store | 127.0.0.1:8768 | `lab-services` |
+| https://memory-firma.tail7facc9.ts.net (page), `/mcp` | Shared company memory store | 127.0.0.1:8770 | `lab-services` |
 | https://bandit-lab.tail7facc9.ts.net:8443 | Minecraft map | 127.0.0.1:8100 | `minecraft-panel-https` (bandit-craft), per-port serve, not a Service |
 | https://bandit-lab.tail7facc9.ts.net:8445 | mcbots dashboard | mcbots | `mcbots-https` (bandit-craft), per-port serve, not a Service |
 | https://bandit-lab.tail7facc9.ts.net:8446 | mcbots worker API | mcbots | `mcbots-https` (bandit-craft), per-port serve, not a Service |
@@ -86,3 +88,40 @@ tag `tag:lab-mem` (tagOwners `autogroup:admin`, autoApprovers
 `tcp:443`. Invite a device or person by adding it to that grant's `src`.
 Clients: `claude mcp add -s user -t http basic-memory https://memory.tail7facc9.ts.net/mcp`.
 Notes live in `/srv/containers/memory/data` (in the restic backup).
+
+### Three stores (`svc:memory`, `svc:memory-albert`, `svc:memory-firma`)
+
+Design: `docs/superpowers/specs/2026-11-14-memory-stores-design.md`. Three
+copies of the same container (store list in `services/memory/default.nix`),
+each with its own data dir, front and Service, all `tag:lab-mem`. Each keeps
+project `main`. Only vino's store has the summariser and `/bnet/devices`.
+
+| Store | Service | Ports (MCP/page) | Data | Who reaches it |
+| --- | --- | --- | --- | --- |
+| vino (private) | `svc:memory` | 8765/8766 | `/srv/containers/memory/data` | owner only |
+| albert | `svc:memory-albert` | 8767/8768 | `/srv/containers/memory-albert/data` | Albert (`tag:albert`) and owner |
+| firma (shared) | `svc:memory-firma` | 8769/8770 | `/srv/containers/memory-firma/data` | Albert (`tag:albert`) and owner |
+
+Access is the tailnet policy only; no store has a login, and no front sends
+CORS headers. The page links stores with `[[firma:path]]`, `[[vino:path]]`,
+`[[albert:path]]`; a viewer without access gets a failed page. All data dirs
+are in the restic backup (the only undo for an overwritten note).
+
+Owner steps (design steps 3-7, in order; 1 and 2 must pass before Albert gets any address):
+
+1. Tailscale console, policy: add `tagOwners` `"tag:albert": ["autogroup:admin"]`;
+   grant `tag:albert` to `svc:memory-firma`, `svc:memory-albert` `tcp:443`;
+   grant owner login and `tag:lab` to `tag:albert` `*`; tests: `tag:albert`
+   accepts the two new Services and is denied `svc:memory` and `svc:grafana`,
+   the owner accepts all three. Save must pass.
+2. Console: set `tag:albert` on the device `albert`. Check from that PC: the
+   private store fails, SSH and bnet still work.
+3. Signed commit and lab deploy. Check on the lab:
+   `tailscale serve status` shows three memory blocks; all three pages load
+   on the laptop.
+4. Laptop: `claude mcp add -s user -t http firma https://memory-firma.tail7facc9.ts.net/mcp`
+   and a CLAUDE.md rule (listed company projects go to `firma`, never copy
+   private notes there). Check: `firma` answers.
+5. Albert: `claude mcp add -s user -t http firma https://memory-firma.tail7facc9.ts.net/mcp`
+   and `claude mcp add -s user -t http albert https://memory-albert.tail7facc9.ts.net/mcp`,
+   plus his CLAUDE.md. Check: he writes a test note, the owner sees it.
