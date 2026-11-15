@@ -293,15 +293,28 @@ out=$(lage --dir "$HOME/w" --once)
 owner 14:11:50     # a real prompt does move it
 out=$(lage --dir "$HOME/w" --once);  [[ $out == *"FUNDE  2"$'\n'* && $out != *NEU* ]]
 
-# test_older: what does not fit collapses; each section gets max(2, (LINES - 19) // 4) lines
+# test_older: what does not fit collapses; each section gets what is left of LINES - 1 after the rest, at least 1 line
 fresh; session $$ $s1 src-a "$HOME/w"
 { echo '## Funde'; for m in 00 01 02 03 04 05 06; do echo "- 13:$m Fund $m"; done; } | board
 out=$(lage --dir "$HOME/w" --once)
 funde=$(sed -n '/^FUNDE/,/^UNGEPRÜFT/p' <<<"$out")
 [[ $(grep -c 'Fund 0' <<<"$funde") -eq 2 && $funde == *"13:06 Fund 06"*"13:05 Fund 05"*$'\n+5 ältere\n'* && $funde != *"Fund 04"* ]]
-out=$(LINES=10 lage --dir "$HOME/w" --once);  [[ $(grep -c 'Fund 0' <<<"$out") -eq 2 && $out == *$'\n+5 ältere\n'* ]]
+out=$(LINES=14 lage --dir "$HOME/w" --once);  [[ $(grep -c 'Fund 0' <<<"$out") -eq 1 && $out == *$'\n+6 ältere\n'* ]]   # a small pane: one entry per section, the rest is cut
 out=$(LINES=31 lage --dir "$HOME/w" --once);  [[ $(grep -c 'Fund 0' <<<"$out") -eq 3 && $out == *$'\n+4 ältere\n'* ]]
 out=$(LINES=47 lage --dir "$HOME/w" --once);  [[ $(grep -c 'Fund 0' <<<"$out") -eq 7 && $out != *ältere* ]]
+
+# test_height: the frame is never taller than LINES - 1 (the last newline would scroll the pane); header and JETZT stay on top
+fresh; session $$ $s1 src-a "$HOME/w"
+entry $s1 "$(assistant 14:12:00 '"tool_use"' '[{"type":"tool_use","name":"Bash","input":{"description":"x"}}]')"
+for i in 1 2 3 4 5 6; do live; session $pid "cap0000$i-1" "src-$i" "$HOME/empty"; done
+{ for h in Funde Ungeprüft "Für dich"; do echo "## $h"; for m in 00 01 02 03 04; do echo "- 13:$m Eintrag $m"; done; done
+  echo '## Deine Ideen'; for m in 00 01 02 03 04; do echo "- [ ] 13:$m Idee $m"; done; } | board
+for L in 60 40 27 20 11 8 5; do
+  out=$(LINES=$L lage --dir "$HOME/w" --once)
+  [[ $(wc -l <<<"$out") -le $((L - 1)) && $(sed -n 1p <<<"$out") == "LAGE  w"* && $(sed -n 2p <<<"$out") == "JETZT ▶ x" ]] || { echo "LINES=$L: $(wc -l <<<"$out") lines" >&2; false; }
+done
+out=$(LINES=27 lage --dir "$HOME/w" --once);  [[ $out == *"FUNDE"*"UNGEPRÜFT"*"FÜR DICH"*"DEINE IDEEN"*"SITZUNGEN"*"+1 weitere"*"i = Idee eintragen" ]]   # all there when it fits
+out=$(LINES=11 lage --dir "$HOME/w" --once);  [[ $out == *"i = Idee eintragen"* || $out == *SITZUNGEN* ]]                   # the foot outlives the board
 
 # test_old_day: an older day shows as DD.MM.
 fresh; session $$ $s1 src-a "$HOME/w"
@@ -371,7 +384,7 @@ assert b["Funde"] == [lage.Entry(datetime(2026, 11, 15, 14, 2), True, None, "A")
 assert b["Deine Ideen"] == [lage.Entry(datetime(2026, 11, 15, 13, 40), False, True, "C"), lage.Entry(None, False, False, "D")], b["Deine Ideen"]
 assert b["Ungeprüft"] == [] and b["Für dich"] == []
 owner = datetime(2026, 11, 15, 14, 2, 40, tzinfo=timezone.utc)
-plain = lage.board_lines(b, owner, 46, 27)
+plain = lage.board_lines(b, owner, 46, 2)
 assert not any("\x1b" in x for x in plain), plain
 
 
@@ -381,7 +394,7 @@ class Tty(io.StringIO):
 
 
 sys.stdout = Tty()
-lit = lage.board_lines(b, owner, 46, 27)
+lit = lage.board_lines(b, owner, 46, 2)
 assert [x for x in lit if "\x1b" in x] == [x for x in lit if "A" in x and "NEU" in x], lit
 assert [lage.RESET in x for x in lit if "\x1b" in x] == [True]
 EOF

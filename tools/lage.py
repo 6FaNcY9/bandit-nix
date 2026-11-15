@@ -452,11 +452,10 @@ def add_idea(path, text, now):
         tmp.unlink(missing_ok=True)
 
 
-def board_lines(board, owner_ts, cols, rows):
-    """The four sections: head, newest entries that fit, then one +N ältere line."""
+def board_lines(board, owner_ts, cols, space):
+    """The four sections: head, newest entries that fit in space lines, then one +N ältere line."""
     today = clock().astimezone().date()
     cut = owner_ts.astimezone().replace(tzinfo=None, second=0, microsecond=0) if owner_ts else None
-    space = max(2, (rows - 19) // 4)
     lit = sys.stdout.isatty()
 
     def neu(e):
@@ -496,15 +495,17 @@ def board_of(session):
 
 
 def frame(session, ended, where):
-    """The whole pane as lines. where finishes the sentence "kein Claude ", e.g. "in w"."""
-    n, width = clock(), cols()
+    """The whole pane as lines, at most one fewer than the pane is high (the newline after the last would scroll it).
+    where finishes the sentence "kein Claude ", e.g. "in w"."""
+    n, width, room = clock(), cols(), max(rows() - 1, 1)
     stand = "Stand " + n.astimezone().strftime("%H:%M")
     left = "LAGE" if session is None else "LAGE  " + short(str(session.get("cwd")))
     left = clean(left, width - len(stand) - 1)
-    out = [left + " " * (width - len(left) - len(stand)) + stand]
+    head = [left + " " * (width - len(left) - len(stand)) + stand]
+    rule = "─" * width
+    block = sitzungen_lines(None if session is None else session["sessionId"], width)
     if session is None:
-        block = sitzungen_lines(None, width)
-        return out + [clean("kein Claude " + where, width)] + (["─" * width] + block if block else [])
+        return (head + [clean("kein Claude " + where, width)] + ([rule] + block if block else []))[:room]
     state, owner_ts = "", None
     if ended:
         lines = ["Sitzung beendet"]
@@ -519,11 +520,13 @@ def frame(session, ended, where):
         text = board_of(session).read_text(encoding="utf-8", errors="replace")
     except OSError:
         text = ""
-    rule = "─" * width
-    out += ["JETZT ▶ " + lines[0]] + ["        " + x for x in lines[1:]] + [rule]
-    out += board_lines(parse_board(text, n.astimezone().date()), owner_ts, width, rows()) + [rule]
-    block = sitzungen_lines(session["sessionId"], width)
-    return out + (block + [rule] if block else []) + ["i = Idee eintragen"]
+    top = head + ["JETZT ▶ " + lines[0]] + ["        " + x for x in lines[1:]] + [rule]
+    foot = [rule] + block + ([rule] if block else []) + ["i = Idee eintragen"]
+    free = room - len(top) - len(foot)
+    # lines per section: what is left, less the 4 headings and the 4 +N ältere lines; a pane too small for it loses
+    # the end of the board first, then the end of the foot
+    board = board_lines(parse_board(text, n.astimezone().date()), owner_ts, width, max(1, (free - 8) // 4))
+    return (top + board[:max(free, 0)] + foot)[:room]
 
 
 def wait(seconds, session):
