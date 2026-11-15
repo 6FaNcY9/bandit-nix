@@ -257,9 +257,9 @@
         lab = self.nixosConfigurations.bandit-lab.config;
       };
 
-      jerry-report-test = import ./hosts/bandit-lab/services/jerry-box/report-test.nix {inherit pkgs;};
+      guest-report-test = import ./hosts/bandit-lab/services/guest-box/report-test.nix {inherit pkgs;};
 
-      lab-jerry = import ./ci/lab-jerry.nix {
+      lab-guests = import ./ci/lab-guests.nix {
         inherit pkgs;
         inherit (nixpkgs) lib;
         lab = self.nixosConfigurations.bandit-lab.config;

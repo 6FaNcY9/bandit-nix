@@ -28,7 +28,7 @@ in {
     "${craft}/minecraft/nix-minecraft.nix"
     "${craft}/mcbots"
     ./services/ntfy
-    ./services/jerry-box
+    ./services/guest-box
     ./services/mc-public
     "${craft}/ollama"
     "${craft}/llamacpp"

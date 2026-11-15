@@ -1,6 +1,6 @@
 {pkgs}:
-pkgs.runCommand "jerry-report-test" {
-  nativeBuildInputs = [(pkgs.callPackage ./report.nix {}) (pkgs.callPackage ./watch-wrapper.nix {})];
+pkgs.runCommand "guest-report-test" {
+  nativeBuildInputs = [(pkgs.callPackage ./report.nix {}) (pkgs.callPackage ./watch-wrapper.nix {}) (pkgs.callPackage ./report.nix {guest = "martin";}) (pkgs.callPackage ./watch-wrapper.nix {guest = "martin";})];
 } ''
   mkdir bin
   # CURL overrides the binary: writeShellApplication puts its own curl first on PATH.
@@ -75,6 +75,16 @@ pkgs.runCommand "jerry-report-test" {
   CURL_EXIT=7 DEBOUNCE_SECONDS=0 jerry-watch restic < r.txt 2>err || rc=$?
   test "$rc" = 1
   test "$(posts)" = 3
+
+  # martin: the same scripts with the guest's name swapped in count only key "martin"
+  rm -f cursor posts-*
+  { rec 9 0 '\"vim\"' martin; rec 10 0 '\"python3\"' jerry; } > m.json
+  MARTIN_JOURNAL_FILE=m.json martin-report
+  grep -qx 'Title: Martin box: 1 processes' posts-0
+  test "$(body posts-0)" = "1x vim (0 failed)"
+  rm -f posts-*
+  printf 'Accepted publickey for root from 10.251.2.1\n' | martin-watch ssh && exit 1
+  grep -qx 'Title: Martin box: ssh login' posts-0
 
   touch $out
 ''
