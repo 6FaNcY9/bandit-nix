@@ -25,7 +25,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import NamedTuple
 
-MARKERS = (b'"type":"assistant"', b'"type":"user"', b'"type":"ai-title"')
+MARKERS = (b'"type":"assistant"', b'"type":"user"')
 # tool name -> (German verb, input key); keys ending in _path show the file name only
 TOOLS = {
     "Bash": ("", "description"),
@@ -38,9 +38,14 @@ TOOLS = {
     "Glob": ("sucht ", "pattern"),
     "Agent": ("Helfer: ", "description"),
     "Task": ("Helfer: ", "description"),
+    "WebFetch": ("liest eine Webseite", ""),
+    "WebSearch": ("sucht im Web", ""),
 }
 VERBS = ("liest ", "sucht ", "ändert ")  # LOG steps with one of these in a row join into one line
 HIGHLIGHT, RED, RESET = "\x1b[1;7m", "\x1b[1;31m", "\x1b[0m"
+TEAL, YELLOW, PURPLE, DIM = "\x1b[1;36m", "\x1b[1;33m", "\x1b[35m", "\x1b[2m"  # the theme's own ANSI colours
+MEMORY = ("basic-memory", "firma")  # MCP servers shown as Gedächtnis
+BOARD = re.compile(r"lage\.md|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.md")
 HEADINGS = ("Funde", "Ungeprüft", "Für dich", "Deine Ideen")
 IDEAS = HEADINGS[3]
 LABS = ("re", "ctf", "live")
@@ -231,7 +236,6 @@ class Transcript:
         self.last = None
         self.settled = None  # like last, for a session file without status: entries that are no turn leave it alone
         self.owner_ts = None
-        self.title = None
         self.last_text = None
         self.steps = deque(maxlen=8)  # LOG: (time, text, count), oldest first
 
@@ -271,10 +275,6 @@ class Transcript:
         if not isinstance(e, dict) or e.get("isSidechain"):
             return
         kind = e.get("type")
-        if kind == "ai-title":
-            if isinstance(e.get("aiTitle"), str):
-                self.title = e["aiTitle"]
-            return
         if kind not in ("assistant", "user"):
             return
         try:
@@ -315,10 +315,19 @@ class Transcript:
 
 
 def tool_text(name, tool_input):
+    """A tool call in short German; a name nobody can read (MCP tools, the board's file name) gets a plain one."""
+    if name.startswith("mcp__"):
+        server, _, tool = name[5:].partition("__")
+        if server in MEMORY:
+            return "schreibt ins Gedächtnis" if tool in ("bm_edit", "bm_write", "bm_delete", "bm_move") else "liest im Gedächtnis"
+        return "Werkzeug " + server
     verb, key = TOOLS.get(name, ("", ""))
+    if not key:
+        return verb or name
     arg = tool_input.get(key)
     if key.endswith("_path") and isinstance(arg, str):
         arg = os.path.basename(arg)
+        arg = "das Board" if BOARD.fullmatch(arg) else arg
     return verb + arg if isinstance(arg, str) and arg.strip() else name
 
 
@@ -329,7 +338,7 @@ def waiting_for(s):
 
 
 def jetzt(tr, now, s):
-    """The JETZT line (in a list) and a state: tool, denkt, wartet or helfer. The status in the session file s wins
+    """The ▶ line (in a list) and a state: tool, denkt, wartet or helfer. The status in the session file s wins
     where it says waiting or idle; busy, shell, any other status and a missing one leave it to the transcript."""
     status = s.get("status")
     e = tr.last if status else tr.settled
@@ -351,12 +360,12 @@ def jetzt(tr, now, s):
             text, state = (f"Helfer arbeiten ({n})", "helfer") if n else ("wartet auf dich", "wartet")
         else:
             text, state = "denkt nach", "denkt"
-    return [clean(f"{text} ({since})" if since else text, cols() - 8)], state
+    return [clean(f"{text}  {since}" if since else text, cols() - 2)], state
 
 
 def wartet_lines(followed_sid, cols):
-    """A line per other session that waits for the owner, by name: name, topic, what it waits for. More than 3: the
-    first 2 and a +N weitere line."""
+    """A line per other session that waits for the owner, by name: name and what it waits for. More than 3: the first 2
+    and a +N weitere line."""
     now, rows = clock(), []
     for s in sessions():
         sid = s["sessionId"]
@@ -368,9 +377,8 @@ def wartet_lines(followed_sid, cols):
             continue
         name = s.get("name")
         name = (clean(name, 12) if isinstance(name, str) else "") or clean(sid[:6], 6)
-        topic = " " + clean(tr.title, 12) if tr.title else ""
         why = waiting_for(s) or tr.last_text
-        rows.append((name, sid, clean(f"! WARTET  {name}{topic}" + (": " + why if why else ""), cols)))
+        rows.append((name, sid, clean(f"! {name} wartet" + (": " + why if why else ""), cols)))
     lines = [r[2] for r in sorted(rows)]
     return lines if len(lines) <= 3 else lines[:2] + [f"+{len(lines) - 2} weitere"]
 
@@ -485,17 +493,19 @@ def neu_line(board, since, seen=frozenset()):
     new = {h: [e for e in board[h] if is_new(e, cut, seen)] for h in ("Funde", "Für dich")}
     bang = "! " if any(e.important for x in new.values() for e in x) else ""
     ideas = sum(e.done is False for e in board[IDEAS])
-    return f"{bang}NEU  {len(new['Funde'])} Funde · {len(new['Für dich'])} für dich · {ideas} Ideen"
+    funde = len(new["Funde"])
+    return f"{bang}NEU  {funde} Fund{'' if funde == 1 else 'e'} · {len(new['Für dich'])} für dich · {ideas} Idee{'' if ideas == 1 else 'n'}"
 
 
 def log_lines(tr, cols, n):
     """The newest n LOG steps, newest first: HH:MM (DD.MM. on another day), the text, +N for steps joined into it."""
-    today = clock().astimezone().date()
+    today, lit = clock().astimezone().date(), sys.stdout.isatty()
     out = []
     for ts, text, count in list(reversed(tr.steps))[:n]:
         t = ts.astimezone()
-        line = f"{t:%H:%M} " if t.date() == today else f"{t:%d.%m.} "
-        out.append(" " + clean(line + text + (f" +{count - 1}" if count > 1 else ""), cols - 1))
+        when = f"{t:%H:%M}" if t.date() == today else f"{t:%d.%m.}"
+        line = clean(f"{when} {text}" + (f" +{count - 1}" if count > 1 else ""), cols - 1)
+        out.append(" " + (DIM + when + RESET + line[len(when):] if lit else line))
     return out
 
 
@@ -566,23 +576,34 @@ def start_tasks():
 
 
 def task_lines(cols, n):
-    """DEINE AUFGABEN from the cache: the owner's rows (who vino or none), at most n lines below the heading; when they
-    do not all fit, the last of them is +N weitere. The count gets + when lagebild's list was full (10 rows)."""
+    """AUFGABEN from the cache: the owner's rows (who vino or none), project and text in two columns, at most n lines
+    below the heading; when they do not all fit, the last of them is +N weitere."""
+    lit = sys.stdout.isatty()
     path = tasks_cache()
     try:
         cached = path.read_text(encoding="utf-8", errors="replace").splitlines()
         mtime = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc)
     except OSError:
-        return ["DEINE AUFGABEN", " nicht erreichbar"][:1 + max(n, 0)]
-    mine = [f"{m[1]}: {m[2]}" for m in map(TASK.fullmatch, cached) if m and m[3] in (None, "vino")]
+        return [paint(TEAL, "AUFGABEN", lit), " " + paint(DIM, "nicht erreichbar", lit)][:1 + max(n, 0)]
+    mine = [(m[1], m[2]) for m in map(TASK.fullmatch, cached) if m and m[3] in (None, "vino")]
     now = clock()
     stale = (tasks_ok is None or (now - tasks_ok).total_seconds() > 900) and (now - mtime).total_seconds() > 900
-    head = f"DEINE AUFGABEN  {len(mine)}{'+' if len(cached) >= 10 else ''}" + (f"  (Stand {mtime.astimezone():%H:%M})" if stale else "")
+    count = clean(f"{len(mine)}" + (f"  (Stand {mtime.astimezone():%H:%M})" if stale else ""), max(cols - 10, 1))
+    head = [paint(TEAL, "AUFGABEN", lit) + "  " + paint(DIM, count, lit)]
     if n <= 0:
-        return [clean(head, cols)]
+        return head
     shown = mine if len(mine) <= n else mine[:n - 1]
-    more = [f" +{len(mine) - len(shown)} weitere"] if len(shown) < len(mine) else []
-    return [clean(head, cols)] + [" " + clean("□ " + x, cols - 1) for x in shown] + more
+    w = min(max((len(p) for p, _ in shown), default=0), 14)
+    rows = []
+    for project, text in shown:
+        line = clean(f"{project[:w]:<{w}}  {text}", cols - 1)
+        rows.append(" " + (paint(PURPLE, line[:w], lit) + line[w:] if lit else line))
+    more = [" " + paint(DIM, f"+{len(mine) - len(shown)} weitere", lit)] if len(shown) < len(mine) else []
+    return head + rows + more
+
+
+def paint(code, s, lit):
+    return code + s + RESET if lit else s
 
 
 def board_lines(board, since, cols, space, seen=frozenset()):
@@ -638,64 +659,69 @@ def board_entries(session):
 
 def frame(session, ended, where, full=False, seen=frozenset()):
     """The whole pane as lines, at most one fewer than the pane is high (the newline after the last would scroll it).
-    where finishes the sentence "kein Claude ", e.g. "in w". full: the whole board instead of the overview. seen: when
-    the entries the owner saw when last closing the full view of this session; they are no longer NEU."""
+    where finishes the sentence "kein Claude ", e.g. "in w". full: the whole board instead of the overview. seen: the
+    entries the owner saw when last closing the full view of this session; they are no longer NEU."""
     n, width, room = clock(), cols(), max(rows() - 1, 1)
     lit = sys.stdout.isatty()
-    stand = "Stand " + n.astimezone().strftime("%H:%M")
+    stand = n.astimezone().strftime("%H:%M")
     left = "LAGE" if session is None else "LAGE  " + short(str(session.get("cwd")))
     left = clean(left, width - len(stand) - 1)
-    head = [left + " " * (width - len(left) - len(stand)) + stand]
+    head = [paint(TEAL, "LAGE", lit) + left[4:] + " " * (width - len(left) - len(stand)) + paint(DIM, stand, lit)]
     rule = "─" * width
-    wartet = [RED + x + RESET if lit and x.startswith("!") else x for x in wartet_lines(session and session["sessionId"], width)]
+    wartet = [paint(RED if x.startswith("!") else DIM, x, lit) for x in wartet_lines(session and session["sessionId"], width)]
     if session is None:
         top = head + [clean("kein Claude " + where, width)] + wartet
-        box = task_lines(width, min(6, room - len(top) - 2)) if tasks_url() else []
-        return (top + ([rule] + box if box else []))[:room]
+        box = task_lines(width, min(4, room - len(top) - 2)) if tasks_url() else []
+        return (top + ([""] + box if box else []))[:room]
     state, since, tr = "", None, None
     if ended:
-        lines = ["Sitzung beendet"]
+        line = "Sitzung beendet"
     else:
         tr = transcripts.setdefault(session["sessionId"], Transcript(session["sessionId"]))
         tr.update()
-        lines, state = jetzt(tr, n, session) if tr.path else (["Protokoll nicht gefunden"], "")
-        since = tr.owner_ts
-    if state == "wartet" and lit:
-        lines[0] = HIGHLIGHT + lines[0] + RESET
+        line, state = jetzt(tr, n, session) if tr.path else (["Protokoll nicht gefunden"], "")
+        line, since = line[0], tr.owner_ts
+    cut = line.rfind("  seit ")
+    text, age = (line[:cut], line[cut:]) if cut > 0 else (line, "")
+    line = paint(YELLOW, "▶ " + text, lit and state == "wartet") + (paint(DIM, age, lit) if age else "")
     try:
         text = board_of(session).read_text(encoding="utf-8", errors="replace")
     except OSError:
         text = ""
     board = parse_board(text, n.astimezone().date())
-    top = head + ["JETZT ▶ " + lines[0]] + wartet
     if full:
+        top = head + [line] + wartet
         foot = [rule, "i = Idee   f = zurück"]
         free = room - len(top) - 1 - len(foot)
         # lines per section: what is left, less the 4 headings and the 4 +N ältere lines; a pane too small for it loses
         # the end of the board first, then the end of the foot
         body = board_lines(board, since, width, max(1, (free - 8) // 4), seen)
         return (top + [rule] + body[:max(free, 0)] + foot)[:room]
-    # Overview: header, JETZT, WARTET, the tasks heading and NEU always; then, while they fit, the LOG with 3 steps, up
-    # to 6 task lines, up to 8 steps, the key line, and last the rules between the parts. A pane too small even for the
-    # fixed lines loses its end.
-    steps = log_lines(tr, width, 8) if tr else []
+    # Overview: header, the ▶ line, the waiting lines, the tasks heading and NEU always; then, while they fit, the LOG
+    # with 3 steps, up to 4 task lines, a 4th step, the key line, and last the blank lines between the parts. A pane
+    # too small even for the fixed lines loses its end.
+    steps = log_lines(tr, width, 4) if tr else []
     neu = clean(neu_line(board, since, seen), width)
-    neu = HIGHLIGHT + neu + RESET if lit and neu.startswith("!") else neu
+    if lit:
+        bang = neu.startswith("! ")
+        neu = (paint(RED, "! ", True) if bang else "") + paint(YELLOW, "NEU", True) + neu[2 + 3 if bang else 3:]
     on = bool(tasks_url())
-    used, shown = len(top) + 1 + on, 0
+    used, shown = 3 + len(wartet) + on, 0
     if steps and used + 1 + min(3, len(steps)) <= room:
         shown = min(3, len(steps))
         used += 1 + shown
-    box = task_lines(width, min(6, room - used)) if on else []
+    box = task_lines(width, min(4, room - used)) if on else []
     used += max(len(box) - 1, 0)
     if shown:
         more = min(len(steps) - shown, room - used)
         shown, used = shown + more, used + more
-    keys = ["i = Idee   f = alles zeigen"] if used < room else []
-    parts = [p for p in (top, box, ["LOG  (was Claude macht)"] + steps[:shown] if shown else [], [neu] + keys) if p]
+    keys = [paint(DIM, "i = Idee   f = alles", lit)] if used < room else []
+    log = [paint(TEAL, "LOG", lit)] + steps[:shown] if shown else []
+    parts = [p for p in (head, [line] + wartet, box, log, [neu] + keys) if p]
+    gap = [""] if used + len(keys) + len(parts) - 1 <= room else []
     out = parts[0]
     for p in parts[1:]:
-        out = out + ([rule] if used + len(keys) + len(parts) - 1 <= room else []) + p
+        out = out + gap + p
     return out[:room]
 
 

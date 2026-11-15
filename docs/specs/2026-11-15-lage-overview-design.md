@@ -62,3 +62,7 @@ unnecessary and wants a glanceable overview: what Claude does, who waits, their 
 ## Left to the builder
 
 Names of new functions and flags (a `--full` flag for tests is suggested), exact test split.
+
+## v2 look (approved 2026-11-15, browser choice A)
+
+Colours from the theme (headings teal, times grey, waiting red, NEU yellow, projects purple), blank lines instead of rules, header time without "Stand", `▶ <text>  seit …` instead of `JETZT ▶`, `! <name> wartet: …` without the topic, AUFGABEN in two columns with 3 rows, LOG with 4 steps, tool names in plain German (memory, web, the board file). Bash descriptions in German come from a rule in the owner's global CLAUDE.md.
