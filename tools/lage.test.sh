@@ -518,16 +518,19 @@ EOF
 
 # test_f_key: key f switches to the whole board and back; what was new before is not NEU any more (needs a pty)
 fresh; session $$ $s1 src-a "$HOME/w"; owner 14:00:00
-printf '## Funde\n- 14:05 Fund nach dem Prompt\n' | board
-python3 -B - "$here/lage.py" "$HOME/w" <<'EOF'
+printf '## Funde\n- 14:12 Fund nach dem Prompt\n' | board    # the same minute as the clock: seeing it must still count
+python3 -B - "$here/lage.py" "$HOME/w" "$(bfile)" <<'EOF'
+import json
 import os
 import pty
 import select
 import signal
+import subprocess
 import sys
 import time
+from pathlib import Path
 
-prog, folder = sys.argv[1:]
+prog, folder, board = sys.argv[1:]
 pid, fd = pty.fork()
 if pid == 0:
     os.execvp("python3", ["python3", prog, "--dir", folder])
@@ -551,6 +554,20 @@ wait_for("FUNDE  1  (1 neu)")
 wait_for("i = Idee   f = zurück")
 os.write(fd, b"f")
 wait_for("NEU  0 Funde")  # seen in the full view: no longer new
+with open(board, "a", encoding="utf-8") as f:
+    f.write("- 14:12 noch einer\n")  # written later in the same minute: new
+wait_for("NEU  1 Funde")
+# a second, newer session in the folder takes over; its board was never seen, even with the same text
+sleeper = subprocess.Popen(["sleep", "60"])
+home = Path.home()
+(home / ".claude/sessions" / f"{sleeper.pid}.json").write_text(json.dumps(
+    {"pid": sleeper.pid, "sessionId": "bbbbbbbb-2", "name": "src-b", "cwd": folder, "startedAt": 1794800000000, "status": "busy"}))
+(home / ".claude/projects/p/bbbbbbbb-2.jsonl").write_text(
+    '{"type":"user","timestamp":"2026-11-15T14:00:00Z","origin":{"kind":"human"},"message":{"content":"los"}}\n')
+(home / ".local/state/lage/bbbbbbbb-2.md").write_text("## Funde\n- 14:12 Fund nach dem Prompt\n")
+wait_for("LAGE  w")
+wait_for("NEU  1 Funde")
+sleeper.kill()
 os.kill(pid, signal.SIGINT)
 assert os.waitpid(pid, 0)[1] == 0
 EOF

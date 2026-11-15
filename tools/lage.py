@@ -474,14 +474,15 @@ def cut_of(since):
     return since.astimezone().replace(tzinfo=None, second=0, microsecond=0) if since else None
 
 
-def is_new(e, cut):
-    return cut is not None and e.done is None and e.ts is not None and e.ts >= cut
+def is_new(e, cut, seen=frozenset()):
+    """Newer than the owner's last prompt (cut) and not yet seen in the full view."""
+    return cut is not None and e.done is None and e.ts is not None and e.ts >= cut and e not in seen
 
 
-def neu_line(board, since):
+def neu_line(board, since, seen=frozenset()):
     """NEU  <new> Funde · <new> für dich · <open> Ideen, with ! in front when a new one is important."""
     cut = cut_of(since)
-    new = {h: [e for e in board[h] if is_new(e, cut)] for h in ("Funde", "Für dich")}
+    new = {h: [e for e in board[h] if is_new(e, cut, seen)] for h in ("Funde", "Für dich")}
     bang = "! " if any(e.important for x in new.values() for e in x) else ""
     ideas = sum(e.done is False for e in board[IDEAS])
     return f"{bang}NEU  {len(new['Funde'])} Funde · {len(new['Für dich'])} für dich · {ideas} Ideen"
@@ -584,14 +585,14 @@ def task_lines(cols, n):
     return [clean(head, cols)] + [" " + clean("□ " + x, cols - 1) for x in shown] + more
 
 
-def board_lines(board, since, cols, space):
+def board_lines(board, since, cols, space, seen=frozenset()):
     """The four sections: head, newest entries that fit in space lines, then one +N ältere line."""
     today = clock().astimezone().date()
     cut = cut_of(since)
     lit = sys.stdout.isatty()
 
     def neu(e):
-        return is_new(e, cut)
+        return is_new(e, cut, seen)
 
     out = []
     for h in HEADINGS:
@@ -626,10 +627,19 @@ def board_of(session):
     return board_path(session["sessionId"], str(session.get("cwd")))
 
 
-def frame(session, ended, where, full=False, seen=None):
+def board_entries(session):
+    """Every entry on the session's board now; empty without a session or a readable board."""
+    try:
+        text = board_of(session).read_text(encoding="utf-8", errors="replace") if session else ""
+    except OSError:
+        text = ""
+    return frozenset(e for x in parse_board(text, clock().astimezone().date()).values() for e in x)
+
+
+def frame(session, ended, where, full=False, seen=frozenset()):
     """The whole pane as lines, at most one fewer than the pane is high (the newline after the last would scroll it).
     where finishes the sentence "kein Claude ", e.g. "in w". full: the whole board instead of the overview. seen: when
-    the owner last closed the full view; entries before it are no longer NEU."""
+    the entries the owner saw when last closing the full view of this session; they are no longer NEU."""
     n, width, room = clock(), cols(), max(rows() - 1, 1)
     lit = sys.stdout.isatty()
     stand = "Stand " + n.astimezone().strftime("%H:%M")
@@ -650,8 +660,6 @@ def frame(session, ended, where, full=False, seen=None):
         tr.update()
         lines, state = jetzt(tr, n, session) if tr.path else (["Protokoll nicht gefunden"], "")
         since = tr.owner_ts
-    if seen is not None and (since is None or seen > since):
-        since = seen
     if state == "wartet" and lit:
         lines[0] = HIGHLIGHT + lines[0] + RESET
     try:
@@ -665,13 +673,13 @@ def frame(session, ended, where, full=False, seen=None):
         free = room - len(top) - 1 - len(foot)
         # lines per section: what is left, less the 4 headings and the 4 +N ältere lines; a pane too small for it loses
         # the end of the board first, then the end of the foot
-        body = board_lines(board, since, width, max(1, (free - 8) // 4))
+        body = board_lines(board, since, width, max(1, (free - 8) // 4), seen)
         return (top + [rule] + body[:max(free, 0)] + foot)[:room]
     # Overview: header, JETZT, WARTET, the tasks heading and NEU always; then, while they fit, the LOG with 3 steps, up
     # to 6 task lines, up to 8 steps, the key line, and last the rules between the parts. A pane too small even for the
     # fixed lines loses its end.
     steps = log_lines(tr, width, 8) if tr else []
-    neu = clean(neu_line(board, since), width)
+    neu = clean(neu_line(board, since, seen), width)
     neu = HIGHLIGHT + neu + RESET if lit and neu.startswith("!") else neu
     on = bool(tasks_url())
     used, shown = len(top) + 1 + on, 0
@@ -785,11 +793,12 @@ def main():
     first = start_tasks()
     if args.once and first:
         first.wait(3)  # one frame: show fresh tasks if they come quickly, else the cache
-    session, full, seen = None, args.full, None
+    session, full, seen = None, args.full, {}  # seen: sessionId -> the board entries shown when the full view closed
     try:
         while True:
             session, ended = pick(session)
-            lines = frame(session, ended, where, full, seen)
+            sid = session and session["sessionId"]
+            lines = frame(session, ended, where, full, seen.get(sid, frozenset()))
             if args.once:
                 print("\n".join(lines))
                 return 0
@@ -799,7 +808,7 @@ def main():
             if wait(2, session) == b"f":
                 full = not full
                 if not full:
-                    seen = clock()  # the owner has looked at the whole board: what is there is not new any more
+                    seen[sid] = board_entries(session)  # the owner has looked at the whole board: not new any more
     except KeyboardInterrupt:
         return 0
 
