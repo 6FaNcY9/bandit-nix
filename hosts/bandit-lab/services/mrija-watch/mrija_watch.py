@@ -598,27 +598,32 @@ def run_collect(cfg) -> dict:
     }
     report = build_report(mail, web, dns, meta)
 
+    push_failed = False
     for title, body in report.instant:
-        post_ntfy(
+        if not post_ntfy(
             cfg["ntfy_url"],
             cfg["ntfy_topic"],
             cfg["ntfy_token"],
             title,
             body,
             priority="high",
-        )
+        ):
+            push_failed = True
 
-    # Advance state only for the collectors that succeeded.
-    state["maildir_cursor"] = mail.new_cursor
-    if new_web is not None:
-        state["web_manifest"] = new_web
-    if new_dns is not None:
-        state["dns"] = new_dns
-    state["last_sync_mtime"] = newest
-    state["pending_digest"] = report.digest
-    save_state(cfg["state_path"], state)
+    # If an instant push failed, leave the whole state unchanged so the finding
+    # is re-detected and re-pushed on the next run (like jerry-box's cursor).
+    if not push_failed:
+        state["maildir_cursor"] = mail.new_cursor
+        if new_web is not None:
+            state["web_manifest"] = new_web
+        if new_dns is not None:
+            state["dns"] = new_dns
+        state["last_sync_mtime"] = newest
+        state["pending_digest"] = report.digest
+        save_state(cfg["state_path"], state)
 
     meta["instant_count"] = len(report.instant)
+    meta["push_failed"] = push_failed
     return meta
 
 

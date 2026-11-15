@@ -12,19 +12,7 @@
   inherit (repoConfig.workstation) username;
   stateDir = "/var/lib/mrija-watch";
   ntfyEnv = "/var/lib/mcbots/ntfy/publisher.env";
-  pythonEnv = pkgs.python3.withPackages (p: [p.maxminddb]);
-  geoip = "${pkgs.dbip-country-lite}/share/dbip/dbip-country-lite.mmdb";
-
-  watcher = pkgs.writeShellApplication {
-    name = "mrija-watch";
-    # Real binaries on PATH for production; the flake check overrides them with
-    # RSYNC/DIG/CURL env vars pointing at stubs (like jerry-box/report.sh).
-    runtimeInputs = [pkgs.rsync pkgs.dnsutils pkgs.curl pkgs.openssh];
-    text = ''
-      export MRIJA_GEOIP=${geoip}
-      exec ${pythonEnv}/bin/python -B ${./mrija_watch.py} "$@"
-    '';
-  };
+  watcher = pkgs.callPackage ./package.nix {};
 
   # The archive key is deployed to disk by the mrija-archive module's sops
   # secret; reuse it, no new key and no sops change.

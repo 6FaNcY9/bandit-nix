@@ -262,6 +262,8 @@
 
       werbung-watch-test = import ./hosts/bandit-lab/services/werbung-watch/test.nix {inherit pkgs;};
 
+      mrija-watch-test = import ./hosts/bandit-lab/services/mrija-watch/test.nix {inherit pkgs;};
+
       lab-guests = import ./ci/lab-guests.nix {
         inherit pkgs;
         inherit (nixpkgs) lib;
