@@ -142,3 +142,28 @@ def test_core_update_not_flagged():
     )
     web = mw.diff_web(old, new)
     assert not any("class-wp.php" in i for i in web.instant)
+
+
+# --- Task 4: dns diff ------------------------------------------------------
+
+
+def test_mx_change_is_instant():
+    old = {"MX": ["10 mail.mrija.org."], "NS": ["ns.ledl.net."]}
+    new = {"MX": ["10 evil.example.net."], "NS": ["ns.ledl.net."]}
+    dns = mw.diff_dns(old, new)
+    assert "MX" in dns.changed
+    assert "MX" in dns.instant
+
+
+def test_txt_change_digest_only():
+    old = {"TXT": ["v=spf1 include:_spf.mrija.org -all"]}
+    new = {"TXT": ["v=spf1 include:evil.example.net ~all"]}
+    dns = mw.diff_dns(old, new)
+    assert "TXT" in dns.changed
+    assert dns.instant == []
+
+
+def test_first_run_baseline():
+    dns = mw.diff_dns({}, {"MX": ["10 mail.mrija.org."]})
+    assert dns.changed == []
+    assert dns.instant == []

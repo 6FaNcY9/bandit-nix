@@ -303,6 +303,28 @@ def diff_web(old: dict, new: dict) -> WebFindings:
     return out
 
 
+# --- dns diff --------------------------------------------------------------
+
+
+@dataclass
+class DnsFindings:
+    changed: list = field(default_factory=list)  # record names
+    instant: list = field(default_factory=list)  # only NS or MX
+
+
+def diff_dns(old: dict, new: dict) -> DnsFindings:
+    """Diff two DNS snapshots (type -> sorted values). Empty old = baseline."""
+    out = DnsFindings()
+    if not old:
+        return out
+    for rtype in sorted(set(old) | set(new)):
+        if old.get(rtype) != new.get(rtype):
+            out.changed.append(rtype)
+            if rtype in ("NS", "MX"):
+                out.instant.append(rtype)
+    return out
+
+
 # --- CLI -------------------------------------------------------------------
 
 
