@@ -5,7 +5,9 @@
 // shortcut: forwards requests and their replies only (no server-initiated
 // messages); enough for tool calls. Drop it once Termux resolves *.ts.net.
 const https = require('https');
-const HOST = 'memory.tail7facc9.ts.net', ADDR = process.env.MEMORY_ADDR || '100.103.202.198';
+// MEMORY_HOST picks another store (memory-firma..., memory-albert...); it is then dialled by name (Claude Desktop on a PC).
+const HOST = process.env.MEMORY_HOST || 'memory.tail7facc9.ts.net';
+const ADDR = process.env.MEMORY_ADDR || (process.env.MEMORY_HOST ? HOST : '100.103.202.198');
 let session, initLine, queue = Promise.resolve();
 
 const post = (line, quiet = false) => new Promise((resolve) => {
