@@ -215,6 +215,16 @@ done
 printf '## Waiting for a human\n1. a (vino): eins\n2. b (vino): zwei (vino)\n' >"$t/short.md"
 out=$(LAGE_TASKS_URL=file://$t/short.md lage --dir "$HOME/w" --once)
 [[ $out == *$'\nAUFGABEN  2\n a  eins\n b  zwei\n'* && $out != *weitere* ]]
+# a long row wraps with a hanging indent instead of ending in …
+long="Eine sehr lange Aufgabe die nicht mehr in eine Zeile passt und darum umbricht"
+printf '## Waiting for a human\n1. a (vino): %s (vino)\n2. b (vino): zwei (vino)\n' "$long" >"$t/long.md"
+out=$(LAGE_TASKS_URL=file://$t/long.md COLUMNS=40 lage --dir "$HOME/w" --once)
+[[ $out == *$'\n a  Eine sehr lange Aufgabe die nicht\n    mehr in eine Zeile passt und darum\n    umbricht\n b  zwei\n'* ]]
+[[ $(LAGE_TASKS_URL=file://$t/long.md COLUMNS=30 lage --dir "$HOME/w" --once | widest) -le 30 ]]
+for L in 20 8 5; do   # wrapped rows never push the box past the window
+  out=$(LAGE_TASKS_URL=file://$t/long.md COLUMNS=20 LINES=$L lage --dir "$HOME/w" --once)
+  [[ $(wc -l <<<"$out") -le $((L - 1)) ]] || { echo "long LINES=$L" >&2; false; }
+done
 # no Claude in the folder: the tasks still show
 out=$(LAGE_TASKS_URL=file://$t/short.md lage --dir "$HOME/empty" --once);  [[ $out == *"kein Claude in empty"*"AUFGABEN  2"* ]]
 
