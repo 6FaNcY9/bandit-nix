@@ -13,7 +13,7 @@
     uid = 655360;
     net = "10.251.2";
     memory = "4G";
-    key = ""; # Martin's public key, collected out of band (runbook step 4)
+    key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG9CD8nqgC8lbrzUinbW8iKXhFkW5RQWeAOACpjheUAy martin";
     hostAccept = []; # no backup on the lab, so nothing on the host is open to him
   };
 }

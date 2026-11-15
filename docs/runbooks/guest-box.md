@@ -239,7 +239,7 @@ Send him, once his key is in and the box is on the tailnet:
   your login to port 22 of this box and nothing else on the lab).
 - Limits: 1 CPU, 4 GB RAM without swap (an OOM kill is yours to handle), 512
   tasks; under load the lab's own services come first. `/data` is 50 GB; put
-  your work there. The rest of the root filesystem is not quota-counted. Nothing
+  your work there. The rest of the root filesystem is capped at 20 GB. Nothing
   is backed up: keep your own copies. Egress is NAT with DNS 9.9.9.9/1.1.1.1;
   no LAN, no other tailnet nodes.
 - Visibility: the owner receives an hourly report of the box's processes (names,
