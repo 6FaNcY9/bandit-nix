@@ -774,13 +774,31 @@ TMUX_CLIENTS="$tm $pid" probe $w1; [[ $rc -eq 1 ]]                       # a pan
 TMUX_CLIENTS="$((tm + 1)) $cc" probe $w1; [[ $rc -eq 1 ]]                # only the client below this window counts
 clients "$(cl $$ cockpit-log 3 1700 0)" "$(cl $w1 kitty 3 0 0)"
 [[ $(TMUX_CLIENTS="$tm $cc" lage --once) == "LAGE  w"* ]]
-# no tmux on PATH: the client's own binary answers (here a copy of bash named tmux that runs ./list-clients)
-cp "$(readlink -f /bin/sh)" "$t/exe/tmux"; printf 'printf "%%s\\n" "$TMUX_CLIENTS"\n' >"$t/exe/list-clients"
+# no tmux on PATH: the client's own binary answers, but lage runs it only when it is a tmux from the Nix store.
+# Here it is a copy of sh named tmux outside the store (it would run ./list-clients): never run, so no pane is found.
+cp "$(readlink -f /bin/sh)" "$t/exe/tmux"; printf 'touch ran\nprintf "%%s\\n" "$TMUX_CLIENTS"\n' >"$t/exe/list-clients"
 window "$t/exe/tmux" -c 'sleep 60; :'; tm=$child
 rc=0; out=$(cd "$t/exe" && TMUX_CLIENTS="$tm $cc" PATH=$t/none "$py" "$here/lage.py" --probe $wrapper 2>&1) || rc=$?
-[[ $rc -eq 0 && -z $out ]]
-rc=0; out=$(cd "$t/exe" && TMUX_CLIENTS="$tm $pid" PATH=$t/none "$py" "$here/lage.py" --probe $wrapper 2>&1) || rc=$?
-[[ $rc -eq 1 && -z $out ]]
+[[ $rc -eq 1 && -z $out && ! -e $t/exe/ran ]]
+python3 -B - "$here" <<'EOF2'
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, sys.argv[1])
+import lage
+
+store = "/nix/store/0123abc-tmux-3.8/bin/tmux"  # the store path need not exist: it cannot be faked outside the store
+assert lage.store_tmux(store) == store
+for bad in ("/nix/store/0123abc-tmux-3.8/bin/sh", "/nix/store/0123abc-tmux-3.8/bin/tmux2", "/nix/storex/tmux", "/tmp/nix/store/x/tmux", "/nix/store/../tmp/tmux", "/proc/self/exe"):
+    assert lage.store_tmux(bad) is None, bad
+link = Path.home() / "tmux"
+link.symlink_to(store)
+assert lage.store_tmux(str(link)) == store  # the resolved path is what gets run
+link.unlink()
+link.symlink_to("/tmp/other/tmux")
+assert lage.store_tmux(str(link)) is None
+EOF2
 
 # test_master_ended: the session goes away; the board stays with "Sitzung beendet" until another session turns up
 fresh; window "$t/bin/claude"; session $child $s1 src-a "$HOME/w"

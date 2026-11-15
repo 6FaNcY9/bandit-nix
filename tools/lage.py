@@ -157,6 +157,13 @@ def master_pid():
     return min(here, key=lambda c: (c["at"], c.get("focusHistoryID", 0)))["pid"] if here else None
 
 
+def store_tmux(path):
+    """path resolved, if it is a tmux binary in the Nix store; else None. lage runs it, so a process that merely calls
+    itself tmux must not get that far."""
+    real = os.path.realpath(path)
+    return real if real.startswith("/nix/store/") and os.path.basename(real) == "tmux" else None
+
+
 def claude_session_under(pid):
     """The session of the first claude process at or below pid. A tmux client below pid leads on to the processes
     of its tmux pane, which is where the session runs then."""
@@ -181,7 +188,9 @@ def claude_session_under(pid):
             if not comm(p).startswith("tmux"):
                 continue
             # tmux is not on every PATH, but the client in the window is the tmux binary itself
-            listing = run(shutil.which("tmux") or f"/proc/{p}/exe", "list-clients", "-F", "#{client_pid} #{pane_pid}")
+            if (exe := shutil.which("tmux") or store_tmux(f"/proc/{p}/exe")) is None:
+                continue
+            listing = run(exe, "list-clients", "-F", "#{client_pid} #{pane_pid}")
             for client, pane in re.findall(r"^(\d+) (\d+)$", listing, re.M | re.A):
                 if int(client) == p and (found := find(int(pane))):
                     return found
