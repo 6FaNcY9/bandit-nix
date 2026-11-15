@@ -208,6 +208,7 @@ class Transcript:
         self.path = None
         self.pos = 0
         self.last = None
+        self.settled = None  # like last, for a session file without status: entries that are no turn leave it alone
         self.owner_ts = None
         self.title = None
         self.last_text = None
@@ -256,6 +257,10 @@ class Transcript:
             if item.get("type") == "text" and isinstance(text, str) and text.strip():
                 self.last_text = clean(text, 10000)
         self.last = e
+        if kind == "assistant" or "origin" in e or any(i.get("type") == "tool_result" for i in items(e)):
+            self.settled = e
+        elif any(str(i.get("text")).startswith("[Request interrupted by user") for i in items(e)):
+            self.settled = {**e, "type": "assistant", "message": {"stop_reason": "interrupt"}}  # the turn is over
 
     def helpers(self):
         """Helpers of this session: no finished flag and a log written in the last 30 minutes."""
@@ -282,21 +287,33 @@ def tool_text(name, tool_input):
     return verb + arg if isinstance(arg, str) and arg.strip() else name
 
 
-def jetzt(tr, now):
-    """The JETZT lines and a state: tool, denkt, wartet or helfer."""
-    e = tr.last
+def waiting_for(s):
+    """What a waiting session waits for, as its session file says; empty otherwise."""
+    w = s.get("waitingFor")
+    return clean(w, 40) if s.get("status") == "waiting" and isinstance(w, str) else ""
+
+
+def jetzt(tr, now, s):
+    """The JETZT lines and a state: tool, denkt, wartet or helfer. The status in the session file s wins where it
+    says waiting or idle; busy, shell, any other status and a missing one leave it to the transcript."""
+    status = s.get("status")
+    e = tr.last if status else tr.settled
+    since = "seit " + ago((now - parse_ts(e["timestamp"])).total_seconds()) if e else ""
+    if status == "waiting":
+        detail = " · ".join(x for x in (waiting_for(s), since) if x)
+        return [clean(x, cols() - 8) for x in ["wartet auf dich"] + ([detail] if detail else [])], "wartet"
     if e is None:
         return ["wartet auf dich"], "wartet"
-    since = "seit " + ago((now - parse_ts(e["timestamp"])).total_seconds())
     message = e.get("message")
     stop = message.get("stop_reason") if isinstance(message, dict) else None
     tools = [i for i in items(e) if i.get("type") == "tool_use"]
-    if e["type"] == "assistant" and tools:
+    idle = status == "idle"
+    if e["type"] == "assistant" and tools and not idle:
         name = str(tools[-1].get("name") or "Tool")
         tool_input = tools[-1].get("input")
         text = tool_text(name, tool_input if isinstance(tool_input, dict) else {})
         lines, state = [text, f"{name} · {since}"], "tool"
-    elif e["type"] == "assistant" and stop and stop != "tool_use":
+    elif idle or (e["type"] == "assistant" and stop and stop != "tool_use"):
         n = tr.helpers()
         if n:
             lines, state = [f"Helfer arbeiten ({n})", since], "helfer"
@@ -316,11 +333,12 @@ def sitzungen_lines(followed_sid, cols):
         sid = s["sessionId"]
         tr = transcripts.setdefault(sid, Transcript(sid))
         tr.update()
-        state = jetzt(tr, now)[1]
+        state = jetzt(tr, now, s)[1]
         name = s.get("name")
         name = (clean(name, 12) if isinstance(name, str) else "") or clean(sid[:6], 6)
         if state == "wartet":
-            mark, text = "!", "wartet: " + tr.last_text if tr.last_text else "wartet"
+            why = waiting_for(s) or tr.last_text
+            mark, text = "!", "wartet: " + why if why else "wartet"
         else:
             mark, text = "▶" if sid == followed_sid else " ", "Helfer arbeiten" if state == "helfer" else "arbeitet"
         rows.append((mark, name, sid, clean(tr.title, 12) if tr.title else "", text))
@@ -488,7 +506,7 @@ def frame(session, ended, where):
     else:
         tr = transcripts.setdefault(session["sessionId"], Transcript(session["sessionId"]))
         tr.update()
-        lines, state = jetzt(tr, n) if tr.path else (["Protokoll nicht gefunden"], "")
+        lines, state = jetzt(tr, n, session) if tr.path else (["Protokoll nicht gefunden"], "")
         owner_ts = tr.owner_ts
     if state == "wartet" and sys.stdout.isatty():
         lines[0] = HIGHLIGHT + lines[0] + RESET

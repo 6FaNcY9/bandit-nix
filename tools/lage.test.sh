@@ -34,6 +34,10 @@ owner() { # owner <time>: an owner prompt at that time today
   entry $s1 '{"type":"user","timestamp":"2026-11-15T'"$1"'Z","origin":{"kind":"human"},"message":{"content":"los"}}'
 }
 live() { sleep 600 & sl+=($!); pid=$!; } # live: one more running process, its pid in $pid
+status() { # status <pid> <status|""> [waitingFor]: set or remove (empty) status and waitingFor in a session file
+  jq -c --arg s "$2" --arg w "${3:-}" '(if $s == "" then del(.status) else .status = $s end) | (if $w == "" then del(.waitingFor) else .waitingFor = $w end)' \
+    "$HOME/.claude/sessions/$1.json" >"$t/status.json" && mv "$t/status.json" "$HOME/.claude/sessions/$1.json"
+}
 widest() { python3 -c 'import sys; print(max(len(l) for l in sys.stdin.read().split("\n")))'; }
 
 # test_tool_use
@@ -96,6 +100,43 @@ entry $s1 "$(assistant 14:12:05 null '[{"type":"text","text":"ich schaue nach"}]
 out=$(lage --dir "$HOME/w" --once);  [[ $out == *"JETZT ▶ denkt nach"* && $out == *"seit 15 s"* ]]
 entry $s1 '{"type":"user","timestamp":"2026-11-15T14:12:10Z","message":{"content":[{"type":"tool_result","content":"ok"}]}}'
 out=$(lage --dir "$HOME/w" --once);  [[ $out == *"JETZT ▶ denkt nach"* && $out == *"seit 10 s"* ]]
+
+# test_status: the status in the session file beats the transcript where the transcript cannot know
+fresh; session $$ $s1 src-a "$HOME/w"
+entry $s1 "$(assistant 14:12:00 '"tool_use"' '[{"type":"tool_use","name":"Bash","input":{"description":"x"}}]')"
+status $$ waiting 'dialog open'                                    # a permission prompt or a question: the last entry is still the tool call
+out=$(lage --dir "$HOME/w" --once)
+[[ $out == *"JETZT ▶ wartet auf dich"$'\n'"        dialog open · seit 20 s"* && $out == *" !  src-a "*"wartet: dialog open"* && $out != *"JETZT ▶ x"* ]]
+status $$ waiting $'sandbox\e[2J request'                          # outside text: control characters never reach the terminal
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *"sandbox?[2J request"* && $out != *$'\e'* ]]
+status $$ waiting
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *"JETZT ▶ wartet auf dich"$'\n'"        seit 20 s"* && $out == *" !  src-a "*"wartet"* ]]
+status $$ idle                                                     # idle while the transcript still says tool
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *"JETZT ▶ wartet auf dich"* && $out == *" !  src-a "*"wartet"* && $out != *"JETZT ▶ x"* ]]
+sub=$HOME/.claude/projects/p/$s1/subagents; mkdir -p "$sub"
+echo '{}' >"$sub/agent-a1.meta.json"; echo '{}' >"$sub/agent-a1.jsonl"; touch -d 2026-11-15T14:10:00Z "$sub/agent-a1.jsonl"
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *"JETZT ▶ Helfer arbeiten (1)"* && $out == *" ▶  src-a "*"Helfer arbeiten"* && $out != *"wartet auf dich"* ]]
+rm -r "$sub"
+for st in busy shell bogus; do                                     # busy, shell and unknown: the transcript decides
+  status $$ $st; out=$(lage --dir "$HOME/w" --once);  [[ $out == *"JETZT ▶ x"$'\n'"        Bash · seit 20 s"* && $out == *"arbeitet"* ]]
+done
+entry $s1 "$(assistant 14:12:10 '"end_turn"' '[{"type":"text","text":"fertig"}]')"
+status $$ busy; out=$(lage --dir "$HOME/w" --once);  [[ $out == *"JETZT ▶ wartet auf dich"$'\n'"        seit 10 s"* ]]
+fresh; session $$ $s1 src-a "$HOME/w"; owner 14:12:00; status $$ idle   # idle after an owner prompt: nothing runs
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *"JETZT ▶ wartet auf dich"* && $out != *"denkt nach"* ]]
+# no status at all (older Claude Code): a user entry that is no turn leaves the state alone; an interrupt marker ends the turn
+fresh; session $$ $s1 src-a "$HOME/w"; status $$ ""
+entry $s1 "$(assistant 14:12:00 '"tool_use"' '[{"type":"tool_use","name":"Bash","input":{"description":"x"}}]')"
+entry $s1 '{"type":"user","timestamp":"2026-11-15T14:12:10Z","message":{"content":"<local-command-stdout>ok</local-command-stdout>"}}'
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *"JETZT ▶ x"$'\n'"        Bash · seit 20 s"* ]]
+entry $s1 '{"type":"user","timestamp":"2026-11-15T14:12:10Z","message":{"content":[{"type":"text","text":"[Request interrupted by user for tool use]"}]}}'
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *"JETZT ▶ wartet auf dich"$'\n'"        seit 10 s"* ]]
+entry $s1 '{"type":"user","timestamp":"2026-11-15T14:12:15Z","origin":{"kind":"human"},"message":{"content":"weiter"}}'
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *"JETZT ▶ denkt nach"$'\n'"        seit 5 s"* ]]
+fresh; session $$ $s1 src-a "$HOME/w"                                 # with a status the same entries replace the state, as before
+entry $s1 "$(assistant 14:12:00 '"tool_use"' '[{"type":"tool_use","name":"Bash","input":{"description":"x"}}]')"
+entry $s1 '{"type":"user","timestamp":"2026-11-15T14:12:10Z","message":{"content":[{"type":"text","text":"[Request interrupted by user]"}]}}'
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *"JETZT ▶ denkt nach"$'\n'"        seit 10 s"* ]]
 
 # test_age: seconds, minutes, hours
 fresh; session $$ $s1 src-a "$HOME/w"
