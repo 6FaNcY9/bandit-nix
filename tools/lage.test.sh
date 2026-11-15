@@ -613,11 +613,14 @@ sed -i 's/\[ \] 2026-11-15 14:12/[x] 2026-11-15 14:12/' "$(bfile)"
 LAGE_NOW=2026-11-15T14:20:00Z lage --dir "$HOME/w" --idea 'Cookie'
 [[ $(hook PostToolUse $s1 | context) == 'Neue Idee von vino: Cookie' && -z $(hook PostToolUse $s1) ]]
 
-# test_hook_start_with_ideas: SessionStart gives the path, then the ideas not shown yet, one per line
+# test_hook_start_with_ideas: SessionStart gives the path, then the open ideas, one per line
 fresh; session $$ $s1 src-a "$HOME/w"
 lage --dir "$HOME/w" --idea 'eins'; lage --dir "$HOME/w" --idea 'zwei'
 [[ $(hook SessionStart $s1 | context) == "Lage-Board: $HOME/.local/state/lage/$s1.md"$'\nNeue Idee von vino: eins\nNeue Idee von vino: zwei' ]]
-[[ $(hook SessionStart $s1 | context) == "Lage-Board: $HOME/.local/state/lage/$s1.md" ]]
+[[ -z $(hook PostToolUse $s1) ]]
+# a session start also follows compaction, resume and clear, which may have lost what was told: the open ideas are told again, once
+[[ $(hook SessionStart $s1 | context) == "Lage-Board: $HOME/.local/state/lage/$s1.md"$'\nNeue Idee von vino: eins\nNeue Idee von vino: zwei' ]]
+[[ -z $(hook PostToolUse $s1) && -z $(hook UserPromptSubmit $s1) ]]
 
 # test_hook_done_idea_not_shown: only open ideas under Deine Ideen
 fresh

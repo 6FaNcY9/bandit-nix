@@ -576,7 +576,8 @@ def hook():
             text = ""
         shown_file = Path.home() / ".local/state/lage" / (sid + ".shown")  # hashes only: lab text stays in its lab folder
         try:
-            shown = shown_file.read_text().split()
+            # a session start also follows compaction, resume and clear, which may have lost what was told: tell it all again
+            shown = [] if event == "SessionStart" else shown_file.read_text().split()
         except OSError:
             shown = []
         # shortcut: ideas with the same text and time count as one, because only a hash is kept; upgrade if that bites
