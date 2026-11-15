@@ -259,6 +259,8 @@
 
       guest-report-test = import ./hosts/bandit-lab/services/guest-box/report-test.nix {inherit pkgs;};
 
+      werbung-watch-test = import ./hosts/bandit-lab/services/werbung-watch/test.nix {inherit pkgs;};
+
       lab-guests = import ./ci/lab-guests.nix {
         inherit pkgs;
         inherit (nixpkgs) lib;

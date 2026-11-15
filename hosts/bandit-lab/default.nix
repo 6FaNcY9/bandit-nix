@@ -29,6 +29,7 @@ in {
     "${craft}/mcbots"
     ./services/ntfy
     ./services/guest-box
+    ./services/werbung-watch
     ./services/mc-public
     "${craft}/ollama"
     "${craft}/llamacpp"
