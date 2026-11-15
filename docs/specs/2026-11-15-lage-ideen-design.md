@@ -21,12 +21,12 @@ vino hardly uses the ideas window of `lage`; he writes ideas straight into the C
 
 - **A** Drop the 76-char cut in `lagebild`: smallest, but ~300 more tokens per session start. Rejected (vino wants to save tokens).
 - **B (picked by vino)** `lagebild` stays short; the view gets full lines on its own.
-  - B1 (architect's pick): `index.sh` also writes a hidden `.wartet.md` per store with the same rows, order and top 10, titles capped at 240 instead of 76. `lage.py` reads it and wraps.
+  - B1 (architect's pick): `index.sh` also writes a hidden `.wartet.md` per store with the same rows, order and top 10, rows up to 280 chars instead of 76. `lage.py` reads it and wraps.
   - B2: `lage` fetches the project notes itself. Rejected: duplicates the gawk parser and ordering.
 
 ## Design
 
-- `hosts/bandit-lab/services/memory/index.sh`: second temp file `mktemp "$dst/.lagebild.XXXXXX"`, passed as `-v full=`; `flush()` fills a second array with cap 240; `END` prints `## Waiting for a human` and the rows (or `Nothing.`) to `full`; trap removes both temps; temp + `cmp` + `mv`, no rewrite when unchanged. Dotfile because the lab `.bmignore` has `.*` (not indexed by basic-memory) and the UI `walk()` skips dot names; the mirror copies only `mirroredNotes`.
+- `hosts/bandit-lab/services/memory/index.sh`: second temp file `mktemp "$dst/.lagebild.XXXXXX"`, passed as `-v full=`; `flush()` fills a second array with title budget `276 - length(head) - length(tail)` (mirrors the existing 76, so a numbered row stays ≤ 280); `END` prints `## Waiting for a human` and the rows (or `Nothing.`) to `full`; trap removes both temps; temp + `cmp` + `mv`, no rewrite when unchanged. Dotfile because the lab `.bmignore` has `.*` (not indexed by basic-memory) and the UI `walk()` skips dot names; the mirror copies only `mirroredNotes`.
 - Whole row stays under 300 chars (lage's `clean(line, 300)`; a cut tail breaks the `(who)`/date parse).
 - `tools/lage.py`: `TASKS_URL` → `/notes/.wartet.md`; `task_lines` wraps like `board_lines` (`textwrap.wrap`, `max_lines=3`, `placeholder="…"`, hanging indent).
 - `~/.claude/CLAUDE.md`, section "Shared memory" (the "Lage board" section is skipped when there is no board): "A prompt starting with `Idee:`: append `- [ ] <text> (vino)` at the end of `## Tasks` in `projects/<project>` (its store; note `ideen` when none fits), confirm in one line, continue." Needs vino's yes and a backup first.
