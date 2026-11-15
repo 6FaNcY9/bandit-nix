@@ -3,9 +3,11 @@
 
 lage [--dir DIR] [--once]   follow the newest Claude session started in DIR
 lage [--dir DIR] --idea TEXT   add an owner idea to that session's board
-Everything is read from ~/.claude; nothing is written there. The only file lage writes is the board.
+lage hook   Claude Code hook (JSON on stdin): tells a session its board and each new owner idea once
+Everything is read from ~/.claude; nothing is written there. lage writes the board and, for the hook, a .shown file of hashes.
 """
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -434,7 +436,48 @@ def wait(seconds, session):
             pass  # cancelled, or the board is not writable: the next refresh shows no new idea
 
 
+def hook():
+    """Claude Code hook on SessionStart, UserPromptSubmit and PostToolUse. Prints JSON for Claude only when there is
+    something to say (the board path on SessionStart, each new open owner idea once). Never creates the board; always 0."""
+    try:
+        data = json.load(sys.stdin)
+        sid, event = data["session_id"], data["hook_event_name"]
+        if "agent_id" in data or not re.fullmatch(r"[0-9a-f-]{8,}", sid):
+            return 0  # a helper, or an id that must not become a file name
+        start = next((s["cwd"] for s in sessions() if s["sessionId"] == sid and isinstance(s.get("cwd"), str)), data.get("cwd"))
+        path = board_path(sid, start)
+        lines = ["Lage-Board: " + str(path)] if event == "SessionStart" else []
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            text = ""
+        shown_file = Path.home() / ".local/state/lage" / (sid + ".shown")  # hashes only: lab text stays in its lab folder
+        try:
+            shown = shown_file.read_text().split()
+        except OSError:
+            shown = []
+        # shortcut: ideas with the same text count as one, because only the hash of the line is kept; upgrade if that bites
+        new = {}
+        for e in parse_board(text, clock().astimezone().date())[IDEAS]:
+            line = "Neue Idee von vino: " + e.text
+            digest = hashlib.sha256(line.encode()).hexdigest()
+            if e.done is False and digest not in shown:
+                new[digest] = line
+        if new:
+            shown_file.parent.mkdir(parents=True, exist_ok=True)
+            with shown_file.open("a") as f:
+                f.writelines(d + "\n" for d in new)
+            lines += new.values()
+        if lines:
+            print(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": "\n".join(lines)}}))
+    except Exception:  # a hook must never break the session it watches
+        pass
+    return 0
+
+
 def main():
+    if sys.argv[1:] == ["hook"]:
+        return hook()
     ap = argparse.ArgumentParser(prog="lage", description="Show what a Claude Code session is doing now.")
     ap.add_argument("--dir", default=os.getcwd(), help="follow the session started in this folder (default: cwd)")
     ap.add_argument("--once", action="store_true", help="print one frame and exit")

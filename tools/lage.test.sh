@@ -516,4 +516,76 @@ lage.sitzungen_lines("aaaaaaaa-1", 60)
 assert tr.pos == before
 EOF
 
+hook() { # hook <event> <session id> [agent id]: the hook JSON on stdin (cwd $HOME/w), the hook's output on stdout
+  jq -nc --arg e "$1" --arg s "$2" --arg c "$HOME/w" --arg a "${3:-}" \
+    '{hook_event_name: $e, session_id: $s, cwd: $c} + (if $a == "" then {} else {agent_id: $a} end)' | lage hook; }
+context() { jq -r .hookSpecificOutput.additionalContext; } # the text Claude gets, from the hook output on stdin
+
+# test_hook_start_tells_path: no board yet; the hook never creates one
+fresh
+out=$(hook SessionStart $s1)
+[[ $(context <<<"$out") == "Lage-Board: $HOME/.local/state/lage/$s1.md" && $(jq -r .hookSpecificOutput.hookEventName <<<"$out") == SessionStart ]]
+[[ -z $(hook UserPromptSubmit $s1) && ! -e $HOME/.local/state ]]
+
+# test_hook_idea_once: a new open idea is shown once, escaped as JSON; the state file holds hashes only
+fresh; session $$ $s1 src-a "$HOME/w"
+lage --dir "$HOME/w" --idea 'Cookie "anschauen" \ ü'
+out=$(hook PostToolUse $s1)
+[[ $(jq -r .hookSpecificOutput.hookEventName <<<"$out") == PostToolUse ]]
+[[ $(context <<<"$out") == 'Neue Idee von vino: Cookie "anschauen" \ ü' ]]
+[[ -z $(hook PostToolUse $s1) && -z $(hook UserPromptSubmit $s1) ]]
+shown=$HOME/.local/state/lage/$s1.shown
+[[ -s $shown && $(grep -c Cookie "$shown" || true) == 0 && $(grep -vc '^[0-9a-f]\{64\}$' "$shown" || true) == 0 ]]
+lage --dir "$HOME/w" --idea 'zweite'
+[[ $(hook PostToolUse $s1 | context) == 'Neue Idee von vino: zweite' ]]
+
+# test_hook_start_with_ideas: SessionStart gives the path, then the ideas not shown yet, one per line
+fresh; session $$ $s1 src-a "$HOME/w"
+lage --dir "$HOME/w" --idea 'eins'; lage --dir "$HOME/w" --idea 'zwei'
+[[ $(hook SessionStart $s1 | context) == "Lage-Board: $HOME/.local/state/lage/$s1.md"$'\nNeue Idee von vino: eins\nNeue Idee von vino: zwei' ]]
+[[ $(hook SessionStart $s1 | context) == "Lage-Board: $HOME/.local/state/lage/$s1.md" ]]
+
+# test_hook_done_idea_not_shown: only open ideas under Deine Ideen
+fresh
+board <<'EOF'
+## Funde
+- 14:00 ! ein Fund
+## Für dich
+- 14:00 wichtig
+## Deine Ideen
+- [x] 2026-11-15 14:00 erledigt
+- [ ] 2026-11-15 14:01 offen
+EOF
+[[ $(hook PostToolUse $s1 | context) == 'Neue Idee von vino: offen' ]]
+[[ -z $(hook PostToolUse $s1) ]]
+
+# test_hook_helper_skipped: a helper's call says nothing; the next main call still shows the idea
+fresh; session $$ $s1 src-a "$HOME/w"
+lage --dir "$HOME/w" --idea 'für den Hauptlauf'
+[[ -z $(hook PostToolUse $s1 a1) && -z $(hook SessionStart $s1 a1) && ! -e $HOME/.local/state/lage/$s1.shown ]]
+[[ $(hook PostToolUse $s1 | context) == 'Neue Idee von vino: für den Hauptlauf' ]]
+
+# test_hook_no_board: a session without a board gets no output and no file
+fresh
+out=$(hook PostToolUse cccccccc-3); [[ -z $out && ! -e $HOME/.local/state ]]
+
+# test_hook_bad_id: anything but lowercase hex and dashes (8+) is ignored; nothing outside the state folder is read
+fresh; mkdir -p "$HOME/.local/state/lage"
+for f in ../x.md abcdef.md AAAAAAAA-1.md; do printf '## Deine Ideen\n- [ ] 2026-11-15 14:00 Falle\n' >"$HOME/.local/state/lage/$f"; done
+for bad in ../x abcdef AAAAAAAA-1 $'aaaaaaaa-1\n' ''; do
+  rc=0; out=$(hook PostToolUse "$bad" 2>&1) || rc=$?; [[ $rc -eq 0 && -z $out ]]
+done
+[[ -z $(ls "$HOME/.local/state/lage" | grep shown || true) && ! -e $HOME/.local/state/x.shown ]]
+
+# test_hook_never_fails: empty or odd stdin gives exit 0 and no output
+for bad in '' '{bad' '[]' null '{"session_id":5,"hook_event_name":"PostToolUse"}' '{"session_id":"aaaaaaaa-1"}'; do
+  rc=0; out=$(printf '%s' "$bad" | lage hook 2>&1) || rc=$?; [[ $rc -eq 0 && -z $out ]]
+done
+
+# test_hook_start_cwd: the board follows the session file's start folder, not the hook's cwd; lab text never leaves the lab folder
+fresh; mkdir -p "$HOME/src/sec/live/b/sub"; session $$ $s1 src-a "$HOME/src/sec/live/b/sub"
+lage --dir "$HOME/src/sec/live/b" --idea 'Cookie im Labor'
+[[ $(hook SessionStart $s1 | context) == "Lage-Board: $HOME/src/sec/live/b/.claude/lage.md"$'\nNeue Idee von vino: Cookie im Labor' ]]
+[[ $(ls "$HOME/.local/state/lage") == $s1.shown && -z $(grep -rl Cookie "$HOME/.local/state" || true) ]]
+
 echo ok
