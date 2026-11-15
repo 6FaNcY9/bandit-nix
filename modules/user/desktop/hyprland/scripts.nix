@@ -219,4 +219,19 @@ in {
       pkgs.less
     ];
   };
+
+  # Cockpit (hypr-cockpit): a reload (nh os switch) drops the runtime workspace rules; workspaces with a
+  # state file get their master layout back while the config loads, so the Cockpit stays as it was.
+  wayland.windowManager.hyprland.extraConfig = ''
+    do
+      local dir = (os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/hypr-cockpit/"
+      for id = 1, 10 do
+        local f = io.open(dir .. id, "r")
+        if f then
+          f:close()
+          hl.workspace_rule({ workspace = tostring(id), layout = "master" })
+        end
+      end
+    end
+  '';
 }
