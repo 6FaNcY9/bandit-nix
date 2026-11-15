@@ -205,6 +205,104 @@ def scan_mail(maildir: Path, cursor: dict, geoip) -> MailFindings:
     return out
 
 
+# --- web manifest diff -----------------------------------------------------
+
+_PHP_EXT = {"php", "php3", "php4", "php5", "php7", "phtml", "phar"}
+_SENSITIVE = {".htaccess", ".user.ini", "wp-config.php"}
+
+
+@dataclass
+class WebFindings:
+    added: list = field(default_factory=list)
+    removed: list = field(default_factory=list)
+    changed: list = field(default_factory=list)
+    instant: list = field(default_factory=list)  # "rule: path"
+    digest_groups: dict = field(default_factory=dict)  # group -> changed count
+
+
+def parse_manifest(text: str) -> dict:
+    """Parse `rsync --list-only` lines into {path: (perms, size, mtime)}."""
+    out = {}
+    for line in text.splitlines():
+        parts = line.split(None, 4)
+        if len(parts) < 5:
+            continue
+        perms, size, date, clock, path = parts
+        try:
+            size = int(size.replace(",", ""))
+        except ValueError:
+            continue
+        out[path] = (perms, size, f"{date} {clock}")
+    return out
+
+
+def _digest_group(path: str) -> str:
+    segs = path.split("/")
+    if segs[0] == "wp-content" and len(segs) >= 3:
+        return "/".join(segs[:3])
+    return segs[0]
+
+
+def _instant_rules(path, perms, is_added, is_changed, version_changed):
+    """Rule names that fire for one added/changed path (privacy-safe)."""
+    segs = path.split("/")
+    base = segs[-1]
+    ext = base.rsplit(".", 1)[-1].lower() if "." in base else ""
+    hit = []
+    if "mu-plugins" in segs:
+        hit.append("mu-plugins")
+    if "uploads" in segs and ext in _PHP_EXT:
+        hit.append("uploads-php")
+    if base in _SENSITIVE:
+        hit.append("sensitive-file")
+    if (
+        base == "wp-inmri.php"
+        or base.startswith(".htaccess.bak")
+        or any(s.endswith("vgh") for s in segs)
+    ):
+        hit.append("ioc")
+    if is_added and perms.startswith("d") and len(segs) == 1:
+        hit.append("new-topdir")
+    if base.endswith("authorized_keys"):
+        hit.append("authorized-keys")
+    if (
+        is_changed
+        and ext in _PHP_EXT
+        and (len(segs) == 1 or segs[0] in ("wp-includes", "wp-admin"))
+        and not version_changed
+    ):
+        hit.append("core-file")
+    return hit
+
+
+def diff_web(old: dict, new: dict) -> WebFindings:
+    """Diff two manifests. An empty `old` is the first-run baseline."""
+    out = WebFindings()
+    if not old:
+        return out
+    added = sorted(set(new) - set(old))
+    removed = sorted(set(old) - set(new))
+    changed = sorted(
+        p
+        for p in set(old) & set(new)
+        if old[p][1] != new[p][1] or old[p][2] != new[p][2]
+    )
+    out.added, out.removed, out.changed = added, removed, changed
+    version_changed = any(p.endswith("wp-includes/version.php") for p in changed)
+    for p in changed:
+        out.digest_groups[_digest_group(p)] = (
+            out.digest_groups.get(_digest_group(p), 0) + 1
+        )
+    for p in added + changed:
+        perms = new[p][0]
+        rules = _instant_rules(
+            p, perms, p in set(added), p in set(changed), version_changed
+        )
+        for rule in rules:
+            out.instant.append(f"{rule}: {p}")
+    return out
+
+
 # --- CLI -------------------------------------------------------------------
 
 
