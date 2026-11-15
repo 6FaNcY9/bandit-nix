@@ -61,4 +61,12 @@ before=$(wc -l <"$CALLS"); sweep
 echo "{\"transcript_path\":\"$p/dddddddd-1.jsonl\",\"session_id\":\"dddddddd-1\"}" | "$here/memory-save.sh" --fg
 [[ $(wc -l <"$CALLS") -eq $((before + 1)) ]]                       # SessionEnd skips it too
 [[ -e $HOME/.local/state/memory-saved/dddddddd-1 ]]                # marked, so the sweep does not rescan it
+
+# A corrupt line before the live cwd does not hide it: only that line is skipped.
+prompts "$p/99999999-1.jsonl" 3
+printf '%s\n' '{"type":"user","cwd":"/x/pro' >>"$p/99999999-1.jsonl"
+echo '{"type":"user","cwd":"'"$live"'/acme","message":{"content":"q"}}' >>"$p/99999999-1.jsonl"
+touch -d '2 hours ago' "$p/99999999-1.jsonl"
+before=$(wc -l <"$CALLS"); sweep
+[[ $(wc -l <"$CALLS") -eq $before && -e $HOME/.local/state/memory-saved/99999999-1 ]]
 echo ok
