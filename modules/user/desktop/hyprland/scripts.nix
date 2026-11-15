@@ -1,24 +1,15 @@
 {
-  config,
   pkgs,
   bandit,
   ...
-}: let
-  colors = config.lib.stylix.colors.withHashtag;
-in {
+}: {
   home = {
     file = {
       "Pictures/Screenshots/.keep".text = "";
-      ".config/flameshot/flameshot.ini".text = ''
-        [General]
-        savePath=${bandit.workstation.homeDirectory}/Pictures/Screenshots
-        ; Theme colours instead of Flameshot's default purple.
-        uiColor=${colors.base0C}
-        contrastUiColor=${colors.base01}
-        drawColor=${colors.base08}
-      '';
 
-      # ─── Region screenshot: capture, save, copy, notify ───
+      # ─── Region screenshot: select, then draw in satty; Enter copies + saves ───
+      # grim + slurp instead of Flameshot: Flameshot 14 must capture through the
+      # portal on Hyprland, about 0.8 s before its overlay even appears.
       ".local/bin/hypr-screenshot" = {
         executable = true;
         text = ''
@@ -26,10 +17,12 @@ in {
           set -euo pipefail
           dir="${bandit.workstation.homeDirectory}/Pictures/Screenshots"
           mkdir -p "$dir"
-          file="$dir/$(date +%Y-%m-%d_%H-%M-%S).png"
-          ${pkgs.grim}/bin/grim -g "$(${pkgs.slurp}/bin/slurp)" "$file"
-          ${pkgs.wl-clipboard}/bin/wl-copy < "$file"
-          ${pkgs.libnotify}/bin/notify-send -a hypr-screenshot "Screenshot saved" "$file"
+          region=$(${pkgs.slurp}/bin/slurp -d) || exit 0 # Esc cancels the selection
+          ${pkgs.grim}/bin/grim -g "$region" - |
+            ${pkgs.satty}/bin/satty --filename - \
+              --output-filename "$dir/%Y-%m-%d_%H-%M-%S.png" \
+              --copy-command ${pkgs.wl-clipboard}/bin/wl-copy \
+              --actions-on-enter save-to-clipboard --save-after-copy --early-exit
         '';
       };
 
@@ -170,8 +163,7 @@ in {
             Mod+Shift+.         dismiss all notifications
 
           SCREENSHOTS
-            Print / F11         region screenshot (grim + slurp)
-            Mod+Shift+S         screenshot with drawing (flameshot)
+            Print / F11 / Mod+Shift+S   region screenshot, draw in satty (Enter = copy + save)
 
           MEDIA
             XF86AudioRaise/Lower  volume ±5%
