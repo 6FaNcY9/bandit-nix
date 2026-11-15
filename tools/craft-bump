@@ -2,8 +2,8 @@
 # Bump the bandit-craft input (the game and AI half, github:6FaNcY9/bandit-craft) and get it ready to ship.
 #   tools/craft-bump [REV]   (default: bandit-craft's main on GitHub)
 # In a fresh detached worktree on origin/main: moves the input, lists the bandit-craft commits that come
-# in, commits the flake.lock change (unsigned), builds that committed bandit-lab revision and prints the
-# tools/ship-claude line. It never pushes: a push to main deploys (lab-update).
+# in, commits the flake.lock change (unsigned), builds bandit-craft's bot tests and that committed bandit-lab
+# revision and prints the tools/ship-claude line. It never pushes: a push to main deploys (lab-update).
 set -euo pipefail
 
 repo=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)
@@ -35,6 +35,12 @@ gh api "repos/6FaNcY9/bandit-craft/compare/$old...$new" \
 
 git commit -q --no-gpg-sign -m "chore(flake): bandit-craft ${old:0:7} -> ${new:0:7}" -- flake.lock
 sha=$(git rev-parse HEAD)
+# The bot suite runs once, here, not in the package build on the laptop and the lab. --inputs-from takes the locked
+# input (no GitHub API call), and it is the same derivation an agent built from the craft worktree before handing over.
+nix build --no-link --inputs-from "git+file://$wt?rev=$sha" bandit-craft#checks.x86_64-linux.mcbots-tests || {
+  echo "bandit-craft ${new:0:7}: checks.x86_64-linux.mcbots-tests failed or does not exist; not bumping (remove $wt with: git -C $repo worktree remove --force $wt)" >&2
+  exit 1
+}
 nix build --no-link "git+file://$wt?rev=$sha#nixosConfigurations.bandit-lab.config.system.build.toplevel"
 
 echo "ready: ${sha:0:7} in $wt (bandit-lab builds). Ship it with:"
