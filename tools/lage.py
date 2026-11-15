@@ -55,8 +55,8 @@ ENTRY = re.compile(
     re.ASCII,
 )
 transcripts = {}  # sessionId -> Transcript, so each refresh reads only new bytes
-TASKS_URL = "https://memory.tail7facc9.ts.net/notes/lagebild.md"  # LAGE_TASKS_URL overrides it; empty turns tasks off
-# N. project (store): text (who) [date]; text may hold ": " and is cut with … by lagebild already
+TASKS_URL = "https://memory.tail7facc9.ts.net/notes/.wartet.md"  # LAGE_TASKS_URL overrides it; empty turns tasks off
+# N. project (store): text (who) [date]; text may hold ": "; .wartet.md cuts it with … only past 280 characters
 TASK = re.compile(r"\d+\.\s+(\S+) \([^)]*\): (.*?)(?: \(([^)]*)\))?(?: \d{4}-\d\d-\d\d)?")
 tasks_ok = None  # clock() of the last fetch of the tasks that worked, in this process
 
@@ -597,13 +597,21 @@ def task_lines(cols, n):
     head = [paint(TEAL, "AUFGABEN", lit) + "  " + paint(DIM, count, lit)]
     if n <= 0:
         return head
-    shown = mine if len(mine) <= n else mine[:n - 1]
-    w = min(max((len(p) for p, _ in shown), default=0), 14)
-    rows = []
-    for project, text in shown:
-        line = clean(f"{project[:w]:<{w}}  {text}", cols - 1)
-        rows.append(" " + (paint(PURPLE, line[:w], lit) + line[w:] if lit else line))
-    more = [" " + paint(DIM, f"+{len(mine) - len(shown)} weitere", lit)] if len(shown) < len(mine) else []
+    w = min(max((len(p) for p, _ in mine[:n]), default=0), 14)
+    rows, shown = [], 0
+    for i, (project, text) in enumerate(mine):
+        parts = textwrap.wrap(text, max(cols - 1 - w - 2, 1), max_lines=3, placeholder="…") or [""]
+        room = n - len(rows) - (i + 1 < len(mine))  # keep a line for +N weitere while more follow
+        if len(parts) > room:
+            if rows or room <= 0:
+                break
+            parts = parts[:room]  # even the first task never gets more than the box
+            parts[-1] = parts[-1][:-1] + "…"
+        first = clean(f"{project[:w]:<{w}}  {parts[0]}", cols - 1)
+        rows.append(" " + (paint(PURPLE, first[:w], lit) + first[w:] if lit else first))
+        rows += [" " + " " * (w + 2) + p for p in parts[1:]]
+        shown += 1
+    more = [" " + paint(DIM, f"+{len(mine) - shown} weitere", lit)] if shown < len(mine) else []
     return head + rows + more
 
 
