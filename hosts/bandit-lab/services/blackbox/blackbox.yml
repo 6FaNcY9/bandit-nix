@@ -19,3 +19,22 @@ modules:
     timeout: 5s
     tcp:
       preferred_ip_protocol: ip4
+  # aiia.at live check (job aiia-live): www must send visitors to the apex.
+  http_redirect_aiia:
+    prober: http
+    timeout: 10s
+    http:
+      valid_status_codes: [301, 302, 307, 308]
+      follow_redirects: false
+      preferred_ip_protocol: ip4
+      fail_if_header_not_matches:
+        - header: Location
+          regexp: '^https://aiia\.at/'
+  # The CDN root has no page (404): an answer from the bucket is up, a 5xx or timeout is not.
+  http_answers:
+    prober: http
+    timeout: 10s
+    http:
+      valid_status_codes: [200, 301, 302, 403, 404]
+      follow_redirects: false
+      preferred_ip_protocol: ip4

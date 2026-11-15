@@ -1029,8 +1029,180 @@
     ];
   });
 
+  # aiia.at usage (aiia-create-stats, counts only) and the hourly live check
+  # (job aiia-live). German titles: the owner reads this one.
+  plainSteps = [
+    {
+      color = "blue";
+      value = null;
+    }
+  ];
+  liveOk = ''min(last_over_time(probe_success{job="aiia-live"}[2h])) * min(aiia_healthz_ok)'';
+  dashboardAiia = pkgs.writeText "grafana-dashboard-aiia.json" (builtins.toJSON {
+    title = "aiia";
+    uid = "aiia";
+    schemaVersion = 39;
+    version = 1;
+    editable = false;
+    timezone = "browser";
+    refresh = "5m";
+    time = {
+      from = "now-7d";
+      to = "now";
+    };
+    panels = [
+      (statPanel {
+        id = 1;
+        x = 0;
+        title = "Konten";
+        expr = "aiia_accounts";
+        steps = plainSteps;
+      })
+      (statPanel {
+        id = 2;
+        x = 3;
+        title = "Designs";
+        expr = "aiia_designs";
+        steps = plainSteps;
+      })
+      (statPanel {
+        id = 3;
+        x = 6;
+        title = "Designs mit Konto";
+        expr = "aiia_designs_account";
+        steps = plainSteps;
+      })
+      (statPanel {
+        id = 4;
+        x = 9;
+        title = "Offene Meldungen";
+        expr = "aiia_reports_open";
+        steps = countSteps;
+      })
+      (statPanel {
+        id = 5;
+        x = 12;
+        title = "Offene Bestellungen";
+        expr = ''sum(aiia_orders{state=~"waiting|in_production"})'';
+        steps = plainSteps;
+      })
+      (statPanel {
+        id = 6;
+        x = 15;
+        title = "Bilder im 24-h-Kontingent";
+        expr = "aiia_site_generations";
+        steps = plainSteps;
+      })
+      (lib.recursiveUpdate (statPanel {
+          id = 7;
+          x = 18;
+          title = "Live-Check";
+          expr = liveOk;
+          steps = [
+            {
+              color = "red";
+              value = null;
+            }
+            {
+              color = "green";
+              value = 1;
+            }
+          ];
+        }) {
+          description = "aiia.at/create, /info, /api/session, www-Weiterleitung und CDN stündlich, healthz alle 5 Minuten.";
+          fieldConfig.defaults.mappings = [
+            {
+              type = "value";
+              options = {
+                "0" = {
+                  text = "FEHLER";
+                  color = "red";
+                };
+                "1" = {
+                  text = "OK";
+                  color = "green";
+                };
+              };
+            }
+          ];
+        })
+      (statPanel {
+        id = 8;
+        x = 21;
+        title = "Zahlen zuletzt erfasst vor";
+        expr = "time() - aiia_stats_last_success_timestamp_seconds";
+        unit = "s";
+        steps = highIsBad 600 1800;
+      })
+      (graphPanel {
+        id = 9;
+        x = 0;
+        y = 4;
+        w = 12;
+        title = "Konten und Designs";
+        unit = "none";
+        targets = [
+          {
+            expr = "aiia_accounts";
+            legend = "Konten";
+          }
+          {
+            expr = "aiia_designs";
+            legend = "Designs";
+          }
+          {
+            expr = "aiia_designs_account";
+            legend = "Designs mit Konto";
+          }
+        ];
+      })
+      # shortcut: delta of the stored-designs gauge, so expired designs (30 days
+      # after an anonymous one was made) lower it; export a created counter if that matters.
+      (lib.recursiveUpdate (graphPanel {
+          id = 10;
+          x = 12;
+          y = 4;
+          w = 12;
+          title = "Neue Designs pro Tag";
+          unit = "none";
+          hideLegend = true;
+          targets = [
+            {
+              expr = "clamp_min(delta(aiia_designs[1d]), 0)";
+              legend = "neu";
+            }
+          ];
+        }) {
+          interval = "1d";
+          description = "Zuwachs der gespeicherten Designs pro Tag. Ablaufende Designs (anonym nach 30 Tagen) drücken den Wert.";
+          fieldConfig.defaults.custom.drawStyle = "bars";
+          fieldConfig.defaults.decimals = 0;
+        })
+      (graphPanel {
+        id = 11;
+        x = 0;
+        y = 12;
+        w = 24;
+        title = "Live-Checks (1 = OK)";
+        unit = "none";
+        max = 1;
+        targets = [
+          {
+            expr = ''last_over_time(probe_success{job="aiia-live"}[2h])'';
+            legend = "{{instance}}";
+          }
+          {
+            expr = "aiia_healthz_ok";
+            legend = "healthz (lokal)";
+          }
+        ];
+      })
+    ];
+  });
+
   grafanaDashboards = pkgs.runCommand "grafana-dashboards" {} ''
     mkdir -p $out
+    cp -L ${dashboardAiia} $out/aiia.json
     cp -L ${dashboardLabOverview} $out/lab-overview.json
     cp -L ${dashboardNodeExporter} $out/node-exporter-full.json
     cp -L ${dashboardWanProbes} $out/wan-probes.json

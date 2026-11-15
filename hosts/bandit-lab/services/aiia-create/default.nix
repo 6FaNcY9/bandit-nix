@@ -28,6 +28,8 @@
   r2Bucket = "aiia-designs";
   assetBase = "https://cdn.aiia.at";
 in {
+  imports = [./stats.nix];
+
   systemd.tmpfiles.rules = [
     "d /srv/containers/aiia-create 0750 ${username} users -"
     # redis:7-alpine runs as 999:999 here, like aiia-redis. Redis holds the

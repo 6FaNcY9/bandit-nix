@@ -105,6 +105,27 @@ browser at `https://create.aiia.at/create`: it costs one fal generation and
 proves fal, Turnstile and R2 in one go. A failed start of the API is almost
 always its settings guard: `journalctl -u aiia-create-api` names the variable.
 
+## Usage numbers and live check
+
+Grafana dashboard **aiia** shows counts only (no addresses, names or ids):
+
+- `aiia-create-stats.timer` (every 5 min, root, `services/aiia-create/stats.sh`)
+  counts Redis keys with SCAN via `podman exec aiia-create-redis redis-cli` and
+  checks `http://127.0.0.1:3080/healthz`; it writes
+  `/var/lib/node-exporter-textfile/aiia-{stats,healthz}.prom` for node-exporter.
+  Metrics: `aiia_accounts`, `aiia_designs`, `aiia_designs_account`,
+  `aiia_reports_open`, `aiia_orders{state}`, `aiia_site_generations`,
+  `aiia_stats_last_success_timestamp_seconds`, `aiia_healthz_ok`.
+  Test on the laptop: `nix shell nixpkgs#redis nixpkgs#curl -c bash hosts/bandit-lab/services/aiia-create/stats.test.sh`.
+- Prometheus job `aiia-live` probes hourly through blackbox (`probe_success`):
+  `/create`, `/info`, `/api/session` (200), `www.aiia.at` (redirect to
+  `https://aiia.at/`), `cdn.aiia.at` (200, 301, 302, 403 or 404; its root is a 404). Only GETs: no
+  generation, no account.
+- Alerts (ntfy via grafana-ntfy): "aiia.at live check failing" when one check
+  failed its last two runs; "aiia numbers not collected for 30 minutes".
+  Run by hand: `sudo systemctl start aiia-create-stats`; on failure
+  `journalctl -u aiia-create-stats`.
+
 ## Updating
 
 Push to `main` of the generator repository, wait for the artifact, transfer and

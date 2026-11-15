@@ -316,6 +316,30 @@
         noData = "OK";
         window = 600;
       }}
+      ${rule {
+        uid = "bandit-lab-aiia-live-failing";
+        title = "aiia.at live check failing";
+        for = "1m";
+        severity = "critical";
+        summary = "{{ $labels.instance }} failed its last two checks";
+        # The probes run hourly (119m holds exactly the last two), healthz every 5 minutes (9m: the last two).
+        expr = ''max_over_time(probe_success{job="aiia-live"}[119m]) or label_replace(max_over_time(aiia_healthz_ok[9m]), "instance", "http://127.0.0.1:3080/healthz", "", "")'';
+        op = "lt";
+        threshold = 1;
+        noData = "OK";
+        window = 7140;
+      }}
+      ${rule {
+        uid = "bandit-lab-aiia-stats-stale";
+        title = "aiia numbers not collected for 30 minutes";
+        for = "5m";
+        severity = "warning";
+        summary = "aiia-create-stats has not collected the aiia numbers for more than 30 minutes";
+        expr = ''time() - aiia_stats_last_success_timestamp_seconds'';
+        op = "gt";
+        threshold = 1800;
+        noData = "Alerting";
+      }}
     '';
   in
     pkgs.runCommand "grafana-provisioning" {} ''

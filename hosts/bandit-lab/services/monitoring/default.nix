@@ -48,6 +48,8 @@ in {
     "d /srv/containers/monitoring 0755 root root -"
     "d /srv/containers/monitoring/grafana 0750 472 472 -"
     "d /srv/containers/monitoring/prometheus 0750 65534 65534 -"
+    # Root writes, node-exporter (65534) reads.
+    "d /var/lib/node-exporter-textfile 0755 root root -"
   ];
 
   virtualisation.quadlet = {
@@ -105,6 +107,8 @@ in {
         exec = [
           "--path.rootfs=/host"
           "--collector.systemd"
+          # *.prom files written by host units (aiia-create-stats)
+          "--collector.textfile.directory=/host/var/lib/node-exporter-textfile"
           "--collector.systemd.unit-include=(sshd|docker|containerd|podman|traefik|cloudflared.*|postgresql|smbd|nmbd|ollama|tailscaled|lab-update-.*|restic-backups-peer|restic-backups-mc-public|restic-peer-prune.*|minecraft-server-.*|minecraft-backup|docker-mcbots.*|postgresqlBackup.*|.*-pod|.*-network|prometheus|grafana|blackbox-exporter|node-exporter|nvidia-gpu-exporter|mrija-archive|vaultwarden)\\.(service|timer)"
         ];
         volumes = [

@@ -71,6 +71,31 @@
           - target_label: __address__
             replacement: localhost:9115
 
+      # aiia.at live check, hourly: read-only GETs that cost nothing (no
+      # generation, no account). Queries use last/max_over_time, as an
+      # instant query only sees a sample for 5 minutes after each scrape.
+      # The local healthz comes from the aiia-create-stats collector.
+      - job_name: aiia-live
+        scrape_interval: 1h
+        metrics_path: /probe
+        static_configs:
+          - targets:
+              - https://aiia.at/create
+              - https://aiia.at/info
+              - https://aiia.at/api/session
+            labels: {__param_module: http_origin}
+          - targets: ["https://www.aiia.at/"]
+            labels: {__param_module: http_redirect_aiia}
+          - targets: ["https://cdn.aiia.at/"]
+            labels: {__param_module: http_answers}
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: __param_target
+          - source_labels: [__param_target]
+            target_label: instance
+          - target_label: __address__
+            replacement: localhost:9115
+
       - job_name: nvidia-gpu
         static_configs:
           - targets: ["localhost:9835"]
