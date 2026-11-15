@@ -129,6 +129,9 @@ in {
             S3_BUCKET = r2Bucket;
             PUBLIC_ASSET_BASE_URL = assetBase;
             TURNSTILE_EXPECTED_HOSTNAMES = ''["aiia.at"]'';
+            # fal calls <this>/<job id> when a picture is done (needs the
+            # generator image at 85f8012 or later; signature checked in the API).
+            FAL_WEBHOOK_URL = "${origin}/hooks/fal";
             # Stage 2 (checkout): stays off until the image carries real variant
             # ids in config/shopify-variants.json (REPLACE_ME answers "not set up").
             # Off until the shop can sell and stage 3 is agreed: uncomment to open checkout.
