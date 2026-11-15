@@ -1,6 +1,7 @@
 """lage: a terminal view of what a Claude Code session is doing right now.
 
-lage [--once]   follow the Claude session in the Cockpit master window (Hyprland); with --dir DIR the newest one started in DIR
+lage [--once] [--full]   follow the Claude session in the Cockpit master window (Hyprland); with --dir DIR the newest one
+  started in DIR. The main view is a short overview; --full (or the key f) shows the whole board.
 lage [--dir DIR] --idea TEXT   add an owner idea to that session's board
 lage --probe PID   exit 0 when a Claude session runs under the window with pid PID, else 1; no output
 lage hook   Claude Code hook (JSON on stdin): tells a session its board and each new owner idea once
@@ -18,6 +19,7 @@ import termios
 import textwrap
 import time
 import tty
+from collections import deque
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import NamedTuple
@@ -36,7 +38,8 @@ TOOLS = {
     "Agent": ("Helfer: ", "description"),
     "Task": ("Helfer: ", "description"),
 }
-HIGHLIGHT, RESET = "\x1b[1;7m", "\x1b[0m"
+VERBS = ("liest ", "sucht ", "ändert ")  # LOG steps with one of these in a row join into one line
+HIGHLIGHT, RED, RESET = "\x1b[1;7m", "\x1b[1;31m", "\x1b[0m"
 HEADINGS = ("Funde", "Ungeprüft", "Für dich", "Deine Ideen")
 IDEAS = HEADINGS[3]
 LABS = ("re", "ctf", "live")
@@ -225,6 +228,17 @@ class Transcript:
         self.owner_ts = None
         self.title = None
         self.last_text = None
+        self.steps = deque(maxlen=8)  # LOG: (time, text, count), oldest first
+
+    def step(self, ts, text):
+        """Add a LOG step; after a step with the same text or the same verb (VERBS) it joins that one. Helpers never join."""
+        if self.steps and not text.startswith("Helfer: "):
+            _, last, count = self.steps[-1]
+            verb = next((v for v in VERBS if text.startswith(v)), None)
+            if last == text or (verb and last.startswith(verb)):
+                self.steps[-1] = (ts, text, count + 1)
+                return
+        self.steps.append((ts, text, 1))
 
     def update(self):
         """Read the complete lines added since the last call."""
@@ -269,6 +283,9 @@ class Transcript:
             text = item.get("text")
             if item.get("type") == "text" and isinstance(text, str) and text.strip():
                 self.last_text = clean(text, 10000)
+            elif item.get("type") == "tool_use":
+                tool_input = item.get("input")
+                self.step(ts, tool_text(str(item.get("name") or "Tool"), tool_input if isinstance(tool_input, dict) else {}))
         self.last = e
         if kind == "assistant" or "origin" in e or any(i.get("type") == "tool_result" for i in items(e)):
             self.settled = e
@@ -307,64 +324,50 @@ def waiting_for(s):
 
 
 def jetzt(tr, now, s):
-    """The JETZT lines and a state: tool, denkt, wartet or helfer. The status in the session file s wins where it
-    says waiting or idle; busy, shell, any other status and a missing one leave it to the transcript."""
+    """The JETZT line (in a list) and a state: tool, denkt, wartet or helfer. The status in the session file s wins
+    where it says waiting or idle; busy, shell, any other status and a missing one leave it to the transcript."""
     status = s.get("status")
     e = tr.last if status else tr.settled
     since = "seit " + ago((now - parse_ts(e["timestamp"])).total_seconds()) if e else ""
     if status == "waiting":
-        detail = " · ".join(x for x in (waiting_for(s), since) if x)
-        return [clean(x, cols() - 8) for x in ["wartet auf dich"] + ([detail] if detail else [])], "wartet"
-    if e is None:
-        return ["wartet auf dich"], "wartet"
-    message = e.get("message")
-    stop = message.get("stop_reason") if isinstance(message, dict) else None
-    tools = [i for i in items(e) if i.get("type") == "tool_use"]
-    idle = status == "idle"
-    if e["type"] == "assistant" and tools and not idle:
-        name = str(tools[-1].get("name") or "Tool")
-        tool_input = tools[-1].get("input")
-        text = tool_text(name, tool_input if isinstance(tool_input, dict) else {})
-        lines, state = [text, f"{name} · {since}"], "tool"
-    elif idle or (e["type"] == "assistant" and stop and stop != "tool_use"):
-        n = tr.helpers()
-        if n:
-            lines, state = [f"Helfer arbeiten ({n})", since], "helfer"
-        else:
-            lines, state = ["wartet auf dich", since], "wartet"
+        text, state = "wartet auf dich" + (": " + waiting_for(s) if waiting_for(s) else ""), "wartet"
+    elif e is None:
+        text, state = "wartet auf dich", "wartet"
     else:
-        lines, state = ["denkt nach", since], "denkt"
-    return [clean(x, cols() - 8) for x in lines], state
+        message = e.get("message")
+        stop = message.get("stop_reason") if isinstance(message, dict) else None
+        tools = [i for i in items(e) if i.get("type") == "tool_use"]
+        idle = status == "idle"
+        if e["type"] == "assistant" and tools and not idle:
+            tool_input = tools[-1].get("input")
+            text, state = tool_text(str(tools[-1].get("name") or "Tool"), tool_input if isinstance(tool_input, dict) else {}), "tool"
+        elif idle or (e["type"] == "assistant" and stop and stop != "tool_use"):
+            n = tr.helpers()
+            text, state = (f"Helfer arbeiten ({n})", "helfer") if n else ("wartet auf dich", "wartet")
+        else:
+            text, state = "denkt nach", "denkt"
+    return [clean(f"{text} ({since})" if since else text, cols() - 8)], state
 
 
-def sitzungen_lines(followed_sid, cols):
-    """SITZUNGEN: a line per running session, waiting ones first (!), then by name; the followed one is marked ▶."""
+def wartet_lines(followed_sid, cols):
+    """A line per other session that waits for the owner, by name: name, topic, what it waits for. More than 3: the
+    first 2 and a +N weitere line."""
     now, rows = clock(), []
     for s in sessions():
-        if not s["alive"]:
-            continue
         sid = s["sessionId"]
+        if not s["alive"] or sid == followed_sid:
+            continue
         tr = transcripts.setdefault(sid, Transcript(sid))
         tr.update()
-        state = jetzt(tr, now, s)[1]
+        if jetzt(tr, now, s)[1] != "wartet":
+            continue
         name = s.get("name")
         name = (clean(name, 12) if isinstance(name, str) else "") or clean(sid[:6], 6)
-        if state == "wartet":
-            why = waiting_for(s) or tr.last_text
-            mark, text = "!", "wartet: " + why if why else "wartet"
-        else:
-            mark, text = "▶" if sid == followed_sid else " ", "Helfer arbeiten" if state == "helfer" else "arbeitet"
-        rows.append((mark, name, sid, clean(tr.title, 12) if tr.title else "", text))
-    if not rows:
-        return []
-    rows.sort(key=lambda r: (r[0] != "!", r[1], r[2]))
-    shown = rows[:6]
-    nw, tw = max(len(r[1]) for r in shown), max(len(r[3]) for r in shown)
-    out = ["SITZUNGEN"]
-    for mark, name, _, topic, text in shown:
-        line = f" {mark}  {name:<{nw}}  {topic:<{tw}}  {text}"
-        out.append(line if len(line) <= cols else line[:cols - 1] + "…")
-    return out + ([f"+{len(rows) - 6} weitere"] if len(rows) > 6 else [])
+        topic = " " + clean(tr.title, 12) if tr.title else ""
+        why = waiting_for(s) or tr.last_text
+        rows.append((name, sid, clean(f"! WARTET  {name}{topic}" + (": " + why if why else ""), cols)))
+    lines = [r[2] for r in sorted(rows)]
+    return lines if len(lines) <= 3 else lines[:2] + [f"+{len(lines) - 2} weitere"]
 
 
 def started(session):
@@ -461,14 +464,43 @@ def add_idea(path, text, now):
         tmp.unlink(missing_ok=True)
 
 
-def board_lines(board, owner_ts, cols, space):
+def cut_of(since):
+    """The NEU limit as board time (local, naive, whole minute): entries from that minute on are new."""
+    return since.astimezone().replace(tzinfo=None, second=0, microsecond=0) if since else None
+
+
+def is_new(e, cut):
+    return cut is not None and e.done is None and e.ts is not None and e.ts >= cut
+
+
+def neu_line(board, since):
+    """NEU  <new> Funde · <new> für dich · <open> Ideen, with ! in front when a new one is important."""
+    cut = cut_of(since)
+    new = {h: [e for e in board[h] if is_new(e, cut)] for h in ("Funde", "Für dich")}
+    bang = "! " if any(e.important for x in new.values() for e in x) else ""
+    ideas = sum(e.done is False for e in board[IDEAS])
+    return f"{bang}NEU  {len(new['Funde'])} Funde · {len(new['Für dich'])} für dich · {ideas} Ideen"
+
+
+def log_lines(tr, cols, n):
+    """The newest n LOG steps, newest first: HH:MM (DD.MM. on another day), the text, +N for steps joined into it."""
+    today = clock().astimezone().date()
+    out = []
+    for ts, text, count in list(reversed(tr.steps))[:n]:
+        t = ts.astimezone()
+        line = f"{t:%H:%M} " if t.date() == today else f"{t:%d.%m.} "
+        out.append(" " + clean(line + text + (f" +{count - 1}" if count > 1 else ""), cols - 1))
+    return out
+
+
+def board_lines(board, since, cols, space):
     """The four sections: head, newest entries that fit in space lines, then one +N ältere line."""
     today = clock().astimezone().date()
-    cut = owner_ts.astimezone().replace(tzinfo=None, second=0, microsecond=0) if owner_ts else None
+    cut = cut_of(since)
     lit = sys.stdout.isatty()
 
     def neu(e):
-        return cut is not None and e.done is None and e.ts is not None and e.ts >= cut
+        return is_new(e, cut)
 
     out = []
     for h in HEADINGS:
@@ -503,39 +535,61 @@ def board_of(session):
     return board_path(session["sessionId"], str(session.get("cwd")))
 
 
-def frame(session, ended, where):
+def frame(session, ended, where, full=False, seen=None):
     """The whole pane as lines, at most one fewer than the pane is high (the newline after the last would scroll it).
-    where finishes the sentence "kein Claude ", e.g. "in w"."""
+    where finishes the sentence "kein Claude ", e.g. "in w". full: the whole board instead of the overview. seen: when
+    the owner last closed the full view; entries before it are no longer NEU."""
     n, width, room = clock(), cols(), max(rows() - 1, 1)
+    lit = sys.stdout.isatty()
     stand = "Stand " + n.astimezone().strftime("%H:%M")
     left = "LAGE" if session is None else "LAGE  " + short(str(session.get("cwd")))
     left = clean(left, width - len(stand) - 1)
     head = [left + " " * (width - len(left) - len(stand)) + stand]
     rule = "─" * width
-    block = sitzungen_lines(None if session is None else session["sessionId"], width)
+    wartet = [RED + x + RESET if lit and x.startswith("!") else x for x in wartet_lines(session and session["sessionId"], width)]
     if session is None:
-        return (head + [clean("kein Claude " + where, width)] + ([rule] + block if block else []))[:room]
-    state, owner_ts = "", None
+        return (head + [clean("kein Claude " + where, width)] + wartet)[:room]
+    state, since, tr = "", None, None
     if ended:
         lines = ["Sitzung beendet"]
     else:
         tr = transcripts.setdefault(session["sessionId"], Transcript(session["sessionId"]))
         tr.update()
         lines, state = jetzt(tr, n, session) if tr.path else (["Protokoll nicht gefunden"], "")
-        owner_ts = tr.owner_ts
-    if state == "wartet" and sys.stdout.isatty():
+        since = tr.owner_ts
+    if seen is not None and (since is None or seen > since):
+        since = seen
+    if state == "wartet" and lit:
         lines[0] = HIGHLIGHT + lines[0] + RESET
     try:
         text = board_of(session).read_text(encoding="utf-8", errors="replace")
     except OSError:
         text = ""
-    top = head + ["JETZT ▶ " + lines[0]] + ["        " + x for x in lines[1:]] + [rule]
-    foot = [rule] + block + ([rule] if block else []) + ["i = Idee eintragen"]
-    free = room - len(top) - len(foot)
-    # lines per section: what is left, less the 4 headings and the 4 +N ältere lines; a pane too small for it loses
-    # the end of the board first, then the end of the foot
-    board = board_lines(parse_board(text, n.astimezone().date()), owner_ts, width, max(1, (free - 8) // 4))
-    return (top + board[:max(free, 0)] + foot)[:room]
+    board = parse_board(text, n.astimezone().date())
+    top = head + ["JETZT ▶ " + lines[0]] + wartet
+    if full:
+        foot = [rule, "i = Idee   f = zurück"]
+        free = room - len(top) - 1 - len(foot)
+        # lines per section: what is left, less the 4 headings and the 4 +N ältere lines; a pane too small for it loses
+        # the end of the board first, then the end of the foot
+        body = board_lines(board, since, width, max(1, (free - 8) // 4))
+        return (top + [rule] + body[:max(free, 0)] + foot)[:room]
+    # Overview: header, JETZT, WARTET and NEU always; then, while they fit, the LOG with 3 steps, up to 8 steps, the
+    # key line, and last the rules between the parts. A pane too small even for the fixed lines loses its end.
+    steps = log_lines(tr, width, 8) if tr else []
+    neu = clean(neu_line(board, since), width)
+    neu = HIGHLIGHT + neu + RESET if lit and neu.startswith("!") else neu
+    used, shown = len(top) + 1, 0
+    if steps and used + 1 + min(3, len(steps)) <= room:
+        shown = min(3, len(steps))
+        shown += min(len(steps) - shown, room - used - 1 - shown)
+        used += 1 + shown
+    keys = ["i = Idee   f = alles zeigen"] if used < room else []
+    parts = [p for p in (top, ["LOG  (was Claude macht)"] + steps[:shown] if shown else [], [neu] + keys) if p]
+    out = parts[0]
+    for p in parts[1:]:
+        out = out + ([rule] if used + len(keys) + len(parts) - 1 <= room else []) + p
+    return out[:room]
 
 
 def wait(seconds, session):
@@ -605,6 +659,7 @@ def main():
     ap = argparse.ArgumentParser(prog="lage", description="Show what a Claude Code session is doing now.")
     ap.add_argument("--dir", help="follow the newest session started in this folder (default: the Cockpit master window)")
     ap.add_argument("--once", action="store_true", help="print one frame and exit")
+    ap.add_argument("--full", action="store_true", help="start with the whole board (the key f switches)")
     ap.add_argument("--idea", metavar="TEXT", help="add an idea to the board of the followed session and exit")
     ap.add_argument("--probe", type=int, metavar="PID", help="exit 0 if a Claude session runs under the window with this pid, else 1")
     args = ap.parse_args()
@@ -630,7 +685,7 @@ def main():
     try:
         while True:
             session, ended = pick(session)
-            lines = frame(session, ended, where)
+            lines = frame(session, ended, where, args.full)
             if args.once:
                 print("\n".join(lines))
                 return 0
