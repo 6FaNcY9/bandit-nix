@@ -61,9 +61,9 @@ run "$(cl $w1 foot 0)" "$(cl $w2 foot 1)"
 claude_window; c1=$wrapper
 run "$(cl $c1 kitty 0)" "$(cl $w2 foot 1)"
 [[ $(<"$KITTY_LOG") == "--class cockpit-log --session /nix/store/"*"-cockpit-session" ]]
-session=$(cut -d' ' -f4 "$KITTY_LOG")                            # lage on top, the shell split below it
+session=$(cut -d' ' -f4 "$KITTY_LOG")                            # lage on top, a shell below it for deploys
 grep -q '^launch --title lage /nix/store/.*/bin/lage$' "$session"
-grep -q '^launch --location=hsplit --bias=30 --title shell$' "$session"
+grep -q '^launch --location=hsplit --bias=35 --title shell$' "$session"
 grep -q 'layout = "master"' "$HYPR_LOG"                          # the layout part is untouched
 
 # test_claude_stacks: Claude in front: every other tiled window joins its tab group, then the work window is in front again
