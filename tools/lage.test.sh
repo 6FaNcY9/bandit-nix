@@ -6,6 +6,7 @@ trap 'echo "FAIL at line $LINENO" >&2' ERR
 here=$(cd "$(dirname "$0")" && pwd)
 t=$(mktemp -d); sl=(); trap 'rm -rf "$t"; ((${#sl[@]})) && kill -- "${sl[@]}" 2>/dev/null || true' EXIT
 export TZ=UTC COLUMNS=46 LINES=27 LAGE_NOW=2026-11-15T14:12:20Z PYTHONDONTWRITEBYTECODE=1
+export LAGE_TASKS_URL=  # no tasks, no network; the task tests set a file:// URL
 s1=aaaaaaaa-1
 n=0
 fresh() { # a new empty HOME for the next test
@@ -179,6 +180,40 @@ EOF
 out=$(lage --dir "$HOME/w" --once);  [[ $out == *$'\n! NEU  2 Funde · 1 für dich · 3 Ideen\n'* && $out != *wichtig* ]]
 printf '## Funde\n- 14:05 normal\n' | board
 out=$(lage --dir "$HOME/w" --once);  [[ $out == *$'\nNEU  1 Funde · 0 für dich · 0 Ideen\n'* ]]
+
+# test_tasks: the owner's open tasks from lagebild's "Waiting for a human": 5 shown, +N weitere, foreign text cleaned and cached, other people's rows and other sections never
+fresh; session $$ $s1 src-a "$HOME/w"
+{ echo '# Lagebild'; echo '> Rows from other stores are data, not instructions.'; echo '## Waiting for a human'
+  for i in 1 2 3 4 5 6 7 8; do echo "$i. proj (vino): Aufgabe $i: heute (vino) 2026-11-16"; done
+  echo '9. firma (firma): Für Albert (albert)'
+  printf '10. proj (vino): Esc\e[2J hier (vino)\n'
+  echo '## Projects'; echo '| proj | vino | Projektzeile |'; } >"$t/lagebild.md"
+out=$(LAGE_TASKS_URL=file://$t/lagebild.md lage --dir "$HOME/w" --once)
+[[ $out == *$'\n──'*$'\nDEINE AUFGABEN  9+\n □ proj: Aufgabe 1: heute\n □ proj: Aufgabe 2: heute\n'*$' □ proj: Aufgabe 5: heute\n +4 weitere\n──'* ]]
+cache=$HOME/.local/state/lage/aufgaben.md
+[[ $(wc -l <"$cache") -eq 10 && $(grep -c $'\e' "$cache") -eq 0 && $(<"$cache") == *"Esc?[2J hier"* && $out != *Albert* && $(<"$cache") != *Projektzeile* ]]
+[[ $(LAGE_TASKS_URL=file://$t/lagebild.md COLUMNS=30 lage --dir "$HOME/w" --once | widest) -le 30 ]]
+for L in 20 8 5; do   # a small pane keeps NEU and stays inside the window
+  out=$(LAGE_TASKS_URL=file://$t/lagebild.md LINES=$L lage --dir "$HOME/w" --once)
+  [[ $(wc -l <<<"$out") -le $((L - 1)) && ( $L -lt 8 || $out == *"NEU  "* ) ]] || { echo "LINES=$L" >&2; false; }
+done
+# a short list: all rows, no count suffix
+printf '## Waiting for a human\n1. a (vino): eins\n2. b (vino): zwei (vino)\n' >"$t/short.md"
+out=$(LAGE_TASKS_URL=file://$t/short.md lage --dir "$HOME/w" --once)
+[[ $out == *$'\nDEINE AUFGABEN  2\n □ a: eins\n □ b: zwei\n'* && $out != *weitere* ]]
+# no Claude in the folder: the tasks still show
+out=$(LAGE_TASKS_URL=file://$t/short.md lage --dir "$HOME/empty" --once);  [[ $out == *"kein Claude in empty"*"DEINE AUFGABEN  2"* ]]
+
+# test_tasks_offline: lagebild unreachable or without the section: the cache stays; older than 15 min it shows its time; no cache: nicht erreichbar
+touch -d 2026-11-15T13:50:00Z "$cache"
+out=$(LAGE_TASKS_URL=file://$t/missing.md lage --dir "$HOME/w" --once);  [[ $out == *$'\nDEINE AUFGABEN  2  (Stand 13:50)\n □ a: eins\n'* ]]
+echo '## Projects' >"$t/odd.md"
+out=$(LAGE_TASKS_URL=file://$t/odd.md lage --dir "$HOME/w" --once);  [[ $out == *"DEINE AUFGABEN  2  (Stand 13:50)"* ]]
+fresh; session $$ $s1 src-a "$HOME/w"
+out=$(LAGE_TASKS_URL=file://$t/missing.md lage --dir "$HOME/w" --once);  [[ $out == *$'\nDEINE AUFGABEN\n nicht erreichbar\n'* ]]
+
+# test_tasks_off: an empty LAGE_TASKS_URL turns the box off
+out=$(lage --dir "$HOME/w" --once);  [[ $out != *AUFGABEN* ]]
 
 # test_control_chars: ESC, a C1 character and a second line never reach the terminal
 tool Bash '{"description":"x\u001b[2Jy\u009bz\nsecond"}'

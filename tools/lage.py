@@ -17,6 +17,7 @@ import shutil
 import sys
 import termios
 import textwrap
+import threading
 import time
 import tty
 from collections import deque
@@ -49,6 +50,10 @@ ENTRY = re.compile(
     re.ASCII,
 )
 transcripts = {}  # sessionId -> Transcript, so each refresh reads only new bytes
+TASKS_URL = "https://memory.tail7facc9.ts.net/notes/lagebild.md"  # LAGE_TASKS_URL overrides it; empty turns tasks off
+# N. project (store): text (who) [date]; text may hold ": " and is cut with … by lagebild already
+TASK = re.compile(r"\d+\.\s+(\S+) \([^)]*\): (.*?)(?: \(([^)]*)\))?(?: \d{4}-\d\d-\d\d)?")
+tasks_ok = None  # clock() of the last fetch of the tasks that worked, in this process
 
 
 def clean(s, limit):
@@ -493,6 +498,92 @@ def log_lines(tr, cols, n):
     return out
 
 
+def tasks_url():
+    return os.environ.get("LAGE_TASKS_URL", TASKS_URL)
+
+
+def tasks_cache():
+    return Path.home() / ".local/state/lage/aufgaben.md"
+
+
+def fetch_tasks(url):
+    """The rows under '## Waiting for a human' in lagebild, at most 10, cleaned; None when that cannot be read."""
+    import urllib.request  # late: only the view needs it
+    try:
+        with urllib.request.urlopen(url, timeout=3) as r:
+            text = r.read(65536).decode("utf-8", errors="replace")
+    except Exception:  # any network or protocol error: keep the cache
+        return None
+    rows, inside = None, False
+    for line in text.splitlines():
+        name = heading(line)
+        if name is not None:
+            if inside:
+                break
+            inside = name == "Waiting for a human"
+            rows = [] if inside else rows
+        elif inside and line.strip():
+            rows.append(clean(line, 300))
+    return None if rows is None else rows[:10]
+
+
+def refresh_tasks(url):
+    """Fetch the tasks and replace the cache (atomic, as add_idea) when that worked."""
+    global tasks_ok
+    rows = fetch_tasks(url)
+    if rows is None:
+        return
+    path = tasks_cache()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_text("".join(r + "\n" for r in rows), encoding="utf-8")
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
+    tasks_ok = clock()
+
+
+def start_tasks():
+    """A daemon thread that refreshes the tasks now and every 5 minutes, so a hanging network never stops the keys.
+    Returns an event set after the first try, or None when tasks are off."""
+    url, first = tasks_url(), threading.Event()
+    if not url:
+        return None
+
+    def loop():
+        while True:
+            try:
+                refresh_tasks(url)
+            except OSError:
+                pass  # the cache cannot be written: the box keeps what it has
+            first.set()
+            time.sleep(300)
+
+    threading.Thread(target=loop, daemon=True).start()
+    return first
+
+
+def task_lines(cols, n):
+    """DEINE AUFGABEN from the cache: the owner's rows (who vino or none), at most n lines below the heading; when they
+    do not all fit, the last of them is +N weitere. The count gets + when lagebild's list was full (10 rows)."""
+    path = tasks_cache()
+    try:
+        cached = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        mtime = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc)
+    except OSError:
+        return ["DEINE AUFGABEN", " nicht erreichbar"][:1 + max(n, 0)]
+    mine = [f"{m[1]}: {m[2]}" for m in map(TASK.fullmatch, cached) if m and m[3] in (None, "vino")]
+    now = clock()
+    stale = (tasks_ok is None or (now - tasks_ok).total_seconds() > 900) and (now - mtime).total_seconds() > 900
+    head = f"DEINE AUFGABEN  {len(mine)}{'+' if len(cached) >= 10 else ''}" + (f"  (Stand {mtime.astimezone():%H:%M})" if stale else "")
+    if n <= 0:
+        return [clean(head, cols)]
+    shown = mine if len(mine) <= n else mine[:n - 1]
+    more = [f" +{len(mine) - len(shown)} weitere"] if len(shown) < len(mine) else []
+    return [clean(head, cols)] + [" " + clean("□ " + x, cols - 1) for x in shown] + more
+
+
 def board_lines(board, since, cols, space):
     """The four sections: head, newest entries that fit in space lines, then one +N ältere line."""
     today = clock().astimezone().date()
@@ -548,7 +639,9 @@ def frame(session, ended, where, full=False, seen=None):
     rule = "─" * width
     wartet = [RED + x + RESET if lit and x.startswith("!") else x for x in wartet_lines(session and session["sessionId"], width)]
     if session is None:
-        return (head + [clean("kein Claude " + where, width)] + wartet)[:room]
+        top = head + [clean("kein Claude " + where, width)] + wartet
+        box = task_lines(width, min(6, room - len(top) - 2)) if tasks_url() else []
+        return (top + ([rule] + box if box else []))[:room]
     state, since, tr = "", None, None
     if ended:
         lines = ["Sitzung beendet"]
@@ -574,18 +667,24 @@ def frame(session, ended, where, full=False, seen=None):
         # the end of the board first, then the end of the foot
         body = board_lines(board, since, width, max(1, (free - 8) // 4))
         return (top + [rule] + body[:max(free, 0)] + foot)[:room]
-    # Overview: header, JETZT, WARTET and NEU always; then, while they fit, the LOG with 3 steps, up to 8 steps, the
-    # key line, and last the rules between the parts. A pane too small even for the fixed lines loses its end.
+    # Overview: header, JETZT, WARTET, the tasks heading and NEU always; then, while they fit, the LOG with 3 steps, up
+    # to 6 task lines, up to 8 steps, the key line, and last the rules between the parts. A pane too small even for the
+    # fixed lines loses its end.
     steps = log_lines(tr, width, 8) if tr else []
     neu = clean(neu_line(board, since), width)
     neu = HIGHLIGHT + neu + RESET if lit and neu.startswith("!") else neu
-    used, shown = len(top) + 1, 0
+    on = bool(tasks_url())
+    used, shown = len(top) + 1 + on, 0
     if steps and used + 1 + min(3, len(steps)) <= room:
         shown = min(3, len(steps))
-        shown += min(len(steps) - shown, room - used - 1 - shown)
         used += 1 + shown
+    box = task_lines(width, min(6, room - used)) if on else []
+    used += max(len(box) - 1, 0)
+    if shown:
+        more = min(len(steps) - shown, room - used)
+        shown, used = shown + more, used + more
     keys = ["i = Idee   f = alles zeigen"] if used < room else []
-    parts = [p for p in (top, ["LOG  (was Claude macht)"] + steps[:shown] if shown else [], [neu] + keys) if p]
+    parts = [p for p in (top, box, ["LOG  (was Claude macht)"] + steps[:shown] if shown else [], [neu] + keys) if p]
     out = parts[0]
     for p in parts[1:]:
         out = out + ([rule] if used + len(keys) + len(parts) - 1 <= room else []) + p
@@ -681,6 +780,9 @@ def main():
             print("lage:", e, file=sys.stderr)
             return 1
         return 0
+    first = start_tasks()
+    if args.once and first:
+        first.wait(3)  # one frame: show fresh tasks if they come quickly, else the cache
     session = None
     try:
         while True:
