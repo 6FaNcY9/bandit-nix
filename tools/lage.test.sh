@@ -4,7 +4,7 @@
 set -euo pipefail
 trap 'echo "FAIL at line $LINENO" >&2' ERR
 here=$(cd "$(dirname "$0")" && pwd)
-t=$(mktemp -d); trap 'rm -rf "$t"' EXIT
+t=$(mktemp -d); sl=(); trap 'rm -rf "$t"; ((${#sl[@]})) && kill "${sl[@]}" 2>/dev/null || true' EXIT
 export TZ=UTC COLUMNS=46 LINES=27 LAGE_NOW=2026-11-15T14:12:20Z PYTHONDONTWRITEBYTECODE=1
 s1=aaaaaaaa-1
 n=0
@@ -33,6 +33,7 @@ bfile() { echo "$HOME/.local/state/lage/$s1.md"; }
 owner() { # owner <time>: an owner prompt at that time today
   entry $s1 '{"type":"user","timestamp":"2026-11-15T'"$1"'Z","origin":{"kind":"human"},"message":{"content":"los"}}'
 }
+live() { sleep 600 & sl+=($!); pid=$!; } # live: one more running process, its pid in $pid
 widest() { python3 -c 'import sys; print(max(len(l) for l in sys.stdin.read().split("\n")))'; }
 
 # test_tool_use
@@ -230,8 +231,8 @@ out=$(lage --dir "$HOME/w" --once)
 [[ $out == *"FUNDE  2  (1 neu)"* && $out == *"NEU !  14:02 Admin-Login"* && $out == *"UNGEPRÜFT  0"* && $out == *"FÜR DICH  1  (1 neu)"* && $out == *"DEINE IDEEN  0 offen"* ]]
 [[ $(grep '13:50 Port 22 offen' <<<"$out") == "    ·  13:50 Port 22 offen" ]]
 [[ $out == *"NEU ·  14:09 Ist 10.10.10.7 im Scope?"* && $(grep -c NEU <<<"$out") -eq 2 ]]
-# two rule lines frame the board below JETZT; every line fits
-[[ $(grep -c '^──────' <<<"$out") -eq 2 && $(sed -n 4p <<<"$out") == ──────* && $(sed -n 5p <<<"$out") == "FUNDE  2  (1 neu)" && $(widest <<<"$out") -le 46 ]]
+# a rule below JETZT, one below the board, one above the footer (SITZUNGEN sits between the last two); every line fits
+[[ $(grep -c '^──────' <<<"$out") -eq 3 && $(sed -n 4p <<<"$out") == ──────* && $(sed -n 5p <<<"$out") == "FUNDE  2  (1 neu)" && $(widest <<<"$out") -le 46 ]]
 # no owner prompt in the transcript: nothing is NEU
 fresh; session $$ $s1 src-a "$HOME/w"
 printf '## Funde\n- 14:02 ! x\n' | board
@@ -422,6 +423,97 @@ class Tty(io.StringIO):
 
 sys.stdout = Tty()
 assert any("\x1b" in x and "wartet auf dich" in x for x in lage.frame(session, ended, "in w"))
+EOF
+
+# test_sitzungen: waiting first, marked !; the followed session is marked ▶; only the first line of the text
+fresh; session $$ $s1 src-a "$HOME/w"
+entry $s1 "$(assistant 14:12:00 '"tool_use"' '[{"type":"tool_use","name":"Bash","input":{"description":"x"}}]')"
+live; session $pid bbbbbbbb-2 src-c8 "$HOME/empty"
+entry bbbbbbbb-2 '{"type":"ai-title","aiTitle":"Bot-Menü","sessionId":"bbbbbbbb-2"}'
+entry bbbbbbbb-2 "$(assistant 14:12:00 '"end_turn"' '[{"type":"text","text":"Soll ich es ausrollen?\nzweite Zeile"}]')"
+out=$(COLUMNS=60 lage --dir "$HOME/w" --once)
+blk=$(sed -n '/^SITZUNGEN/,$p' <<<"$out")
+[[ $(sed -n 1p <<<"$blk") == SITZUNGEN && $(sed -n 2p <<<"$blk") == " !  src-c8  Bot-Menü  wartet: Soll ich es ausrollen?" ]]   # waiting first
+[[ $(sed -n 3p <<<"$blk") == " ▶  src-a   "*"arbeitet" && $blk != *"zweite Zeile"* && $(tail -n 1 <<<"$blk") == "i = Idee eintragen" ]]
+[[ $(sed -n 4p <<<"$blk") == ──────* && $(grep -c '^──────' <<<"$out") -eq 3 ]]   # a rule between the board and SITZUNGEN, one above the footer
+# a line wider than the window is cut with an ellipsis, never wrapped
+out=$(lage --dir "$HOME/w" --once);  line=$(grep src-c8 <<<"$out")
+[[ ${#line} -eq 46 && $line == *"…" && $line == " !  src-c8  Bot-Menü  wartet: Soll ich es "* ]]
+# ! wins over ▶: the followed session waits too; both wait, so by name
+entry $s1 "$(assistant 14:12:10 '"end_turn"' '[{"type":"text","text":"Fertig, ok?"}]')"
+out=$(COLUMNS=60 lage --dir "$HOME/w" --once);  blk=$(sed -n '/^SITZUNGEN/,$p' <<<"$out")
+[[ $(sed -n 2p <<<"$blk") == " !  src-a   "*"wartet: Fertig, ok?" && $(sed -n 3p <<<"$blk") == " !  src-c8 "* && $blk != *"▶"* ]]
+# helpers running: Helfer arbeiten, not waiting, no !
+sub=$HOME/.claude/projects/p/bbbbbbbb-2/subagents; mkdir -p "$sub"
+echo '{}' >"$sub/agent-a1.meta.json"; echo '{}' >"$sub/agent-a1.jsonl"; touch -d 2026-11-15T14:10:00Z "$sub/agent-a1.jsonl"
+out=$(COLUMNS=60 lage --dir "$HOME/w" --once)
+[[ $(grep src-c8 <<<"$out") == "    src-c8  Bot-Menü  Helfer arbeiten" ]]
+
+# test_sitzungen_names: no name or an empty one → first 6 characters of the session id; topic and name are cut; control characters never reach the terminal
+fresh; session $$ $s1 src-a "$HOME/w"
+live; echo '{"pid":'"$pid"',"sessionId":"deadbe12-3456","cwd":"/x","startedAt":1794700000000}' >"$HOME/.claude/sessions/$pid.json"
+live; session $pid cafe0000-1 "" "$HOME/empty"
+entry cafe0000-1 '{"type":"ai-title","aiTitle":"Dies ist ein sehr langer Titel","sessionId":"cafe0000-1"}'
+live; session $pid evil0000-1 '\u001b[31mevil name that is long' "$HOME/empty"
+entry evil0000-1 '{"type":"ai-title","aiTitle":"a\u001b[0mb\u009bc","sessionId":"evil0000-1"}'
+out=$(COLUMNS=80 lage --dir "$HOME/w" --once)
+[[ $out == *" !  deadbe "*"wartet"* && $out == *" !  cafe00 "*"Dies ist ei…  wartet"* ]]
+[[ $out == *"?[31mevil n…  a?[0mb?c "*"wartet"* && $out != *$'\x1b'* && $out != *$'\xc2\x9b'* ]]
+[[ $(widest <<<"$out") -le 80 ]]
+
+# test_dead_hidden: a session whose pid is gone has no line; without any line the block and its rule are gone
+fresh; session $$ $s1 src-a "$HOME/w"
+session 999999 dddddddd-4 src-dead "$HOME/empty"
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *src-a* && $out != *src-dead* ]]
+fresh; session 999999 dddddddd-4 src-dead "$HOME/w"
+out=$(lage --dir "$HOME/w" --once)
+[[ $out == *"Sitzung beendet"* && $out != *SITZUNGEN* && $out != *src-dead* && $(grep -c '^──────' <<<"$out") -eq 2 ]]
+
+# test_cap: 8 alive sessions → 6 lines and "+2 weitere"; the working one sorts last and is cut; no line wider than the window
+fresh; session $$ $s1 src-a "$HOME/w"
+entry $s1 "$(assistant 14:12:00 '"tool_use"' '[{"type":"tool_use","name":"Bash","input":{"description":"x"}}]')"
+for i in 1 2 3 4 5 6 7; do live; session $pid "cap0000$i-1" "src-$i" "$HOME/empty"; done
+out=$(lage --dir "$HOME/w" --once)
+blk=$(sed -n '/^SITZUNGEN/,/^──/p' <<<"$out" | sed '1d;$d')
+[[ $(wc -l <<<"$blk") -eq 7 && $(tail -n 1 <<<"$blk") == "+2 weitere" && $(grep -c 'wartet' <<<"$blk") -eq 6 && $blk == *src-6* && $blk != *src-7* && $blk != *src-a* ]]
+[[ $(sed -n 1p <<<"$blk") == " !  src-1 "*"wartet" && $(widest <<<"$out") -le 46 ]]
+# exactly 6 sessions: no "+N weitere"
+fresh; session $$ $s1 src-a "$HOME/w"
+for i in 1 2 3 4 5; do live; session $pid "cap0000$i-1" "src-$i" "$HOME/empty"; done
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *"src-5"* && $out != *weitere* ]]
+
+# test_sitzungen_cache: a transcript is kept across refreshes and only its new bytes are read
+fresh; session $$ $s1 src-a "$HOME/w"; live
+python3 -B - "$here" $pid <<'EOF'
+import json
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, sys.argv[1])
+import lage
+
+home = Path.home()
+pid = int(sys.argv[2])
+(home / ".claude/sessions" / f"{pid}.json").write_text(json.dumps({"pid": pid, "sessionId": "bbbbbbbb-2", "name": "src-b", "cwd": "/x"}))
+f = home / ".claude/projects/p/bbbbbbbb-2.jsonl"
+entry = '{"type":"assistant","timestamp":"2026-11-15T14:12:00Z","message":{"stop_reason":"%s","content":[%s]}}\n'
+tool = entry % ("tool_use", '{"type":"tool_use","name":"Read","input":{}}')
+f.write_text('{"type":"ai-title","aiTitle":"Alt","sessionId":"bbbbbbbb-2"}\n' + tool)
+os.environ["LAGE_NOW"] = "2026-11-15T14:12:20Z"
+first = lage.sitzungen_lines("aaaaaaaa-1", 60)
+assert first[0] == "SITZUNGEN" and any("src-b" in x and "Alt" in x and x.endswith("arbeitet") for x in first), first
+tr = lage.transcripts["bbbbbbbb-2"]
+assert tr.pos == f.stat().st_size
+with f.open("a") as h:
+    h.write('{"type":"ai-title","aiTitle":"Neu","sessionId":"bbbbbbbb-2"}\n')
+    h.write(entry % ("end_turn", '{"type":"text","text":"Fertig?"}'))
+second = lage.sitzungen_lines("aaaaaaaa-1", 60)
+assert lage.transcripts["bbbbbbbb-2"] is tr and tr.pos == f.stat().st_size
+assert any("src-b" in x and "Neu" in x and x.endswith("wartet: Fertig?") for x in second), second
+before = tr.pos
+lage.sitzungen_lines("aaaaaaaa-1", 60)
+assert tr.pos == before
 EOF
 
 echo ok

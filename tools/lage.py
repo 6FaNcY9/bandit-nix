@@ -217,6 +217,35 @@ def jetzt(tr, now):
     return [clean(x, cols() - 8) for x in lines], state
 
 
+def sitzungen_lines(followed_sid, cols):
+    """SITZUNGEN: a line per running session, waiting ones first (!), then by name; the followed one is marked ▶."""
+    now, rows = clock(), []
+    for s in sessions():
+        if not s["alive"]:
+            continue
+        sid = s["sessionId"]
+        tr = transcripts.setdefault(sid, Transcript(sid))
+        tr.update()
+        state = jetzt(tr, now)[1]
+        name = s.get("name")
+        name = (clean(name, 12) if isinstance(name, str) else "") or clean(sid[:6], 6)
+        if state == "wartet":
+            mark, text = "!", "wartet: " + tr.last_text if tr.last_text else "wartet"
+        else:
+            mark, text = "▶" if sid == followed_sid else " ", "Helfer arbeiten" if state == "helfer" else "arbeitet"
+        rows.append((mark, name, sid, clean(tr.title, 12) if tr.title else "", text))
+    if not rows:
+        return []
+    rows.sort(key=lambda r: (r[0] != "!", r[1], r[2]))
+    shown = rows[:6]
+    nw, tw = max(len(r[1]) for r in shown), max(len(r[3]) for r in shown)
+    out = ["SITZUNGEN"]
+    for mark, name, _, topic, text in shown:
+        line = f" {mark}  {name:<{nw}}  {topic:<{tw}}  {text}"
+        out.append(line if len(line) <= cols else line[:cols - 1] + "…")
+    return out + ([f"+{len(rows) - 6} weitere"] if len(rows) > 6 else [])
+
+
 def started(session):
     value = session.get("startedAt")
     return value if isinstance(value, (int, float)) else 0
@@ -379,7 +408,9 @@ def frame(session, ended, where):
         text = ""
     rule = "─" * width
     out += ["JETZT ▶ " + lines[0]] + ["        " + x for x in lines[1:]] + [rule]
-    return out + board_lines(parse_board(text, n.astimezone().date()), owner_ts, width, rows()) + [rule, "i = Idee eintragen"]
+    out += board_lines(parse_board(text, n.astimezone().date()), owner_ts, width, rows()) + [rule]
+    block = sitzungen_lines(session["sessionId"], width)
+    return out + (block + [rule] if block else []) + ["i = Idee eintragen"]
 
 
 def wait(seconds, session):
