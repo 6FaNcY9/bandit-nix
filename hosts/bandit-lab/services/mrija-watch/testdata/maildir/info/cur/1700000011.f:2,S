@@ -1,0 +1,15 @@
+From: x@example.org
+To: info@mrija.org
+Subject: invoice
+Content-Type: multipart/mixed; boundary="M1"
+
+--M1
+Content-Type: text/plain
+
+see attached
+--M1
+Content-Type: application/javascript; name="run.js"
+Content-Disposition: attachment; filename="run.js"
+
+alert(1)
+--M1--

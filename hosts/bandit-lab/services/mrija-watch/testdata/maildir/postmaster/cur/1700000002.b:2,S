@@ -1,0 +1,23 @@
+From: MAILER-DAEMON@s16.thehost.com.ua
+To: postmaster@mrija.org
+Subject: Mail delivery failed
+Content-Type: multipart/report; report-type=delivery-status; boundary="BND"
+
+--BND
+Content-Type: text/plain
+
+This message was not delivered.
+--BND
+Content-Type: message/delivery-status
+
+Action: failed
+--BND
+Content-Type: message/rfc822
+
+Received: from [1.2.3.4] (helo=y) by s16.thehost.com.ua with esmtps (TLS1.2) id b1
+From: postmaster@mrija.org
+To: somebody@example.com
+Subject: cheap offers
+
+spam body
+--BND--

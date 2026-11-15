@@ -1,0 +1,15 @@
+From: y@example.org
+To: info@mrija.org
+Subject: disk
+Content-Type: multipart/mixed; boundary="M2"
+
+--M2
+Content-Type: text/plain
+
+image attached
+--M2
+Content-Type: application/octet-stream; name="os.iso"
+Content-Disposition: attachment; filename="os.iso"
+
+ISOBYTES
+--M2--
