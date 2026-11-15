@@ -15,7 +15,6 @@
         "$cache_root/fontconfig" \
         "$cache_root/mesa_shader_cache" \
         "$cache_root/nix" \
-        "$cache_root/nix-index" \
         "$cache_root/npm" \
         "$cache_root/python" \
         "$cache_root/thumbnails" \
@@ -59,7 +58,6 @@
         "${config.xdg.cacheHome}/fontconfig" \
         "${config.xdg.cacheHome}/mesa_shader_cache" \
         "${config.xdg.cacheHome}/nix" \
-        "${config.xdg.cacheHome}/nix-index" \
         "${config.xdg.cacheHome}/npm" \
         "${config.xdg.cacheHome}/python" \
         "${config.xdg.cacheHome}/thumbnails" \
