@@ -66,3 +66,10 @@ Names of new functions and flags (a `--full` flag for tests is suggested), exact
 ## v2 look (approved 2026-11-15, browser choice A)
 
 Colours from the theme (headings teal, times grey, waiting red, NEU yellow, projects purple), blank lines instead of rules, header time without "Stand", `▶ <text>  seit …` instead of `JETZT ▶`, `! <name> wartet: …` without the topic, AUFGABEN in two columns with 3 rows, LOG with 4 steps, tool names in plain German (memory, web, the board file). Bash descriptions in German come from a rule in the owner's global CLAUDE.md.
+
+## v3 (owner 2026-11-15: "half of the page is not being used", wants a terminal for deploys)
+
+The shell split comes back below lage (`cockpitSession`, kitty `hsplit --bias=35`), which replaces
+the "lage only" goal and the empty-bottom anti-goal. Rows are filled in this order: LOG 3, the key
+line, the blank lines between the parts, then up to 5 task rows (`+N weitere` as the 6th line), then
+LOG up to 8 steps. A short pane loses the extra rows before it loses the blank lines.

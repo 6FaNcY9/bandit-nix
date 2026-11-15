@@ -4,6 +4,12 @@
   ...
 }: let
   lage = pkgs.writers.writePython3Bin "lage" {flakeIgnore = ["E501"];} (builtins.readFile ../../../../tools/lage.py);
+  # The Cockpit pane: lage on top, below it a small shell for deploys, sudo and the finger (kitty splits).
+  cockpitSession = pkgs.writeText "cockpit-session" ''
+    layout splits
+    launch --title lage ${lage}/bin/lage
+    launch --location=hsplit --bias=35 --title shell
+  '';
 in {
   home = {
     file = {
@@ -78,7 +84,7 @@ in {
             claude=0
             [[ $pid =~ ^[0-9]+$ ]] && "${lage}/bin/lage" --probe "$pid" 2>/dev/null && claude=1
             # The work window runs Claude: every other tiled window joins its tab group (the master is left),
-            # so the lage pane has the whole right column; also after a reload left the pane open.
+            # so the pane (lage and its shell) has the whole right column; also after a reload left the pane open.
             if ((claude)); then
               $jq -r --argjson id "$id" --arg a "$work" '
                 [.[] | select(.address == $a) | .grouped[], $a] as $mine
@@ -90,7 +96,7 @@ in {
                   hyprctl dispatch 'hl.dsp.window.move({ into_or_create_group = "left" })' >/dev/null
                 done
               hyprctl dispatch "hl.dsp.focus({ window = \"address:$work\" })" >/dev/null
-              [ "$logs" -gt 0 ] || setsid -f "$kitty" --class cockpit-log ${lage}/bin/lage >/dev/null 2>&1
+              [ "$logs" -gt 0 ] || setsid -f "$kitty" --class cockpit-log --session ${cockpitSession} >/dev/null 2>&1
             # One tiled window or group alone and no log yet: add the log pane (opens right).
             elif [ "$slots" -le 1 ] && [ "$logs" -eq 0 ]; then
               setsid -f "$kitty" --class cockpit-log journalctl -f >/dev/null 2>&1

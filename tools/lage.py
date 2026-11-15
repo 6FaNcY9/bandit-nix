@@ -698,9 +698,9 @@ def frame(session, ended, where, full=False, seen=frozenset()):
         body = board_lines(board, since, width, max(1, (free - 8) // 4), seen)
         return (top + [rule] + body[:max(free, 0)] + foot)[:room]
     # Overview: header, the ▶ line, the waiting lines, the tasks heading and NEU always; then, while they fit, the LOG
-    # with 3 steps, up to 4 task lines, a 4th step, the key line, and last the blank lines between the parts. A pane
+    # with 3 steps, the key line, the blank lines between the parts, up to 6 task lines, and last up to 8 steps. A pane
     # too small even for the fixed lines loses its end.
-    steps = log_lines(tr, width, 4) if tr else []
+    steps = log_lines(tr, width, 8) if tr else []
     neu = clean(neu_line(board, since, seen), width)
     if lit:
         bang = neu.startswith("! ")
@@ -710,15 +710,17 @@ def frame(session, ended, where, full=False, seen=frozenset()):
     if steps and used + 1 + min(3, len(steps)) <= room:
         shown = min(3, len(steps))
         used += 1 + shown
-    box = task_lines(width, min(4, room - used)) if on else []
+    keys = [paint(DIM, "i = Idee   f = alles", lit)] if used < room else []
+    used += len(keys)
+    gaps = 2 + on + bool(shown)  # between header, ▶ block, tasks, LOG and NEU
+    gap = [""] if used + gaps <= room else []
+    used += gaps if gap else 0
+    box = task_lines(width, min(6, room - used)) if on else []
     used += max(len(box) - 1, 0)
     if shown:
-        more = min(len(steps) - shown, room - used)
-        shown, used = shown + more, used + more
-    keys = [paint(DIM, "i = Idee   f = alles", lit)] if used < room else []
+        shown += min(len(steps) - shown, room - used)
     log = [paint(TEAL, "LOG", lit)] + steps[:shown] if shown else []
     parts = [p for p in (head, [line] + wartet, box, log, [neu] + keys) if p]
-    gap = [""] if used + len(keys) + len(parts) - 1 <= room else []
     out = parts[0]
     for p in parts[1:]:
         out = out + gap + p

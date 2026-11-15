@@ -157,8 +157,8 @@ out=$(lage --dir "$HOME/w" --once)
 [[ $out == *$'\nLOG\n 14:11 Helfer: Design prüfen\n 14:11 Helfer: Design prüfen\n 14:10 liest c.py +2\n 14.11. sucht gestern\n'* ]]
 [[ $out == *$'\n▶ Helfer: Design prüfen  seit 40 s\n'* ]]
 for i in 1 2; do entry $s1 "$(assistant 14:12:0$i '"tool_use"' '[{"type":"tool_use","name":"Bash","input":{"description":"baut System"}}]')"; done
-out=$(lage --dir "$HOME/w" --once);  [[ $out == *$'\nLOG\n 14:12 baut System +1\n 14:11 Helfer'* ]]   # the same text joins; 4 steps at most
-[[ $(sed -n '/^LOG$/,/^$/p' <<<"$out" | grep -c '^ [0-9]') -eq 4 ]]
+out=$(lage --dir "$HOME/w" --once)   # the same text joins
+[[ $out == *$'\nLOG\n 14:12 baut System +1\n 14:11 Helfer: Design prüfen\n 14:11 Helfer: Design prüfen\n 14:10 liest c.py +2\n 14.11. sucht gestern\n'* ]]
 # names a person can read: memory tools, web tools, the board file
 while IFS='|' read -r name input want; do
   tool "$name" "$input";  [[ $out == *"▶ $want  seit 20 s"* ]] || { echo "$name → $out" >&2; false; }
@@ -203,7 +203,7 @@ fresh; session $$ $s1 src-a "$HOME/w"
   printf '10. proj (vino): Esc\e[2J hier (vino)\n'
   echo '## Projects'; echo '| proj | vino | Projektzeile |'; } >"$t/lagebild.md"
 out=$(LAGE_TASKS_URL=file://$t/lagebild.md lage --dir "$HOME/w" --once)
-[[ $out == *$'\n\nAUFGABEN  9\n proj  Aufgabe 1: heute\n proj  Aufgabe 2: heute\n proj  Aufgabe 3: heute\n +6 weitere\n\n'* ]]
+[[ $out == *$'\n\nAUFGABEN  9\n proj  Aufgabe 1: heute\n proj  Aufgabe 2: heute\n proj  Aufgabe 3: heute\n proj  Aufgabe 4: heute\n proj  Aufgabe 5: heute\n +4 weitere\n\n'* ]]
 cache=$HOME/.local/state/lage/aufgaben.md
 [[ $(wc -l <"$cache") -eq 10 && $(grep -c $'\e' "$cache") -eq 0 && $(<"$cache") == *"Esc?[2J hier"* && $out != *Albert* && $(<"$cache") != *Projektzeile* ]]
 [[ $(LAGE_TASKS_URL=file://$t/lagebild.md COLUMNS=30 lage --dir "$HOME/w" --once | widest) -le 30 ]]
@@ -401,7 +401,7 @@ for C in 45 90; do for L in 60 40 27 20 11 8 5; do for v in "" --full; do
 done; done; done
 out=$(LINES=27 lage --dir "$HOME/w" --once)   # main view: who waits, the newest 8 steps, NEU, the keys; no board text
 [[ $out == *$'\n\n▶ x  seit 20 s\n! src-1 wartet\n! src-2 wartet\n+4 weitere\n\nLOG\n'*$'\n\nNEU  0 Funde · 0 für dich · 5 Ideen\ni = Idee   f = alles' && $out != *──* ]]
-[[ $(grep -c Schritt <<<"$out") -eq 3 && $out == *" 14:12 x"* && $out != *Eintrag* ]]
+[[ $(grep -c Schritt <<<"$out") -eq 7 && $out == *" 14:12 x"* && $out != *Eintrag* ]]   # 8 steps at most
 out=$(LINES=8 lage --dir "$HOME/w" --once);  [[ $out == *"NEU  "* && $out != *LOG* ]]          # a small pane drops the log first
 out=$(LINES=27 lage --dir "$HOME/w" --once --full)
 [[ $out == *"! src-1 wartet"*"FUNDE"*"UNGEPRÜFT"*"FÜR DICH"*"DEINE IDEEN"*"i = Idee   f = zurück" && $out != *LOG* ]]
