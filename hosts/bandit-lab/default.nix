@@ -17,6 +17,7 @@ in {
     ./services/tailnet-https.nix
     ./services/comfyui
     ./services/mrija-archive
+    ./services/mrija-watch
     ./services/monitoring
     ./services/ntopng.nix
     ./services/beszel

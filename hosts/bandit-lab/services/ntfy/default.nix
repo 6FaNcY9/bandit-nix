@@ -24,7 +24,10 @@ in {
       listen-http = "0.0.0.0:${toString port}";
       auth-file = "/var/lib/ntfy-sh/user.db";
       auth-default-access = "deny-all";
-      auth-access = ["mcbots:mcbots:wo" "phone:mcbots:ro"];
+      # The mrija-watch job reuses the existing mcbots writer token and the
+      # phone reader to publish NGO alerts to a separate topic (keeps mailbox
+      # names out of mcbots). No new users, no re-seed.
+      auth-access = ["mcbots:mcbots:wo" "phone:mcbots:ro" "mcbots:mrija:wo" "phone:mrija:ro"];
       # iOS uses the upstream only for wake-up requests, never message bodies.
       upstream-base-url = "https://ntfy.sh";
     };

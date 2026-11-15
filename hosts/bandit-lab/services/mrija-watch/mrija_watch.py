@@ -443,14 +443,11 @@ class CollectorError(Exception):
 def run_rsync_manifest(remote: str, keypath: str) -> str:
     """`rsync --list-only` of the remote tree; returns the manifest text."""
     rsync = os.environ.get("RSYNC", "rsync")
-    cmd = [
-        rsync,
-        "--list-only",
-        "-r",
-        "-e",
-        f"ssh -i {keypath} -o BatchMode=yes",
-        remote,
-    ]
+    ssh = f"ssh -i {keypath} -o BatchMode=yes"
+    known = os.environ.get("MRIJA_KNOWN_HOSTS")
+    if known:
+        ssh += f" -o UserKnownHostsFile={known} -o StrictHostKeyChecking=yes"
+    cmd = [rsync, "--list-only", "-r", "-e", ssh, remote]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
     except (subprocess.TimeoutExpired, OSError) as e:
