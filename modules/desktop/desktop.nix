@@ -28,6 +28,8 @@
   };
 
   security.pam.services.greetd.enableGnomeKeyring = true;
+  # hyprlock's own PAM service (finger or password); without it hyprlock falls back to su's.
+  security.pam.services.hyprlock = {};
 
   # Bluetooth
   hardware.bluetooth = {
