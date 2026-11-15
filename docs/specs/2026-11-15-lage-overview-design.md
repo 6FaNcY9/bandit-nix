@@ -73,3 +73,7 @@ The shell split comes back below lage (`cockpitSession`, kitty `hsplit --bias=35
 the "lage only" goal and the empty-bottom anti-goal. Rows are filled in this order: LOG 3, the key
 line, the blank lines between the parts, then up to 5 task rows (`+N weitere` as the 6th line), then
 LOG up to 8 steps. A short pane loses the extra rows before it loses the blank lines.
+
+The waiting line names a session by its tab title (`custom-title` from `/rename`, else the newest
+`ai-title`, cut to 18), else by its name, else by the first 6 characters of its id (owner: "src-06"
+matched no tab).
