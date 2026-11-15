@@ -63,6 +63,20 @@ run "$(cl $c1 kitty 0)" "$(cl $w2 foot 1)"
 [[ $(<"$KITTY_LOG") == "--class cockpit-log /nix/store/"*"/bin/lage" ]]
 grep -q 'layout = "master"' "$HYPR_LOG"                          # the layout part is untouched
 
+# test_claude_stacks: Claude in front: every other tiled window joins its tab group, then the work window is in front again
+work=$(cl $c1 kitty 0 | jq -c --arg a "0x$c1" '.grouped = [$a, "0xmate"]')
+mate=$(cl $w1 kitty 3 | jq -c '.address = "0xmate"')   # already in the work group: stays
+float=$(cl $w1 foot 4 | jq -c '.address = "0xfloat" | .floating = true')
+run "$work" "$mate" "$(cl $w2 foot 1)" "$float"
+expected="dispatch hl.dsp.focus({ window = \"address:0x$w2\" })
+dispatch hl.dsp.window.move({ into_or_create_group = \"left\" })
+dispatch hl.dsp.focus({ window = \"address:0x$c1\" })"
+[[ $(tail -3 "$HYPR_LOG") == "$expected" ]] || die "stacking: $(cat "$HYPR_LOG")"
+
+# test_plain_no_stack: no Claude: windows stay where they are
+run "$(cl $w1 foot 0)" "$(cl $w2 foot 1)"
+if grep -q into_or_create_group "$HYPR_LOG"; then die "stacked without Claude"; fi
+
 # test_claude_pane_exists: same, but the pane is already there
 run "$(cl $c1 kitty 0)" "$(cl $w2 foot 1)" "$(cl $w1 cockpit-log 2)"
 [[ ! -s $KITTY_LOG ]]
