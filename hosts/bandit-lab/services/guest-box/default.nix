@@ -9,17 +9,22 @@
   ...
 }: let
   guests = import ./guests.nix;
-  # The drops live in Docker's DOCKER-USER chain because Docker reorders FORWARD (same dependency crowdsec accepted).
-  # Allow-list: ve-<name> may only leave via enp44s0, and not to the LAN (so never to the other guest either).
+  # Host side: v4 refuses everything from ve-<name> after its hostAccept; v6 refuses everything at the top
+  # (the guests have no IPv6, and an accepted router advertisement would rewrite the host's routes).
+  # Forward side, in the mangle table that neither Docker nor tailscaled touches, so it holds while Docker
+  # is down and whatever order the filter FORWARD chain ends up in: ve-<name> may only leave via enp44s0,
+  # and never to a private, link-local or CGNAT range (so never to the LAN or the other guest either).
+  private = ["10.0.0.0/8" "172.16.0.0/12" "192.168.0.0/16" "169.254.0.0/16" "100.64.0.0/10"];
   rules = name: g:
-    g.hostAccept
+    map (r: "iptables -w ${r}") g.hostAccept
     ++ [
-      "-A nixos-fw -i ve-${name} -j nixos-fw-refuse"
-      "-I DOCKER-USER 1 -i ve-${name} -d 192.168.0.0/24 -j DROP"
-      "-I DOCKER-USER 1 -i ve-${name} ! -o enp44s0 -j DROP"
-    ];
+      "iptables -w -A nixos-fw -i ve-${name} -j nixos-fw-refuse"
+      "ip6tables -w -I nixos-fw 1 -i ve-${name} -j nixos-fw-refuse"
+    ]
+    ++ map (d: "iptables -w -t mangle -A FORWARD -i ve-${name} -d ${d} -j DROP") private
+    ++ ["iptables -w -t mangle -A FORWARD -i ve-${name} ! -o enp44s0 -j DROP"];
   allRules = lib.concatLists (lib.mapAttrsToList rules guests);
-  delete = r: "iptables -w ${builtins.replaceStrings ["-A " "-I DOCKER-USER 1"] ["-D " "-D DOCKER-USER"] r} || true";
+  delete = r: "${builtins.replaceStrings ["-A " "-I nixos-fw 1"] ["-D " "-D nixos-fw"] r} || true";
   authkey = name: "/var/lib/nixos-containers/${name}/var/lib/tailscale/authkey";
   owner = g: toString g.uid;
 
@@ -60,7 +65,9 @@
         RestartSec = "30s";
       };
       environment.systemPackages = with pkgs; [git curl python3 uv htop];
-      nix.enable = false; # the host nix daemon is not exposed to the guest
+      # No nix inside. The host's start script still binds /nix/store and the nix daemon socket in read-only;
+      # the daemon refuses the guest's mapped uids (host nix.settings.allowed-users = ["vino"], ci/lab-guests.nix).
+      nix.enable = false;
       system.stateVersion = "25.11";
     };
   };
@@ -98,7 +105,7 @@ in {
       internalInterfaces = map (name: "ve-${name}") (lib.attrNames guests);
       externalInterface = "enp44s0";
     };
-    firewall.extraCommands = lib.concatStringsSep "\n" (["iptables -w -N DOCKER-USER 2>/dev/null || true"] ++ map (r: "iptables -w ${r}") allRules);
+    firewall.extraCommands = lib.concatStringsSep "\n" allRules;
     firewall.extraStopCommands = lib.concatMapStringsSep "\n" delete allRules;
   };
 

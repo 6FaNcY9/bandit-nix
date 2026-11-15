@@ -30,14 +30,18 @@
     cc = c.config;
     svc = lab.systemd.services."container@${name}".serviceConfig;
     v = "ve-${name}";
+    refuse = "iptables -w -A nixos-fw -i ${v} -j nixos-fw-refuse";
     fwLines =
       e.hostAccept
       ++ [
-        "iptables -w -A nixos-fw -i ${v} -j nixos-fw-refuse"
-        "iptables -w -I DOCKER-USER 1 -i ${v} -d 192.168.0.0/24 -j DROP"
-        "iptables -w -I DOCKER-USER 1 -i ${v} ! -o enp44s0 -j DROP" # also drops guest-to-guest forwards
-      ];
-    stopLines = map (l: builtins.replaceStrings ["-A " "-I DOCKER-USER 1"] ["-D " "-D DOCKER-USER"] l + " || true") fwLines;
+        refuse
+        "ip6tables -w -I nixos-fw 1 -i ${v} -j nixos-fw-refuse"
+      ]
+      ++ map (d: "iptables -w -t mangle -A FORWARD -i ${v} -d ${d} -j DROP") ["10.0.0.0/8" "172.16.0.0/12" "192.168.0.0/16" "169.254.0.0/16" "100.64.0.0/10"]
+      ++ ["iptables -w -t mangle -A FORWARD -i ${v} ! -o enp44s0 -j DROP"]; # also drops guest-to-guest forwards
+    stopLines = map (l: builtins.replaceStrings ["-A " "-I nixos-fw 1"] ["-D " "-D nixos-fw"] l + " || true") fwLines;
+    fwList = lib.splitString "\n" fw;
+    at = l: lib.lists.findFirstIndex (x: x == l) null fwList;
     keys = cc.users.users.root.openssh.authorizedKeys.keys;
     uidMax = toString (e.uid + 65535);
   in
@@ -55,14 +59,20 @@
     assert lib.assertMsg (lab.systemd.timers."${name}-report".timerConfig.OnCalendar == "hourly") "${name}-report must run hourly";
     assert lib.assertMsg (svc.Slice == "guests.slice") "container@${name} must run in guests.slice";
     assert lib.assertMsg (svc.CPUQuota == "100%" && svc.MemoryMax == e.memory && svc.MemorySwapMax == "0" && svc.TasksMax == 512) "container@${name} must carry CPU, memory (${e.memory}), swap and task limits";
-    assert lib.assertMsg (lib.all (l: lib.hasInfix l fw) fwLines) "firewall must refuse ${v} on the host and drop its LAN/bots/docker/other-guest forwards";
+    assert lib.assertMsg (lib.all (l: lib.elem l fwList) fwLines) "firewall must refuse ${v} on the host (v4 and v6) and drop its forwards to private ranges and anything but the uplink";
+    assert lib.assertMsg (lib.all (l: at l < at refuse) e.hostAccept) "${name}'s host accept must stay in front of its refuse";
+    assert lib.assertMsg (!(lib.hasInfix "DOCKER-USER -i ${v}" fw)) "${name}'s forward isolation must live in mangle FORWARD, not DOCKER-USER";
     assert lib.assertMsg (e.hostAccept != [] || !(lib.hasInfix "-i ${v} -p" fw || lib.hasInfix "-i ${v} -j nixos-fw-accept" fw)) "${name} must not be accepted by any host port";
     assert lib.assertMsg (lib.all (l: lib.hasInfix l stop) stopLines) "firewall stop commands must mirror every ${name} rule";
     assert lib.assertMsg (cc.networking.nameservers == ["9.9.9.9" "1.1.1.1"]) "${name} must use fixed nameservers, not the host resolv.conf";
-    assert lib.assertMsg (lib.elem "-a always,exit -F arch=b64 -S execve -F uid>=${toString e.uid} -F uid<=${uidMax} -k ${name}" lab.security.audit.rules) "audit rule for ${name}'s uid range missing"; true;
+    assert lib.assertMsg (lib.elem "-a always,exit -F arch=b64 -S execve -S execveat -F uid>=${toString e.uid} -F uid<=${uidMax} -k ${name}" lab.security.audit.rules) "audit rule for ${name}'s uid range missing"; true;
 in
   assert lib.assertMsg (lib.all lib.id (lib.mapAttrsToList check expect)) "guest checks";
   assert lib.assertMsg (lib.length (lib.unique (map (b: b / 65536) bases)) == lib.length bases && lib.all (b: lib.mod b 65536 == 0) bases) "guest user namespaces must be distinct 65536-aligned blocks";
+  # The -A nixos-fw refuse sits below the generic accepts, so there must be none: ports open on tailscale0 only.
+  assert lib.assertMsg (lab.networking.firewall.allowedTCPPorts == [] && lab.networking.firewall.allowedUDPPorts == [] && lab.networking.firewall.allowedTCPPortRanges == [] && lab.networking.firewall.allowedUDPPortRanges == []) "the lab must open no port on all interfaces";
+  # The container start script binds the host's nix daemon socket into every box; only vino may use it.
+  assert lib.assertMsg (lab.nix.settings.allowed-users == ["vino"]) "the nix daemon must refuse the guests' mapped uids";
   assert lib.assertMsg (slice.CPUQuota == "200%" && slice.MemoryMax == "6G" && slice.CPUWeight == 20 && slice.IOWeight == 20) "guests.slice must pool 2 CPUs / 6G at low CPU and IO weight";
   assert lib.assertMsg (lib.sort lib.lessThan lab.networking.nat.internalInterfaces == ["ve-jerry" "ve-martin" "ve-mc-public"]) "NAT must serve ve-jerry, ve-martin and ve-mc-public (ci/lab-mc-public.nix) only";
     pkgs.writeText "lab-guests" "ok\n"

@@ -31,8 +31,8 @@
   auditRules = name: g: let
     range = "-F uid>=${toString g.uid} -F uid<=${toString (g.uid + 65535)} -k ${name}";
   in [
-    "-a always,exit -F arch=b64 -S execve ${range}"
-    "-a always,exit -F arch=b32 -S execve ${range}"
+    "-a always,exit -F arch=b64 -S execve -S execveat ${range}"
+    "-a always,exit -F arch=b32 -S execve -S execveat ${range}"
   ];
   services = name: _: {
     "${name}-report" =

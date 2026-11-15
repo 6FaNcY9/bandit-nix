@@ -9,8 +9,10 @@ the audit rules and ntfy units, `report.sh`/`watch.sh` the scripts with the
 guest's name swapped in). Contract check: `ci/lab-guests.nix`. Each box: pinned
 user namespace, 1 CPU, no swap, 512 tasks, 50 GB `/data` (btrfs qgroup), own
 tailnet node `tag:<name>-box`, root SSH by key only, NATed out, refused by the
-host and walled off from LAN, bots, Docker and the other guest (forwarding
-allowed to `enp44s0` only). Host auditd logs every exec; hourly ntfy report and
+host (IPv4 after the guest's own accepts, IPv6 always) and walled off from LAN,
+bots, Docker and the other guest: in the mangle table, forwarding from `ve-<name>`
+is allowed to `enp44s0` only and never to 10/8, 172.16/12, 192.168/16,
+169.254/16 or 100.64/10. Host auditd logs every exec; hourly ntfy report and
 an ntfy notice per SSH login. The kernel is shared (`docs/SECURITY-PLAN.md` A6).
 
 | Guest | uid base | veth (host/guest) | RAM | tag | extra |
@@ -95,7 +97,7 @@ On the lab:
 systemctl status container@jerry auditd jerry-ssh-watch jerry-restic-watch jerry-report.timer
 ausearch -k jerry | tail
 btrfs qgroup show -reF /srv/jerry/restic
-iptables -S DOCKER-USER | grep ve-jerry                        # two DROP rules
+iptables -t mangle -S FORWARD | grep ve-jerry                  # six DROP rules
 stat -c %u /srv/jerry/box                                      # 524288
 nixos-container run jerry -- touch /data/.w                    # /data is writable
 machinectl status jerry | grep -i uid                          # user namespace base 524288
@@ -141,9 +143,10 @@ port is open to him, unlike Jerry's UDP 41641).
 
 ### Owner setup, in order
 
-1. **Tailscale admin console.** Invite Martin, then add to the policy file
-   (`<martin@example.com>` is his login). He reaches only his box; the box
-   reaches no tailnet node (no grant has `tag:martin-box` as `src`):
+1. **Tailscale policy first** (Access controls, JSON editor), before Martin is
+   invited (`<martin@example.com>` is the login he will use). He reaches only
+   his box; the box reaches no tailnet node (no grant has `tag:martin-box` as
+   `src`):
 
    ```json
    "tagOwners": {"tag:martin-box": ["autogroup:admin"]},
@@ -152,30 +155,45 @@ port is open to him, unlike Jerry's UDP 41641).
    ]
    ```
 
-   Tests (save only if they pass):
-   `{"src": "<martin@example.com>", "accept": ["tag:martin-box:22"], "deny": ["tag:jerry-box:22", "100.125.161.81:8000", "svc:comfyui:443"]}`
-   and `{"src": "tag:martin-box", "deny": ["tag:jerry-box:22", "100.125.161.81:22"]}`.
+   Tests under `"tests"` (save only if they pass):
+
+   ```json
+   {"src": "<martin@example.com>", "accept": ["tag:martin-box:22"], "deny": ["tag:jerry-box:22", "100.125.161.81:22", "100.125.161.81:445", "100.125.161.81:8000", "100.125.161.81:25565", "svc:grafana:443", "svc:beszel:443", "svc:cockpit:443", "svc:ntopng:443", "svc:comfyui:443", "svc:memory:443", "svc:memory-albert:443", "svc:memory-firma:443", "svc:bnet:443"]},
+   {"src": "tag:martin-box", "deny": ["tag:jerry-box:22", "100.125.161.81:22", "100.125.161.81:445", "100.125.161.81:8000", "100.125.161.81:25565", "svc:grafana:443", "svc:beszel:443", "svc:cockpit:443", "svc:ntopng:443", "svc:comfyui:443", "svc:memory:443", "svc:memory-albert:443", "svc:memory-firma:443", "svc:bnet:443"]}
+   ```
+
+   Then invite Martin.
 2. **Auth key.** Settings, Keys, Generate auth key: reusable off, ephemeral off,
-   pre-authorized on, tag `tag:martin-box`, 90-day expiry (used once).
+   pre-authorized on, tag `tag:martin-box`, 90-day expiry (used once). Revoke
+   it in the console once the box has joined (step 7).
 3. **Secret**, on the laptop from the repo root: `sops secrets/lab.yaml`, add
    `martin-tailscale-authkey` (the key from step 2). Commit. The lab toplevel
    does not build without it.
 4. **SSH key.** Paste Martin's public key (collected out of band) into
    `martin.key` in `hosts/bandit-lab/services/guest-box/guests.nix`, commit.
    Until then the box runs but nobody can log in by SSH.
-5. **Subvolume**, as root on the lab, **before any push to `main`** (the hourly
+5. **Subvolumes**, as root on the lab, **before any push to `main`** (the hourly
    timer deploys it; without `/srv/martin/box` the container cannot start and
-   the switch fails). One line each:
+   the switch fails). The second one caps the container's root filesystem,
+   which otherwise has no quota; it must exist before the first start (the
+   container module only runs `mkdir -p` in it, and nspawn chowns it to
+   655360 on first boot). One line each:
 
    ```bash
    mkdir -p /srv/martin
    btrfs subvolume create /srv/martin/box && btrfs qgroup limit 50G /srv/martin/box
    chown 655360:655360 /srv/martin/box
+   btrfs subvolume create /var/lib/nixos-containers/martin && btrfs qgroup limit 20G /var/lib/nixos-containers/martin
    ```
+
+   (A nested subvolume is not part of snapshots of `/`; nothing in the box is
+   backed up anyway.)
 6. **Apply**: the first deploy is `lab-apply` from the laptop, not the timer, so
    a failing `container@martin` is seen immediately. Push to `main` only after
    that. This deploy also restarts `container@jerry` once (its unit moves to
    `guests.slice`); tell Jerry beforehand.
+7. **After the deploy**: run the checks below, then revoke the auth key from
+   step 2 and do the handover.
 
 ### Checks
 
@@ -185,21 +203,32 @@ On the lab:
 systemctl status container@martin martin-ssh-watch martin-report.timer
 systemctl show container@jerry container@martin -p Slice,CPUQuotaPerSecUSec,MemoryMax   # guests.slice, 1s, 2G / 4G
 systemctl show guests.slice -p CPUQuotaPerSecUSec,MemoryMax,CPUWeight,IOWeight            # 2s, 6G, 20, 20
-iptables -S DOCKER-USER | grep ve-martin                       # two DROP rules
+iptables -t mangle -S FORWARD | grep ve-                        # six DROP rules per guest
 iptables -S nixos-fw | grep ve-martin                          # one refuse, no accept
+ip6tables -S nixos-fw | head -3                                # ve-jerry and ve-martin refuses on top
+ip -6 route show dev ve-martin                                 # only fe80::/64
 stat -c %u /srv/martin/box                                     # 655360
 btrfs qgroup show -reF /srv/martin/box                         # 50 GiB limit
+btrfs qgroup show -reF /var/lib/nixos-containers/martin        # 20 GiB limit
 nixos-container run martin -- touch /data/.w                   # /data is writable
 nixos-container run martin -- tailscale status                 # joined the tailnet
-nixos-container run martin -- ping -c1 -W2 10.251.0.2          # fails: guest-to-guest is dropped
+nixos-container run martin -- curl -sI https://example.com    # egress works
 ausearch -k martin | tail
+```
+
+Must print only `closed` lines (host, LAN, router, tailnet, the other boxes,
+Podman, the bots bridge, Docker). The one exception allowed is
+`100.100.100.100/53`: that is the box's own tailscaled resolver, not the host.
+
+```bash
+nixos-container run martin -- bash -c 'for t in 10.251.2.1/22 192.168.0.160/22 192.168.0.1/80 100.125.161.81/22 100.100.100.100/53 10.251.0.2/22 10.251.1.2/25565 10.89.0.1/25565 10.250.77.1/25575 172.17.0.1/22; do timeout 3 bash -c "</dev/tcp/$t" 2>/dev/null && echo "OPEN $t" || echo "closed $t"; done'
 ```
 
 ### Pause / remove
 
 Pause: `systemctl stop container@martin`. Remove: delete the Tailscale ACL rule
 and the `tag:martin-box` node, `nixos-container destroy martin`,
-`btrfs subvolume delete /srv/martin/box`, drop `martin-tailscale-authkey` from
+`btrfs subvolume delete /srv/martin/box /var/lib/nixos-containers/martin`, drop `martin-tailscale-authkey` from
 `secrets/lab.yaml`, remove `martin` from `guests.nix` and `ci/lab-guests.nix`.
 
 ### Handover to Martin
