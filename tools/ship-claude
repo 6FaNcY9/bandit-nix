@@ -59,9 +59,14 @@ if ((deploy)); then
   # The finger prompt comes after the build, a minute or more after the start, and timed out three times while the
   # owner looked away (2026-10-17): call them back to it with a bell, a sound and a desktop notice.
   printf '\a\n>>> lab-apply: put your finger on the reader now <<<\n\n'
-  notify-send -u critical ship-claude "lab-apply: put your finger on the reader now" 2>/dev/null || true
+  id=$(notify-send -p -u critical ship-claude "lab-apply: put your finger on the reader now" 2>/dev/null) || id=
   snd=/run/current-system/sw/share/sounds/freedesktop/stereo/bell.oga
   [[ -r $snd ]] && command -v pw-play >/dev/null && { pw-play "$snd" >/dev/null 2>&1 & }
+  # The finger first (sudo -v), so the sticky notice goes once it is done; lab-apply's sudo then reuses the ticket.
+  auth=0
+  sudo -v || auth=$?
+  [[ -z $id ]] || makoctl dismiss -n "$id" 2>/dev/null || true
+  ((auth == 0)) || exit "$auth"
   exec lab-apply
 fi
 echo "ready: $(git -C "$wt" rev-parse --short HEAD) on $remote/main in $wt"
