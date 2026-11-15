@@ -221,6 +221,10 @@ printf '## Waiting for a human\n1. a (vino): %s (vino)\n2. b (vino): zwei (vino)
 out=$(LAGE_TASKS_URL=file://$t/long.md COLUMNS=40 lage --dir "$HOME/w" --once)
 [[ $out == *$'\n a  Eine sehr lange Aufgabe die nicht\n    mehr in eine Zeile passt und darum\n    umbricht\n b  zwei\n'* ]]
 [[ $(LAGE_TASKS_URL=file://$t/long.md COLUMNS=30 lage --dir "$HOME/w" --once | widest) -le 30 ]]
+# a long row after a short one is cut to the lines left, not dropped (box of 4 lines without Claude)
+printf '## Waiting for a human\n1. a (vino): eins\n2. b (vino): %s\n3. c (vino): drei\n4. d (vino): vier\n' "$long" >"$t/mixed.md"
+out=$(LAGE_TASKS_URL=file://$t/mixed.md COLUMNS=40 lage --dir "$HOME/empty" --once)
+[[ $out == *$'\nAUFGABEN  4\n a  eins\n b  Eine sehr lange Aufgabe die nicht\n    mehr in eine Zeile passt und darum…\n +2 weitere'* ]]
 for L in 20 8 5; do   # wrapped rows never push the box past the window
   out=$(LAGE_TASKS_URL=file://$t/long.md COLUMNS=20 LINES=$L lage --dir "$HOME/w" --once)
   [[ $(wc -l <<<"$out") -le $((L - 1)) ]] || { echo "long LINES=$L" >&2; false; }

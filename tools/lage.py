@@ -600,13 +600,10 @@ def task_lines(cols, n):
     w = min(max((len(p) for p, _ in mine[:n]), default=0), 14)
     rows, shown = [], 0
     for i, (project, text) in enumerate(mine):
-        parts = textwrap.wrap(text, max(cols - 1 - w - 2, 1), max_lines=3, placeholder="…") or [""]
-        room = n - len(rows) - (i + 1 < len(mine))  # keep a line for +N weitere while more follow
-        if len(parts) > room:
-            if rows or room <= 0:
-                break
-            parts = parts[:room]  # even the first task never gets more than the box
-            parts[-1] = parts[-1][:-1] + "…"
+        room = min(3, n - len(rows) - (i + 1 < len(mine)))  # keep a line for +N weitere while more follow
+        if room <= 0:
+            break
+        parts = textwrap.wrap(text, max(cols - 1 - w - 2, 1), max_lines=room, placeholder="…") or [""]
         first = clean(f"{project[:w]:<{w}}  {parts[0]}", cols - 1)
         rows.append(" " + (paint(PURPLE, first[:w], lit) + first[w:] if lit else first))
         rows += [" " + " " * (w + 2) + p for p in parts[1:]]
