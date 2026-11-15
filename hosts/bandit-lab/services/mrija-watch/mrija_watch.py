@@ -325,6 +325,110 @@ def diff_dns(old: dict, new: dict) -> DnsFindings:
     return out
 
 
+# --- report builder + redaction guard --------------------------------------
+
+# One mailbox crossing this many NDRs in 24h pushes instantly.
+NDR_INSTANT = 20
+# This many authenticated NDRs from outside AT push instantly.
+FOREIGN_NDR_INSTANT = 3
+
+
+@dataclass
+class Report:
+    instant: list = field(default_factory=list)  # (title, body), both "Mrija: "
+    digest: str = ""
+
+
+def assert_clean(text: str, forbidden: list) -> None:
+    """Raise if any forbidden token (a real subject/address) is in `text`."""
+    for tok in forbidden:
+        if tok and tok in text:
+            raise ValueError("mrija-watch: forbidden token leaked into output")
+
+
+def build_report(mail, web, dns, meta) -> Report:
+    rep = Report()
+
+    if mail.password_test_hits:
+        rep.instant.append((
+            "Mrija: Passwort-Test erkannt",
+            f"Mrija: Betreff mit Mailbox-Passwort gesehen ({mail.password_test_hits})",
+        ))
+    for box, n in sorted(mail.ndr_per_mailbox.items()):
+        if n >= NDR_INSTANT:
+            rep.instant.append((
+                "Mrija: Viele Unzustellbar-Mails",
+                f"Mrija: {box} {n} Bounces in 24 h",
+            ))
+    if len(mail.auth_ndr_foreign) >= FOREIGN_NDR_INSTANT:
+        countries = sorted({c for _, c in mail.auth_ndr_foreign})
+        rep.instant.append((
+            "Mrija: Versand aus dem Ausland",
+            f"Mrija: {len(mail.auth_ndr_foreign)} Bounces, Länder {', '.join(countries)}",
+        ))
+    for item in web.instant:
+        rep.instant.append((
+            "Mrija: Web-Datei verdächtig",
+            f"Mrija: {item}",
+        ))
+    for rtype in dns.instant:
+        rep.instant.append((
+            f"Mrija: DNS {rtype} geändert",
+            f"Mrija: {rtype} Eintrag geändert",
+        ))
+
+    total_ndr = sum(mail.ndr_per_mailbox.values())
+    sync_age = meta.get("sync_age_hours", 0.0)
+    cert_days = meta.get("cert_days", 0)
+    http_ok = meta.get("http_ok", False)
+    errors = meta.get("errors", [])
+    quiet = (
+        total_ndr == 0
+        and mail.risky_attach_total == 0
+        and mail.spoof_spf_fail == 0
+        and not mail.auth_ndr_foreign
+        and not web.instant
+        and not web.digest_groups
+        and not dns.changed
+        and not errors
+    )
+
+    lines = []
+    if quiet:
+        lines.append("Mrija: alles ruhig, keine Auffälligkeiten")
+    else:
+        lines.append(
+            f"Mrija: {total_ndr} Bounces, {mail.risky_attach_total} riskante Anhänge,"
+            f" {mail.spoof_spf_fail} SPF-Fehler"
+        )
+        if web.digest_groups:
+            tops = ", ".join(
+                f"{g.split('/')[-1]} {n}"
+                for g, n in sorted(web.digest_groups.items())[:3]
+            )
+            lines.append(f"Mrija: Datei-Änderungen: {tops}")
+        if "TXT" in dns.changed:
+            lines.append("Mrija: DNS TXT-Eintrag geändert, bitte prüfen")
+        if errors:
+            lines.append(f"Mrija: Fehler: {'; '.join(errors)}")
+    lines.append(f"Mrija: letzter Mail-Sync vor {sync_age:.0f} h")
+    lines.append(
+        f"Mrija: Web {'ok' if http_ok else 'nicht erreichbar'},"
+        f" Zertifikat {cert_days} Tage"
+    )
+
+    rep.digest = "\n".join(lines[:6])
+
+    # Self-check: a caller that has the raw subjects/addresses (never copied
+    # into the findings) can pass them as meta["forbidden"] to prove the
+    # emitted text is clean. Default empty -> no-op.
+    forbidden = meta.get("forbidden", [])
+    assert_clean(rep.digest, forbidden)
+    for title, body in rep.instant:
+        assert_clean(title + " " + body, forbidden)
+    return rep
+
+
 # --- CLI -------------------------------------------------------------------
 
 

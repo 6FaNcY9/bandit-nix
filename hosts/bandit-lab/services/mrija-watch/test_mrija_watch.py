@@ -167,3 +167,71 @@ def test_first_run_baseline():
     dns = mw.diff_dns({}, {"MX": ["10 mail.mrija.org."]})
     assert dns.changed == []
     assert dns.instant == []
+
+
+# --- Task 5: report builder + redaction guard ------------------------------
+
+
+def _meta(**kw):
+    m = {
+        "sync_age_hours": 1.0,
+        "errors": [],
+        "http_ok": True,
+        "cert_days": 60,
+        "updates": {},
+    }
+    m.update(kw)
+    return m
+
+
+def test_instant_from_each_source():
+    mail = mw.MailFindings(
+        ndr_per_mailbox={"postmaster": 25},
+        password_test_hits=1,
+    )
+    web = mw.diff_web(
+        mw.parse_manifest("-rw-r--r-- 10 2026/01/01 00:00:00 keep.txt"),
+        mw.parse_manifest(
+            "\n".join([
+                "-rw-r--r-- 10 2026/01/01 00:00:00 keep.txt",
+                "-rw-r--r-- 10 2026/02/01 00:00:00 wp-content/mu-plugins/x/index.php",
+            ])
+        ),
+    )
+    dns = mw.diff_dns({"MX": ["10 a."]}, {"MX": ["10 b."]})
+    report = mw.build_report(mail, web, dns, _meta())
+    assert len(report.instant) >= 4
+    assert all(
+        t.startswith("Mrija: ") and b.startswith("Mrija: ")
+        for t, b in report.instant
+    )
+
+
+def test_digest_at_most_six_lines():
+    mail = mw.MailFindings(
+        ndr_per_mailbox={"postmaster": 5, "admin": 2},
+        risky_attach_total=3,
+        spoof_spf_fail=1,
+    )
+    web = mw.WebFindings(digest_groups={"wp-content/plugins/elementor": 812})
+    dns = mw.DnsFindings(changed=["TXT"])
+    report = mw.build_report(
+        mail, web, dns, _meta(errors=["rsync timeout"], http_ok=False, cert_days=9)
+    )
+    lines = [ln for ln in report.digest.splitlines() if ln.strip()]
+    assert 1 <= len(lines) <= 6
+
+
+def test_quiet_digest():
+    report = mw.build_report(
+        mw.MailFindings(), mw.WebFindings(), mw.DnsFindings(), _meta()
+    )
+    assert "ruhig" in report.digest
+
+
+def test_digest_has_no_secrets():
+    mail = mw.scan_mail(MAILDIR, {}, FakeGeoIP())
+    report = mw.build_report(mail, mw.WebFindings(), mw.DnsFindings(), _meta())
+    mw.assert_clean(report.digest, [PW_TOKEN])  # must not raise
+    with pytest.raises(ValueError):
+        mw.assert_clean(f"leak {PW_TOKEN} here", [PW_TOKEN])
