@@ -15,22 +15,29 @@
   svc = lab.systemd.services."container@mc-public".serviceConfig;
   prepare = lab.systemd.services.mc-public-prepare;
   fw = lab.networking.firewall;
-  fwLines = [
-    "iptables -w -I nixos-fw 1 -i ve-mc-public -j nixos-fw-refuse"
-    "iptables -w -I nixos-fw 1 -i ve-mc-public -m conntrack --ctstate ESTABLISHED,RELATED -j nixos-fw-accept"
-    "iptables -w -I DOCKER-USER 1 -i ve-mc-public -d 192.168.0.0/24 -j DROP"
-    "iptables -w -I DOCKER-USER 1 -i ve-mc-public -d 10.250.77.0/29 -j DROP"
-    "iptables -w -I DOCKER-USER 1 -i ve-mc-public ! -o enp44s0 -j DROP"
-    "iptables -w -I DOCKER-USER 1 -o ve-mc-public -m conntrack --ctstate NEW -j DROP"
-  ];
-  stopLines = [
-    "iptables -w -D nixos-fw -i ve-mc-public -j nixos-fw-refuse || true"
-    "iptables -w -D nixos-fw -i ve-mc-public -m conntrack --ctstate ESTABLISHED,RELATED -j nixos-fw-accept || true"
-    "iptables -w -D DOCKER-USER -i ve-mc-public -d 192.168.0.0/24 -j DROP || true"
-    "iptables -w -D DOCKER-USER -i ve-mc-public -d 10.250.77.0/29 -j DROP || true"
-    "iptables -w -D DOCKER-USER -i ve-mc-public ! -o enp44s0 -j DROP || true"
-    "iptables -w -D DOCKER-USER -o ve-mc-public -m conntrack --ctstate NEW -j DROP || true"
-  ];
+  ranges = ["10.0.0.0/8" "172.16.0.0/12" "192.168.0.0/16" "169.254.0.0/16" "100.64.0.0/10"];
+  fwLines =
+    [
+      "iptables -w -I nixos-fw 1 -i ve-mc-public -j nixos-fw-refuse"
+      "iptables -w -I nixos-fw 1 -i ve-mc-public -m conntrack --ctstate ESTABLISHED,RELATED -j nixos-fw-accept"
+      "ip6tables -w -I nixos-fw 1 -i ve-mc-public -j nixos-fw-refuse"
+    ]
+    ++ map (d: "iptables -w -t mangle -A FORWARD -i ve-mc-public -d ${d} -j DROP") ranges
+    ++ [
+      "iptables -w -t mangle -A FORWARD -i ve-mc-public ! -o enp44s0 -j DROP"
+      "iptables -w -t mangle -A FORWARD -o ve-mc-public -m conntrack --ctstate NEW -j DROP"
+    ];
+  stopLines =
+    [
+      "iptables -w -D nixos-fw -i ve-mc-public -j nixos-fw-refuse || true"
+      "iptables -w -D nixos-fw -i ve-mc-public -m conntrack --ctstate ESTABLISHED,RELATED -j nixos-fw-accept || true"
+      "ip6tables -w -D nixos-fw -i ve-mc-public -j nixos-fw-refuse || true"
+    ]
+    ++ map (d: "iptables -w -t mangle -D FORWARD -i ve-mc-public -d ${d} -j DROP || true") ranges
+    ++ [
+      "iptables -w -t mangle -D FORWARD -i ve-mc-public ! -o enp44s0 -j DROP || true"
+      "iptables -w -t mangle -D FORWARD -o ve-mc-public -m conntrack --ctstate NEW -j DROP || true"
+    ];
   # networking.nat writes two lines of its own for an internal interface (the mark for masquerading and the
   # forward accept towards the uplink only); every other mention must be one of fwLines.
   natLines = ["-i 've-mc-public' -j MARK --set-mark 1" "-i 've-mc-public' -o enp44s0 -j ACCEPT"];
@@ -60,8 +67,9 @@ in
   assert lib.assertMsg (lib.hasInfix "-Xms6G -Xmx6G" paper.jvmOpts && lib.hasInfix "-Xmx512M" velocity.jvmOpts) "heaps (6G Paper, 512M Velocity) must fit the 10G cap";
   # The veth: refused by the host, forwarded to the uplink only, nothing forwarded in.
   assert lib.assertMsg (lib.elem "ve-mc-public" lab.networking.nat.internalInterfaces && lab.networking.nat.externalInterface == "enp44s0") "NAT must serve ve-mc-public through the uplink";
-  assert lib.assertMsg (lib.all (l: lib.hasInfix l fw.extraCommands) fwLines) "firewall must refuse ve-mc-public on the host (but accept replies to host-opened connections, the tunnel agent -> Velocity), drop its forwards to the LAN, the mcbots bridge and everything but the uplink, and forward nothing new into it";
+  assert lib.assertMsg (lib.all (l: lib.elem l (lib.splitString "\n" fw.extraCommands)) fwLines) "firewall must refuse ve-mc-public on the host, v4 and v6 (but accept v4 replies to host-opened connections, the tunnel agent -> Velocity), drop its forwards to private, link-local and CGNAT ranges and everything but the uplink, and forward nothing new into it";
   assert lib.assertMsg (lib.all (l: lib.elem l fwLines) vethLines) "no other firewall rule may mention ve-mc-public (an accept would open the host to the box): ${toString vethLines}";
+  assert lib.assertMsg (!(lib.hasInfix "DOCKER-USER -i ve-mc-public" fw.extraCommands) && !(lib.hasInfix "DOCKER-USER -o ve-mc-public" fw.extraCommands)) "mc-public's forward isolation must live in mangle FORWARD, not DOCKER-USER";
   assert lib.assertMsg (lib.all (l: lib.hasInfix l fw.extraStopCommands) stopLines) "firewall stop commands must mirror every mc-public rule";
   assert lib.assertMsg (!(fw.interfaces ? "ve-mc-public")) "the host opens no port for ve-mc-public";
   assert lib.assertMsg (inner.networking.nameservers == ["9.9.9.9" "1.1.1.1"]) "mc-public must use fixed nameservers, not the host resolv.conf";

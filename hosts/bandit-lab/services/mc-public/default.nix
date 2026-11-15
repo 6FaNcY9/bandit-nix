@@ -6,7 +6,7 @@
 # The host refuses everything that arrives from the veth; forwarding is allowed to the uplink only, never
 # to the LAN, the mcbots bridge, Docker's or Podman's networks or another container.
 # Design: bandit-craft docs/specs/2026-11-10-public-anarchy-world.md. Runbook: bandit-craft
-# docs/runbooks/minecraft/PUBLIC.md. Contract: ci/lab-mc-public.nix.
+# docs/runbooks/minecraft/PUBLIC.md; host firewall: docs/runbooks/mc-public-firewall.md. Contract: ci/lab-mc-public.nix.
 {
   config,
   inputs,
@@ -27,23 +27,31 @@
   worldDir = "/srv/mc-public/data";
   # Each rule goes to the top of its chain. nixos-fw: nothing from the veth reaches a host address, whatever
   # another module accepts further down (the mcbots bridge rule admits the private RCON forwarders on
-  # 10.250.77.1). The forward drops live in Docker's DOCKER-USER chain because Docker reorders FORWARD, as
-  # for jerry-box. Unlike jerry-box there is no accept for the host's tailscaled: this box talks to its
-  # tailnet peers through the uplink and never to the host. The last rule is the other direction: nothing
+  # 10.250.77.1). IPv6: the box has none, so everything from the veth is refused at the top of the ip6
+  # nixos-fw too (an accepted router advertisement would rewrite the host's routes). The forward drops live
+  # in mangle FORWARD, which neither Docker nor tailscaled touches, so they hold while Docker is down and
+  # whatever order filter FORWARD ends up in (as for the guest boxes). Unlike jerry-box there is no accept
+  # for the host's tailscaled: this box talks to its tailnet peers through the uplink and never to the host,
+  # and never to a private, link-local or CGNAT range (the LAN, the mcbots bridge 10.250.77.0/29, Docker's
+  # and Podman's networks, the other containers). The last rule is the other direction: nothing
   # is forwarded into the box unless the box opened the connection, so the game port does not depend on
   # the container's own firewall alone (replies to its NATed traffic are not NEW and pass).
   # One exception sits above the refuse: replies to connections the host itself opens to the box (the
   # tunnel agent -> Velocity on 10.251.1.2:25565) must come back, or the handshake never completes. The box
   # still cannot open anything to the host (a NEW packet from the veth is not ESTABLISHED and hits refuse).
-  rules = [
-    "-I nixos-fw 1 -i ${veth} -j nixos-fw-refuse"
-    "-I nixos-fw 1 -i ${veth} -m conntrack --ctstate ESTABLISHED,RELATED -j nixos-fw-accept"
-    "-I DOCKER-USER 1 -i ${veth} -d 192.168.0.0/24 -j DROP" # the LAN
-    "-I DOCKER-USER 1 -i ${veth} -d 10.250.77.0/29 -j DROP" # the mcbots bridge (bandit-craft minecraft/default.nix mcbotsSubnet)
-    "-I DOCKER-USER 1 -i ${veth} ! -o ${uplink} -j DROP" # everything else that is not the uplink
-    "-I DOCKER-USER 1 -o ${veth} -m conntrack --ctstate NEW -j DROP"
-  ];
-  delete = r: "iptables -w ${builtins.replaceStrings ["-I nixos-fw 1" "-I DOCKER-USER 1"] ["-D nixos-fw" "-D DOCKER-USER"] r} || true";
+  private = ["10.0.0.0/8" "172.16.0.0/12" "192.168.0.0/16" "169.254.0.0/16" "100.64.0.0/10"];
+  rules =
+    [
+      "iptables -w -I nixos-fw 1 -i ${veth} -j nixos-fw-refuse"
+      "iptables -w -I nixos-fw 1 -i ${veth} -m conntrack --ctstate ESTABLISHED,RELATED -j nixos-fw-accept"
+      "ip6tables -w -I nixos-fw 1 -i ${veth} -j nixos-fw-refuse"
+    ]
+    ++ map (d: "iptables -w -t mangle -A FORWARD -i ${veth} -d ${d} -j DROP") private
+    ++ [
+      "iptables -w -t mangle -A FORWARD -i ${veth} ! -o ${uplink} -j DROP" # everything else that is not the uplink
+      "iptables -w -t mangle -A FORWARD -o ${veth} -m conntrack --ctstate NEW -j DROP"
+    ];
+  delete = r: "${builtins.replaceStrings ["-I nixos-fw 1" "-A "] ["-D nixos-fw" "-D "] r} || true";
 
   # The tunnel to the public address (bandit-craft PUBLIC.md, "Phase 2"): playit.gg's agent runs on the HOST,
   # not in the container. An IPv4-only container gets an IPv6 relay from playit and cannot reach it (the agent
@@ -97,7 +105,7 @@ in {
         nameservers = ["9.9.9.9" "1.1.1.1"];
         # Velocity binds every address; the game port is admitted on the tailnet interface (testers) and on
         # the veth (eth0), where only the host's tunnel agent reaches it (the host forwards nothing new in,
-        # DOCKER-USER rule above). Paper is loopback.
+        # mangle FORWARD rule above). Paper is loopback.
         firewall = {
           enable = true;
           interfaces.tailscale0.allowedTCPPorts = [25565];
@@ -143,7 +151,9 @@ in {
       internalInterfaces = [veth];
       externalInterface = uplink;
     };
-    firewall.extraCommands = lib.concatStringsSep "\n" (["iptables -w -N DOCKER-USER 2>/dev/null || true"] ++ map (r: "iptables -w ${r}") rules);
+    # No rule of this box is in DOCKER-USER any more; the chain is still created here because the crowdsec
+    # bouncer (ordered after firewall.service, not docker) inserts into it and may start before Docker.
+    firewall.extraCommands = lib.concatStringsSep "\n" (["iptables -w -N DOCKER-USER 2>/dev/null || true"] ++ rules);
     firewall.extraStopCommands = lib.concatMapStringsSep "\n" delete rules;
   };
 
