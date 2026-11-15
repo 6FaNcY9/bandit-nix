@@ -112,7 +112,7 @@
 
     (execBinding "Print" "~/.local/bin/hypr-screenshot" "region screenshot")
     (execBinding "F11" "~/.local/bin/hypr-screenshot" "region screenshot")
-    (execBinding "${mod} + SHIFT + s" "${pkgs.flameshot}/bin/flameshot gui" "screenshot with drawing (flameshot)")
+    (execBinding "${mod} + SHIFT + s" "~/.local/bin/hypr-screenshot" "region screenshot")
 
     # Mako notification controls
     (execBinding "${mod} + grave" "${pkgs.mako}/bin/makoctl restore" "restore last notification")

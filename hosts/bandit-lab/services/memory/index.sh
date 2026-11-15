@@ -45,11 +45,12 @@ if ! gawk -v today="$(date +%F)" '
     c = ctitle[1] != "" ? 1 : ctitle[2] != "" ? 2 : 0
     row[k] = "| " proj " | " sto " | " st " | " open " | " doing " | " late " | " \
       (w ? clean(htitle[w], 80) : "-") " | " (c ? clean(ctitle[c], 80) : "-") " | " clean(repo, 80) " | " chg " |"
+    # Late first, then by due date (undated last), so a dated step is not cut by the top 10.
     # Paused projects wait for nobody; one step per project, the step cut so "LATE <date>" survives.
     if (w && st != "paused") {
       head = proj " (" sto "): "
       tail = (hwho[w] != "" ? " (" clean(hwho[w], 30) ")" : "") (hlate[w] ? " LATE " hdue[w] : hdue[w] != "" ? " " hdue[w] : "")
-      wait[sprintf("%d\t%s", !hlate[w], k)] = head clean(htitle[w], 76 - length(head) - length(tail)) tail
+      wait[sprintf("%d\t%s\t%s", !hlate[w], hdue[w] != "" ? hdue[w] : "9999", k)] = head clean(htitle[w], 76 - length(head) - length(tail)) tail
     }
   }
   BEGINFILE {
