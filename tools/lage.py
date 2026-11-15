@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """lage: a terminal view of what a Claude Code session is doing right now.
 
 lage [--once]   follow the Claude session in the Cockpit master window (Hyprland); with --dir DIR the newest one started in DIR

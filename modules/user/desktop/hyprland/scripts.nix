@@ -5,6 +5,7 @@
   ...
 }: let
   colors = config.lib.stylix.colors.withHashtag;
+  lage = pkgs.writers.writePython3Bin "lage" {flakeIgnore = ["E501"];} (builtins.readFile ../../../../tools/lage.py);
 in {
   home = {
     file = {
@@ -33,6 +34,8 @@ in {
         '';
       };
 
+      ".local/bin/lage".source = "${lage}/bin/lage";
+
       # ─── Cockpit (Mod+C): master layout with a log pane, per workspace ───
       ".local/bin/hypr-cockpit" = {
         executable = true;
@@ -41,6 +44,7 @@ in {
           # Spike, Hyprland 0.56.2: a workspace_rule with layout re-tiles a live workspace at once, so Cockpit is per workspace.
           set -euo pipefail
           jq=${pkgs.jq}/bin/jq
+          kitty=''${HYPR_COCKPIT_KITTY:-${pkgs.kitty}/bin/kitty}
           dir="''${XDG_RUNTIME_DIR:-/tmp}/hypr-cockpit"
           ws=$(hyprctl activeworkspace -j)
           id=$($jq .id <<<"$ws")
@@ -71,13 +75,18 @@ in {
               [.[] | select(.workspace.id == $id and (.floating | not) and (.hidden | not) and .class != "cockpit-log")]
               | sort_by(.focusHistoryID) | .[0].address // empty
             ' <<<"$clients")
+            pid=
             if [ -n "$work" ]; then
               hyprctl dispatch "hl.dsp.focus({ window = \"address:$work\" })" >/dev/null
               hyprctl dispatch 'hl.dsp.layout("swapwithmaster ignoremaster")' >/dev/null
+              pid=$($jq -r --arg a "$work" '.[] | select(.address == $a) | .pid' <<<"$clients")
             fi
+            # No log pane yet and the work window runs Claude: lage opens right, also beside other windows.
+            if [ "$logs" -eq 0 ] && [[ $pid =~ ^[0-9]+$ ]] && "${lage}/bin/lage" --probe "$pid" 2>/dev/null; then
+              setsid -f "$kitty" --class cockpit-log ${lage}/bin/lage >/dev/null 2>&1
             # One tiled window or group alone and no log yet: add the log pane (opens right).
-            if [ "$slots" -le 1 ] && [ "$logs" -eq 0 ]; then
-              setsid -f ${pkgs.kitty}/bin/kitty --class cockpit-log journalctl -f >/dev/null 2>&1
+            elif [ "$slots" -le 1 ] && [ "$logs" -eq 0 ]; then
+              setsid -f "$kitty" --class cockpit-log journalctl -f >/dev/null 2>&1
             fi
             mkdir -p "$dir"
             touch "$dir/$id"
