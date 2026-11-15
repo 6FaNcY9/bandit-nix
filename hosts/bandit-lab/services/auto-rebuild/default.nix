@@ -6,7 +6,7 @@
   repoDir = "/etc/nixos/bandit-nix";
   repositoryUrl = "https://github.com/6FaNcY9/bandit-nix.git";
   signingKeyFingerprint = "4D8770567A65FE1369E2BCC1611871842A8C1619";
-  phoneSigningKeyFingerprint = "6FC0F17CBA83E7BA06D7C929EE5EB15A5F02387A";
+  phoneSigningKeyFingerprint = "EED481B02CA38F6764056E3A2638AEF73F1A5A45";
 
   labUpdate = pkgs.writeShellScriptBin "lab-update" ''
     set -euo pipefail
