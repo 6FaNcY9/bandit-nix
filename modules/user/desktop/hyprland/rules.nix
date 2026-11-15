@@ -58,9 +58,11 @@
     }
     {
       # satty (hypr-screenshot's editor) floats so it never joins a tab group.
+      # max_size: a tall selection would put its bottom toolbar under the Waybar.
       name = "satty";
       match.class = "^(com\\.gabm\\.satty)$";
       float = true;
+      max_size = "monitor_w*0.9 monitor_h*0.85";
       center = true;
     }
     {
