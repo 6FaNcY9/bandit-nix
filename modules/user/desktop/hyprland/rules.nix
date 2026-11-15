@@ -15,8 +15,6 @@
     "${pkgs.blueman}/bin/blueman-applet"
     "${pkgs.wl-clipboard}/bin/wl-paste --type text --watch ${pkgs.cliphist}/bin/cliphist store"
     "${pkgs.wl-clipboard}/bin/wl-paste --type image --watch ${pkgs.cliphist}/bin/cliphist store"
-    # Resident daemon keeps copied screenshots in the Wayland clipboard after the capture UI closes.
-    "${pkgs.flameshot}/bin/flameshot"
   ];
   startupHandler = lib.concatMapStringsSep "\n" (command: "  hl.exec_cmd(${builtins.toJSON command})") startupCommands;
 
@@ -59,24 +57,13 @@
       pin = true;
     }
     {
-      # Flameshot's capture overlay must cover the screen untouched by tiling.
-      # Matched by title: Flameshot 14 maps with an empty class, so a class rule
-      # never floated it; the tiled overlay joined the focused tab group and its
-      # fullscreen passed to the next tab on close.
-      name = "flameshot";
-      match.title = "^(flameshot)$";
+      # satty (hypr-screenshot's editor) floats so it never joins a tab group.
+      # max_size: a tall selection would put its bottom toolbar under the Waybar.
+      name = "satty";
+      match.class = "^(com\\.gabm\\.satty)$";
       float = true;
-      move = "0 0";
-      no_anim = true;
-    }
-    {
-      # Hyprland allows one fullscreen window per workspace, so Flameshot's own
-      # fullscreen request ended a fullscreen game's; cover the screen without it.
-      name = "flameshot-over-fullscreen";
-      match.title = "^(flameshot)$";
-      match.workspace = "f[0]";
-      suppress_event = "fullscreen";
-      size = "monitor_w monitor_h";
+      max_size = "monitor_w*0.9 monitor_h*0.85";
+      center = true;
     }
     {
       name = "hyprland-shortcuts";

@@ -7,6 +7,7 @@
 }: {
   imports = [
     inputs.nixvim.homeModules.nixvim
+    inputs.nix-index-database.homeModules.nix-index
     ./xdg-cleanup.nix
     ./xdg-shims.nix
     ./dotfiles.nix

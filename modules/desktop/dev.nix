@@ -18,6 +18,8 @@
     direnv = {
       enable = true;
       nix-direnv.enable = true;
+      # No "export +AR +AS +CC …" list on cd into a dev shell; errors still show.
+      settings.global.hide_env_diff = true;
     };
     virt-manager.enable = true;
     nh = {

@@ -1,24 +1,23 @@
 {
-  config,
   pkgs,
   bandit,
   ...
 }: let
-  colors = config.lib.stylix.colors.withHashtag;
+  lage = pkgs.writers.writePython3Bin "lage" {flakeIgnore = ["E501"];} (builtins.readFile ../../../../tools/lage.py);
+  # The Cockpit pane: lage on top, below it a small shell for deploys, sudo and the finger (kitty splits).
+  cockpitSession = pkgs.writeText "cockpit-session" ''
+    layout splits
+    launch --title lage ${lage}/bin/lage
+    launch --location=hsplit --bias=30 --title shell
+  '';
 in {
   home = {
     file = {
       "Pictures/Screenshots/.keep".text = "";
-      ".config/flameshot/flameshot.ini".text = ''
-        [General]
-        savePath=${bandit.workstation.homeDirectory}/Pictures/Screenshots
-        ; Theme colours instead of Flameshot's default purple.
-        uiColor=${colors.base0C}
-        contrastUiColor=${colors.base01}
-        drawColor=${colors.base08}
-      '';
 
-      # ─── Region screenshot: capture, save, copy, notify ───
+      # ─── Region screenshot: select, then draw in satty; Enter copies + saves ───
+      # grim + slurp instead of Flameshot: Flameshot 14 must capture through the
+      # portal on Hyprland, about 0.8 s before its overlay even appears.
       ".local/bin/hypr-screenshot" = {
         executable = true;
         text = ''
@@ -26,12 +25,16 @@ in {
           set -euo pipefail
           dir="${bandit.workstation.homeDirectory}/Pictures/Screenshots"
           mkdir -p "$dir"
-          file="$dir/$(date +%Y-%m-%d_%H-%M-%S).png"
-          ${pkgs.grim}/bin/grim -g "$(${pkgs.slurp}/bin/slurp)" "$file"
-          ${pkgs.wl-clipboard}/bin/wl-copy < "$file"
-          ${pkgs.libnotify}/bin/notify-send -a hypr-screenshot "Screenshot saved" "$file"
+          region=$(${pkgs.slurp}/bin/slurp -d) || exit 0 # Esc cancels the selection
+          ${pkgs.grim}/bin/grim -g "$region" - |
+            ${pkgs.satty}/bin/satty --filename - \
+              --output-filename "$dir/%Y-%m-%d_%H-%M-%S.png" \
+              --copy-command ${pkgs.wl-clipboard}/bin/wl-copy \
+              --actions-on-enter save-to-clipboard --save-after-copy --early-exit
         '';
       };
+
+      ".local/bin/lage".source = "${lage}/bin/lage";
 
       # ─── Cockpit (Mod+C): master layout with a log pane, per workspace ───
       ".local/bin/hypr-cockpit" = {
@@ -41,6 +44,7 @@ in {
           # Spike, Hyprland 0.56.2: a workspace_rule with layout re-tiles a live workspace at once, so Cockpit is per workspace.
           set -euo pipefail
           jq=${pkgs.jq}/bin/jq
+          kitty=''${HYPR_COCKPIT_KITTY:-${pkgs.kitty}/bin/kitty}
           dir="''${XDG_RUNTIME_DIR:-/tmp}/hypr-cockpit"
           ws=$(hyprctl activeworkspace -j)
           id=$($jq .id <<<"$ws")
@@ -71,13 +75,31 @@ in {
               [.[] | select(.workspace.id == $id and (.floating | not) and (.hidden | not) and .class != "cockpit-log")]
               | sort_by(.focusHistoryID) | .[0].address // empty
             ' <<<"$clients")
+            pid=
             if [ -n "$work" ]; then
               hyprctl dispatch "hl.dsp.focus({ window = \"address:$work\" })" >/dev/null
               hyprctl dispatch 'hl.dsp.layout("swapwithmaster ignoremaster")' >/dev/null
+              pid=$($jq -r --arg a "$work" '.[] | select(.address == $a) | .pid' <<<"$clients")
             fi
+            claude=0
+            [[ $pid =~ ^[0-9]+$ ]] && "${lage}/bin/lage" --probe "$pid" 2>/dev/null && claude=1
+            # The work window runs Claude: every other tiled window joins its tab group (the master is left),
+            # so the pane (lage and its shell) has the whole right column; also after a reload left the pane open.
+            if ((claude)); then
+              $jq -r --argjson id "$id" --arg a "$work" '
+                [.[] | select(.address == $a) | .grouped[], $a] as $mine
+                | .[] | select(.workspace.id == $id and (.floating | not) and .class != "cockpit-log")
+                | .address | select(IN($mine[]) | not)
+              ' <<<"$clients" |
+                while read -r addr; do
+                  hyprctl dispatch "hl.dsp.focus({ window = \"address:$addr\" })" >/dev/null
+                  hyprctl dispatch 'hl.dsp.window.move({ into_or_create_group = "left" })' >/dev/null
+                done
+              hyprctl dispatch "hl.dsp.focus({ window = \"address:$work\" })" >/dev/null
+              [ "$logs" -gt 0 ] || setsid -f "$kitty" --class cockpit-log --session ${cockpitSession} >/dev/null 2>&1
             # One tiled window or group alone and no log yet: add the log pane (opens right).
-            if [ "$slots" -le 1 ] && [ "$logs" -eq 0 ]; then
-              setsid -f ${pkgs.kitty}/bin/kitty --class cockpit-log journalctl -f >/dev/null 2>&1
+            elif [ "$slots" -le 1 ] && [ "$logs" -eq 0 ]; then
+              setsid -f "$kitty" --class cockpit-log journalctl -f >/dev/null 2>&1
             fi
             mkdir -p "$dir"
             touch "$dir/$id"
@@ -170,8 +192,7 @@ in {
             Mod+Shift+.         dismiss all notifications
 
           SCREENSHOTS
-            Print / F11         region screenshot (grim + slurp)
-            Mod+Shift+S         screenshot with drawing (flameshot)
+            Print / F11 / Mod+Shift+S   region screenshot, draw in satty (Enter = copy + save)
 
           MEDIA
             XF86AudioRaise/Lower  volume ±5%
@@ -198,4 +219,19 @@ in {
       pkgs.less
     ];
   };
+
+  # Cockpit (hypr-cockpit): a reload (nh os switch) drops the runtime workspace rules; workspaces with a
+  # state file get their master layout back while the config loads, so the Cockpit stays as it was.
+  wayland.windowManager.hyprland.extraConfig = ''
+    do
+      local dir = (os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/hypr-cockpit/"
+      for id = 1, 10 do
+        local f = io.open(dir .. id, "r")
+        if f then
+          f:close()
+          hl.workspace_rule({ workspace = tostring(id), layout = "master" })
+        end
+      end
+    end
+  '';
 }

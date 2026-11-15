@@ -16,6 +16,12 @@
 
     nixvim.url = "github:nix-community/nixvim";
 
+    # Prebuilt weekly nix-index database: the shell's command-not-found handler and comma need it.
+    nix-index-database = {
+      url = "github:nix-community/nix-index-database";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     stylix = {
       url = "github:nix-community/stylix";
       inputs.nixpkgs.follows = "nixpkgs";

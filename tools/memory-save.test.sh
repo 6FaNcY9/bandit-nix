@@ -18,9 +18,9 @@ chmod +x "$t/bin/curl"
 export HOME=$t/home PATH=$t/bin:$PATH CALLS=$t/calls MEMORY_DEVICE=dev
 : >"$CALLS"
 p=$HOME/.claude/projects/p
-prompts() { # prompts <file> <count>: a transcript with that many user prompts
+prompts() { # prompts <file> <count> [cwd]: a transcript with that many user prompts
   for i in $(seq "$2"); do
-    echo '{"type":"user","cwd":"/x/proj","timestamp":"2026-11-10T09:00:00Z","message":{"content":"q'"$i"'"}}'
+    echo '{"type":"user","cwd":"'"${3:-/x/proj}"'","timestamp":"2026-11-10T09:00:00Z","message":{"content":"q'"$i"'"}}'
     echo '{"type":"assistant","message":{"content":[{"type":"text","text":"a'"$i"'"}]}}'
   done >"$1"
 }
@@ -48,4 +48,25 @@ sweep; [[ $(tail -n 1 "$CALLS") == 2026-11-10-dev-proj-aaaaaaaa && $(wc -l <"$CA
 # SessionEnd still saves right away, active or not.
 echo "{\"transcript_path\":\"$p/cccccccc-1.jsonl\",\"session_id\":\"cccccccc-1\"}" | "$here/memory-save.sh" --fg
 [[ $(tail -n 1 "$CALLS") == 2026-11-10-dev-proj-cccccccc ]]
+
+# Live engagements never reach the memory server, by start cwd or any later cwd.
+live=$HOME/src/sec/live
+prompts "$p/dddddddd-1.jsonl" 3 "$live/acme"; touch -d '2 hours ago' "$p/dddddddd-1.jsonl"
+prompts "$p/eeeeeeee-1.jsonl" 3
+echo '{"type":"user","cwd":"'"$live"'/acme/sub","message":{"content":"q"}}' >>"$p/eeeeeeee-1.jsonl"
+touch -d '2 hours ago' "$p/eeeeeeee-1.jsonl"
+prompts "$p/ffffffff-1.jsonl" 3 "$HOME/src/sec/live-notes"; touch -d '2 hours ago' "$p/ffffffff-1.jsonl"
+before=$(wc -l <"$CALLS"); sweep
+[[ $(wc -l <"$CALLS") -eq $((before + 1)) && $(tail -n 1 "$CALLS") == 2026-11-10-dev-live-notes-ffffffff ]]
+echo "{\"transcript_path\":\"$p/dddddddd-1.jsonl\",\"session_id\":\"dddddddd-1\"}" | "$here/memory-save.sh" --fg
+[[ $(wc -l <"$CALLS") -eq $((before + 1)) ]]                       # SessionEnd skips it too
+[[ -e $HOME/.local/state/memory-saved/dddddddd-1 ]]                # marked, so the sweep does not rescan it
+
+# A corrupt line before the live cwd does not hide it: only that line is skipped.
+prompts "$p/99999999-1.jsonl" 3
+printf '%s\n' '{"type":"user","cwd":"/x/pro' >>"$p/99999999-1.jsonl"
+echo '{"type":"user","cwd":"'"$live"'/acme","message":{"content":"q"}}' >>"$p/99999999-1.jsonl"
+touch -d '2 hours ago' "$p/99999999-1.jsonl"
+before=$(wc -l <"$CALLS"); sweep
+[[ $(wc -l <"$CALLS") -eq $before && -e $HOME/.local/state/memory-saved/99999999-1 ]]
 echo ok
