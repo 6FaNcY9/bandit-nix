@@ -31,4 +31,21 @@ in {
       ExecStopPost = "${hyprctl} output remove PHONE";
     };
   };
+
+  # The real screen for the phone's VNC app, which connects through its own SSH tunnel
+  # (AVNC profile "bandit – Bildschirm"): up whenever Hyprland runs, localhost only.
+  # Own control socket, so it does not clash with phone-screen's wayvnc.
+  systemd.user.services.laptop-screen = {
+    Unit = {
+      Description = "The laptop's own screen for the phone (VNC on 127.0.0.1:5901)";
+      PartOf = ["graphical-session.target"];
+      After = ["graphical-session.target"];
+    };
+    Service = {
+      ExecStart = "${pkgs.wayvnc}/bin/wayvnc -S %t/wayvncctl-laptop -o eDP-1 127.0.0.1 5901";
+      Restart = "on-failure";
+      RestartSec = 5;
+    };
+    Install.WantedBy = ["graphical-session.target"];
+  };
 }
