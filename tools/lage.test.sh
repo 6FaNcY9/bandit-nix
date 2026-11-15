@@ -203,7 +203,7 @@ fresh; session $$ $s1 src-a "$HOME/w"
   printf '10. proj (vino): Esc\e[2J hier (vino)\n'
   echo '## Projects'; echo '| proj | vino | Projektzeile |'; } >"$t/lagebild.md"
 out=$(LAGE_TASKS_URL=file://$t/lagebild.md lage --dir "$HOME/w" --once)
-[[ $out == *$'\n\nAUFGABEN  9\n proj  Aufgabe 1: heute\n proj  Aufgabe 2: heute\n proj  Aufgabe 3: heute\n proj  Aufgabe 4: heute\n proj  Aufgabe 5: heute\n +4 weitere\n\n'* ]]
+[[ $out == *$'\n\nAUFGABEN  9\n proj  Aufgabe 1: heute\n proj  Aufgabe 2: heute\n proj  Aufgabe 3: heute\n proj  Aufgabe 4: heute\n proj  Aufgabe 5: heute\n proj  Aufgabe 6: heute\n proj  Aufgabe 7: heute\n proj  Aufgabe 8: heute\n proj  Esc?[2J hier\n\n'* ]]
 cache=$HOME/.local/state/lage/aufgaben.md
 [[ $(wc -l <"$cache") -eq 10 && $(grep -c $'\e' "$cache") -eq 0 && $(<"$cache") == *"Esc?[2J hier"* && $out != *Albert* && $(<"$cache") != *Projektzeile* ]]
 [[ $(LAGE_TASKS_URL=file://$t/lagebild.md COLUMNS=30 lage --dir "$HOME/w" --once | widest) -le 30 ]]
