@@ -145,7 +145,7 @@ Soft errors go into the digest. Only a crash triggers `OnFailure`, which is set 
 ## Open questions for the owner
 
 1. **Answered 2026-11-15:** yes, instant pushes may wake the owner at 04:00. They are sent right after the 04:00 run with priority high.
-2. Does anyone send mail as @mrija.org through another service (Google, Mailchimp, a newsletter tool)? That decides the SPF/DMARC steps in Part 1, not the build.
+2. **Answered 2026-11-15:** no other service is believed to send as @mrija.org. Before enforcing DMARC, confirm this with the Cloudflare DMARC reports.
 3. Not blocking: does the lab have a fixed public IP? If it does, add `from=` to the watch key later.
 4. Not blocking: is it okay with Mrija (DSGVO) that the NGO mail archive lives on your private lab? It already does today.
 
