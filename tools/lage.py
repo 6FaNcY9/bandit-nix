@@ -189,10 +189,14 @@ def claude_session_under(pid):
 
 
 def master_session(previous):
-    """(session, ended) for the master window: the session in it; else the previous one, ended; else (None, False)."""
+    """(session, ended) for the master window: the session in it; else (None, False), or, when the previous session is
+    gone (its file or its process), (previous, True). A master window that shows something else ends nothing."""
     pid = master_pid()
     session = claude_session_under(pid) if pid is not None else None
-    return (session, False) if session or previous is None else (previous, True)
+    if session or previous is None:
+        return session, False
+    gone = not any(s["sessionId"] == previous["sessionId"] and s["alive"] for s in sessions())
+    return (previous, True) if gone else (None, False)
 
 
 def items(entry):
@@ -499,7 +503,8 @@ def frame(session, ended, where):
     left = clean(left, width - len(stand) - 1)
     out = [left + " " * (width - len(left) - len(stand)) + stand]
     if session is None:
-        return out + [clean("kein Claude " + where, width)]
+        block = sitzungen_lines(None, width)
+        return out + [clean("kein Claude " + where, width)] + (["─" * width] + block if block else [])
     state, owner_ts = "", None
     if ended:
         lines = ["Sitzung beendet"]

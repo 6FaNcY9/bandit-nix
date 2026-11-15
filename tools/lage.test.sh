@@ -166,8 +166,11 @@ out=$(lage --dir "$HOME/w" --once);  [[ $out == "LAGE  w/b"* && $out != *"Sitzun
 out=$(lage --dir "$HOME/w/c" --once);  [[ $out == "LAGE  w/c"* && $out == *"Sitzung beendet"* ]]
 out=$(lage --dir "$HOME/wx/" --once);  [[ $out == "LAGE  wx"* ]]
 
-# test_none: nobody in the folder
-out=$(lage --dir "$HOME/empty" --once);  [[ $out == "LAGE"*"Stand 14:12"$'\n'"kein Claude in empty" ]]
+# test_none: nobody in the folder; sessions elsewhere are still listed, without the footer (there is nothing to add an idea to)
+fresh; out=$(lage --dir "$HOME/empty" --once);  [[ $out == "LAGE"*"Stand 14:12"$'\n'"kein Claude in empty" ]]
+session $$ $s1 src-a "$HOME/w"
+out=$(lage --dir "$HOME/empty" --once)
+[[ $(sed -n 2p <<<"$out") == "kein Claude in empty" && $(sed -n 3p <<<"$out") == ──────* && $(sed -n 4p <<<"$out") == SITZUNGEN && $out == *"src-a"* && $out != *"Idee eintragen"* ]]
 
 # test_no_session_files: files without sessionId or valid JSON are ignored
 fresh
@@ -702,6 +705,35 @@ CLIENTS='Hyprland is not running' out=$(lage --once); [[ $(sed -n 2p <<<"$out") 
 clients "$(cl 999999 kitty 3 0 0)"; out=$(lage --once); [[ $(sed -n 2p <<<"$out") == "kein Claude im Hauptfenster" ]]  # no own window
 clients "$(cl $$ cockpit-log 3 1700 0)" "$(cl $pid kitty 3 0 0 false true)" "$(cl $pid kitty 4 0 0)"
 out=$(lage --once); [[ $(sed -n 2p <<<"$out") == "kein Claude im Hauptfenster" ]]                                # no candidate
+
+# test_master_none_lists_sessions: no Claude in the master window, yet the other sessions are listed
+fresh; live; clients "$(cl $$ cockpit-log 3 1700 0)" "$(cl $pid kitty 3 0 0)"
+session $$ $s1 src-a "$HOME/w"
+out=$(lage --once);  [[ $(sed -n 2p <<<"$out") == "kein Claude im Hauptfenster" && $out == *$'\nSITZUNGEN\n'*src-a* ]]
+
+# test_master_switch: the master tab shows something else while the session lives: no "Sitzung beendet"; only a gone session is ended
+fresh; window "$t/bin/claude"; session $child $s1 src-a "$HOME/w"; session 999999 dddddddd-4 src-dead "$HOME/w"; live
+clients "$(cl $$ cockpit-log 3 1700 0)" "$(cl $wrapper kitty 3 0 0)"; in_claude=$CLIENTS
+clients "$(cl $$ cockpit-log 3 1700 0)" "$(cl $pid kitty 3 0 0)"; in_browser=$CLIENTS
+python3 -B - "$here" "$in_claude" "$in_browser" "$child" <<'EOF2'
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, sys.argv[1])
+import lage
+
+in_claude, in_browser, child = sys.argv[2:]
+os.environ["CLIENTS"] = in_claude
+session, ended = lage.master_session(None)
+assert session["sessionId"] == "aaaaaaaa-1" and not ended, (session, ended)
+os.environ["CLIENTS"] = in_browser
+assert lage.master_session(session) == (None, False)  # alive: only the view changed
+dead = next(s for s in lage.sessions() if s["sessionId"] == "dddddddd-4")
+assert lage.master_session(dead) == (dead, True)  # its process is gone
+(Path.home() / f".claude/sessions/{child}.json").unlink()
+assert lage.master_session(session) == (session, True)  # its file is gone
+EOF2
 
 # test_tmux: the kitty runs a tmux client; its pane holds the claude
 fresh; window "$t/bin/tmux" client; w1=$wrapper; tm=$child
