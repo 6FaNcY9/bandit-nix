@@ -627,17 +627,17 @@ sys.stdout = Tty()
 assert any("\x1b" in x and "wartet auf dich" in x for x in lage.frame(session, ended, "in w"))
 EOF
 
-# test_wartet: a line per other waiting session, with name, topic and what it waits for; the followed one never; only the first line of the text
+# test_wartet: a line per other waiting session, with its tab title and what it waits for; the followed one never; only the first line of the text
 fresh; session $$ $s1 src-a "$HOME/w"
 entry $s1 "$(assistant 14:12:00 '"tool_use"' '[{"type":"tool_use","name":"Bash","input":{"description":"x"}}]')"
 live; session $pid bbbbbbbb-2 src-c8 "$HOME/empty"
 entry bbbbbbbb-2 '{"type":"ai-title","aiTitle":"Bot-Menü","sessionId":"bbbbbbbb-2"}'
 entry bbbbbbbb-2 "$(assistant 14:12:00 '"end_turn"' '[{"type":"text","text":"Soll ich es ausrollen, oder erst morgen?\nzweite Zeile"}]')"
 out=$(COLUMNS=80 lage --dir "$HOME/w" --once)
-[[ $out == *$'\n! src-c8 wartet: Soll ich es ausrollen, oder erst morgen?\n'* && $out != *"zweite Zeile"* && $(grep -c ' wartet' <<<"$out") -eq 1 ]]
+[[ $out == *$'\n! Bot-Menü wartet: Soll ich es ausrollen, oder erst morgen?\n'* && $out != *"zweite Zeile"* && $out != *src-c8* && $(grep -c ' wartet' <<<"$out") -eq 1 ]]
 # a line wider than the window is cut with an ellipsis, never wrapped
-out=$(lage --dir "$HOME/w" --once);  line=$(grep src-c8 <<<"$out")
-[[ ${#line} -eq 46 && $line == *"…" && $line == "! src-c8 wartet: Soll ich es ausrollen, oder "* ]]
+out=$(lage --dir "$HOME/w" --once);  line=$(grep Bot-Menü <<<"$out")
+[[ ${#line} -eq 46 && $line == *"…" && $line == "! Bot-Menü wartet: Soll ich es ausrollen, ode"* ]]
 # the followed session waits too: that shows in its ▶ line, never as a waiting line
 entry $s1 "$(assistant 14:12:10 '"end_turn"' '[{"type":"text","text":"Fertig, ok?"}]')"
 out=$(COLUMNS=60 lage --dir "$HOME/w" --once)
@@ -645,7 +645,7 @@ out=$(COLUMNS=60 lage --dir "$HOME/w" --once)
 # helpers running: it does not wait, no line
 sub=$HOME/.claude/projects/p/bbbbbbbb-2/subagents; mkdir -p "$sub"
 echo '{}' >"$sub/agent-a1.meta.json"; echo '{}' >"$sub/agent-a1.jsonl"; touch -d 2026-11-15T14:10:00Z "$sub/agent-a1.jsonl"
-out=$(COLUMNS=60 lage --dir "$HOME/w" --once);  [[ $out != *"src-c8"* ]]
+out=$(COLUMNS=60 lage --dir "$HOME/w" --once);  [[ $out != *"Bot-Menü"* ]]
 
 # test_wartet_answered: a question the owner has answered is not shown as waited on again
 fresh; session $$ $s1 src-a "$HOME/w"
@@ -656,7 +656,7 @@ entry bbbbbbbb-2 '{"type":"user","timestamp":"2026-11-15T14:12:00Z","origin":{"k
 entry bbbbbbbb-2 "$(assistant 14:12:10 '"end_turn"' '[]')"
 out=$(lage --dir "$HOME/w" --once);  [[ $out == *"! src-b wartet"* && $out != *ausrollen* ]]
 
-# test_wartet_names: no name or an empty one → first 6 characters of the session id; topic and name are cut; control characters never reach the terminal
+# test_wartet_names: a /rename title beats Claude's title, the title beats the name; no title and no name → first 6 characters of the session id; title and name are cut; control characters never reach the terminal
 fresh; session $$ $s1 src-a "$HOME/w"
 live; echo '{"pid":'"$pid"',"sessionId":"deadbe12-3456","cwd":"/x","startedAt":1794700000000}' >"$HOME/.claude/sessions/$pid.json"
 live; session $pid cafe0000-1 "" "$HOME/empty"
@@ -664,8 +664,16 @@ entry cafe0000-1 '{"type":"ai-title","aiTitle":"Dies ist ein sehr langer Titel",
 live; session $pid evil0000-1 '\u001b[31mevil name that is long' "$HOME/empty"
 entry evil0000-1 '{"type":"ai-title","aiTitle":"a\u001b[0mb\u009bc","sessionId":"evil0000-1"}'
 out=$(COLUMNS=80 lage --dir "$HOME/w" --once)
-[[ $out == *"! deadbe wartet"* && $out == *"! cafe00 wartet"* && $out == *"! ?[31mevil n… wartet"* ]]
+[[ $out == *"! deadbe wartet"* && $out == *"! Dies ist ein sehr… wartet"* && $out == *"! a?[0mb?c wartet"* && $out != *cafe00* ]]
 [[ $out != *$'\x1b'* && $out != *$'\xc2\x9b'* && $(widest <<<"$out") -le 80 ]]
+fresh; session $$ $s1 src-a "$HOME/w"
+live; session $pid evil0000-2 '\u001b[31mevil name that is long' "$HOME/empty"
+live; session $pid renamed0-1 src-r "$HOME/empty"
+entry renamed0-1 '{"type":"ai-title","aiTitle":"Claude-Titel","sessionId":"renamed0-1"}'
+entry renamed0-1 '{"type":"custom-title","customTitle":"Mein Titel","sessionId":"renamed0-1"}'
+entry renamed0-1 '{"type":"ai-title","aiTitle":"Neuer Claude-Titel","sessionId":"renamed0-1"}'
+out=$(COLUMNS=80 lage --dir "$HOME/w" --once)
+[[ $out == *"! ?[31mevil n… wartet"* && $out == *"! Mein Titel wartet"* && $out != *Claude-Titel* && $out != *src-r* && $out != *$'\x1b'* ]]
 
 # test_dead_hidden: a session whose pid is gone has no line
 fresh; session $$ $s1 src-a "$HOME/w"
@@ -713,7 +721,7 @@ with f.open("a") as h:
     h.write(entry % ("end_turn", '{"type":"text","text":"Fertig?"}'))
 second = lage.wartet_lines("aaaaaaaa-1", 60)
 assert lage.transcripts["bbbbbbbb-2"] is tr and tr.pos == f.stat().st_size
-assert second == ["! src-b wartet: Fertig?"], second
+assert second == ["! Neu wartet: Fertig?"], second  # the title from the new bytes
 before = tr.pos
 lage.wartet_lines("aaaaaaaa-1", 60)
 assert tr.pos == before

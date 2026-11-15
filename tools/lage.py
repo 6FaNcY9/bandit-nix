@@ -25,7 +25,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import NamedTuple
 
-MARKERS = (b'"type":"assistant"', b'"type":"user"')
+MARKERS = (b'"type":"assistant"', b'"type":"user"', b'"type":"ai-title"', b'"type":"custom-title"')
 # tool name -> (German verb, input key); keys ending in _path show the file name only
 TOOLS = {
     "Bash": ("", "description"),
@@ -237,6 +237,7 @@ class Transcript:
         self.settled = None  # like last, for a session file without status: entries that are no turn leave it alone
         self.owner_ts = None
         self.last_text = None
+        self.titles = {}  # the tab title: "custom-title" (/rename) beats "ai-title"
         self.steps = deque(maxlen=8)  # LOG: (time, text, count), oldest first
 
     def step(self, ts, text):
@@ -275,6 +276,9 @@ class Transcript:
         if not isinstance(e, dict) or e.get("isSidechain"):
             return
         kind = e.get("type")
+        title = e.get("customTitle" if kind == "custom-title" else "aiTitle")
+        if kind in ("ai-title", "custom-title") and isinstance(title, str):
+            self.titles[kind] = title
         if kind not in ("assistant", "user"):
             return
         try:
@@ -364,8 +368,8 @@ def jetzt(tr, now, s):
 
 
 def wartet_lines(followed_sid, cols):
-    """A line per other session that waits for the owner, by name: name and what it waits for. More than 3: the first 2
-    and a +N weitere line."""
+    """A line per other session that waits for the owner: its tab title (else its name) and what it waits for. More
+    than 3: the first 2 and a +N weitere line."""
     now, rows = clock(), []
     for s in sessions():
         sid = s["sessionId"]
@@ -376,7 +380,8 @@ def wartet_lines(followed_sid, cols):
         if jetzt(tr, now, s)[1] != "wartet":
             continue
         name = s.get("name")
-        name = (clean(name, 12) if isinstance(name, str) else "") or clean(sid[:6], 6)
+        title = tr.titles.get("custom-title") or tr.titles.get("ai-title")
+        name = clean(title or "", 18) or (clean(name, 12) if isinstance(name, str) else "") or clean(sid[:6], 6)
         why = waiting_for(s) or tr.last_text
         rows.append((name, sid, clean(f"! {name} wartet" + (": " + why if why else ""), cols)))
     lines = [r[2] for r in sorted(rows)]
