@@ -7,11 +7,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1794707209,
-        "narHash": "sha256-uS/0X43DZ6dClsvoSWhJxlSguRnbmLaIgY4d4XkAd78=",
+        "lastModified": 1794713105,
+        "narHash": "sha256-PQDMeEXAKzgSLsKmAdvh/1VbLVE67EVCK/RWEjfi6HU=",
         "owner": "6FaNcY9",
         "repo": "bandit-craft",
-        "rev": "99e7c12b5629212f1eb785b0fa7857480a34d211",
+        "rev": "2eb99d62af0512df97da9b41def56103cf14aedb",
         "type": "github"
       },
       "original": {
@@ -234,6 +234,26 @@
         "type": "github"
       }
     },
+    "nix-index-database": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1794132860,
+        "narHash": "sha256-iGNtQnUZsi+v6/4NbtYr+dsmASa6GkzXtUcTpE8F3mE=",
+        "owner": "nix-community",
+        "repo": "nix-index-database",
+        "rev": "af9249ca33bc2efaae5d071e4c67ddef19dcb681",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "nix-index-database",
+        "type": "github"
+      }
+    },
     "nix-minecraft": {
       "inputs": {
         "flake-compat": "flake-compat",
@@ -390,6 +410,7 @@
         "bandit-craft": "bandit-craft",
         "fzf-tab-source": "fzf-tab-source",
         "home-manager": "home-manager",
+        "nix-index-database": "nix-index-database",
         "nix-minecraft": "nix-minecraft",
         "nixos-hardware": "nixos-hardware",
         "nixpkgs": "nixpkgs",
