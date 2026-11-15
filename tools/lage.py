@@ -570,11 +570,11 @@ def hook():
             shown = shown_file.read_text().split()
         except OSError:
             shown = []
-        # shortcut: ideas with the same text count as one, because only the hash of the line is kept; upgrade if that bites
+        # shortcut: ideas with the same text and time count as one, because only a hash is kept; upgrade if that bites
         new = {}
         for e in parse_board(text, clock().astimezone().date())[IDEAS]:
             line = "Neue Idee von vino: " + e.text
-            digest = hashlib.sha256(line.encode()).hexdigest()
+            digest = hashlib.sha256(f"{e.ts}|{line}".encode()).hexdigest()
             if e.done is False and digest not in shown:
                 new[digest] = line
         if new:

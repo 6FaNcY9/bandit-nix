@@ -604,6 +604,15 @@ shown=$HOME/.local/state/lage/$s1.shown
 lage --dir "$HOME/w" --idea 'zweite'
 [[ $(hook PostToolUse $s1 | context) == 'Neue Idee von vino: zweite' ]]
 
+# test_hook_idea_again: the same text typed again later is a new idea, even when the first one is ticked off
+fresh; session $$ $s1 src-a "$HOME/w"
+lage --dir "$HOME/w" --idea 'Cookie'
+[[ $(hook PostToolUse $s1 | context) == 'Neue Idee von vino: Cookie' ]]
+sed -i 's/\[ \] 2026-11-15 14:12/[x] 2026-11-15 14:12/' "$(bfile)"
+[[ -z $(hook PostToolUse $s1) ]]
+LAGE_NOW=2026-11-15T14:20:00Z lage --dir "$HOME/w" --idea 'Cookie'
+[[ $(hook PostToolUse $s1 | context) == 'Neue Idee von vino: Cookie' && -z $(hook PostToolUse $s1) ]]
+
 # test_hook_start_with_ideas: SessionStart gives the path, then the ideas not shown yet, one per line
 fresh; session $$ $s1 src-a "$HOME/w"
 lage --dir "$HOME/w" --idea 'eins'; lage --dir "$HOME/w" --idea 'zwei'
