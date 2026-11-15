@@ -77,10 +77,30 @@ while IFS= read -r line; do
 done < "$v/lagebild.md"
 [[ $(cat "$v/lagebild.md") != *"[["* ]] || fail "wiki link left"
 
+# .wartet.md: lagebild's Waiting rows uncut, each at most 280 characters.
+w=$v/.wartet.md
+[ -f "$w" ] || fail ".wartet.md missing"
+[ "$(head -1 "$w")" = "## Waiting for a human" ] || fail "wartet heading"
+[ "$(grep -c '^[0-9]*\. ' "$w")" = "$(sed -n '/^## Waiting/,/^## Projects/p' "$v/lagebild.md" | grep -c '^[0-9]*\. ')" ] || fail "wartet row count"
+grep -qx "1\. zz (firma): $(printf 'y%.0s' {1..120}) (Albert) LATE 2000-01-05" "$w" || fail "wartet row cut"
+grep -q '^[0-9]*\. aiia (firma): Ship the form / fix x\{100\} (owner)$' "$w" || fail "aiia row cut in wartet"
+printf -- '- [ ] %s (Albert, 2000-01-05)\n' "$(printf 'y%.0s' {1..300})" > "$f/projects/zz.md"
+run > /dev/null
+first=$(grep -m1 '^1\. ' "$w")
+[[ $first == *"… (Albert) LATE 2000-01-05" && ${#first} -le 280 ]] || fail "long wartet row: ${#first}"
+while IFS= read -r line; do [ "${#line}" -le 280 ] || fail "wartet line too long"; done < "$w"
+[[ $(cat "$f/.wartet.md") != *CANARY* ]] || fail "vino content in firma's wartet"
+e=$t/empty
+mkdir -p "$e/projects"
+printf -- '- [ ] x (claude)\n' > "$e/projects/x.md"
+MEMORY_INDEX_DST=$e MEMORY_INDEX_SOURCES="empty=$e" MEMORY_INDEX_SKIP= run > /dev/null || fail "empty run failed"
+[ "$(cat "$e/.wartet.md")" = "## Waiting for a human"$'\n'"Nothing." ] || fail "empty wartet: $(cat "$e/.wartet.md")"
+
 # A second run with nothing changed rewrites nothing.
-touch -d '2000-01-01' "$v/lagebild.md"
+touch -d '2000-01-01' "$v/lagebild.md" "$v/.wartet.md"
 out=$(run)
 [ -z "$out" ] || fail "second run wrote: $out"
 [ "$(stat -c %Y "$v/lagebild.md")" = "$(date -d 2000-01-01 +%s)" ] || fail "unchanged lagebild touched"
+[ "$(stat -c %Y "$v/.wartet.md")" = "$(date -d 2000-01-01 +%s)" ] || fail "unchanged wartet touched"
 [ -z "$(find "$t" -name '.lagebild.*')" ] || fail "temp file left behind"
 echo "index.test.sh: ok"
