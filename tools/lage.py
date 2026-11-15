@@ -725,7 +725,7 @@ def frame(session, ended, where, full=False, seen=frozenset()):
     gaps = 2 + on + bool(shown)  # between header, ▶ block, tasks, LOG and NEU
     gap = [""] if used + gaps <= room else []
     used += gaps if gap else 0
-    box = task_lines(width, min(6, room - used)) if on else []
+    box = task_lines(width, min(10, room - used)) if on else []
     used += max(len(box) - 1, 0)
     if shown:
         shown += min(len(steps) - shown, room - used)
