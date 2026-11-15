@@ -28,6 +28,13 @@ tool() { # tool <name> <input json>: the newest entry is a tool call, 20 s old
   out=$(lage --dir "$HOME/w" --once)
 }
 
+board() { mkdir -p "$HOME/.local/state/lage"; cat >"$HOME/.local/state/lage/$s1.md"; } # board: stdin becomes the board of $s1
+bfile() { echo "$HOME/.local/state/lage/$s1.md"; }
+owner() { # owner <time>: an owner prompt at that time today
+  entry $s1 '{"type":"user","timestamp":"2026-11-15T'"$1"'Z","origin":{"kind":"human"},"message":{"content":"los"}}'
+}
+widest() { python3 -c 'import sys; print(max(len(l) for l in sys.stdin.read().split("\n")))'; }
+
 # test_tool_use
 fresh; session $$ $s1 src-a "$HOME/w"
 entry $s1 "$(assistant 14:12:00 '"tool_use"' '[{"type":"tool_use","name":"Bash","input":{"description":"prüft die Webseite"}}]')"
@@ -136,6 +143,243 @@ out=$(lage --dir "$HOME/w" --once);  [[ $out == *"JETZT ▶ Protokoll nicht gefu
 # test_home_cut: $HOME/src/ is cut off the header like $HOME/
 fresh; session $$ $s1 src-a "$HOME/src/sec/ctf/box1"
 out=$(lage --dir "$HOME/src/sec" --once);  [[ $out == "LAGE  sec/ctf/box1"* ]]
+
+# test_board_path: one board per session; inside a lab folder one board per lab folder
+fresh; session $$ $s1 src-a "$HOME/w"
+[[ $(lage --dir "$HOME/w" --idea 'A' && ls "$HOME/.local/state/lage/") == $s1.md ]]
+[[ $(cat "$(bfile)") == $'## Funde\n## Ungeprüft\n## Für dich\n## Deine Ideen\n- [ ] 2026-11-15 14:12 A' ]]
+lage --dir "$HOME/w" --idea 'B'
+[[ $(tail -n 2 "$(bfile)") == $'- [ ] 2026-11-15 14:12 A\n- [ ] 2026-11-15 14:12 B' ]]
+for d in ctf/box1/sub re/a live/b/c/d; do
+  fresh; session $$ bbbbbbbb-2 src-b "$HOME/src/sec/$d"
+  lab=$HOME/src/sec/$(cut -d/ -f1-2 <<<"$d")
+  lage --dir "$HOME/src/sec/$d" --idea 'Cookie anschauen'
+  grep -qx -- '- \[ \] 2026-11-15 14:12 Cookie anschauen' "$lab/.claude/lage.md"
+  [[ ! -e $HOME/.local/state && $(find "$HOME" -name lage.md) == "$lab/.claude/lage.md" ]]
+done
+# the lab folder itself finds the same session; its board keeps growing
+lage --dir "$HOME/src/sec/live/b" --idea 'Zwei'
+[[ $(grep -c . "$HOME/src/sec/live/b/.claude/lage.md") -eq 6 ]]
+
+# test_not_a_lab (Review Focus 5): lookalike folders and the kind folders themselves keep the board in ~/.local/state
+for d in ctf-old/x live-notes ctf live re-old/a; do
+  fresh; session $$ cccccccc-3 src-c "$HOME/src/sec/$d"
+  lage --dir "$HOME/src/sec/$d" --idea 'B'
+  [[ $(find "$HOME" -name "*.md") == "$HOME/.local/state/lage/cccccccc-3.md" && ! -e $HOME/src ]]
+done
+
+# test_idea_cleaned: empty text does nothing, control characters and long text are cut, no session is an error
+fresh; session $$ $s1 src-a "$HOME/w"
+lage --dir "$HOME/w" --idea '   '; lage --dir "$HOME/w" --idea ''
+[[ ! -e $HOME/.local/state ]]
+lage --dir "$HOME/w" --idea $'x\e[2Jy\nzweite'
+[[ $(tail -n 1 "$(bfile)") == '- [ ] 2026-11-15 14:12 x?[2Jy' && $(<"$(bfile)") != *$'\e'* ]]
+lage --dir "$HOME/w" --idea "$(printf 'a%.0s' {1..300})"
+python3 -c 'import sys; l = open(sys.argv[1], encoding="utf-8").read().splitlines()[-1]; sys.exit(len(l) != 23 + 200 or not l.endswith("…"))' "$(bfile)"
+fresh; rc=0
+lage --dir "$HOME/empty" --idea 'x' 2>"$t/err" || rc=$?
+[[ $rc -eq 1 && $(<"$t/err") == *"kein Claude in empty"* && ! -e $HOME/.local/state ]]
+
+# test_idea_keeps_file: add_idea changes one line and nothing else
+fresh; session $$ $s1 src-a "$HOME/w"
+board <<'EOF'
+## Funde
+- 2026-11-15 14:02 ! Admin-Login ohne Sperre
+- 13:50 Port 22 offen
+## Ungeprüft
+- 14:05 UDP nicht gescannt
+## Für dich
+- 14:06 Ist 10.10.10.7 im Scope?
+## Deine Ideen
+- [ ] 14:10 Cookie anschauen
+- [x] 13:40 robots.txt lesen → nichts drin
+EOF
+cp "$(bfile)" "$t/before"
+lage --dir "$HOME/w" --idea 'Neu'
+[[ $(diff "$t/before" "$(bfile)" | grep -c '^[<>]') -eq 1 && $(tail -n 1 "$(bfile)") == '- [ ] 2026-11-15 14:12 Neu' ]]
+# the ideas section in the middle: the idea goes below its last line; blank separator and next heading stay
+printf '## Deine Ideen\n- [ ] 14:10 eins\n\n## Funde\n- 14:02 x\n' | board
+lage --dir "$HOME/w" --idea 'zwei'
+[[ $(<"$(bfile)") == $'## Deine Ideen\n- [ ] 14:10 eins\n- [ ] 2026-11-15 14:12 zwei\n\n## Funde\n- 14:02 x' ]]
+# no ideas section and no final newline: the heading is added
+printf '## Funde\n- 14:02 x' | board
+lage --dir "$HOME/w" --idea 'drei'
+[[ $(<"$(bfile)") == $'## Funde\n- 14:02 x\n## Deine Ideen\n- [ ] 2026-11-15 14:12 drei' ]]
+# an empty file; bytes that are not UTF-8 and CRLF line ends survive
+: | board
+lage --dir "$HOME/w" --idea 'vier'
+[[ $(<"$(bfile)") == $'## Deine Ideen\n- [ ] 2026-11-15 14:12 vier' ]]
+printf '## Funde\n- \xff alt\r\n## Deine Ideen\n' | board
+cp "$(bfile)" "$t/before"
+lage --dir "$HOME/w" --idea 'fünf'
+[[ $(diff -a "$t/before" "$(bfile)" | grep -c '^[<>]') -eq 1 ]] && grep -aq alt "$(bfile)"
+[[ $(ls "$HOME/.local/state/lage/") == $s1.md ]]    # no temp file left behind
+
+# test_neu: the owner's last prompt marks newer entries; the same minute counts (Review Focus 3)
+fresh; session $$ $s1 src-a "$HOME/w"
+owner 14:02:40
+board <<'EOF'
+## Funde
+- 2026-11-15 14:02 ! Admin-Login ohne Sperre
+- 2026-11-15 13:50 Port 22 offen
+## Für dich
+- 14:09 Ist 10.10.10.7 im Scope?
+EOF
+out=$(lage --dir "$HOME/w" --once)
+[[ $out == *"FUNDE  2  (1 neu)"* && $out == *"NEU !  14:02 Admin-Login"* && $out == *"UNGEPRÜFT  0"* && $out == *"FÜR DICH  1  (1 neu)"* && $out == *"DEINE IDEEN  0 offen"* ]]
+[[ $(grep '13:50 Port 22 offen' <<<"$out") == "    ·  13:50 Port 22 offen" ]]
+[[ $out == *"NEU ·  14:09 Ist 10.10.10.7 im Scope?"* && $(grep -c NEU <<<"$out") -eq 2 ]]
+# two rule lines frame the board below JETZT; every line fits
+[[ $(grep -c '^──────' <<<"$out") -eq 2 && $(sed -n 4p <<<"$out") == ──────* && $(sed -n 5p <<<"$out") == "FUNDE  2  (1 neu)" && $(widest <<<"$out") -le 46 ]]
+# no owner prompt in the transcript: nothing is NEU
+fresh; session $$ $s1 src-a "$HOME/w"
+printf '## Funde\n- 14:02 ! x\n' | board
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *"FUNDE  1"$'\n'* && $out != *NEU* ]]
+
+# test_peer_is_not_owner: helper mail and notifications do not move NEU
+fresh; session $$ $s1 src-a "$HOME/w"
+owner 14:02:40
+entry $s1 '{"type":"user","timestamp":"2026-11-15T14:11:00Z","origin":{"kind":"peer"},"message":{"content":"mail"}}'
+entry $s1 '{"type":"user","timestamp":"2026-11-15T14:11:30Z","origin":{"kind":"task-notification"},"message":{"content":"n"}}'
+printf '## Funde\n- 14:05 spaeter\n- 14:01 frueher\n' | board
+out=$(lage --dir "$HOME/w" --once)
+[[ $out == *"FUNDE  2  (1 neu)"* && $out == *"NEU ·  14:05 spaeter"* && $out != *"NEU ·  14:01"* ]]
+owner 14:11:50     # a real prompt does move it
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *"FUNDE  2"$'\n'* && $out != *NEU* ]]
+
+# test_older: what does not fit collapses; each section gets max(2, (LINES - 19) // 4) lines
+fresh; session $$ $s1 src-a "$HOME/w"
+{ echo '## Funde'; for m in 00 01 02 03 04 05 06; do echo "- 13:$m Fund $m"; done; } | board
+out=$(lage --dir "$HOME/w" --once)
+funde=$(sed -n '/^FUNDE/,/^UNGEPRÜFT/p' <<<"$out")
+[[ $(grep -c 'Fund 0' <<<"$funde") -eq 2 && $funde == *"13:06 Fund 06"*"13:05 Fund 05"*$'\n+5 ältere\n'* && $funde != *"Fund 04"* ]]
+out=$(LINES=10 lage --dir "$HOME/w" --once);  [[ $(grep -c 'Fund 0' <<<"$out") -eq 2 && $out == *$'\n+5 ältere\n'* ]]
+out=$(LINES=31 lage --dir "$HOME/w" --once);  [[ $(grep -c 'Fund 0' <<<"$out") -eq 3 && $out == *$'\n+4 ältere\n'* ]]
+out=$(LINES=47 lage --dir "$HOME/w" --once);  [[ $(grep -c 'Fund 0' <<<"$out") -eq 7 && $out != *ältere* ]]
+
+# test_old_day: an older day shows as DD.MM.
+fresh; session $$ $s1 src-a "$HOME/w"
+printf '## Funde\n- 2026-11-14 09:00 Gestern\n- 2026-11-15 09:00 Heute\n' | board
+out=$(lage --dir "$HOME/w" --once)
+[[ $out == *"·  09:00 Heute"*"·  14.11. Gestern"* && $out != *"15.11."* ]]    # newest first
+
+# test_wrap: long entries wrap to the text column; one longer than its section is cut
+fresh; session $$ $s1 src-a "$HOME/w"
+long=$(printf 'wort%02d ' {1..16})
+printf '## Funde\n- 14:02 ! %s\n- 13:00 kurz\n## Deine Ideen\n- [ ] %s\n' "$long" "$long" | board
+out=$(LINES=47 lage --dir "$HOME/w" --once)
+[[ $(widest <<<"$out") -le 46 && $out == *"    !  14:02 wort01 "* && $(grep -c '^             wort05 ' <<<"$out") -eq 2 && $(grep -c wort16 <<<"$out") -eq 2 ]]
+[[ $out == *"·        [ ] wort01 "* ]]
+out=$(lage --dir "$HOME/w" --once)
+[[ $(widest <<<"$out") -le 46 && $out == *"wort01 "* && $out == *"…"$'\n'* && $out == *$'\n+1 ältere\n'* && $out != *wort16* ]]
+# a dated row indents one column further
+fresh; session $$ $s1 src-a "$HOME/w"
+printf '## Funde\n- 2026-11-14 14:02 %s\n' "$long" | board
+out=$(LINES=47 lage --dir "$HOME/w" --once)
+[[ $out == *"·  14.11. wort01 "* && $out == *$'\n              wort05 '* ]]
+
+# test_ideas: open ideas first, then done ones; ideas are never NEU
+fresh; session $$ $s1 src-a "$HOME/w"
+owner 12:00:00
+printf '## Deine Ideen\n- [x] 14:11 robots lesen → nichts drin\n- [ ] 13:00 Cookie anschauen\n- Ohne Kästchen\n' | board
+out=$(LINES=47 lage --dir "$HOME/w" --once)
+[[ $out == *"DEINE IDEEN  2 offen"* && $out != *NEU* ]]
+[[ $out == *"·  13:00 [ ] Cookie anschauen"*"[ ] Ohne Kästchen"*"·  14:11 [x] robots lesen → nichts drin"* ]]
+
+# test_odd_board (Review Focus 4): hand-edited boards never crash and never invent NEU
+fresh; session $$ $s1 src-a "$HOME/w"
+owner 14:02:40
+: | board
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *"FUNDE  0"* && $out == *"DEINE IDEEN  0 offen"* ]]
+printf '## Notizen\n- Fund im falschen Abschnitt\n' | board
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *"FUNDE  0"* && $out != *falschen* ]]
+printf '## Funde\n- kein Zeitstempel\n- 13:40 nur Uhrzeit\n- 25:99 kaputt\nfreie Zeile\n- \n-\n## Funde zwei\n- anderes\n' | board
+out=$(LINES=47 lage --dir "$HOME/w" --once)
+[[ $out == *"FUNDE  3"$'\n'* && $out != *NEU* && $out == *"·  13:40 nur Uhrzeit"*"kein Zeitstempel"*"25:99 kaputt"* && $out != *freie* && $out != *anderes* ]]
+printf '## Funde\n- 14:30 bare Uhrzeit ist heute\n' | board
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *"FUNDE  1  (1 neu)"* && $out == *"NEU ·  14:30 bare"* ]]
+printf '## Funde\r\n- 14:30 ! mit CRLF\r\n' | board
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *"NEU !  14:30 mit CRLF"* ]]
+printf '## Funde\n- 14:30 x\xff\xfe\x1b[2Jy\n' | board
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *"FUNDE  1"* && $out != *$'\e'* ]]
+rm "$(bfile)"; mkdir "$(bfile)"                    # a directory where the board should be
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *"FUNDE  0"* ]]
+rc=0; lage --dir "$HOME/w" --idea 'x' 2>"$t/err" || rc=$?;  [[ $rc -eq 1 && $(<"$t/err") == "lage: "* ]]
+rmdir "$(bfile)"; printf '## Funde\n- 0001-01-01 10:00 uralt\n- 14:30 jung\n' >"$(bfile)"
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *"jung"*"01.01. uralt"* ]]       # a silly date neither crashes nor leads
+
+# test_board_unit: parse_board and the highlight of ! rows, which only a terminal shows
+fresh; session $$ $s1 src-a "$HOME/w"
+python3 -B - "$here" <<'EOF'
+import io
+import sys
+from datetime import date, datetime, timezone
+
+sys.path.insert(0, sys.argv[1])
+import lage
+
+text = "## Funde\n- 2026-11-15 14:02 ! A\n- 9:05 B\n## Deine Ideen\n- [x] 13:40 C\n- [ ] D\n## Foo\n- E\n"
+b = lage.parse_board(text, date(2026, 11, 15))
+assert list(b) == ["Funde", "Ungeprüft", "Für dich", "Deine Ideen"], list(b)
+assert b["Funde"] == [lage.Entry(datetime(2026, 11, 15, 14, 2), True, None, "A"), lage.Entry(datetime(2026, 11, 15, 9, 5), False, None, "B")], b["Funde"]
+assert b["Deine Ideen"] == [lage.Entry(datetime(2026, 11, 15, 13, 40), False, True, "C"), lage.Entry(None, False, False, "D")], b["Deine Ideen"]
+assert b["Ungeprüft"] == [] and b["Für dich"] == []
+owner = datetime(2026, 11, 15, 14, 2, 40, tzinfo=timezone.utc)
+plain = lage.board_lines(b, owner, 46, 27)
+assert not any("\x1b" in x for x in plain), plain
+
+
+class Tty(io.StringIO):
+    def isatty(self):
+        return True
+
+
+sys.stdout = Tty()
+lit = lage.board_lines(b, owner, 46, 27)
+assert [x for x in lit if "\x1b" in x] == [x for x in lit if "A" in x and "NEU" in x], lit
+assert [lage.RESET in x for x in lit if "\x1b" in x] == [True]
+EOF
+
+# test_idea_key: key i on a terminal asks for an idea (needs a pty)
+fresh; session $$ $s1 src-a "$HOME/w"
+python3 -B - "$here/lage.py" "$HOME/w" "$(bfile)" <<'EOF'
+import os
+import pty
+import select
+import signal
+import sys
+import time
+
+prog, folder, board = sys.argv[1:]
+pid, fd = pty.fork()
+if pid == 0:
+    os.execvp("python3", ["python3", prog, "--dir", folder])
+seen = b""
+
+
+def wait_for(text):
+    global seen
+    end = time.time() + 8
+    while text not in seen and time.time() < end:
+        if select.select([fd], [], [], 0.2)[0]:
+            seen += os.read(fd, 4096)
+    assert text in seen, (text, seen[-300:])
+
+
+wait_for("i = Idee eintragen".encode())
+time.sleep(0.3)
+os.write(fd, b"x")  # other keys do nothing
+os.write(fd, b"i")
+wait_for(b"Idee: ")
+os.write(fd, b"Cookie anschauen\n")
+wait_for(b"Cookie anschauen\r\n")  # echoed: the terminal was restored for input()
+end = time.time() + 5
+while not os.path.exists(board) and time.time() < end:
+    time.sleep(0.1)
+assert open(board, encoding="utf-8").read().splitlines()[-1] == "- [ ] 2026-11-15 14:12 Cookie anschauen"
+os.kill(pid, signal.SIGINT)
+assert os.waitpid(pid, 0)[1] == 0
+EOF
 
 # test_incremental: update() takes only complete new lines; the highlight appears on a terminal only
 fresh; session $$ $s1 src-a "$HOME/w"

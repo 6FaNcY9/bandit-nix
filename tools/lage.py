@@ -2,17 +2,23 @@
 """lage: a terminal view of what a Claude Code session is doing right now.
 
 lage [--dir DIR] [--once]   follow the newest Claude session started in DIR
-Everything is read from ~/.claude; nothing is written there.
+lage [--dir DIR] --idea TEXT   add an owner idea to that session's board
+Everything is read from ~/.claude; nothing is written there. The only file lage writes is the board.
 """
 import argparse
 import json
 import os
 import re
+import select
 import shutil
 import sys
+import termios
+import textwrap
 import time
-from datetime import datetime, timezone
+import tty
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import NamedTuple
 
 MARKERS = (b'"type":"assistant"', b'"type":"user"', b'"type":"ai-title"')
 # tool name -> (German verb, input key); keys ending in _path show the file name only
@@ -29,6 +35,14 @@ TOOLS = {
     "Task": ("Helfer: ", "description"),
 }
 HIGHLIGHT, RESET = "\x1b[1;7m", "\x1b[0m"
+HEADINGS = ("Funde", "Ungeprüft", "Für dich", "Deine Ideen")
+IDEAS = HEADINGS[3]
+LABS = ("re", "ctf", "live")
+# - [ ] / [x] (ideas only), optional [YYYY-MM-DD ]H:MM, optional !, text
+ENTRY = re.compile(
+    r"-\s+(?:\[(?P<box>[ xX])\]\s+)?(?:(?P<stamp>(?:(?P<date>\d{4}-\d\d-\d\d)\s+)?(?P<hm>\d{1,2}:\d\d))\s+)?(?:(?P<bang>!)\s+)?(?P<text>.*)",
+    re.ASCII,
+)
 transcripts = {}  # sessionId -> Transcript, so each refresh reads only new bytes
 
 
@@ -53,6 +67,10 @@ def parse_ts(s):
 
 def cols():
     return shutil.get_terminal_size().columns
+
+
+def rows():
+    return shutil.get_terminal_size().lines
 
 
 def short(path):
@@ -215,6 +233,126 @@ def pick_by_dir(folder):
     return None, False
 
 
+class Entry(NamedTuple):
+    ts: datetime | None  # local time as written on the board, naive
+    important: bool
+    done: bool | None  # None outside Deine Ideen
+    text: str
+
+
+def board_path(session_id, start_cwd):
+    """<lab folder>/.claude/lage.md for a start folder inside ~/src/sec/{re,ctf,live}/<name>/, else a file in ~/.local/state/lage."""
+    home, here = Path.home(), Path(os.path.abspath(start_cwd))
+    for kind in LABS:
+        base = home / "src/sec" / kind
+        if here.is_relative_to(base) and here != base:
+            return base / here.relative_to(base).parts[0] / ".claude/lage.md"
+    return home / ".local/state/lage" / (session_id + ".md")
+
+
+def heading(line):
+    m = re.match(r"#+\s*(.*)", line.strip())
+    return m.group(1).strip() if m else None
+
+
+def parse_board(text, today):
+    """Entries by section. Unknown headings, lines before the first heading and lines that are no entry are dropped."""
+    board = {h: [] for h in HEADINGS}
+    section = None
+    for line in text.splitlines():
+        name = heading(line)
+        if name is not None:
+            section = name if name in board else None
+            continue
+        m = ENTRY.match(line.strip())
+        if section is None or not m:
+            continue
+        body = clean(m["text"], 500)
+        ts = None
+        if m["stamp"]:
+            try:
+                ts = datetime.fromisoformat(f"{m['date'] or today.isoformat()}T{m['hm'].zfill(5)}")
+            except ValueError:
+                body = clean(m["stamp"] + " " + body, 500)  # not a time after all
+        if body:
+            done = m["box"] in ("x", "X") if section == IDEAS else None
+            board[section].append(Entry(ts, bool(m["bang"]), done, body))
+    return board
+
+
+def add_idea(path, text, now):
+    """Append '- [ ] YYYY-MM-DD HH:MM text' as the last line of Deine Ideen; the rest of the file stays as it is."""
+    text = clean(text, 200)
+    if not text:
+        return
+    try:
+        old = path.read_text(encoding="utf-8", errors="surrogateescape")
+    except FileNotFoundError:
+        old = "".join(f"## {h}\n" for h in HEADINGS)
+    lines = (old if old.endswith("\n") or not old else old + "\n").split("\n")[:-1]
+    new = f"- [ ] {now.astimezone():%Y-%m-%d %H:%M} {text}"
+    start = next((i for i, x in enumerate(lines) if heading(x) == IDEAS), None)
+    if start is None:
+        lines += ["## " + IDEAS, new]
+    else:
+        end = start + 1
+        while end < len(lines) and heading(lines[end]) is None:
+            end += 1
+        while end > start + 1 and not lines[end - 1].strip():
+            end -= 1  # blank lines before the next heading stay below the idea
+        lines.insert(end, new)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_text("\n".join(lines) + "\n", encoding="utf-8", errors="surrogateescape")
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def board_lines(board, owner_ts, cols, rows):
+    """The four sections: head, newest entries that fit, then one +N ältere line."""
+    today = clock().astimezone().date()
+    cut = owner_ts.astimezone().replace(tzinfo=None, second=0, microsecond=0) if owner_ts else None
+    space = max(2, (rows - 19) // 4)
+    lit = sys.stdout.isatty()
+
+    def neu(e):
+        return cut is not None and e.done is None and e.ts is not None and e.ts >= cut
+
+    out = []
+    for h in HEADINGS:
+        # open ideas first, then newest first, entries without a time last
+        entries = sorted(board.get(h, []), key=lambda e: (bool(e.done), e.ts is None, datetime.max - e.ts if e.ts else timedelta()))
+        n = sum(map(neu, entries))
+        if h == IDEAS:
+            out.append(f"{h.upper()}  {sum(not e.done for e in entries)} offen")
+        else:
+            out.append(f"{h.upper()}  {len(entries)}" + (f"  ({n} neu)" if n else ""))
+        used = shown = 0
+        for e in entries:
+            when = "     " if e.ts is None else e.ts.strftime("%H:%M" if e.ts.date() == today else "%d.%m.")
+            head = f"{'NEU ' if neu(e) else '    '}{'!' if e.important else '·'}  {when} "
+            text = e.text if e.done is None else ("[x] " if e.done else "[ ] ") + e.text
+            wrapped = textwrap.wrap(text, max(cols - len(head), 1))
+            lines = [head + wrapped[0]] + [" " * len(head) + x for x in wrapped[1:]]
+            if used + len(lines) > space:
+                if used:
+                    break
+                lines = lines[:space]  # even the newest entry never gets more than its share
+                lines[-1] = lines[-1][:-1] + "…"
+            out += [HIGHLIGHT + x + RESET for x in lines] if lit and e.important else lines
+            used += len(lines)
+            shown += 1
+        if shown < len(entries):
+            out.append(f"+{len(entries) - shown} ältere")
+    return out
+
+
+def board_of(session):
+    return board_path(session["sessionId"], str(session.get("cwd")))
+
+
 def frame(session, ended, where):
     """The whole pane as lines. where finishes the sentence "kein Claude ", e.g. "in w"."""
     n, width = clock(), cols()
@@ -224,24 +362,64 @@ def frame(session, ended, where):
     out = [left + " " * (width - len(left) - len(stand)) + stand]
     if session is None:
         return out + [clean("kein Claude " + where, width)]
-    state = ""
+    state, owner_ts = "", None
     if ended:
         lines = ["Sitzung beendet"]
     else:
         tr = transcripts.setdefault(session["sessionId"], Transcript(session["sessionId"]))
         tr.update()
         lines, state = jetzt(tr, n) if tr.path else (["Protokoll nicht gefunden"], "")
+        owner_ts = tr.owner_ts
     if state == "wartet" and sys.stdout.isatty():
         lines[0] = HIGHLIGHT + lines[0] + RESET
-    return out + ["JETZT ▶ " + lines[0]] + ["        " + x for x in lines[1:]]
+    try:
+        text = board_of(session).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        text = ""
+    rule = "─" * width
+    out += ["JETZT ▶ " + lines[0]] + ["        " + x for x in lines[1:]] + [rule]
+    return out + board_lines(parse_board(text, n.astimezone().date()), owner_ts, width, rows()) + [rule, "i = Idee eintragen"]
+
+
+def wait(seconds, session):
+    """Sleep. On a terminal, the key i asks for an idea and adds it to the board; other keys do nothing."""
+    if not sys.stdin.isatty():
+        time.sleep(seconds)
+        return
+    fd, saved = sys.stdin.fileno(), termios.tcgetattr(sys.stdin.fileno())
+    key, end = b"", time.monotonic() + seconds
+    try:
+        tty.setcbreak(fd, termios.TCSANOW)
+        while key != b"i" and (left := end - time.monotonic()) > 0:
+            if select.select([fd], [], [], left)[0]:
+                key = os.read(fd, 1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, saved)
+    if key == b"i" and session is not None:
+        try:
+            add_idea(board_of(session), input("Idee: "), clock())
+        except (EOFError, KeyboardInterrupt, OSError):
+            pass  # cancelled, or the board is not writable: the next refresh shows no new idea
 
 
 def main():
     ap = argparse.ArgumentParser(prog="lage", description="Show what a Claude Code session is doing now.")
     ap.add_argument("--dir", default=os.getcwd(), help="follow the session started in this folder (default: cwd)")
     ap.add_argument("--once", action="store_true", help="print one frame and exit")
+    ap.add_argument("--idea", metavar="TEXT", help="add an idea to the board of the followed session and exit")
     args = ap.parse_args()
     where = "in " + short(os.path.abspath(args.dir))
+    if args.idea is not None:
+        session, _ = pick_by_dir(args.dir)
+        if session is None:
+            print("lage: kein Claude " + where, file=sys.stderr)
+            return 1
+        try:
+            add_idea(board_of(session), args.idea, clock())
+        except OSError as e:
+            print("lage:", e, file=sys.stderr)
+            return 1
+        return 0
     try:
         while True:
             session, ended = pick_by_dir(args.dir)
@@ -252,7 +430,7 @@ def main():
             # home, then each line cleared to its end, then everything below: no flicker
             sys.stdout.write("\x1b[H" + "".join(x + "\x1b[K\n" for x in lines) + "\x1b[J")
             sys.stdout.flush()
-            time.sleep(2)
+            wait(2, session)
     except KeyboardInterrupt:
         return 0
 
