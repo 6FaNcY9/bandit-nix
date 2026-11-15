@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="de">
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Gedächtnis</title>
 <style>
   :root { --bg:#f6f3ea; --fg:#1d1b16; --dim:#5f5a4f; --card:#fffdf7; --line:#d8d1c0; --acc:#b4541a; --late:#b3261e; --ok:#2e7d32; --doing:#1f5fa8; }
@@ -42,11 +42,11 @@
   .tcard .moves button { font-size:16px; padding:4px 10px; }
   svg { width:100%; height:75vh; background:var(--card); border:1px solid var(--line); border-radius:12px; touch-action:none; user-select:none; }
   svg text { fill:var(--fg); font-size:var(--fs); pointer-events:none; text-anchor:middle; }
-  svg text.grp { font-size:var(--gs); font-weight:700; fill:var(--acc); }
+  svg text.hub { fill:var(--dim); font-style:italic; }
   svg.far text.lbl { display:none; }
-  svg line { stroke:var(--line); stroke-width:3; }
-  svg rect { fill:none; stroke:var(--line); stroke-width:3; }
-  svg circle { cursor:pointer; stroke:var(--card); stroke-width:3; }
+  svg line { stroke:var(--line); stroke-width:2; vector-effect:non-scaling-stroke; }
+  svg circle { cursor:pointer; stroke:var(--card); stroke-width:2; vector-effect:non-scaling-stroke; }
+  svg circle.late { stroke:var(--late); stroke-width:4; }
   .task { text-decoration:none; color:var(--fg); text-align:left; }
   input { font:inherit; color:var(--fg); background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:6px 10px; width:min(100%, 26em); min-height:44px; }
   form { margin:8px 0; }
@@ -60,38 +60,58 @@
   ol.wait { padding-left:28px; } .wait .late, .card .late { color:var(--late); font-weight:600; }
   summary { cursor:pointer; min-height:32px; }
   #stores { margin-right:12px; } #stores a[aria-current] { font-weight:700; text-decoration:none; }
+  #tabs { display:flex; flex-wrap:wrap; gap:8px; }
+  #q { width:min(100%, 14em); }
+  mark { background:var(--acc); color:var(--bg); border-radius:3px; padding:0 2px; }
+  .tick { min-height:44px; min-width:44px; padding:0 10px; margin-right:6px; }
+  ol.wait li, ul.feed li { margin:0 0 6px; }
+  ul.feed { list-style:none; padding-left:0; }
+  /* Phone: search across the top, the views as a bar at the bottom within thumb reach. */
+  @media (max-width: 760px) {
+    body { padding-bottom:84px; }
+    header h1 { font-size:20px; }
+    #q { flex:1 1 100%; width:100%; }
+    #tabs { position:fixed; left:0; right:0; bottom:0; z-index:5; display:grid; grid-template-columns:repeat(5, 1fr); gap:4px;
+      padding:6px 6px calc(6px + env(safe-area-inset-bottom)); background:var(--card); border-top:1px solid var(--line); }
+    #tabs button { font-size:15px; padding:4px 2px; }
+  }
 </style>
 <header>
   <h1>Gedächtnis</h1>
   <nav id="stores" class="dim" aria-label="Speicher"></nav>
-  <button data-view="status">Übersicht</button>
-  <button data-view="board">Aufgaben</button>
-  <button data-view="notes">Notizen</button>
-  <button data-view="map">Karte</button>
-  <button data-view="devices">Geräte</button>
+  <input id="q" type="search" placeholder="Suchen …" aria-label="Alle Notizen durchsuchen" autocomplete="off">
+  <nav id="tabs" aria-label="Ansichten">
+    <button data-view="status">Heute</button>
+    <button data-view="board">Aufgaben</button>
+    <button data-view="notes">Notizen</button>
+    <button data-view="map">Karte</button>
+    <button data-view="devices">Geräte</button>
+  </nav>
   <span class="dim" id="status"></span>
 </header>
 <main id="main">Lade Notizen …</main>
 <script src="devices.js"></script>
 <script src="stores.js"></script>
+<script src="views.js"></script>
 <script>
-// shortcut: loads every note into the browser, fine for some hundred notes; give the lab an index endpoint when it gets slow.
+// shortcut: every note lives in the browser (unchanged ones from its cache), fine for some hundred notes; give the lab an index endpoint when it gets slow.
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const VIEWS = ['status', 'board', 'notes', 'map', 'devices'];
-let notes = [], shown = null, view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'status', boardProject = '';
+let notes = [], shown = null, view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'status', boardProject = '', query = '';
 const today = () => new Date().toLocaleDateString('sv'); // YYYY-MM-DD in local time
 
 async function walk(dir) {
   const res = await fetch('/notes/' + dir, {headers: {Accept: 'application/json'}, cache: 'no-store'});
   if (!res.ok) throw new Error('Speicher antwortet nicht (' + res.status + ')');
-  const out = [];
+  const out = [], subs = [];
   for (const e of await res.json()) {
     const name = e.name.replace(/\/$/, '');
     if (name.startsWith('.') || name === 'inbox') continue;
-    if (e.is_dir) out.push(...await walk(dir + name + '/'));
-    else if (name.endsWith('.md')) out.push({path: dir + name, changed: e.mod_time});
+    if (e.is_dir) subs.push(walk(dir + name + '/'));
+    else if (name.endsWith('.md')) out.push({path: dir + name, changed: e.mod_time, size: e.size});
   }
+  for (const sub of await Promise.all(subs)) out.push(...sub);
   return out;
 }
 
@@ -117,6 +137,7 @@ function parse(n, text) {
   n.title = (/^title:\s*(.+)$/m.exec(fm) || [])[1] || n.path.replace(/\.md$/, '');
   n.type = (/^type:\s*(.+)$/m.exec(fm) || [])[1] || 'note';
   n.status = (/^status:\s*["']?(active|paused|done)\b/m.exec(fm) || [])[1] || 'active';
+  n.repo = (/^repo:\s*(.+)$/m.exec(fm) || [])[1] || '';
   n.tags = [...fm.matchAll(/^- (.+)$/gm)].map((x) => x[1]);
   n.links = [...n.body.matchAll(/\[\[([^\]]+)\]\]/g)].map((x) => x[1]);
   n.slug = n.path.replace(/\.md$/, '').split('/').pop();
@@ -218,7 +239,7 @@ function status() {
   const cards = projectList().map((p) => {
     const {human, claude} = nextSteps(p.tasks);
     return {p, name: p.name, store: own, status: p.note ? p.note.status : 'active', open: p.open, doing: p.doing, late: p.late,
-      human: human ? human.title : '', humanLate: !!(human && human.late), claude: claude ? claude.title : '', changed: p.when.slice(0, 10)};
+      human: human ? human.title : '', humanLate: !!(human && human.late), task: human, claude: claude ? claude.title : '', changed: p.when.slice(0, 10)};
   }).concat(lage ? parseLagebild(lage.body).filter((r) => r.store !== own).map((r) => ({...r, name: r.project})) : [])
     .filter((c) => c.status !== 'done')
     .sort((a, b) => b.late - a.late || b.changed.localeCompare(a.changed) || a.name.localeCompare(b.name));
@@ -226,11 +247,25 @@ function status() {
   const active = cards.filter((c) => c.status !== 'paused'), resting = cards.filter((c) => c.status === 'paused');
   const waiting = active.filter((c) => c.human).sort((a, b) => b.humanLate - a.humanLate);
   const grid = (cs) => '<div class="grid">' + cs.map(card).join('') + '</div>';
-  return (waiting.length ? `<h2>Wartet auf dich (${waiting.length})</h2><ol class="wait">` + waiting.map((c) =>
-      `<li><b>${esc(c.name)}</b>${c.store !== own ? ' · ' + esc(c.store) : ''} – ${esc(c.human)}${c.humanLate ? ' <span class="late">! überfällig</span>' : ''}</li>`).join('') + '</ol>' : '')
-    + grid(active)
+  const tick = (t) => t ? `<button class="tick" data-note="${esc(t.note.path)}" data-task="${t.note.tasks.indexOf(t)}" aria-label="Abhaken: ${esc(t.title)}" title="Abhaken">✓</button>` : '';
+  const step = (c) => `<li>${tick(c.task)}<b>${esc(c.name)}</b>${c.store !== own ? ' · ' + esc(c.store) : ''} – ${esc(c.human)}${c.humanLate ? ' <span class="late">! überfällig</span>' : ''}</li>`;
+  // The first six (late ones first) stay in view, so "Zuletzt passiert" is still near the top on a phone.
+  return (waiting.length ? `<h2>Wartet auf dich (${waiting.length})</h2><ol class="wait">` + waiting.slice(0, 6).map(step).join('') + '</ol>'
+      + (waiting.length > 6 ? `<details><summary>${waiting.length - 6} weitere</summary><ol class="wait" start="7">${waiting.slice(6).map(step).join('')}</ol></details>` : '') : '')
+    + recent() + quickAdd(cards.filter((c) => c.p && c.p.note).map((c) => c.name))
+    + '<h2>Projekte</h2>' + grid(active)
     + (resting.length ? `<details><summary>${resting.length} ruhende Projekte</summary>${grid(resting)}</details>` : '');
 }
+// What changed in the last two days: sessions say which device worked on what, other notes just that they changed.
+const clock = (iso) => { const d = new Date(iso); return (d.toLocaleDateString('sv') === today() ? '' : shortDay(d.toLocaleDateString('sv')) + ' ')
+  + d.toLocaleTimeString('de', {hour: '2-digit', minute: '2-digit'}); };
+function recent() {
+  const rows = recentActivity(notes, Date.now());
+  return rows.length ? '<h2>Zuletzt passiert</h2><ul class="feed">' + rows.map((n) => `<li><span class="dim">${esc(clock(n.changed))}</span> <button class="link" data-open="${esc(n.path)}">${
+    n.type === 'session' ? `<b>${esc(n.device)}</b> · ${esc(n.project)}: ${esc(section(n, 'Goal').replace(/^[-*] /gm, '').split('\n')[0] || 'Sitzung')}` : esc(n.title) + ' geändert'}</button></li>`).join('') + '</ul>' : '';
+}
+const quickAdd = (names) => names.length ? `<form data-pick><label for="qp"><b>Neue Aufgabe:</b></label> <select id="qp" name="p">${names.map((n) => `<option>${esc(n)}</option>`).join('')}</select>
+    <input name="text" placeholder="Was (wer, 2026-12-31) …" required aria-label="Aufgabe"> <button>Hinzufügen</button></form>` : '';
 function card(c) {
   const counts = [`Offen ${c.open}`, c.doing ? `in Arbeit ${c.doing}` : '', c.late ? `<span class="late">${c.late} überfällig</span>` : ''].filter(Boolean).join(' · ');
   return `<div class="card"><div class="head"><h2>${esc(c.name)}</h2><span class="tag">${esc(c.store)}</span></div>
@@ -282,66 +317,37 @@ function list() {
     ns.sort((a, b) => b.changed.localeCompare(a.changed)).map((n) => `<li>${open(n)} <span class="dim">${esc(n.changed.slice(0, 10))}</span></li>`).join('') + '</ul></div>').join('');
 }
 
-// Map: one boxed cluster per project, the project in the middle and its notes on rings around it.
-// Sessions are no dots, only a count in the project's name; every group without a projects/ note is "Importe".
-function groupOf(n) {
-  if (n.path.startsWith('projects/')) return n.slug;
-  const p = n.type === 'session' ? n.project : n.path.startsWith('imports/claude-mem/') ? n.slug
-    : (n.links.map(find).find((t) => t && t.path.startsWith('projects/')) || {}).slug;
-  return p && find('projects/' + p + '.md') ? p : 'Importe';
-}
+// Karte: one dot per project (views.js lays them out). Colour = when it last changed, size = open tasks, red ring = overdue.
 let fitBox = [0, 0, 1000, 600];
 function map() {
-  const nodes = new Map(), edges = [];
-  const node = (id, note, group) => nodes.get(id) || nodes.set(id, {id, note, group, label: note ? (note.type === 'session' ? note.day.slice(5) + ' ' + note.device : note.title) : id}).get(id);
-  const shownNotes = notes.filter((n) => n.type !== 'session' && n.path !== 'lagebild.md'), sessions = {};
-  for (const n of notes) if (n.type === 'session') sessions[groupOf(n)] = (sessions[groupOf(n)] || 0) + 1;
-  for (const n of shownNotes) node(n.path, n, groupOf(n));
-  for (const n of shownNotes) for (const t of n.links) {
-    const target = find(t), b = target ? nodes.get(target.path) : node('?' + t, null, groupOf(n));
-    if (b && b.group === groupOf(n)) edges.push([nodes.get(n.path), b]); // lines across clusters only cluttered the map
+  const ps = projectList().filter((p) => p.note && p.note.status !== 'done');
+  if (!ps.length) return '<p>Noch keine Projekte.</p>';
+  // Links to imports, sessions and archives say nothing about which projects belong together.
+  const resolve = (link) => { const n = find(link); return !n ? null : n.path.startsWith('projects/') ? n.slug : /^(imports|sessions|archiv)\//.test(n.path) ? false : null; };
+  const {nodes, edges} = projectGraph(ps, resolve), a = (innerWidth - 32) / (innerHeight * .75);
+  layout(nodes, edges, a < 1 ? {aspect: a / 3, pull: 0.03} : {aspect: a}); // tall phone screens: squeeze sideways harder
+  const at = new Map(nodes.map((n) => [n.id, n]));
+  const label = (n) => n.hub || n.id + (n.p.open + n.p.doing ? ` · ${n.p.open + n.p.doing}` : '');
+  // Fit the whole map including its labels. Labels keep about 15 px on screen whatever the scale, so box and scale
+  // (map units per screen pixel) are settled together in a few rounds.
+  let upp = 1;
+  for (let i = 0; i < 5; i++) {
+    const half = (n) => Math.max(label(n).length * 4.6, 24) * upp; // half a label: ~0.6 em of 15 px per letter
+    const x0 = Math.min(...nodes.map((n) => n.x - half(n))) - 8 * upp, x1 = Math.max(...nodes.map((n) => n.x + half(n))) + 8 * upp;
+    const y0 = Math.min(...nodes.map((n) => n.y)) - 30 * upp, y1 = Math.max(...nodes.map((n) => n.y)) + 50 * upp;
+    fitBox = [x0, y0, x1 - x0, y1 - y0];
+    upp = Math.max(fitBox[2] / Math.max(innerWidth - 32, 200), fitBox[3] / (innerHeight * .75));
   }
-  const groups = new Map();
-  for (const a of nodes.values()) (groups.get(a.group) || groups.set(a.group, []).get(a.group)).push(a);
-  // Font sizes in map units: bigger on narrow screens, where the whole map is shrunk more (G project names, L note labels).
-  const G = Math.max(48, Math.round(48 * 640 / innerWidth)), L = Math.max(26, Math.round(26 * 640 / innerWidth));
-  const RING = Math.max(160, L * 6), clusters = [...groups].map(([name, ms]) => {
-    const center = ms.find((a) => a.note ? a.note.path === 'projects/' + name + '.md' : a.id === '?' + name);
-    const rest = ms.filter((a) => a !== center).sort((a, b) => a.label.localeCompare(b.label));
-    let ring = 0, left = rest.length;
-    while (left > 0) { ring++; left -= 6 * ring; }
-    const r = RING * ring + 60, k = sessions[name], label = name + (k ? ` · ${k} ${k === 1 ? 'Sitzung' : 'Sitzungen'}` : '');
-    return {name, label, center, rest, r, w: Math.max(2 * r + 12 * L, label.length * G * .62 + 40), h: 2 * r + G + 32 + L}; // the box holds the label on top and the note labels on the sides and bottom
-  }).sort((a, b) => b.h - a.h || a.name.localeCompare(b.name));
-  // Row packing: clusters left to right, wrapped so the whole map has about the shape of the screen.
-  const aspect = Math.min(3, Math.max(.5, innerWidth / (innerHeight * .75)));
-  const width = Math.max(0, ...clusters.map((c) => c.w), Math.sqrt(clusters.reduce((s, c) => s + (c.w + 40) * (c.h + 40), 0) * aspect));
-  let x = 0, y = 0, rowH = 0;
-  for (const c of clusters) {
-    if (x > 0 && x + c.w > width) { x = 0; y += rowH + 40; rowH = 0; }
-    c.x = x + c.w / 2; c.y = y + G + 32 + c.r; x += c.w + 40; rowH = Math.max(rowH, c.h);
-    if (c.center) Object.assign(c.center, {x: c.x, y: c.y});
-    let i = 0;
-    for (let ring = 1; i < c.rest.length; ring++) {
-      const k = Math.min(6 * ring, c.rest.length - i);
-      for (let j = 0; j < k; j++, i++) {
-        const ang = -Math.PI / 2 + Math.PI * (2 * j + 1 + (ring % 2 ? 0 : 1)) / k; // odd rings half a step off the top, even rings shifted again
-        Object.assign(c.rest[i], {x: c.x + RING * ring * Math.cos(ang), y: c.y + RING * ring * Math.sin(ang)});
-      }
-    }
-  }
-  const all = [...nodes.values()];
-  const xs = clusters.flatMap((c) => [c.x - c.w / 2, c.x + c.w / 2]), ys = clusters.flatMap((c) => [c.y - c.r - G - 32, c.y - c.r - G - 32 + c.h]);
-  fitBox = all.length ? [Math.min(...xs) - 20, Math.min(...ys) - 20, Math.max(...xs) - Math.min(...xs) + 40, Math.max(...ys) - Math.min(...ys) + 40] : [0, 0, 1000, 600];
-  const color = (a) => !a.note ? 'var(--dim)' : a.note.path.startsWith('projects/') ? 'var(--acc)' : 'var(--ok)';
+  const L = Math.round(15 * upp);
+  const age = (p) => (Date.now() - Date.parse(p.when || 0)) / 864e5;
+  const color = (n) => n.hub || n.p.note.status === 'paused' ? 'var(--dim)' : age(n.p) < 1 ? 'var(--acc)' : age(n.p) < 4 ? 'var(--ok)' : 'var(--dim)';
+  const r = (n) => (n.hub ? 7 : 9 + Math.min(n.p.open + n.p.doing, 11)) * upp;
   return `<div class="row"><button data-zoom="in" aria-label="Näher">＋ Näher</button><button data-zoom="out" aria-label="Weiter weg">－ Weiter</button><button data-zoom="fit">Ganz zeigen</button>
-      <span class="dim">Orange: Projekt · Grün: Notiz · Grau: noch ohne Notiz. Ziehen verschiebt, Rad oder zwei Finger zoomen, Antippen öffnet.</span></div>
-    <svg id="map" viewBox="${fitBox.join(' ')}" data-l="${L}" style="--fs:${L}px;--gs:${G}px">` +
-    clusters.map((c) => `<rect x="${c.x - c.w / 2}" y="${c.y - c.r - G - 32}" width="${c.w}" height="${c.h}" rx="24"/>`).join('') +
-    edges.map(([a, b]) => `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>`).join('') +
-    all.map((a) => `<circle ${a.note ? `data-open="${esc(a.note.path)}"` : ''} cx="${a.x}" cy="${a.y}" data-r="${clusters.some((c) => c.center === a) ? 34 : 20}" fill="${color(a)}"><title>${esc(a.label)}</title></circle>`).join('') +
-    all.filter((a) => !clusters.some((c) => c.center === a)).map((a) => `<text class="lbl" x="${a.x}" y="${a.y + 26 + L}">${esc(a.label.length > 22 ? a.label.slice(0, 21) + '…' : a.label)}</text>`).join('') +
-    clusters.map((c) => `<text class="grp" x="${c.x}" y="${c.y - c.r - 24}">${esc(c.label)}</text>`).join('') + '</svg>';
+      <details class="dim"><summary>Was die Karte zeigt</summary>Orange: heute geändert · Grün: letzte 3 Tage · Grau: länger ruhig · rot umrandet: überfällig · Größe und Zahl: offene Aufgaben. Linien: gehören zusammen (Verweis oder gleiches Repo). Antippen öffnet das Projekt, zwei Finger oder Rad zoomen.</details></div>
+    <svg id="map" viewBox="${fitBox.join(' ')}" data-l="${L}" style="--fs:${L}px">` +
+    edges.map(([s, d]) => `<line x1="${at.get(s).x}" y1="${at.get(s).y}" x2="${at.get(d).x}" y2="${at.get(d).y}"/>`).join('') +
+    nodes.map((n) => `<circle ${n.p ? `data-open="${esc(n.p.note.path)}"` : ''}${n.p && n.p.late ? ' class="late"' : ''} cx="${n.x}" cy="${n.y}" data-r="${r(n)}" fill="${color(n)}"><title>${esc(label(n))}</title></circle>`).join('') +
+    nodes.map((n) => `<text class="lbl${n.hub ? ' hub' : ''}" x="${n.x}" y="${n.y + r(n) + L * 1.1}">${esc(label(n))}</text>`).join('') + '</svg>';
 }
 function setupMap() {
   const svg = $('#map');
@@ -353,8 +359,8 @@ function setupMap() {
     // Note labels hide below 13 px on screen (zoomed far out); project names always stay.
     const upp = Math.max(vb[2] / (svg.clientWidth || 1000), vb[3] / (svg.clientHeight || 600));
     svg.classList.toggle('far', svg.dataset.l / upp < 13);
-    // Dots too: at least 26 px (projects 40 px) across on screen, so a finger can hit them.
-    svg.querySelectorAll('circle').forEach((c) => c.setAttribute('r', Math.max(+c.dataset.r, (c.dataset.r > 30 ? 20 : 13) * upp)));
+    // Dots too: at least 18 px across on screen, so a finger can hit them.
+    svg.querySelectorAll('circle').forEach((c) => c.setAttribute('r', Math.max(+c.dataset.r, 9 * upp)));
   };
   const user = (cx, cy) => { const m = svg.getScreenCTM(); return m ? new DOMPoint(cx, cy).matrixTransform(m.inverse()) : {x: 0, y: 0}; };
   const zoom = (f, p) => {
@@ -387,6 +393,14 @@ function setupMap() {
   apply();
 }
 
+// Suche: all notes, archive and sessions included; title and text with the words marked.
+function search() {
+  const hits = searchNotes(notes, query);
+  if (!hits.length) return `<p>Nichts gefunden für „${esc(query)}“.</p>`;
+  return `<p class="dim">${hits.length === 30 ? 'Die ersten 30' : hits.length} Treffer</p>` + hits.map(({n, snippet}) =>
+    `<div class="card"><button class="link" data-open="${esc(n.path)}">${highlight(n.title, query, esc)}</button>
+      <div class="dim">${esc(n.path)} · ${esc(shortDay(n.changed))}</div>${snippet ? `<div>${highlight(snippet, query, esc)}</div>` : ''}</div>`).join('');
+}
 function show(n) {
   $('#main').className = '';
   $('#main').innerHTML = `<p><button data-view="${view}">← zurück</button></p><div class="card"><h2>${esc(n.title)}</h2>
@@ -396,7 +410,7 @@ function show(n) {
 function render() {
   document.querySelectorAll('header button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.view === view));
   $('#main').className = view === 'board' || view === 'map' ? 'wide' : '';
-  $('#main').innerHTML = {status, board, notes: list, map, devices: () => devicesHtml(devList)}[view]();
+  $('#main').innerHTML = {status, board, notes: list, map, search, devices: () => devicesHtml(devList)}[view]();
   if (view === 'map') setupMap();
 }
 // The MCP call answers before the file is on disk (~0.1 s); wait until /notes/ serves the new revision, else the reload shows the old one.
@@ -417,9 +431,11 @@ async function change(action) {
 const taskOf = (el) => { const n = find(el.dataset.note); return n && n.tasks[+(el.dataset.task ?? el.dataset.i)]; };
 document.addEventListener('submit', (e) => {
   e.preventDefault();
-  change(() => addTask(e.target.dataset.add, new FormData(e.target).get('text')));
+  const form = new FormData(e.target);
+  change(() => addTask(e.target.dataset.add || form.get('p'), form.get('text')));
 });
 document.addEventListener('change', (e) => { if (e.target.id === 'bp') { boardProject = e.target.value; render(); } });
+$('#q').addEventListener('input', (e) => { query = e.target.value.trim(); view = query ? 'search' : 'status'; shown = null; render(); });
 document.addEventListener('click', (e) => {
   const task = e.target.closest('[data-task]');
   if (task) { const t = taskOf(task); return t && change(() => moveTask(t, t.state === 'done' ? 'open' : 'done')); }
@@ -428,7 +444,11 @@ document.addEventListener('click', (e) => {
   const t = e.target.closest('[data-view],[data-open],[data-board]');
   if (!t) return;
   if (t.dataset.board) { boardProject = t.dataset.board; view = 'board'; shown = null; location.hash = view; render(); window.scrollTo(0, 0); }
-  else if (t.dataset.view) { view = t.dataset.view; shown = null; location.hash = view; render(); }
+  else if (t.dataset.view) {
+    view = t.dataset.view; shown = null;
+    if (view !== 'search') { query = ''; $('#q').value = ''; location.hash = view; }
+    render();
+  }
   else { const n = find(t.dataset.open); if (n) { show(n); window.scrollTo(0, 0); } }
 });
 // Drag and drop between board columns (mouse); the buttons on each card do the same on touch screens.
@@ -442,19 +462,34 @@ document.addEventListener('drop', (e) => {
   const [note, i] = e.dataTransfer.getData('text/plain').split('\n'), t = taskOf({dataset: {note, i}});
   if (t && t.state !== col.dataset.drop) change(() => moveTask(t, col.dataset.drop)); else col.classList.remove('over');
 });
+// Notes unchanged since the last visit (same time and size) come from this browser's cache, so a phone fetches only what changed.
+// The cache may be missing or blocked (private tab); then everything is fetched as before.
+const CACHE = 'memory-notes-v1';
+function readCache() { try { return JSON.parse(localStorage.getItem(CACHE)) || {}; } catch { return {}; } }
+async function prepared(list, text) {
+  return Promise.all(list.map(async (n) => { const body = await text(n); parse(n, body); n.sum = await sha256(body); n.text = body; return n; }));
+}
 async function load(keepStatus) {
   try {
-    const fresh = await walk('');
-    await Promise.all(fresh.map(async (n) => {
-      const text = await (await fetch('/notes/' + n.path, {cache: 'no-store'})).text();
-      parse(n, text);
-      n.sum = await sha256(text);
-    }));
+    const cache = readCache();
+    if (!notes.length && Object.keys(cache).length) { // first paint at once, from the cache
+      notes = await prepared(Object.entries(cache).map(([path, c]) => ({path, changed: c.changed, size: c.size})), (n) => cache[n.path].text);
+      $('#status').textContent = 'Lade neue Notizen …';
+      render();
+    }
+    const fresh = await prepared(await walk(''), async (n) => {
+      const c = cache[n.path];
+      return c && c.changed === n.changed && c.size === n.size ? c.text : (await fetch('/notes/' + n.path, {cache: 'no-store'})).text();
+    });
+    try { localStorage.setItem(CACHE, JSON.stringify(Object.fromEntries(fresh.map((n) => [n.path, {changed: n.changed, size: n.size, text: n.text}])))); } catch {}
     notes = fresh;
     if (!keepStatus) $('#status').textContent = notes.length + ' Notizen';
     const n = shown && find(shown);
     n ? show(n) : render();
-  } catch (e) { $('#main').textContent = 'Fehler: ' + e.message; }
+  } catch (e) {
+    if (!notes.length) { $('#main').textContent = 'Fehler: ' + e.message; return; }
+    $('#status').textContent = 'Offline, zeige den gespeicherten Stand (' + e.message + ')'; $('#status').className = 'bad';
+  }
 }
 // bandit-net devices: refreshed every 10 s, only while that view is open.
 let devList = [];

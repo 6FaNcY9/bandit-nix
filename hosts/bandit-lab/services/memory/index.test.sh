@@ -40,6 +40,7 @@ out=$(cat "$v/lagebild.md")
 [[ $out == "---"$'\n'"title: Lagebild"$'\n'"type: index"$'\n'"permalink: main/lagebild"$'\n'"---"* ]] || fail "front matter"
 [ "$(grep -c '^| bandit-craft |' "$v/lagebild.md")" = 1 ] || fail "SKIP not honoured (bandit-craft twice)"
 grep -q '^| bandit-craft | vino |' "$v/lagebild.md" || fail "vino's own bandit-craft missing"
+grep -q '^> Project notes: one `## Stand`' "$v/lagebild.md" || fail "format rule line missing"
 [[ $out != *DONE-HIDDEN* && $out != *"| finished |"* ]] || fail "done project shown"
 grep -q '^| resting | firma | paused | 1 | 0 | 0 | PAUSED-STEP |' "$v/lagebild.md" || fail "paused row"
 [[ $(sed -n '/^## Waiting/,/^## Projects/p' "$v/lagebild.md") != *PAUSED-STEP* ]] || fail "paused project waits for a human"
