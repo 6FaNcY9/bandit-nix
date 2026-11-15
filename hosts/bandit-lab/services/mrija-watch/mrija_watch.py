@@ -10,8 +10,12 @@ import argparse
 import json
 import os
 import re
+import ssl
+import subprocess
 import sys
 import tempfile
+import time
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from email.parser import BytesParser
 from pathlib import Path
@@ -429,6 +433,237 @@ def build_report(mail, web, dns, meta) -> Report:
     return rep
 
 
+# --- collectors ------------------------------------------------------------
+
+
+class CollectorError(Exception):
+    """A shell collector (rsync/dig) failed; state must stay unchanged."""
+
+
+def run_rsync_manifest(remote: str, keypath: str) -> str:
+    """`rsync --list-only` of the remote tree; returns the manifest text."""
+    rsync = os.environ.get("RSYNC", "rsync")
+    cmd = [
+        rsync,
+        "--list-only",
+        "-r",
+        "-e",
+        f"ssh -i {keypath} -o BatchMode=yes",
+        remote,
+    ]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    except (subprocess.TimeoutExpired, OSError) as e:
+        raise CollectorError(f"rsync failed: {e.__class__.__name__}") from e
+    if r.returncode != 0:
+        raise CollectorError(f"rsync exit {r.returncode}")
+    return r.stdout
+
+
+def run_dig(name: str) -> dict:
+    """Query DNS for NS/MX/TXT and DMARC. Returns {type: sorted values}."""
+    dig = os.environ.get("DIG", "dig")
+    queries = {
+        "NS": (name, "NS"),
+        "MX": (name, "MX"),
+        "TXT": (name, "TXT"),
+        "DMARC": (f"_dmarc.{name}", "TXT"),
+    }
+    out = {}
+    for key, (qname, qtype) in queries.items():
+        try:
+            r = subprocess.run(
+                [dig, "+short", "@1.1.1.1", qname, qtype],
+                capture_output=True,
+                text=True,
+                timeout=20,
+            )
+        except (subprocess.TimeoutExpired, OSError) as e:
+            raise CollectorError(f"dig failed: {e.__class__.__name__}") from e
+        if r.returncode != 0:
+            raise CollectorError(f"dig exit {r.returncode}")
+        out[key] = sorted(ln for ln in r.stdout.splitlines() if ln.strip())
+    return out
+
+
+def post_ntfy(url, topic, token, title, body, priority="default") -> bool:
+    """POST one ntfy message. The body is an argument, never real content."""
+    curl = os.environ.get("CURL", "curl")
+    cmd = [
+        curl,
+        "-fsS",
+        "-H",
+        f"Authorization: Bearer {token}",
+        "-H",
+        f"Title: {title}",
+        "-H",
+        f"Priority: {priority}",
+        "--data-raw",
+        body,
+        f"{url}/{topic}",
+    ]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+    return r.returncode == 0
+
+
+def check_http(url: str):
+    """Return (reachable, days_until_cert_expiry). Never raises."""
+    import urllib.request
+
+    host = re.sub(r"^https?://", "", url).split("/")[0]
+    ok = False
+    cert_days = 0
+    try:
+        ctx = ssl.create_default_context()
+        with socket_connect(host, ctx) as ssock:
+            cert = ssock.getpeercert()
+        expire = datetime.strptime(
+            cert["notAfter"], "%b %d %H:%M:%S %Y %Z"
+        ).replace(tzinfo=timezone.utc)
+        cert_days = (expire - datetime.now(timezone.utc)).days
+    except Exception:
+        cert_days = 0
+    try:
+        with urllib.request.urlopen(url, timeout=15) as resp:
+            ok = 200 <= resp.status < 400
+    except Exception:
+        ok = False
+    return ok, cert_days
+
+
+def socket_connect(host, ctx):
+    import socket
+
+    sock = socket.create_connection((host, 443), timeout=15)
+    return ctx.wrap_socket(sock, server_hostname=host)
+
+
+# --- run loop --------------------------------------------------------------
+
+
+def _maildir_newest_mtime(maildir: Path) -> float:
+    newest = 0.0
+    maildir = Path(maildir)
+    if maildir.is_dir():
+        for root, _dirs, files in os.walk(maildir):
+            for f in files:
+                try:
+                    newest = max(newest, os.path.getmtime(os.path.join(root, f)))
+                except OSError:
+                    pass
+    return newest
+
+
+def run_collect(cfg) -> dict:
+    """Collect mail/web/dns, push instants, persist state and the digest."""
+    state = load_state(cfg["state_path"])
+    errors = []
+
+    mail = scan_mail(cfg["maildir"], state.get("maildir_cursor", {}), cfg["geoip"])
+
+    old_web = state.get("web_manifest", "")
+    new_web = None
+    try:
+        new_web = run_rsync_manifest(cfg["remote"], cfg["keypath"])
+    except CollectorError as e:
+        errors.append(str(e))
+    web = diff_web(
+        parse_manifest(old_web),
+        parse_manifest(new_web if new_web is not None else old_web),
+    )
+
+    old_dns = state.get("dns", {})
+    new_dns = None
+    if cfg.get("dns_name"):
+        try:
+            new_dns = run_dig(cfg["dns_name"])
+        except CollectorError as e:
+            errors.append(str(e))
+    dns = diff_dns(old_dns, new_dns if new_dns is not None else old_dns)
+
+    http_ok, cert_days = True, 0
+    if cfg.get("http_url"):
+        http_ok, cert_days = check_http(cfg["http_url"])
+        if not http_ok:
+            errors.append("web nicht erreichbar")
+
+    newest = _maildir_newest_mtime(cfg["maildir"])
+    sync_age = (time.time() - newest) / 3600.0 if newest else 0.0
+    meta = {
+        "sync_age_hours": sync_age,
+        "errors": errors,
+        "http_ok": http_ok,
+        "cert_days": cert_days,
+        "updates": {},
+    }
+    report = build_report(mail, web, dns, meta)
+
+    for title, body in report.instant:
+        post_ntfy(
+            cfg["ntfy_url"],
+            cfg["ntfy_topic"],
+            cfg["ntfy_token"],
+            title,
+            body,
+            priority="high",
+        )
+
+    # Advance state only for the collectors that succeeded.
+    state["maildir_cursor"] = mail.new_cursor
+    if new_web is not None:
+        state["web_manifest"] = new_web
+    if new_dns is not None:
+        state["dns"] = new_dns
+    state["last_sync_mtime"] = newest
+    state["pending_digest"] = report.digest
+    save_state(cfg["state_path"], state)
+
+    meta["instant_count"] = len(report.instant)
+    return meta
+
+
+def run_digest(cfg) -> bool:
+    """Post the digest computed at collect time (heartbeat, priority default)."""
+    state = load_state(cfg["state_path"])
+    digest = state.get("pending_digest") or "Mrija: kein Bericht vorhanden"
+    return post_ntfy(
+        cfg["ntfy_url"],
+        cfg["ntfy_topic"],
+        cfg["ntfy_token"],
+        "Mrija: Tagesbericht",
+        digest,
+        priority="default",
+    )
+
+
+def _cfg_from_env() -> dict:
+    env = os.environ
+    cred = env.get("CREDENTIALS_DIRECTORY", "")
+    keypath = env.get("MRIJA_KEY") or (
+        os.path.join(cred, "thehost") if cred else ""
+    )
+    state_dir = Path(env.get("STATE_DIR", "/var/lib/mrija-watch"))
+    return {
+        "state_path": state_dir / "state.json",
+        "maildir": Path(
+            env.get("MRIJA_MAILDIR", "/srv/containers/mrija-archive/maildir")
+        ),
+        "geoip": GeoIP(env.get("MRIJA_GEOIP")),
+        "remote": env.get(
+            "MRIJA_REMOTE", "mrija_org@s16.thehost.com.ua:www/mrija.org/"
+        ),
+        "keypath": keypath,
+        "dns_name": env.get("MRIJA_DNS_NAME"),
+        "http_url": env.get("MRIJA_HTTP_URL"),
+        "ntfy_url": env.get("NTFY_URL", "http://127.0.0.1:2586"),
+        "ntfy_topic": env.get("NTFY_TOPIC", "mrija"),
+        "ntfy_token": env.get("NTFY_TOKEN", ""),
+    }
+
+
 # --- CLI -------------------------------------------------------------------
 
 
@@ -439,14 +674,11 @@ def main(argv=None) -> int:
     sub.add_parser("digest")
     args = parser.parse_args(argv)
 
-    state_dir = Path(os.environ.get("STATE_DIR", "/var/lib/mrija-watch"))
-    state_path = state_dir / "state.json"
-    state = load_state(state_path)
-
+    cfg = _cfg_from_env()
     if args.cmd == "collect":
-        save_state(state_path, state)
+        run_collect(cfg)
     elif args.cmd == "digest":
-        save_state(state_path, state)
+        run_digest(cfg)
     return 0
 
 

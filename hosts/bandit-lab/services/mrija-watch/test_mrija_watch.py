@@ -235,3 +235,46 @@ def test_digest_has_no_secrets():
     mw.assert_clean(report.digest, [PW_TOKEN])  # must not raise
     with pytest.raises(ValueError):
         mw.assert_clean(f"leak {PW_TOKEN} here", [PW_TOKEN])
+
+
+# --- Task 6: collectors and run loop ---------------------------------------
+
+
+def _stub(path, body, mode=0o755):
+    path.write_text("#!/bin/sh\n" + body)
+    path.chmod(mode)
+    return str(path)
+
+
+def test_rsync_failure_keeps_state(tmp_path, monkeypatch):
+    rsync = tmp_path / "rsync"
+    _stub(rsync, 'exit "${RSYNC_EXIT:-0}"\n')
+    monkeypatch.setenv("RSYNC", str(rsync))
+    monkeypatch.setenv("RSYNC_EXIT", "7")
+
+    state_path = tmp_path / "state.json"
+    manifest = "-rw-r--r-- 10 2026/01/01 00:00:00 index.php"
+    mw.save_state(state_path, {"web_manifest": manifest})
+
+    empty_maildir = tmp_path / "mail"
+    empty_maildir.mkdir()
+    cfg = {
+        "state_path": state_path,
+        "maildir": empty_maildir,
+        "geoip": FakeGeoIP(),
+        "remote": "x@host:www/",
+        "keypath": "/dev/null",
+        "ntfy_url": "http://127.0.0.1",
+        "ntfy_topic": "mrija",
+        "ntfy_token": "t",
+    }
+    meta = mw.run_collect(cfg)
+    assert any("rsync" in e.lower() for e in meta["errors"])
+    assert mw.load_state(state_path)["web_manifest"] == manifest
+
+
+def test_post_ntfy_failure_returns_false(tmp_path, monkeypatch):
+    curl = tmp_path / "curl"
+    _stub(curl, "exit 7\n")
+    monkeypatch.setenv("CURL", str(curl))
+    assert mw.post_ntfy("http://127.0.0.1", "mrija", "t", "Mrija: x", "Mrija: y") is False
