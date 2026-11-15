@@ -1,4 +1,5 @@
 # Writes lagebild.md (one overview of all projects) into MEMORY_INDEX_DST.
+# Also .wartet.md: the same Waiting rows uncut, for lage (hidden: not indexed, skipped by the UI).
 # MEMORY_INDEX_SOURCES: space-separated name=/path pairs; the first must be DST
 # itself, so a store's lagebild only ever holds rows of stores listed for it.
 # MEMORY_INDEX_SKIP: note paths not read from the other sources (mirrored copies).
@@ -31,8 +32,9 @@ for i in "${!sources[@]}"; do
 done
 
 tmp=$(mktemp "$dst/.lagebild.XXXXXX") || exit 1
-trap 'rm -f "$tmp"' EXIT
-if ! gawk -v today="$(date +%F)" '
+tmp2=$(mktemp "$dst/.lagebild.XXXXXX") || { rm -f "$tmp"; exit 1; }
+trap 'rm -f "$tmp" "$tmp2"' EXIT
+if ! gawk -v today="$(date +%F)" -v full="$tmp2" '
   function clean(s, n) {
     gsub(/[\r\n\t]/, " ", s); gsub(/\|/, "/", s); while (gsub(/\[\[|\]\]/, "", s));
     sub(/^ +/, "", s); sub(/ +$/, "", s)
@@ -50,7 +52,9 @@ if ! gawk -v today="$(date +%F)" '
     if (w && st != "paused") {
       head = proj " (" sto "): "
       tail = (hwho[w] != "" ? " (" clean(hwho[w], 30) ")" : "") (hlate[w] ? " LATE " hdue[w] : hdue[w] != "" ? " " hdue[w] : "")
-      wait[sprintf("%d\t%s\t%s", !hlate[w], hdue[w] != "" ? hdue[w] : "9999", k)] = head clean(htitle[w], 76 - length(head) - length(tail)) tail
+      wk = sprintf("%d\t%s\t%s", !hlate[w], hdue[w] != "" ? hdue[w] : "9999", k)
+      wait[wk] = head clean(htitle[w], 76 - length(head) - length(tail)) tail
+      fullw[wk] = head clean(htitle[w], 276 - length(head) - length(tail)) tail  # lage cuts fetched rows at 300
     }
   }
   BEGINFILE {
@@ -95,6 +99,11 @@ if ! gawk -v today="$(date +%F)" '
     i = 0
     for (k in wait) if (++i <= 10) print i ". " wait[k]
     if (!i) print "Nothing."
+    print "## Waiting for a human" > full
+    i = 0
+    for (k in fullw) if (++i <= 10) print i ". " fullw[k] > full
+    if (!i) print "Nothing." > full
+    close(full)
     print ""; print "## Projects"
     print "| project | store | status | open | doing | late | human next | claude next | repo | changed |"
     print "|---|---|---|---|---|---|---|---|---|---|"
@@ -107,4 +116,9 @@ if ! cmp -s "$tmp" "$dst/lagebild.md"; then
   chmod 0644 "$tmp"
   mv -f "$tmp" "$dst/lagebild.md"
   echo "wrote $dst/lagebild.md"
+fi
+if ! cmp -s "$tmp2" "$dst/.wartet.md"; then
+  chmod 0644 "$tmp2"
+  mv -f "$tmp2" "$dst/.wartet.md"
+  echo "wrote $dst/.wartet.md"
 fi
