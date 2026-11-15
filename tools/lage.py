@@ -692,15 +692,16 @@ def frame(session, ended, where, full=False, seen=None):
 
 
 def wait(seconds, session):
-    """Sleep. On a terminal, the key i asks for an idea and adds it to the board; other keys do nothing."""
+    """Sleep. On a terminal, the key i asks for an idea and adds it to the board, f ends the wait at once; other keys do
+    nothing. Returns the key that ended the wait, b"i" or b"f", else b""."""
     if not sys.stdin.isatty():
         time.sleep(seconds)
-        return
+        return b""
     fd, saved = sys.stdin.fileno(), termios.tcgetattr(sys.stdin.fileno())
     key, end = b"", time.monotonic() + seconds
     try:
         tty.setcbreak(fd, termios.TCSANOW)
-        while key != b"i" and (left := end - time.monotonic()) > 0:
+        while key not in (b"i", b"f") and (left := end - time.monotonic()) > 0:
             if select.select([fd], [], [], left)[0]:
                 key = os.read(fd, 1)
     finally:
@@ -710,6 +711,7 @@ def wait(seconds, session):
             add_idea(board_of(session), input("Idee: "), clock())
         except (EOFError, KeyboardInterrupt, OSError):
             pass  # cancelled, or the board is not writable: the next refresh shows no new idea
+    return key if key in (b"i", b"f") else b""
 
 
 def hook():
@@ -783,18 +785,21 @@ def main():
     first = start_tasks()
     if args.once and first:
         first.wait(3)  # one frame: show fresh tasks if they come quickly, else the cache
-    session = None
+    session, full, seen = None, args.full, None
     try:
         while True:
             session, ended = pick(session)
-            lines = frame(session, ended, where, args.full)
+            lines = frame(session, ended, where, full, seen)
             if args.once:
                 print("\n".join(lines))
                 return 0
             # home, then each line cleared to its end, then everything below: no flicker
             sys.stdout.write("\x1b[H" + "".join(x + "\x1b[K\n" for x in lines) + "\x1b[J")
             sys.stdout.flush()
-            wait(2, session)
+            if wait(2, session) == b"f":
+                full = not full
+                if not full:
+                    seen = clock()  # the owner has looked at the whole board: what is there is not new any more
     except KeyboardInterrupt:
         return 0
 

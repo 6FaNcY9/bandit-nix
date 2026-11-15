@@ -516,6 +516,45 @@ os.kill(pid, signal.SIGINT)
 assert os.waitpid(pid, 0)[1] == 0
 EOF
 
+# test_f_key: key f switches to the whole board and back; what was new before is not NEU any more (needs a pty)
+fresh; session $$ $s1 src-a "$HOME/w"; owner 14:00:00
+printf '## Funde\n- 14:05 Fund nach dem Prompt\n' | board
+python3 -B - "$here/lage.py" "$HOME/w" <<'EOF'
+import os
+import pty
+import select
+import signal
+import sys
+import time
+
+prog, folder = sys.argv[1:]
+pid, fd = pty.fork()
+if pid == 0:
+    os.execvp("python3", ["python3", prog, "--dir", folder])
+seen = b""
+
+
+def wait_for(text):
+    global seen
+    end = time.time() + 8
+    while text.encode() not in seen and time.time() < end:
+        if select.select([fd], [], [], 0.2)[0]:
+            seen += os.read(fd, 4096)
+    assert text.encode() in seen, (text, seen[-300:])
+    seen = b""
+
+
+wait_for("NEU  1 Funde")
+wait_for("i = Idee   f = alles zeigen")
+os.write(fd, b"f")
+wait_for("FUNDE  1  (1 neu)")
+wait_for("i = Idee   f = zurück")
+os.write(fd, b"f")
+wait_for("NEU  0 Funde")  # seen in the full view: no longer new
+os.kill(pid, signal.SIGINT)
+assert os.waitpid(pid, 0)[1] == 0
+EOF
+
 # test_incremental: update() takes only complete new lines; the highlight appears on a terminal only
 fresh; session $$ $s1 src-a "$HOME/w"
 python3 -B - "$here" <<'EOF'
