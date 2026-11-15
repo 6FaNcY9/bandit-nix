@@ -4,7 +4,7 @@
 set -euo pipefail
 trap 'echo "FAIL at line $LINENO" >&2' ERR
 here=$(cd "$(dirname "$0")" && pwd)
-t=$(mktemp -d); sl=(); trap 'rm -rf "$t"; ((${#sl[@]})) && kill "${sl[@]}" 2>/dev/null || true' EXIT
+t=$(mktemp -d); sl=(); trap 'rm -rf "$t"; ((${#sl[@]})) && kill -- "${sl[@]}" 2>/dev/null || true' EXIT
 export TZ=UTC COLUMNS=46 LINES=27 LAGE_NOW=2026-11-15T14:12:20Z PYTHONDONTWRITEBYTECODE=1
 s1=aaaaaaaa-1
 n=0
@@ -587,5 +587,108 @@ fresh; mkdir -p "$HOME/src/sec/live/b/sub"; session $$ $s1 src-a "$HOME/src/sec/
 lage --dir "$HOME/src/sec/live/b" --idea 'Cookie im Labor'
 [[ $(hook SessionStart $s1 | context) == "Lage-Board: $HOME/src/sec/live/b/.claude/lage.md"$'\nNeue Idee von vino: Cookie im Labor' ]]
 [[ $(ls "$HOME/.local/state/lage") == $s1.shown && -z $(grep -rl Cookie "$HOME/.local/state" || true) ]]
+
+# The Cockpit master window: fake hyprctl and tmux on PATH, a fake claude per window, no real Hyprland.
+mkdir -p "$t/bin" "$t/exe"
+printf '#!/bin/sh\nsleep 60\n' >"$t/bin/claude"                      # its /proc comm is "claude"
+printf '#!/bin/sh\nprintf "%%s\\n" "$CLIENTS"\n' >"$t/bin/hyprctl"     # hyprctl clients -j: $CLIENTS
+cat >"$t/bin/tmux" <<'FAKE'
+#!/bin/sh
+[ "$1" = list-clients ] && { printf '%s\n' "$TMUX_CLIENTS"; exit 0; }
+sleep 60
+FAKE
+chmod +x "$t"/bin/*
+export PATH=$t/bin:$PATH
+py=$(command -v python3)
+die() { echo "FAIL: $*" >&2; exit 1; } # the ERR trap does not reach into functions
+waitcomm() { local i; for i in {1..100}; do [[ $(cat /proc/$1/comm 2>/dev/null) == "$2" ]] && return 0; sleep 0.05; done; die "process $1 never became $2"; } # waitcomm <pid> <comm>
+window() { # window <program> [args]: a shell standing in for kitty, the program its child. Sets $wrapper and $child.
+  local i; rm -f "$t/child"
+  setsid sh -c '"$@" & echo $! >"$0"; wait; sleep 60' "$t/child" "$@" &
+  wrapper=$!; sl+=("-$wrapper")                                         # the whole process group dies in the trap
+  for i in {1..100}; do [[ -s $t/child ]] && break; sleep 0.05; done
+  child=$(<"$t/child"); waitcomm "$child" "${1##*/}"
+}
+cl() { # cl <pid> <class> <workspace> <x> <y> [hidden] [floating]: one client as hyprctl prints it
+  jq -nc --argjson p "$1" --arg c "$2" --argjson w "$3" --argjson x "$4" --argjson y "$5" --argjson h "${6:-false}" --argjson f "${7:-false}" \
+    '{pid: $p, class: $c, workspace: {id: $w}, at: [$x, $y], hidden: $h, floating: $f}'; }
+clients() { CLIENTS=$(printf '%s\n' "$@" | jq -sc .); export CLIENTS; } # clients <cl output>...
+probe() { rc=0; out=$(lage --probe "$1" 2>&1) || rc=$?; [[ -z $out ]] || die "--probe $1 printed: $out"; } # probe <pid>: exit code in $rc, never any output
+
+# test_probe: exit 0 when a claude with a sessions file runs below the window, else 1, always silent
+fresh; window "$t/bin/claude"; session $child $s1 src-a "$HOME/w"
+probe $wrapper; [[ $rc -eq 0 ]]
+live; probe $pid; [[ $rc -eq 1 ]]                                       # a plain sleep
+probe 999999; [[ $rc -eq 1 ]]                                           # no such process
+rm "$HOME/.claude/sessions/$child.json"; probe $wrapper; [[ $rc -eq 1 ]] # claude without a sessions file
+# deeper down, the first claude WITH a sessions file wins
+fresh; window sh -c '"$0" & "$0" & wait' "$t/bin/claude"
+kids=($(pgrep -P $child)); [[ ${#kids[@]} -eq 2 ]]
+waitcomm ${kids[0]} claude; waitcomm ${kids[1]} claude
+probe $wrapper; [[ $rc -eq 1 ]]
+session ${kids[1]} $s1 src-a "$HOME/w"; probe $wrapper; [[ $rc -eq 0 ]]
+
+# test_master: the session in the master window of the workspace of lage's own window
+fresh; window "$t/bin/claude"; w1=$wrapper; session $child $s1 src-a "$HOME/w"
+entry $s1 "$(assistant 14:12:00 '"tool_use"' '[{"type":"tool_use","name":"Bash","input":{"description":"prüft die Webseite"}}]')"
+clients "$(cl $$ cockpit-log 3 1700 0)" "$(cl $w1 kitty 3 0 0)" "$(cl 1 kitty 3 0 0 true)" "$(cl 1 kitty 4 0 0)"
+out=$(lage --once)
+[[ $out == "LAGE  w"*"Stand 14:12"* && $out == *"JETZT ▶ prüft die Webseite"* && $out != *"kein Claude"* ]]
+lage --idea 'fürs Hauptfenster'; grep -q 'fürs Hauptfenster' "$(bfile)"   # --idea without --dir: the master window's session
+# smallest at[0] then at[1]; floating windows, other workspaces and lage's own class never count; a hidden tab drops out
+s2=bbbbbbbb-2; window "$t/bin/claude"; w2=$wrapper; session $child $s2 src-b "$HOME/empty"
+clients "$(cl $$ cockpit-log 3 0 0)" "$(cl $w1 kitty 3 0 10)" "$(cl $w2 kitty 3 0 5)" "$(cl $w1 kitty 3 0 0 false true)" "$(cl $w1 kitty 4 -1 0)"
+[[ $(lage --once) == "LAGE  empty"* ]]                                # y breaks the tie at x 0
+clients "$(cl $$ cockpit-log 3 0 0)" "$(cl $w1 kitty 3 100 0)" "$(cl $w2 kitty 3 0 900)"
+[[ $(lage --once) == "LAGE  empty"* ]]                                # x counts first
+clients "$(cl $$ cockpit-log 3 0 0)" "$(cl $w1 kitty 3 0 0 true)" "$(cl $w2 kitty 3 0 0)"
+[[ $(lage --once) == "LAGE  empty"* ]]                                # tab group: the visible tab
+clients "$(cl $$ cockpit-log 3 0 0)" "$(cl $w1 kitty 3 0 0)" "$(cl $w2 kitty 3 0 0 true)"
+[[ $(lage --once) == "LAGE  w"* ]]                                    # after a tab switch: the other one
+
+# test_master_none: no claude under the master window, no hyprctl, no own window, no candidate
+fresh; live; clients "$(cl $$ cockpit-log 3 1700 0)" "$(cl $pid kitty 3 0 0)"
+rc=0; out=$(lage --once) || rc=$?; [[ $rc -eq 0 && $(sed -n 2p <<<"$out") == "kein Claude im Hauptfenster" && $(sed -n 1p <<<"$out") == "LAGE"*"Stand 14:12" ]]
+rc=0; out=$(lage --idea x 2>&1) || rc=$?; [[ $rc -eq 1 && $out == "lage: kein Claude im Hauptfenster" ]]
+rc=0; out=$(PATH=$t/none "$py" "$here/lage.py" --once) || rc=$?  # test_no_hyprctl
+[[ $rc -eq 0 && $(sed -n 2p <<<"$out") == "kein Claude im Hauptfenster" ]]
+CLIENTS='Hyprland is not running' out=$(lage --once); [[ $(sed -n 2p <<<"$out") == "kein Claude im Hauptfenster" ]]
+clients "$(cl 999999 kitty 3 0 0)"; out=$(lage --once); [[ $(sed -n 2p <<<"$out") == "kein Claude im Hauptfenster" ]]  # no own window
+clients "$(cl $$ cockpit-log 3 1700 0)" "$(cl $pid kitty 3 0 0 false true)" "$(cl $pid kitty 4 0 0)"
+out=$(lage --once); [[ $(sed -n 2p <<<"$out") == "kein Claude im Hauptfenster" ]]                                # no candidate
+
+# test_tmux: the kitty runs a tmux client; its pane holds the claude
+fresh; window "$t/bin/tmux" client; w1=$wrapper; tm=$child
+window "$t/bin/claude"; session $child $s1 src-a "$HOME/w"; cc=$child   # outside the first window
+probe $w1; [[ $rc -eq 1 ]]                                              # list-clients names no pane
+TMUX_CLIENTS="$tm $cc" probe $w1; [[ $rc -eq 0 ]]
+TMUX_CLIENTS="$tm $pid" probe $w1; [[ $rc -eq 1 ]]                       # a pane without claude
+TMUX_CLIENTS="$((tm + 1)) $cc" probe $w1; [[ $rc -eq 1 ]]                # only the client below this window counts
+clients "$(cl $$ cockpit-log 3 1700 0)" "$(cl $w1 kitty 3 0 0)"
+[[ $(TMUX_CLIENTS="$tm $cc" lage --once) == "LAGE  w"* ]]
+# no tmux on PATH: the client's own binary answers (here a copy of bash named tmux that runs ./list-clients)
+cp "$(readlink -f /bin/sh)" "$t/exe/tmux"; printf 'printf "%%s\\n" "$TMUX_CLIENTS"\n' >"$t/exe/list-clients"
+window "$t/exe/tmux" -c 'sleep 60; :'; tm=$child
+rc=0; out=$(cd "$t/exe" && TMUX_CLIENTS="$tm $cc" PATH=$t/none "$py" "$here/lage.py" --probe $wrapper 2>&1) || rc=$?
+[[ $rc -eq 0 && -z $out ]]
+rc=0; out=$(cd "$t/exe" && TMUX_CLIENTS="$tm $pid" PATH=$t/none "$py" "$here/lage.py" --probe $wrapper 2>&1) || rc=$?
+[[ $rc -eq 1 && -z $out ]]
+
+# test_master_ended: the session goes away; the board stays with "Sitzung beendet" until another session turns up
+fresh; window "$t/bin/claude"; session $child $s1 src-a "$HOME/w"
+board <<'EOF2'
+## Funde
+- 14:00 ! ein Fund
+EOF2
+clients "$(cl $$ cockpit-log 3 1700 0)" "$(cl $wrapper kitty 3 0 0)"
+poll() { local i; for i in {1..150}; do grep -q "$1" "$t/out" && return 0; sleep 0.1; done; die "never printed: $1"; } # poll <text>: wait for the loop to print it
+"$py" "$here/lage.py" </dev/null >"$t/out" 2>&1 & sl+=($!)
+poll 'JETZT ▶ wartet auf dich'
+rm "$HOME/.claude/sessions/$child.json"
+poll 'JETZT ▶ Sitzung beendet'
+[[ $(grep -c 'ein Fund' "$t/out") -ge 2 && -z $(grep 'kein Claude' "$t/out" || true) ]]     # the board is kept, no "kein Claude"
+session $child $s1 src-a "$HOME/w"
+before=$(grep -c 'JETZT ▶ wartet auf dich' "$t/out"); for i in {1..150}; do [[ $(grep -c 'JETZT ▶ wartet auf dich' "$t/out") -gt $before ]] && break; sleep 0.1; done
+[[ $(grep -c 'JETZT ▶ wartet auf dich' "$t/out") -gt $before ]]                              # found again
 
 echo ok

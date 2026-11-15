@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """lage: a terminal view of what a Claude Code session is doing right now.
 
-lage [--dir DIR] [--once]   follow the newest Claude session started in DIR
+lage [--once]   follow the Claude session in the Cockpit master window (Hyprland); with --dir DIR the newest one started in DIR
 lage [--dir DIR] --idea TEXT   add an owner idea to that session's board
+lage --probe PID   exit 0 when a Claude session runs under the window with pid PID, else 1; no output
 lage hook   Claude Code hook (JSON on stdin): tells a session its board and each new owner idea once
 Everything is read from ~/.claude; nothing is written there. lage writes the board and, for the hook, a .shown file of hashes.
 """
@@ -105,6 +106,92 @@ def sessions():
             d["alive"] = isinstance(pid, int) and Path(f"/proc/{pid}").exists()
             found.append(d)
     return found
+
+
+def run(*cmd):
+    """stdout of a command; empty when it is missing, fails or hangs."""
+    import subprocess  # late: the hook does not need it and starts faster without
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=3, stdin=subprocess.DEVNULL).stdout
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return ""
+
+
+def procs():
+    """pid -> (parent pid, comm) of every process."""
+    found = {}
+    for f in Path("/proc").glob("[0-9]*/stat"):
+        try:
+            head, _, rest = f.read_text().rpartition(")")  # comm may hold spaces and brackets
+            found[int(f.parent.name)] = (int(rest.split()[1]), head.partition("(")[2])
+        except (OSError, ValueError, IndexError):
+            pass
+    return found
+
+
+def master_pid():
+    """Pid of the Cockpit master window: on the workspace of the window lage runs in, the visible, tiled window
+    that is not the pane itself and sits furthest left (then top; master layout orientation left). None if unknown."""
+    try:
+        clients = [c for c in json.loads(run("hyprctl", "clients", "-j")) if isinstance(c, dict)]
+    except (ValueError, TypeError):
+        return None
+    table, chain, p = procs(), [], os.getpid()
+    while p in table and p not in chain:
+        chain.append(p)
+        p = table[p][0]
+    own = next((c for p in chain for c in clients if c.get("pid") == p), None)
+
+    def workspace(c):
+        return (c.get("workspace") or {}).get("id")
+
+    if own is None or workspace(own) is None:
+        return None
+
+    def candidate(c):
+        shown = not c.get("floating") and not c.get("hidden") and c.get("class") != "cockpit-log"
+        return shown and workspace(c) == workspace(own) and isinstance(c.get("at"), list) and len(c["at"]) == 2
+
+    here = [c for c in clients if candidate(c)]
+    return min(here, key=lambda c: c["at"])["pid"] if here else None
+
+
+def claude_session_under(pid):
+    """The session of the first claude process at or below pid. A tmux client below pid leads on to the processes
+    of its tmux pane, which is where the session runs then."""
+    table, known, kids = procs(), {s.get("pid"): s for s in sessions()}, {}
+    for p, (parent, _) in sorted(table.items()):
+        kids.setdefault(parent, []).append(p)
+
+    def below(root):  # root and everything under it, nearest first
+        order = [root]
+        for p in order:
+            order += [k for k in kids.get(p, []) if k not in order]
+        return order
+
+    def comm(p):
+        return table.get(p, (0, ""))[1]
+
+    def find(root):
+        return next((known[p] for p in below(root) if comm(p) == "claude" and p in known), None)
+
+    if (found := find(pid)) is None:
+        for p in below(pid):
+            if not comm(p).startswith("tmux"):
+                continue
+            # tmux is not on every PATH, but the client in the window is the tmux binary itself
+            listing = run(shutil.which("tmux") or f"/proc/{p}/exe", "list-clients", "-F", "#{client_pid} #{pane_pid}")
+            for client, pane in re.findall(r"^(\d+) (\d+)$", listing, re.M | re.A):
+                if int(client) == p and (found := find(int(pane))):
+                    return found
+    return found
+
+
+def master_session(previous):
+    """(session, ended) for the master window: the session in it; else the previous one, ended; else (None, False)."""
+    pid = master_pid()
+    session = claude_session_under(pid) if pid is not None else None
+    return (session, False) if session or previous is None else (previous, True)
 
 
 def items(entry):
@@ -479,13 +566,20 @@ def main():
     if sys.argv[1:] == ["hook"]:
         return hook()
     ap = argparse.ArgumentParser(prog="lage", description="Show what a Claude Code session is doing now.")
-    ap.add_argument("--dir", default=os.getcwd(), help="follow the session started in this folder (default: cwd)")
+    ap.add_argument("--dir", help="follow the newest session started in this folder (default: the Cockpit master window)")
     ap.add_argument("--once", action="store_true", help="print one frame and exit")
     ap.add_argument("--idea", metavar="TEXT", help="add an idea to the board of the followed session and exit")
+    ap.add_argument("--probe", type=int, metavar="PID", help="exit 0 if a Claude session runs under the window with this pid, else 1")
     args = ap.parse_args()
-    where = "in " + short(os.path.abspath(args.dir))
+    if args.probe is not None:
+        return 0 if claude_session_under(args.probe) else 1
+    where = "im Hauptfenster" if args.dir is None else "in " + short(os.path.abspath(args.dir))
+
+    def pick(previous):
+        return master_session(previous) if args.dir is None else pick_by_dir(args.dir)
+
     if args.idea is not None:
-        session, _ = pick_by_dir(args.dir)
+        session, _ = pick(None)
         if session is None:
             print("lage: kein Claude " + where, file=sys.stderr)
             return 1
@@ -495,9 +589,10 @@ def main():
             print("lage:", e, file=sys.stderr)
             return 1
         return 0
+    session = None
     try:
         while True:
-            session, ended = pick_by_dir(args.dir)
+            session, ended = pick(session)
             lines = frame(session, ended, where)
             if args.once:
                 print("\n".join(lines))
