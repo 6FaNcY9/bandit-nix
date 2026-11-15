@@ -77,8 +77,11 @@ dispatch hl.dsp.focus({ window = \"address:0x$c1\" })"
 run "$(cl $w1 foot 0)" "$(cl $w2 foot 1)"
 if grep -q into_or_create_group "$HYPR_LOG"; then die "stacked without Claude"; fi
 
-# test_claude_pane_exists: same, but the pane is already there
-run "$(cl $c1 kitty 0)" "$(cl $w2 foot 1)" "$(cl $w1 cockpit-log 2)"
+# test_claude_pane_exists: same, but the pane is already there (a reload dropped master): no second pane,
+# but a window grouped with the pane still moves left, the pane itself does not
+run "$(cl $c1 kitty 0)" "$(cl $w2 foot 1 | jq -c --arg a "0x$w1" '.grouped = [$a, .address]')" "$(cl $w1 cockpit-log 2)"
 [[ ! -s $KITTY_LOG ]]
+grep -q "address:0x$w2" "$HYPR_LOG" || die "window beside the pane not stacked: $(cat "$HYPR_LOG")"
+if grep -q "address:0x$w1" "$HYPR_LOG"; then die "pane was moved"; fi
 
 echo ok

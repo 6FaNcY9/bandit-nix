@@ -75,9 +75,11 @@ in {
               hyprctl dispatch 'hl.dsp.layout("swapwithmaster ignoremaster")' >/dev/null
               pid=$($jq -r --arg a "$work" '.[] | select(.address == $a) | .pid' <<<"$clients")
             fi
-            # No log pane yet and the work window runs Claude: every other tiled window joins its tab group
-            # (the master is left), so lage opens alone in the whole right column.
-            if [ "$logs" -eq 0 ] && [[ $pid =~ ^[0-9]+$ ]] && "${lage}/bin/lage" --probe "$pid" 2>/dev/null; then
+            claude=0
+            [[ $pid =~ ^[0-9]+$ ]] && "${lage}/bin/lage" --probe "$pid" 2>/dev/null && claude=1
+            # The work window runs Claude: every other tiled window joins its tab group (the master is left),
+            # so lage has the whole right column; also when a reload left the pane open beside other windows.
+            if ((claude)); then
               $jq -r --argjson id "$id" --arg a "$work" '
                 [.[] | select(.address == $a) | .grouped[], $a] as $mine
                 | .[] | select(.workspace.id == $id and (.floating | not) and .class != "cockpit-log")
@@ -88,7 +90,7 @@ in {
                   hyprctl dispatch 'hl.dsp.window.move({ into_or_create_group = "left" })' >/dev/null
                 done
               hyprctl dispatch "hl.dsp.focus({ window = \"address:$work\" })" >/dev/null
-              setsid -f "$kitty" --class cockpit-log ${lage}/bin/lage >/dev/null 2>&1
+              [ "$logs" -gt 0 ] || setsid -f "$kitty" --class cockpit-log ${lage}/bin/lage >/dev/null 2>&1
             # One tiled window or group alone and no log yet: add the log pane (opens right).
             elif [ "$slots" -le 1 ] && [ "$logs" -eq 0 ]; then
               setsid -f "$kitty" --class cockpit-log journalctl -f >/dev/null 2>&1
