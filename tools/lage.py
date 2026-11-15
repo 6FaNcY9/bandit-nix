@@ -286,7 +286,8 @@ def add_idea(path, text, now):
     if not text:
         return
     try:
-        old = path.read_text(encoding="utf-8", errors="surrogateescape")
+        with open(path, encoding="utf-8", errors="surrogateescape", newline="") as f:  # newline="": keep CRLF
+            old = f.read()
     except FileNotFoundError:
         old = "".join(f"## {h}\n" for h in HEADINGS)
     lines = (old if old.endswith("\n") or not old else old + "\n").split("\n")[:-1]

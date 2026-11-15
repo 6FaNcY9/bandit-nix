@@ -212,7 +212,8 @@ lage --dir "$HOME/w" --idea 'vier'
 printf '## Funde\n- \xff alt\r\n## Deine Ideen\n' | board
 cp "$(bfile)" "$t/before"
 lage --dir "$HOME/w" --idea 'fünf'
-[[ $(diff -a "$t/before" "$(bfile)" | grep -c '^[<>]') -eq 1 ]] && grep -aq alt "$(bfile)"
+[[ $(diff -a "$t/before" "$(bfile)" | grep -c '^[<>]') -eq 1 ]]
+grep -aq alt "$(bfile)"
 [[ $(ls "$HOME/.local/state/lage/") == $s1.md ]]    # no temp file left behind
 
 # test_neu: the owner's last prompt marks newer entries; the same minute counts (Review Focus 3)
