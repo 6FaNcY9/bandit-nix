@@ -609,9 +609,9 @@ window() { # window <program> [args]: a shell standing in for kitty, the program
   for i in {1..100}; do [[ -s $t/child ]] && break; sleep 0.05; done
   child=$(<"$t/child"); waitcomm "$child" "${1##*/}"
 }
-cl() { # cl <pid> <class> <workspace> <x> <y> [hidden] [floating]: one client as hyprctl prints it
-  jq -nc --argjson p "$1" --arg c "$2" --argjson w "$3" --argjson x "$4" --argjson y "$5" --argjson h "${6:-false}" --argjson f "${7:-false}" \
-    '{pid: $p, class: $c, workspace: {id: $w}, at: [$x, $y], hidden: $h, floating: $f}'; }
+cl() { # cl <pid> <class> <workspace> <x> <y> [hidden] [floating] [focusHistoryID]: one client as hyprctl prints it
+  jq -nc --argjson p "$1" --arg c "$2" --argjson w "$3" --argjson x "$4" --argjson y "$5" --argjson h "${6:-false}" --argjson f "${7:-false}" --argjson i "${8:-0}" \
+    '{pid: $p, class: $c, workspace: {id: $w}, at: [$x, $y], hidden: $h, floating: $f, focusHistoryID: $i}'; }
 clients() { CLIENTS=$(printf '%s\n' "$@" | jq -sc .); export CLIENTS; } # clients <cl output>...
 probe() { rc=0; out=$(lage --probe "$1" 2>&1) || rc=$?; [[ -z $out ]] || die "--probe $1 printed: $out"; } # probe <pid>: exit code in $rc, never any output
 
@@ -645,6 +645,11 @@ clients "$(cl $$ cockpit-log 3 0 0)" "$(cl $w1 kitty 3 0 0 true)" "$(cl $w2 kitt
 [[ $(lage --once) == "LAGE  empty"* ]]                                # tab group: the visible tab
 clients "$(cl $$ cockpit-log 3 0 0)" "$(cl $w1 kitty 3 0 0)" "$(cl $w2 kitty 3 0 0 true)"
 [[ $(lage --once) == "LAGE  w"* ]]                                    # after a tab switch: the other one
+# real groups: all tabs share `at` and none is hidden; the one focused most recently (lowest focusHistoryID) is on top
+clients "$(cl $$ cockpit-log 3 1700 0)" "$(cl $w1 kitty 3 0 0 false false 1)" "$(cl $w2 kitty 3 0 0 false false 0)"
+[[ $(lage --once) == "LAGE  empty"* ]]
+clients "$(cl $$ cockpit-log 3 1700 0)" "$(cl $w1 kitty 3 0 0 false false 0)" "$(cl $w2 kitty 3 0 0 false false 1)"
+[[ $(lage --once) == "LAGE  w"* ]]
 
 # test_master_none: no claude under the master window, no hyprctl, no own window, no candidate
 fresh; live; clients "$(cl $$ cockpit-log 3 1700 0)" "$(cl $pid kitty 3 0 0)"

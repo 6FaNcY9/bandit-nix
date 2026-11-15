@@ -131,7 +131,8 @@ def procs():
 
 def master_pid():
     """Pid of the Cockpit master window: on the workspace of the window lage runs in, the visible, tiled window
-    that is not the pane itself and sits furthest left (then top; master layout orientation left). None if unknown."""
+    that is not the pane itself and sits furthest left (then top; master layout orientation left), among tabs of a
+    group the one focused last. None if unknown."""
     try:
         clients = [c for c in json.loads(run("hyprctl", "clients", "-j")) if isinstance(c, dict)]
     except (ValueError, TypeError):
@@ -153,7 +154,8 @@ def master_pid():
         return shown and workspace(c) == workspace(own) and isinstance(c.get("at"), list) and len(c["at"]) == 2
 
     here = [c for c in clients if candidate(c)]
-    return min(here, key=lambda c: c["at"])["pid"] if here else None
+    # tabs of a group share `at` and none is hidden: the most recently focused one (lowest focusHistoryID) is on top
+    return min(here, key=lambda c: (c["at"], c.get("focusHistoryID", 0)))["pid"] if here else None
 
 
 def claude_session_under(pid):
