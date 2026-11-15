@@ -2,7 +2,8 @@
 # Claude Code SessionEnd and SessionStart hook, same file on every device: drops
 # the finished session's text into the shared memory's inbox (MCP tool bm_write
 # on svc:memory); at start it catches up on unsaved ones. bandit-lab turns them
-# into session notes (services/memory). Test: tools/memory-save.test.sh
+# into session notes (services/memory). Skips sessions that ever worked in
+# ~/src/sec/live. Test: tools/memory-save.test.sh
 # Needs bash, curl, jq. Reads the hook JSON on stdin.
 set -euo pipefail
 HOST=memory.tail7facc9.ts.net
@@ -35,6 +36,10 @@ fi
 transcript=$(jq -r '.transcript_path // empty' <<<"$input")
 sid=$(jq -r '.session_id // empty' <<<"$input")
 [ -r "$transcript" ] && [[ $sid =~ ^[0-9a-f-]{8,}$ ]] || exit 0
+# Live engagements (~/src/sec/live) never leave the machine: any cwd there skips the session.
+if jq -en --arg l "$HOME/src/sec/live" 'any(inputs; (.cwd // "") | . == $l or startswith($l + "/"))' "$transcript" >/dev/null; then
+  touch "$saved/$sid"; exit 0
+fi
 # Start directory and day, not the current ones, so a later save keeps the note name.
 cwd=$(jq -rn 'first(inputs | .cwd // empty)' "$transcript")
 day=$(jq -rn 'first(inputs | .timestamp // empty)' "$transcript" | cut -c1-10)
