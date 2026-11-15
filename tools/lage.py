@@ -255,7 +255,7 @@ class Transcript:
             return
         origin = e.get("origin")
         if kind == "user" and isinstance(origin, dict) and origin.get("kind") == "human":
-            self.owner_ts = ts
+            self.owner_ts, self.last_text = ts, None  # the owner answered: an earlier question is not waited on any more
         for item in items(e) if kind == "assistant" else []:
             text = item.get("text")
             if item.get("type") == "text" and isinstance(text, str) and text.strip():

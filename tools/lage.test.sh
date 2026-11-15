@@ -506,6 +506,14 @@ echo '{}' >"$sub/agent-a1.meta.json"; echo '{}' >"$sub/agent-a1.jsonl"; touch -d
 out=$(COLUMNS=60 lage --dir "$HOME/w" --once)
 [[ $(grep src-c8 <<<"$out") == "    src-c8  Bot-Menü  Helfer arbeiten" ]]
 
+# test_sitzungen_answered: a question the owner has answered is not shown as waited on again
+fresh; session $$ $s1 src-a "$HOME/w"
+entry $s1 "$(assistant 14:11:00 '"end_turn"' '[{"type":"text","text":"Soll ich ausrollen?"}]')"
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *" !  src-a "*"wartet: Soll ich ausrollen?"* ]]
+owner 14:12:00
+entry $s1 "$(assistant 14:12:10 '"end_turn"' '[]')"
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *" !  src-a "*"wartet"* && $out != *ausrollen* ]]
+
 # test_sitzungen_names: no name or an empty one → first 6 characters of the session id; topic and name are cut; control characters never reach the terminal
 fresh; session $$ $s1 src-a "$HOME/w"
 live; echo '{"pid":'"$pid"',"sessionId":"deadbe12-3456","cwd":"/x","startedAt":1794700000000}' >"$HOME/.claude/sessions/$pid.json"
