@@ -2,7 +2,7 @@
 
 ## What they are
 
-One systemd-nspawn NixOS container per friend on bandit-lab, all built by the
+One systemd-nspawn container per friend on bandit-lab (Martin NixOS, Jerry Debian), all built by the
 same code: `hosts/bandit-lab/services/guest-box/` (`guests.nix` holds the
 per-guest values, `default.nix` the container, firewall and slice, `watch.nix`
 the audit rules and ntfy units, `report.sh`/`watch.sh` the scripts with the
@@ -30,7 +30,9 @@ what is left; each guest keeps its own cap inside the pool.
 
 ## Jerry
 
-Design: `docs/superpowers/specs/2026-11-01-jerry-guest-box-design.md`. Jerry
+Design: `docs/superpowers/specs/2026-11-01-jerry-guest-box-design.md`; since 2026-11 a
+Debian 13 rootfs run by the stock `systemd-nspawn@jerry`:
+`docs/superpowers/specs/2026-11-16-guest-debian-design.md`. Jerry
 also has an append-only restic repository, `hosts/bandit-lab/services/backup/peer.nix`.
 
 ### Owner setup, in order
@@ -82,9 +84,10 @@ also has an append-only restic repository, `hosts/bandit-lab/services/backup/pee
    systemctl start restic-rest-server.socket
    ```
 6. **Apply**: the first deploy is `lab-apply` from the laptop, not the timer, so a
-   failing `container@jerry` is seen immediately. Push to `main` only after that.
+   failing `systemd-nspawn@jerry` is seen immediately. Push to `main` only after that.
+   A new box also needs its rootfs: steps 2 and 4 of the migration below.
 7. **Tailnet IP.** Read the container's address:
-   `ssh bandit-lab 'sudo nixos-container run jerry -- tailscale ip -4'`. Put
+   `ssh bandit-lab 'sudo systemd-run -M jerry -P -- tailscale ip -4'`. Put
    Jerry's device IPs (the container's included, for backups from the box) into
    `extraPeers.jerry.ips` in `hosts/bandit-lab/services/backup/peer.nix`,
    commit, apply again. Until then nothing is admitted to port 8000.
@@ -94,26 +97,56 @@ also has an append-only restic repository, `hosts/bandit-lab/services/backup/pee
 On the lab:
 
 ```bash
-systemctl status container@jerry auditd jerry-ssh-watch jerry-restic-watch jerry-report.timer
+systemctl status systemd-nspawn@jerry auditd jerry-ssh-watch jerry-restic-watch jerry-report.timer
 ausearch -k jerry | tail
 btrfs qgroup show -reF /srv/jerry/restic
 iptables -t mangle -S FORWARD | grep ve-jerry                  # six DROP rules
 stat -c %u /srv/jerry/box                                      # 524288
-nixos-container run jerry -- touch /data/.w                    # /data is writable
+systemd-run -M jerry -P -- touch /data/.w                      # /data is writable
 machinectl status jerry | grep -i uid                          # user namespace base 524288
-nixos-container run jerry -- tailscale status                  # joined the tailnet
-ls -ln /var/lib/nixos-containers/jerry/var/lib/tailscale/      # authkey owned by 524288
-journalctl -M jerry -u sshd -n 5                               # host can read the container journal
+systemd-run -M jerry -P -- tailscale status                    # joined the tailnet
+ls -ln /var/lib/machines/jerry/var/lib/tailscale/             # authkey owned by 524288
+journalctl -M jerry -u ssh -n 5                                # host can read the container journal
 systemctl status jerry-report.timer
 ```
 
 ### Pause / remove
 
-Pause: `systemctl stop container@jerry`. Remove: delete the Tailscale ACL rules
-and the `tag:jerry-box` node, `nixos-container destroy jerry`,
-`btrfs subvolume delete /srv/jerry/box /srv/jerry/restic`, drop the three jerry
+Pause: `machinectl poweroff jerry` (the unit stays enabled, so it boots again with
+the host; `systemctl disable --now systemd-nspawn@jerry` to keep it off). Remove:
+delete the Tailscale ACL rules and the `tag:jerry-box` node, stop the box,
+`btrfs subvolume delete /var/lib/machines/jerry /srv/jerry/box /srv/jerry/restic`, drop the three jerry
 secrets from `secrets/lab.yaml`, remove `jerry` from `guests.nix` and
 `ci/lab-guests.nix` and the peer from `backup/peer.nix`.
+
+### Migration to Debian (2026-11)
+
+From the NixOS `container@jerry` to a Debian rootfs in `/var/lib/machines/jerry`.
+`guest-debian-init jerry` (root, on the lab) debootstraps trixie, adds Tailscale
+and `uv`, reinstalls with apt what Jerry installed by hand in his proot Debian
+(`/srv/jerry/box/debian/rootfs`), copies the seed files from `/etc/guest-seed/jerry`,
+the old tailscale state and SSH host keys from `/var/lib/nixos-containers/jerry`,
+and the old `/root` to `/srv/jerry/box/old-root`. It writes the marker
+`/var/lib/machines/jerry/etc/guest-seeded` last; the unit does not start without it.
+
+1. Tell Jerry: everything outside `/data` is replaced; `/root` lands in
+   `/data/old-root`, the apt reinstall list in `/data/old-root/apt-reinstall.txt`.
+2. Lab: `sudo btrfs subvolume create /var/lib/machines/jerry && sudo btrfs qgroup limit 20G /var/lib/machines/jerry`.
+3. Laptop: signed merge, `lab-apply` (stops `container@jerry`; the new unit waits
+   for its seed marker).
+4. Lab: `sudo guest-debian-init jerry`, then `sudo systemctl start systemd-nspawn@jerry`.
+   Packages his old Debian had but trixie lacks are only listed under `missing:`.
+   It refuses a non-empty rootfs: after a failed run delete and recreate the
+   subvolume (step 2), then run it again.
+5. Checks: the list above, plus `systemd-run -M jerry -P -- tailscale ip -4` is
+   still 100.102.212.56 (else the box is a new node: fix `peer.nix`),
+   `systemd-run -M jerry -P -- apt-get install -y sl`, `systemctl show systemd-nspawn@jerry -p Slice,MemoryMax`,
+   the port probe as for Martin, an ssh login ntfy and a restic run.
+
+Rollback: `systemctl stop systemd-nspawn@jerry`, signed revert, `lab-apply`; the
+old rootfs in `/var/lib/nixos-containers/jerry` boots as before. Keep it about
+two weeks, then `btrfs subvolume delete /var/lib/nixos-containers/jerry` if it is a
+subvolume.
 
 ### Handover to Jerry
 
@@ -131,8 +164,8 @@ Technical note, he knows the field.
 - Visibility: the owner receives an hourly report of the box's processes (names,
   exit codes and counts; no arguments) and an immediate notice on every SSH
   login and every backup session. Treat process names and logins as visible.
-- No nix in the box (the host's nix daemon is not exposed to guests); use `uv`,
-  pip, or static binaries under `/data`.
+- Debian 13 (trixie): `apt install` as root works; `uv` is in `/usr/local/bin`.
+  The host does not update the inside; `unattended-upgrades` installs security updates.
 - The owner does not support software inside the container.
 
 ## Martin
@@ -201,7 +234,7 @@ On the lab:
 
 ```bash
 systemctl status container@martin martin-ssh-watch martin-report.timer
-systemctl show container@jerry container@martin -p Slice,CPUQuotaPerSecUSec,MemoryMax   # guests.slice, 1s, 2G / 4G
+systemctl show systemd-nspawn@jerry container@martin -p Slice,CPUQuotaPerSecUSec,MemoryMax   # guests.slice, 1s, 2G / 4G
 systemctl show guests.slice -p CPUQuotaPerSecUSec,MemoryMax,CPUWeight,IOWeight            # 2s, 6G, 20, 20
 iptables -t mangle -S FORWARD | grep ve-                        # six DROP rules per guest
 iptables -S nixos-fw | grep ve-martin                          # one refuse, no accept

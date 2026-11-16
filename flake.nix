@@ -258,6 +258,7 @@
       };
 
       guest-report-test = import ./hosts/bandit-lab/services/guest-box/report-test.nix {inherit pkgs;};
+      guest-debian-init-test = import ./hosts/bandit-lab/services/guest-box/debian-init-test.nix {inherit pkgs;};
 
       werbung-watch-test = import ./hosts/bandit-lab/services/werbung-watch/test.nix {inherit pkgs;};
 

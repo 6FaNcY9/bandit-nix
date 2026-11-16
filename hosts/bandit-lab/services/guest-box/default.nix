@@ -192,6 +192,7 @@ in {
 
   containers = lib.mapAttrs container (lib.filterAttrs (_: g: !debian g) guests);
   environment.etc = lib.mkMerge (lib.mapAttrsToList seed (lib.filterAttrs (_: debian) guests));
+  environment.systemPackages = lib.optional (lib.any debian (lib.attrValues guests)) (pkgs.callPackage ./debian-init.nix {inherit guests;});
 
   networking = {
     nat = {
