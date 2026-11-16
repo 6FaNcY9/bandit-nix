@@ -13,6 +13,12 @@ bin=/data/data/com.termux/files/usr/bin
 $su -c "test -d '$root/nix/store' && test -L '$root/home/vino/.nix-profile'" 2>/dev/null ||
   { echo "pong-nix: not installed at $root (run pong-nix-install)"; exit 2; }
 
+# Termux:API bridge: must run here, in Termux's own SELinux context (see ../api/pong-api).
+api=$(cd "$here/../api" && pwd)/pong-api
+sock=${PONG_API_SOCK:-/data/data/com.termux/files/usr/tmp/pong-api.sock}
+PONG_API_SOCK=$sock "$api" call termux-pong-ping >/dev/null 2>&1
+[ $? -ne 69 ] || (setsid nohup "$api" serve "$sock" >/dev/null 2>&1 &)
+
 # KSU su joins all arguments into one string, so quote each one for sh.
 q() { printf "'%s'" "$(printf %s "$1" | sed "s/'/'\\\\''/g")"; }
 args=

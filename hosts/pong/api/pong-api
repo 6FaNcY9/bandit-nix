@@ -1,0 +1,123 @@
+#!/data/data/com.termux/files/usr/bin/python3 -I
+"""Termux:API bridge for the pong Nix chroot.
+
+The chroot runs in SELinux domain ksu, and the Termux:API app may not connect back
+to sockets there, so termux-* commands hang. The chroot may connect *to* Termux,
+so `serve` runs in plain Termux and executes termux-* commands for `call`.
+
+  pong-api serve [SOCKET]            (plain Termux)
+  pong-api call termux-NAME [ARGS]   (inside the chroot; stdin is forwarded)
+  termux-NAME [ARGS]                 (when this file is linked under that name)
+
+shortcut: output is returned when the command ends, so streaming commands
+(termux-sensor without -n, termux-location -r updates) wait for their end;
+add streaming when one of them is needed in the chroot.
+"""
+
+import json
+import os
+import re
+import socket
+import socketserver
+import struct
+import subprocess
+import sys
+
+SOCK = "/data/data/com.termux/files/usr/tmp/pong-api.sock"
+BIN = "/data/data/com.termux/files/usr/bin"
+NAME = re.compile(r"termux-[a-z0-9-]+")
+TIMEOUT = 300
+# Commands that read stdin (from their --help); others get none, so an open pipe cannot hang them.
+STDIN_READERS = {"termux-clipboard-set", "termux-keystore", "termux-notification", "termux-share",
+                 "termux-sms-send", "termux-toast", "termux-tts-speak"}
+
+
+def reads_stdin(name):
+    return name in STDIN_READERS
+
+
+def _send(conn, data):
+    conn.sendall(struct.pack(">I", len(data)) + data)
+
+
+def _recv(conn):
+    head = _exact(conn, 4)
+    return _exact(conn, struct.unpack(">I", head)[0])
+
+
+def _exact(conn, n):
+    buf = b""
+    while len(buf) < n:
+        chunk = conn.recv(n - len(buf))
+        if not chunk:
+            raise ConnectionError("short read")
+        buf += chunk
+    return buf
+
+
+def make_server(path, bindir=BIN):
+    class Handler(socketserver.BaseRequestHandler):
+        def handle(self):
+            argv = json.loads(_recv(self.request))
+            stdin = _recv(self.request)
+            name = argv[0] if argv else ""
+            if not NAME.fullmatch(name):
+                rc, out, err = 126, b"", b"pong-api: not allowed: %s\n" % name.encode()
+            elif not os.access(os.path.join(bindir, name), os.X_OK):
+                rc, out, err = 127, b"", b"pong-api: no such command: %s\n" % name.encode()
+            else:
+                try:
+                    p = subprocess.run([os.path.join(bindir, name)] + argv[1:], input=stdin,
+                                       capture_output=True, timeout=TIMEOUT)
+                    rc, out, err = p.returncode, p.stdout, p.stderr
+                except subprocess.TimeoutExpired:
+                    rc, out, err = 124, b"", b"pong-api: timed out\n"
+            _send(self.request, json.dumps(rc).encode())
+            _send(self.request, out)
+            _send(self.request, err)
+
+    if os.path.exists(path):
+        os.unlink(path)
+    old = os.umask(0o177)  # socket created 0600: only the Termux uid may connect
+    try:
+        server = socketserver.ThreadingUnixStreamServer(path, Handler)
+    finally:
+        os.umask(old)
+    server.daemon_threads = True
+    return server
+
+
+def call(path, argv, stdin):
+    try:
+        conn = socket.socket(socket.AF_UNIX)
+        conn.connect(path)
+    except OSError:
+        return 69, b"", b"pong-api: bridge not running (start: pong-api serve in plain Termux)\n"
+    with conn:
+        _send(conn, json.dumps(argv).encode())
+        _send(conn, stdin)
+        return json.loads(_recv(conn)), _recv(conn), _recv(conn)
+
+
+def main(argv):
+    me = os.path.basename(argv[0])
+    if NAME.fullmatch(me):
+        argv = [me] + argv[1:]
+    elif len(argv) >= 2 and argv[1] == "serve":
+        make_server(argv[2] if len(argv) > 2 else SOCK).serve_forever()
+        return 0
+    elif len(argv) >= 3 and argv[1] == "call":
+        argv = argv[2:]
+    else:
+        sys.stderr.write(__doc__)
+        return 2
+    use = reads_stdin(argv[0]) and sys.stdin is not None and not sys.stdin.isatty()
+    stdin = sys.stdin.buffer.read() if use else b""
+    rc, out, err = call(os.environ.get("PONG_API_SOCK", SOCK), argv, stdin)
+    sys.stdout.buffer.write(out)
+    sys.stderr.buffer.write(err)
+    return rc
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

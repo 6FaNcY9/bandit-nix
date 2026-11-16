@@ -3,7 +3,9 @@
 # They never mount, download or touch /data/nix-root.
 here=$(cd "$(dirname "$0")/.." && pwd)
 tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
+trap 'pkill -f "serve $tmp/api.sock" 2>/dev/null; rm -rf "$tmp"' EXIT
+# Tests never touch the real bridge socket.
+export PONG_API_SOCK="$tmp/api.sock"
 pass=0 fail=0
 # Fake su for tests: claims root for the id check, runs everything else as this user.
 printf '#!/bin/sh\n[ "$2" = "id -u" ] && { echo 0; exit 0; }\nshift; exec sh -c "$@"\n' > "$tmp/fakesu"
@@ -42,6 +44,10 @@ mkdir -p "$tmp/inst/nix/store" "$tmp/inst/home/vino"
 ln -s /home/vino/.local/state/nix/profiles/profile "$tmp/inst/home/vino/.nix-profile"
 out=$(PONG_SU="$tmp/fakesu" PONG_NIX_ROOT="$tmp/inst" sh "$here/pong-nix-enter" true 2>&1)
 echo "$out" | grep -q "not installed" && no enter_installed "$out" || ok enter_installed
+
+# enter: starts the Termux:API bridge in plain Termux before entering
+sleep 1
+[ -S "$tmp/api.sock" ] && ok enter_starts_bridge || no enter_starts_bridge "no socket at $tmp/api.sock"
 
 # install: refuses a non-empty target and downloads nothing
 mkdir -p "$tmp/full" && touch "$tmp/full/x"
