@@ -65,6 +65,7 @@ as_user() {
   # shellcheck disable=SC2086 # passenv is split on newlines on purpose
   exec "$bin/env" -i TERM=xterm-256color ANDROID_DATA=/data ANDROID_ROOT=/system $passenv \
     HOME=/home/vino USER=vino LOGNAME=vino SHELL=/home/vino/.nix-profile/bin/zsh PONG_NIX=1 LANG=C.UTF-8 \
+    XDG_RUNTIME_DIR=/run/user/$uid \
     NIX_SSL_CERT_FILE=$cert SSL_CERT_FILE=$cert \
     PATH=/home/vino/.nix-profile/bin:/bin:/usr/bin:/system/bin \
     "$bin/chroot" --userspec=$uid:$uid --groups=$groups "$root" \
@@ -73,6 +74,10 @@ as_user() {
 
 case $action in
   enter)
+    # XDG_RUNTIME_DIR for sops-nix, gpg-agent and friends (no systemd/logind here).
+    mkdir -p "$root/run/user/$uid"
+    chown $uid:$uid "$root/run/user/$uid"
+    chmod 700 "$root/run/user/$uid"
     while [ $# -gt 0 ] && [ "$1" != -- ]; do
       passenv="$passenv
 $1"
