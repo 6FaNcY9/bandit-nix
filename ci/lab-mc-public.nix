@@ -58,7 +58,7 @@
   private = lab.services.minecraft-servers;
 in
   # The box.
-  assert lib.assertMsg (c.privateUsers == 589824 && c.privateUsers != lab.containers.jerry.privateUsers && lib.elem "--private-users-ownership=chown" c.extraFlags) "mc-public must use its own pinned user namespace base 589824 with chown ownership";
+  assert lib.assertMsg (c.privateUsers == 589824 && c.privateUsers != lib.toInt (lib.head (lib.splitString ":" lab.systemd.nspawn.jerry.execConfig.PrivateUsers)) && lib.elem "--private-users-ownership=chown" c.extraFlags) "mc-public must use its own pinned user namespace base 589824 with chown ownership";
   assert lib.assertMsg (!inner.nix.enable) "the host nix daemon must not be usable from the container";
   assert lib.assertMsg (c.privateNetwork && c.enableTun && c.additionalCapabilities == []) "mc-public needs a private network and /dev/net/tun, and no further capability";
   assert lib.assertMsg (c.hostAddress == "10.251.1.1" && c.localAddress == "10.251.1.2") "mc-public veth addresses must be 10.251.1.1/10.251.1.2";

@@ -5,11 +5,15 @@
   ...
 }: let
   guests = import ./guests.nix;
+  unit = name: g:
+    if (g.os or "nixos") == "debian"
+    then "systemd-nspawn@${name}"
+    else "container@${name}";
   report = name: pkgs.callPackage ./report.nix {guest = name;};
   watch = name: pkgs.callPackage ./watch-wrapper.nix {guest = name;};
   # Run the journal through the filter; pipefail and the filter's exit 1 at EOF make the unit restart.
   pipe = name: journal: mode: "${pkgs.bash}/bin/bash -o pipefail -c '${journal} | ${watch name}/bin/${name}-watch ${mode}'";
-  sshWatch = name: pipe name "${pkgs.systemd}/bin/journalctl -M ${name} -u sshd -f -n0 -o cat" "ssh";
+  sshWatch = name: pipe name "${pkgs.systemd}/bin/journalctl -M ${name} -u sshd -u ssh -f -n0 -o cat" "ssh";
   resticWatch = pipe "jerry" "${pkgs.systemd}/bin/journalctl -u restic-rest-server -f -n0 -o cat" "restic";
   ntfy = {
     after = ["ntfy-seed.service"];
@@ -34,7 +38,7 @@
     "-a always,exit -F arch=b64 -S execve -S execveat ${range}"
     "-a always,exit -F arch=b32 -S execve -S execveat ${range}"
   ];
-  services = name: _: {
+  services = name: g: {
     "${name}-report" =
       ntfy
       // {
@@ -53,8 +57,8 @@
       // {
         description = "ntfy on ssh logins into the ${lib.toSentenceCase name} box";
         wantedBy = ["multi-user.target"];
-        after = ntfy.after ++ ["container@${name}.service"];
-        bindsTo = ["container@${name}.service"]; # stop cleanly with the container instead of failing the switch
+        after = ntfy.after ++ ["${unit name g}.service"];
+        bindsTo = ["${unit name g}.service"]; # stop cleanly with the container instead of failing the switch
       };
   };
 in {

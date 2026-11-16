@@ -6,9 +6,16 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }: let
   guests = import ./guests.nix;
+  debian = g: (g.os or "nixos") == "debian";
+  unit = name: g:
+    if debian g
+    then "systemd-nspawn@${name}"
+    else "container@${name}";
+  marker = name: "/var/lib/machines/${name}/etc/guest-seeded";
   # Host side: v4 refuses everything from ve-<name> after its hostAccept; v6 refuses everything at the top
   # (the guests have no IPv6, and an accepted router advertisement would rewrite the host's routes).
   # Forward side, in the mangle table that neither Docker nor tailscaled touches, so it holds while Docker
@@ -25,7 +32,11 @@
     ++ ["iptables -w -t mangle -A FORWARD -i ve-${name} ! -o enp44s0 -j DROP"];
   allRules = lib.concatLists (lib.mapAttrsToList rules guests);
   delete = r: "${builtins.replaceStrings ["-A " "-I nixos-fw 1"] ["-D " "-D nixos-fw"] r} || true";
-  authkey = name: "/var/lib/nixos-containers/${name}/var/lib/tailscale/authkey";
+  authkey = name: g: "/var/lib/${
+    if debian g
+    then "machines"
+    else "nixos-containers"
+  }/${name}/var/lib/tailscale/authkey";
   owner = g: toString g.uid;
 
   container = name: g: {
@@ -72,32 +83,114 @@
     };
   };
 
-  services = name: g: {
-    "container@${name}".serviceConfig = {
-      Slice = lib.mkForce "guests.slice"; # out of machine.slice (the container module default) into the shared pool
-      CPUQuota = "100%";
-      MemoryMax = g.memory;
-      MemorySwapMax = "0";
-      TasksMax = 512;
+  # Debian guests: the .nspawn file of the stock systemd-nspawn@<name> template (--settings=override, so these win).
+  nspawn = name: g: {
+    execConfig = {
+      PrivateUsers = "${owner g}:65536";
+      ResolvConf = "off"; # the guest's own resolv.conf (seeded) stays
+      # No NotifyReady: nspawn reports READY at init start, so a slow boot cannot get the box killed (2026-11-01).
     };
-    # The tailnet auth key enters the container rootfs owned by its mapped root.
-    "${name}-authkey" = {
-      description = "Place ${lib.toSentenceCase name}'s tailnet auth key in the container rootfs";
-      requiredBy = ["container@${name}.service"];
-      before = ["container@${name}.service"];
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        ExecStart = "/run/current-system/sw/bin/install -D -m 0400 -o ${owner g} -g ${owner g} ${config.sops.secrets."${name}-tailscale-authkey".path} ${authkey name}";
-      };
+    filesConfig = {
+      # chown, as for the NixOS boxes: the rootfs belongs to the mapped ids, so the authkey stays readable inside.
+      PrivateUsersOwnership = "chown";
+      Bind = ["/srv/${name}/box:/data" "/dev/net/tun"];
     };
+    networkConfig.VirtualEthernet = true;
   };
+
+  # What guest-debian-init copies into the rootfs; the inside is the guest's after that.
+  seed = name: g:
+    lib.mapAttrs' (f: text: lib.nameValuePair "guest-seed/${name}/${f}" {inherit text;}) {
+      "sshd_config.d/10-guest.conf" = ''
+        PasswordAuthentication no
+        KbdInteractiveAuthentication no
+        PermitRootLogin prohibit-password
+      '';
+      authorized_keys = "${g.key}\n";
+      "10-host0.network" = ''
+        [Match]
+        Name=host0
+
+        [Network]
+        Address=${g.net}.2/32
+
+        [Route]
+        Gateway=${g.net}.1
+        GatewayOnLink=yes
+      '';
+      "resolv.conf" = ''
+        nameserver 9.9.9.9
+        nameserver 1.1.1.1
+      '';
+      # Fail fast and keep retrying instead of holding the boot until the node is Running (seen 2026-11-01).
+      "tailscale-up.service" = ''
+        [Unit]
+        Description=Join the tailnet as tag:${name}-box
+        Wants=network-online.target tailscaled.service
+        After=network-online.target tailscaled.service
+
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        ExecStart=/usr/bin/tailscale up --auth-key=file:/var/lib/tailscale/authkey --ssh=false --advertise-tags=tag:${name}-box
+        TimeoutStartSec=30s
+        Restart=on-failure
+        RestartSec=30s
+
+        [Install]
+        WantedBy=multi-user.target
+      '';
+    };
+
+  services = name: g:
+    lib.mkMerge [
+      {
+        "${unit name g}".serviceConfig = {
+          Slice = lib.mkForce "guests.slice"; # out of machine.slice (the container module and nspawn template default) into the shared pool
+          CPUQuota = "100%";
+          MemoryMax = g.memory;
+          MemorySwapMax = "0";
+          TasksMax = 512;
+        };
+        # The tailnet auth key enters the container rootfs owned by its mapped root.
+        "${name}-authkey" = {
+          description = "Place ${lib.toSentenceCase name}'s tailnet auth key in the container rootfs";
+          requiredBy = ["${unit name g}.service"];
+          before = ["${unit name g}.service"];
+          unitConfig = lib.optionalAttrs (debian g) {ConditionPathExists = marker name;};
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+            ExecStart = "/run/current-system/sw/bin/install -D -m 0400 -o ${owner g} -g ${owner g} ${config.sops.secrets."${name}-tailscale-authkey".path} ${authkey name g}";
+          };
+        };
+      }
+      (lib.mkIf (debian g) {
+        "systemd-nspawn@${name}" = {
+          overrideStrategy = "asDropin";
+          wantedBy = ["multi-user.target"]; # machines.target is not used on the lab
+          unitConfig.ConditionPathExists = marker name; # waits for guest-debian-init
+          serviceConfig = {
+            # The empty entry resets the template's list (fuse, loop, device-mapper): only tun and ptys stay.
+            DeviceAllow = ["" "/dev/net/tun rwm" "char-pts rw"];
+            DevicePolicy = "closed";
+            # The host does not run networkd: address the host end like the nixos-container start script does.
+            ExecStartPost = [
+              "${pkgs.iproute2}/bin/ip link set ve-${name} up"
+              "${pkgs.iproute2}/bin/ip addr replace ${g.net}.1 dev ve-${name}"
+              "${pkgs.iproute2}/bin/ip route replace ${g.net}.2 dev ve-${name}"
+            ];
+          };
+        };
+      })
+    ];
 in {
   imports = [./watch.nix];
 
   sops.secrets = lib.mapAttrs' (name: _: lib.nameValuePair "${name}-tailscale-authkey" {}) guests;
 
-  containers = lib.mapAttrs container guests;
+  containers = lib.mapAttrs container (lib.filterAttrs (_: g: !debian g) guests);
+  environment.etc = lib.mkMerge (lib.mapAttrsToList seed (lib.filterAttrs (_: debian) guests));
 
   networking = {
     nat = {
@@ -109,14 +202,18 @@ in {
     firewall.extraStopCommands = lib.concatMapStringsSep "\n" delete allRules;
   };
 
-  # The shared pool: under load the guests compete with each other, and the low weights let the host's
-  # own slices (system, user, machine) win. Each guest keeps its own caps inside it.
-  systemd.slices.guests.sliceConfig = {
-    CPUQuota = "200%";
-    MemoryMax = "6G";
-    CPUWeight = 20;
-    IOWeight = 20;
-  };
+  systemd = {
+    nspawn = lib.mapAttrs nspawn (lib.filterAttrs (_: debian) guests);
 
-  systemd.services = lib.mkMerge (lib.mapAttrsToList services guests);
+    # The shared pool: under load the guests compete with each other, and the low weights let the host's
+    # own slices (system, user, machine) win. Each guest keeps its own caps inside it.
+    slices.guests.sliceConfig = {
+      CPUQuota = "200%";
+      MemoryMax = "6G";
+      CPUWeight = 20;
+      IOWeight = 20;
+    };
+
+    services = lib.mkMerge (lib.mapAttrsToList services guests);
+  };
 }
