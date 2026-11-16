@@ -28,6 +28,7 @@ in {
     "${craft}/minecraft/sandbox.nix"
     "${craft}/minecraft/nix-minecraft.nix"
     "${craft}/mcbots"
+    ./services/artex
     ./services/ntfy
     ./services/guest-box
     ./services/werbung-watch
