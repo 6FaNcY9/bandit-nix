@@ -33,6 +33,7 @@ module), Bitwarden CLI, POSIX sh scripts on Android (toybox + KSU `su`), Python 
 - `bandit`, `bandit-ci`, `bandit-lab` must evaluate to the same derivations as before.
 - No heavy builds on the phone; the phone substitutes from `cache.nixos.org`. The laptop
   cannot build `aarch64-linux` (no binfmt); CI builds `pong` on `ubuntu-24.04-arm`.
+- Session src-4c owns the laptop terminal look (`modules/user/desktop`, `home/terminal` look). Task 2 only moves imports; it must not change any laptop derivation (Task 2 Step 3 proves it). Tell src-4c via the shared note before merging.
 - No push to `origin` without the owner's OK (a push to `main` deploys bandit-lab).
 - Phone facts: Termux uid/gid `10417`, Android 16, SELinux enforcing, `/data` f2fs
   `nosuid,nodev`, Termux home `/data/data/com.termux/files/home`.
@@ -129,7 +130,7 @@ point at the Termux home (`~/projects`, `~/src`, `~/.claude`, `~/.claude.json`,
 - [ ] **Step 2:** Make the changes above. `common.nix` = `nixvim` module, `ssh.nix`, `git.nix`, `theme.nix` (stylix colors used by zsh), `editor`, `terminal`, `node.nix`; desktop side keeps `desktop`, `qt`, `kvantum`, `xdg-*`, `dotfiles.nix`, `chromium`, `gruvbox-plus-icons`, gcr `SSH_AUTH_SOCK`. `bitwarden-cli` goes to `common.nix`.
 - [ ] **Step 3: Verify laptop unchanged:** rerun Step 1's evals. Expected: identical to baseline (byte-for-byte diff empty).
 - [ ] **Step 4: Verify phone evaluates:** `nix eval --raw '.#homeConfigurations."vino@pong".activationPackage.drvPath'`. Expected: a `.drv` path, system `aarch64-linux`.
-- [ ] **Step 5:** `nix fmt` on changed files; `nix flake check --no-update-lock-file`. Expected: pass.
+- [ ] **Step 5:** `nix fmt` on changed files; run the targeted checks (`theme-contract`, `sops-isolation`) with `nix build .#checks.x86_64-linux.<name>`. A full `nix flake check` gets killed by earlyoom on the laptop; CI runs it. Expected: pass.
 - [ ] **Step 6: Commit** `feat(pong): aarch64 Home Manager output sharing the laptop terminal`.
 
 ### Task 3: CI build and first activation on the phone
