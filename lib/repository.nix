@@ -26,6 +26,16 @@ in {
     phoneTailscaleIp = "100.123.34.41";
   };
 
+  # The owner phone (Nothing Phone (2), "pong") as a Home Manager host inside a
+  # root chroot; see docs/specs/2026-11-16-phone-nix-host-design.md.
+  phone = {
+    system = "aarch64-linux";
+    username = "vino";
+    homeDirectory = "/home/vino";
+    termuxHome = "/data/data/com.termux/files/home";
+    repoPath = "/data/data/com.termux/files/home/src/bandit-nix";
+  };
+
   lab = {
     # Tailscale IP of bandit-lab. Update after any Tailscale machine
     # re-enrollment or tailnet migration.

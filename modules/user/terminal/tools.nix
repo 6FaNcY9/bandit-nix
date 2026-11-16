@@ -1,8 +1,11 @@
 {
   config,
+  lib,
   pkgs,
+  bandit,
   ...
 }: let
+  desktop = !(bandit.isPhone or false);
   serenaMcp = pkgs.writeShellApplication {
     name = "serena-mcp";
     text = ''
@@ -47,25 +50,28 @@ in {
   };
 
   home = {
-    file = {
-      # Wire docker-compose as a Docker CLI plugin so `docker compose`
-      # works with the rootless Docker daemon. User-level path keeps NixOS pure.
-      ".config/docker/cli-plugins/docker-compose".source = "${pkgs.docker-compose}/bin/docker-compose";
+    file =
+      lib.optionalAttrs desktop {
+        # Wire docker-compose as a Docker CLI plugin so `docker compose`
+        # works with the rootless Docker daemon. User-level path keeps NixOS pure.
+        ".config/docker/cli-plugins/docker-compose".source = "${pkgs.docker-compose}/bin/docker-compose";
+      }
+      // {
+        # Serena's Rust backend only searches conventional user-local paths on
+        # Linux, not NixOS profile paths. Point it at the real package instead of
+        # the rustup proxy, which requires an imperatively selected toolchain.
+        ".local/bin/rust-analyzer".source = "${pkgs.rust-analyzer}/bin/rust-analyzer";
+      };
 
-      # Serena's Rust backend only searches conventional user-local paths on
-      # Linux, not NixOS profile paths. Point it at the real package instead of
-      # the rustup proxy, which requires an imperatively selected toolchain.
-      ".local/bin/rust-analyzer".source = "${pkgs.rust-analyzer}/bin/rust-analyzer";
-    };
-
-    packages = [
-      serenaMcp
-      pkgs.playwright-driver
-      pkgs.python313
-      pkgs.uv
-      pkgs.rustup
-      pkgs.go
-      pkgs.gopls
-    ];
+    packages =
+      [serenaMcp]
+      ++ lib.optional desktop pkgs.playwright-driver
+      ++ [
+        pkgs.python313
+        pkgs.uv
+        pkgs.rustup
+        pkgs.go
+        pkgs.gopls
+      ];
   };
 }

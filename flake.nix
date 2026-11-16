@@ -145,6 +145,32 @@
       };
     };
 
+    # The phone, as a standalone Home Manager host in a root chroot (hosts/pong).
+    homeConfigurations."vino@pong" = let
+      pkgsPhone = import nixpkgs {
+        inherit (repoConfig.phone) system;
+        config.allowUnfreePredicate = repoConfig.allowUnfreePredicate;
+      };
+    in
+      home-manager.lib.homeManagerConfiguration {
+        pkgs = pkgsPhone;
+        extraSpecialArgs = {
+          inherit inputs;
+          # The same constants the laptop's user tree reads, with the phone's paths.
+          bandit =
+            repoConfig
+            // {
+              isPhone = true;
+              workstation = repoConfig.workstation // {inherit (repoConfig.phone) username homeDirectory repoPath;};
+            };
+        };
+        modules = [
+          stylix.homeModules.stylix
+          {stylix = repoConfig.mkStylixTheme pkgsPhone;}
+          ./hosts/pong/home.nix
+        ];
+      };
+
     homeConfigurations.vino = home-manager.lib.homeManagerConfiguration {
       inherit pkgs;
       extraSpecialArgs = sharedArgs;
