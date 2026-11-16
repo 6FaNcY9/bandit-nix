@@ -54,6 +54,7 @@
     marker = "/var/lib/machines/${name}/etc/guest-seeded";
     unit = "systemd-nspawn@${name}.service";
     ak = lab.systemd.services."${name}-authkey";
+    sw = lab.systemd.services."${name}-ssh-watch";
     seed = f: lab.environment.etc."guest-seed/${name}/${f}".text;
     has = f: l: lib.hasInfix l (seed f);
     post = lib.concatStringsSep "\n" (lib.toList d.serviceConfig.ExecStartPost);
@@ -70,6 +71,8 @@
     assert lib.assertMsg (lib.hasInfix "addr replace ${e.net}.1 dev ve-${name}" post && lib.hasInfix "route replace ${e.net}.2 dev ve-${name}" post) "${unit} must address the host side of ve-${name} as ${e.net}.1 with a route to ${e.net}.2";
     assert lib.assertMsg (ak.unitConfig.ConditionPathExists == marker && lib.elem unit ak.requiredBy && lib.elem unit ak.before) "${name}-authkey must run before ${unit}, once the rootfs is seeded";
     assert lib.assertMsg (lib.hasSuffix " /var/lib/machines/${name}/var/lib/tailscale/authkey" ak.serviceConfig.ExecStart) "${name}-authkey must write into the Debian rootfs";
+    assert lib.assertMsg (sw.unitConfig.ConditionPathExists == marker) "${name}-ssh-watch must skip cleanly before the seed marker (else a start bound to the skipped ${unit} fails the switch)";
+    assert lib.assertMsg (lib.elem unit sw.wantedBy && lib.elem "multi-user.target" sw.wantedBy) "${name}-ssh-watch must start with ${unit} and at boot";
     assert lib.assertMsg (has "sshd_config.d/10-guest.conf" "PasswordAuthentication no" && has "sshd_config.d/10-guest.conf" "PermitRootLogin prohibit-password") "${name} ssh must be key-only";
     assert lib.assertMsg (seed "authorized_keys" == (import ../hosts/bandit-lab/services/guest-box/guests.nix).${name}.key + "\n") "${name} root must carry exactly its guest key";
     assert lib.assertMsg (has "resolv.conf" "nameserver 9.9.9.9" && has "resolv.conf" "nameserver 1.1.1.1") "${name} must use fixed nameservers, not the host resolv.conf";

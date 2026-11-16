@@ -112,8 +112,11 @@ systemctl status jerry-report.timer
 
 ### Pause / remove
 
-Pause: `machinectl poweroff jerry` (the unit stays enabled, so it boots again with
-the host; `systemctl disable --now systemd-nspawn@jerry` to keep it off). Remove:
+Pause: `machinectl poweroff jerry`. That holds only until the next deploy or
+reboot (`multi-user.target` wants the unit; `systemctl disable` does not work on
+NixOS). To keep it off, also move the seed marker away, so the unit and its ssh
+watcher are skipped: `mv /var/lib/machines/jerry/etc/guest-seeded /var/lib/machines/jerry/etc/guest-seeded.off`.
+Resume: move it back, `systemctl start systemd-nspawn@jerry`. Remove:
 delete the Tailscale ACL rules and the `tag:jerry-box` node, stop the box,
 `btrfs subvolume delete /var/lib/machines/jerry /srv/jerry/box /srv/jerry/restic`, drop the three jerry
 secrets from `secrets/lab.yaml`, remove `jerry` from `guests.nix` and
@@ -132,21 +135,39 @@ and the old `/root` to `/srv/jerry/box/old-root`. It writes the marker
 1. Tell Jerry: everything outside `/data` is replaced; `/root` lands in
    `/data/old-root`, the apt reinstall list in `/data/old-root/apt-reinstall.txt`.
 2. Lab: `sudo btrfs subvolume create /var/lib/machines/jerry && sudo btrfs qgroup limit 20G /var/lib/machines/jerry`.
-3. Laptop: signed merge, `lab-apply` (stops `container@jerry`; the new unit waits
-   for its seed marker).
-4. Lab: `sudo guest-debian-init jerry`, then `sudo systemctl start systemd-nspawn@jerry`.
+3. Laptop: signed merge, `lab-apply` (stops `container@jerry`; the new unit and
+   `jerry-ssh-watch` are skipped until the seed marker exists). Then on the lab
+   `systemctl is-active container@jerry` must say `inactive`; otherwise
+   `sudo systemctl stop container@jerry`. A failed deploy is retried only after a
+   new commit or `sudo rm /var/lib/lab-update/failed-candidate`.
+4. Lab: `sudo guest-debian-init jerry`, then `sudo systemctl start systemd-nspawn@jerry`
+   (this also starts `jerry-ssh-watch`; no separate start needed).
+   It refuses before writing anything when a guest path is a symlink, the old box has
+   no tailscale state, or the old `/root` does not fit under the `/data` qgroup.
    Packages his old Debian had but trixie lacks are only listed under `missing:`.
    It refuses a non-empty rootfs: after a failed run delete and recreate the
    subvolume (step 2), then run it again.
-5. Checks: the list above, plus `systemd-run -M jerry -P -- tailscale ip -4` is
-   still 100.102.212.56 (else the box is a new node: fix `peer.nix`),
-   `systemd-run -M jerry -P -- apt-get install -y sl`, `systemctl show systemd-nspawn@jerry -p Slice,MemoryMax`,
-   the port probe as for Martin, an ssh login ntfy and a restic run.
+5. Checks: the list above, plus:
 
-Rollback: `systemctl stop systemd-nspawn@jerry`, signed revert, `lab-apply`; the
-old rootfs in `/var/lib/nixos-containers/jerry` boots as before. Keep it about
-two weeks, then `btrfs subvolume delete /var/lib/nixos-containers/jerry` if it is a
-subvolume.
+   ```bash
+   machinectl status jerry | grep -i uid                          # 524288
+   ip addr show ve-jerry                                          # 10.251.0.1/32
+   systemd-run -M jerry -P -- systemctl is-active ssh tailscaled systemd-networkd
+   systemd-run -M jerry -P -- tailscale ip -4                     # 100.102.212.56, else a new node: fix peer.nix
+   systemd-run -M jerry -P -- cat /etc/resolv.conf                # 9.9.9.9 and 1.1.1.1
+   systemd-run -M jerry -P -- apt-get install -y sl
+   systemctl show systemd-nspawn@jerry -p Slice,MemoryMax         # guests.slice, 2G
+   ```
+
+   Then the port probe as for Martin, an ssh login ntfy and a restic run.
+
+Rollback: the revert does not stop the Debian box (a template instance), and if it
+still runs both boxes fight over `ve-jerry` and the node key. So, on the lab
+immediately before `lab-apply` of the signed revert: `sudo systemctl stop systemd-nspawn@jerry`.
+After it, `systemctl is-active systemd-nspawn@jerry` must say `inactive`
+(else stop it again and `sudo systemctl restart container@jerry`); the old rootfs in
+`/var/lib/nixos-containers/jerry` boots as before. Keep it about two weeks, then
+`btrfs subvolume delete /var/lib/nixos-containers/jerry` if it is a subvolume.
 
 ### Handover to Jerry
 

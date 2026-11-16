@@ -39,13 +39,13 @@ pkgs.runCommand "guest-debian-init-test" {
   guest-debian-init --manual-packages E 2>err && exit 1
   grep -q 'goes through a symlink' err
 
-  # Q: qgroup output with a referenced or exclusive limit passes, without one it does not
+  # Q: free bytes under the tightest referenced or exclusive limit; no limit at all fails
   hdr='Qgroupid    Referenced    Exclusive Max referenced Max exclusive   Path
   --------    ----------    --------- -------------- -------------   ----'
-  printf '%s\n0/257 16384 16384 21474836480 none machines/jerry\n' "$hdr" | guest-debian-init --has-limit
-  printf '%s\n0/257 16384 16384 none 1073741824 machines/jerry\n' "$hdr" | guest-debian-init --has-limit
-  printf '%s\n0/257 16384 16384 none none machines/jerry\n' "$hdr" | guest-debian-init --has-limit && exit 1
-  printf "" | guest-debian-init --has-limit && exit 1
+  test "$(printf '%s\n0/257 16384 8192 21474836480 none machines/jerry\n' "$hdr" | guest-debian-init --qgroup-free)" = 21474820096
+  test "$(printf '%s\n0/257 16384 8192 none 1073741824 box\n1/1 100 100 4096 none\n' "$hdr" | guest-debian-init --qgroup-free)" = 3996
+  printf '%s\n0/257 16384 16384 none none machines/jerry\n' "$hdr" | guest-debian-init --qgroup-free && exit 1
+  printf "" | guest-debian-init --qgroup-free && exit 1
 
   # C: no subvolume: refuse, name it, create nothing
   guest-debian-init nosuchguest 2>err && exit 1

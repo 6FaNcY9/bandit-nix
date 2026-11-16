@@ -1,7 +1,8 @@
 # guest-debian-init <name>: fill the empty btrfs subvolume /var/lib/machines/<name> with Debian 13 for the
 # stock systemd-nspawn@<name>, as root on the lab. Runbook: docs/runbooks/guest-box.md (Jerry, migration).
 # guest-debian-init --manual-packages <rootfs>: the manually installed packages of a Debian rootfs.
-# guest-debian-init --has-limit: exit 0 when `btrfs qgroup show -reF --raw` output on stdin shows a limit.
+# guest-debian-init --qgroup-free: bytes left under the tightest limit in `btrfs qgroup show -reF --raw` output
+# on stdin; exit 1 when no qgroup has a limit.
 
 die() {
   echo "guest-debian-init: $*" >&2
@@ -12,7 +13,14 @@ die() {
 # and host root must not follow a link he planted.
 real() { [ "$(realpath -m -- "$1")" = "$(realpath -ms -- "$1")" ]; }
 
-has_limit() { awk '$1 ~ /^[0-9]+\/[0-9]+$/ && ($4 != "none" || $5 != "none") { f = 1 } END { exit !f }'; }
+# Columns: qgroupid rfer excl max_rfer max_excl [path] (btrfs-progs cmds/qgroup.c).
+qgroup_free() {
+  awk '$1 ~ /^[0-9]+\/[0-9]+$/ {
+    if ($4 != "none") { f = $4 - $2; if (!n || f < m) m = f; n = 1 }
+    if ($5 != "none") { f = $5 - $3; if (!n || f < m) m = f; n = 1 }
+  }
+  END { if (!n) exit 1; printf "%d\n", m }'
+}
 
 # Installed in dpkg's status minus those apt marked Auto-Installed; without extended_states all count.
 manual_packages() {
@@ -34,8 +42,8 @@ case "${1:-}" in
   manual_packages "${2:?usage: guest-debian-init --manual-packages <rootfs>}"
   exit 0
   ;;
---has-limit)
-  has_limit
+--qgroup-free)
+  qgroup_free
   exit
   ;;
 esac
@@ -51,13 +59,45 @@ uid=$(guest_uid "$name") || die "$name is not a Debian guest in guests.nix"
 [ "$(id -u)" = 0 ] || die "run as root"
 btrfs subvolume show "$R" >/dev/null 2>&1 || die "$R is not a btrfs subvolume"
 qgroups=$(btrfs qgroup show -reF --raw "$R") || die "no qgroup for $R (quotas off?)"
-printf '%s\n' "$qgroups" | has_limit || die "$R has no qgroup limit; set one: btrfs qgroup limit 20G $R"
+printf '%s\n' "$qgroups" | qgroup_free >/dev/null || die "$R has no qgroup limit; set one: btrfs qgroup limit 20G $R"
 [ -z "$(ls -A "$R")" ] || die "$R is not empty"
 for u in "container@$name" "systemd-nspawn@$name"; do
-  ! systemctl is-active -q "$u" || die "$u is still running; stop it first"
+  st=$(systemctl is-active "$u" || true)
+  case "$st" in
+  inactive | failed | unknown) ;;
+  *) die "$u is $st; stop it first" ;;
+  esac
 done
 [ -d "$seed" ] || die "$seed missing; deploy the host config first"
 [ -d "$BOX" ] || die "$BOX missing"
+
+# Guest-controlled paths: refuse links before anything is written (checked again where they are used).
+oldhome=$BOX/old-root
+oldroot=$BOX/debian/rootfs
+for p in "$oldhome" "$OLD/root" "$OLD/var/lib/tailscale" "$OLD/var/lib/tailscale/tailscaled.state" \
+  "$oldroot/var/lib/dpkg/status" "$oldroot/var/lib/apt/extended_states" "$OLD"/etc/ssh/ssh_host_*; do
+  real "$p" || die "$p goes through a symlink"
+done
+
+# Without the old node state the box joins as a new tailnet node: other IP (peer.nix), and if the auth key is
+# revoked, no ssh and no backup at all.
+if [ -d "$OLD" ]; then
+  [ -s "$OLD/var/lib/tailscale/tailscaled.state" ] || die "$OLD has no tailscale state; the box would become a new tailnet node"
+else
+  echo "WARNING: no old box at $OLD: $name joins the tailnet as a NEW node with the auth key (fix peer.nix IPs after)." >&2
+fi
+
+# The old /root lands under the /data qgroup; running out of it halfway costs a subvolume recreate.
+if [ ! -e "$oldhome" ] && [ -d "$OLD/root" ]; then
+  need=$(du -sx -B1 "$OLD/root" | cut -f1)
+  echo "Old /root: $need bytes."
+  boxq=$(btrfs qgroup show -reF --raw "$BOX") || die "no qgroup for $BOX (quotas off?)"
+  if free=$(printf '%s\n' "$boxq" | qgroup_free); then
+    [ "$need" -lt "$free" ] || die "old /root ($need bytes) does not fit under the $BOX qgroup ($free bytes left)"
+  else
+    echo "No qgroup limit on $BOX, size not checked."
+  fi
+fi
 
 # Commands inside the new tree: plain root, host network, host DNS. --settings=no and its own machine name,
 # else the guest's .nspawn file (user namespace, veth without internet, binds) would apply. PATH is set and
@@ -94,7 +134,6 @@ inside /bin/sh -ec '
 
 # The old /root goes to /data/old-root as it is (cp -a: ownership is already the guest's, links stay links).
 # Copied under a temporary name first, so an interrupted copy is redone on the next run.
-oldhome=$BOX/old-root
 real "$oldhome" || die "$oldhome goes through a symlink"
 if [ -e "$oldhome" ]; then
   echo "$oldhome exists, the old /root is not copied again."
@@ -116,7 +155,6 @@ list() {
 }
 
 # Reinstall what the guest installed by hand in his proot Debian.
-oldroot=$BOX/debian/rootfs
 if [ -e "$oldroot/var/lib/dpkg/status" ] || [ -L "$oldroot/var/lib/dpkg/status" ]; then
   report=$oldhome/apt-reinstall.txt
   manual=$(manual_packages "$oldroot")

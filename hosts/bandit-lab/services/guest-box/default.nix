@@ -168,7 +168,7 @@
       (lib.mkIf (debian g) {
         "systemd-nspawn@${name}" = {
           overrideStrategy = "asDropin";
-          wantedBy = ["multi-user.target"]; # machines.target is not used on the lab
+          wantedBy = ["multi-user.target"]; # the stock template has no [Install] that NixOS honours, so the drop-in sets it
           restartIfChanged = false; # as container@: a deploy must not restart a guest's live box
           unitConfig.ConditionPathExists = marker name; # waits for guest-debian-init
           serviceConfig = {

@@ -5,8 +5,9 @@
   ...
 }: let
   guests = import ./guests.nix;
+  debian = g: (g.os or "nixos") == "debian";
   unit = name: g:
-    if (g.os or "nixos") == "debian"
+    if debian g
     then "systemd-nspawn@${name}"
     else "container@${name}";
   report = name: pkgs.callPackage ./report.nix {guest = name;};
@@ -56,9 +57,13 @@
       // watcher (sshWatch name)
       // {
         description = "ntfy on ssh logins into the ${lib.toSentenceCase name} box";
-        wantedBy = ["multi-user.target"];
+        # Debian boxes: also started with the box, which the owner starts by hand after guest-debian-init.
+        wantedBy = ["multi-user.target"] ++ lib.optional (debian g) "${unit name g}.service";
         after = ntfy.after ++ ["${unit name g}.service"];
         bindsTo = ["${unit name g}.service"]; # stop cleanly with the container instead of failing the switch
+        # Before the box is seeded its unit is skipped; a start job bound to it would end in "dependency" and fail
+        # the switch (exit 4, lab-update rolls back). Conditions are checked first, so this is a clean skip.
+        unitConfig = lib.optionalAttrs (debian g) {ConditionPathExists = "/var/lib/machines/${name}/etc/guest-seeded";};
       };
   };
 in {
