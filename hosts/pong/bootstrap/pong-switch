@@ -1,0 +1,9 @@
+#!/bin/sh
+# Build and activate the phone's Home Manager config from the repo checkout.
+# Runs inside the chroot: pong-nix-enter sh .../pong-switch
+# Uses the flake's locked home-manager (no separate home-manager CLI needed).
+set -e
+repo=${PONG_REPO:-/data/data/com.termux/files/home/src/bandit-nix}
+[ "$PONG_NIX" = 1 ] || { echo "pong-switch: run inside pong-nix-enter"; exit 2; }
+out=$(nix build --no-link --print-out-paths --no-update-lock-file "$repo#homeConfigurations.\"vino@pong\".activationPackage")
+exec "$out/activate"

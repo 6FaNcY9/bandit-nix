@@ -10,14 +10,45 @@ groups=10417,1077,1079,3003,9997,20417,50417
 action=$1 root=$2
 shift 2
 
+# Android's toybox mount turns a bind of a device node into a loop setup;
+# KSU's busybox mount binds it correctly (used read-only, never modified).
+mnt() {
+  if [ -x /data/adb/ksu/bin/busybox ]; then /data/adb/ksu/bin/busybox mount "$@"; else mount "$@"; fi
+}
+
+dev_tree() {
+  mnt -t tmpfs -o mode=755,nosuid tmpfs "$root/dev"
+  # Only what a shell, Nix and the root tools need. Binding every node hung on
+  # modem devices (/dev/at_usb0), so this is an explicit list.
+  for n in null zero full random urandom tty kmsg ashmem binder hwbinder vndbinder \
+    pts block socket __properties__ binderfs fd stdin stdout stderr; do
+    e=/dev/$n t=$root/dev/$n
+    if [ -L "$e" ]; then
+      ln -s "$(readlink "$e")" "$t"
+    elif [ -d "$e" ]; then
+      mkdir "$t" && mnt --rbind "$e" "$t"
+    elif [ -e "$e" ]; then
+      : >"$t" && mnt --bind "$e" "$t"
+    fi || echo "pong-nix: could not bind $e" >&2
+  done
+  # ptmx finds its devpts via the sibling "pts", which a bind-mounted single file
+  # does not have (open gives ENOENT), so it is a real node next to pts.
+  mknod -m 666 "$root/dev/ptmx" c 5 2
+  mkdir "$root/dev/shm"
+  mnt -t tmpfs -o mode=1777,nosuid,nodev tmpfs "$root/dev/shm"
+}
+
 mounts() {
   for d in proc sys dev data sdcard storage system apex linkerconfig vendor product odm system_ext; do
     [ -e "/$d" ] || continue
     mkdir -p "$root/$d"
     case $d in
-      proc) mount -t proc proc "$root/proc" ;;
-      sys | dev | data | storage | apex) mount --rbind "/$d" "$root/$d" ;;
-      *) mount --bind "/$d" "$root/$d" ;;
+      proc) mnt -t proc proc "$root/proc" ;;
+      # Own tmpfs /dev with each real entry bound in: lets the chroot have /dev/shm
+      # (Python multiprocessing) without creating anything in Android's real /dev.
+      dev) dev_tree ;;
+      sys | data | storage | apex) mnt --rbind "/$d" "$root/$d" ;;
+      *) mnt --bind "/$d" "$root/$d" ;;
     esac
   done
 }
@@ -33,7 +64,7 @@ as_user() {
   IFS=$nl
   # shellcheck disable=SC2086 # passenv is split on newlines on purpose
   exec "$bin/env" -i TERM=xterm-256color ANDROID_DATA=/data ANDROID_ROOT=/system $passenv \
-    HOME=/home/vino USER=vino LOGNAME=vino PONG_NIX=1 LANG=C.UTF-8 \
+    HOME=/home/vino USER=vino LOGNAME=vino SHELL=/home/vino/.nix-profile/bin/zsh PONG_NIX=1 LANG=C.UTF-8 \
     NIX_SSL_CERT_FILE=$cert SSL_CERT_FILE=$cert \
     PATH=/home/vino/.nix-profile/bin:/bin:/usr/bin:/system/bin \
     "$bin/chroot" --userspec=$uid:$uid --groups=$groups "$root" \
@@ -79,7 +110,7 @@ $1"
     # MagicDNS first for tailnet names; short timeout so a missing tailnet costs 1 s.
     printf 'nameserver 100.100.100.100\nnameserver 1.1.1.1\noptions timeout:1 attempts:1\n' > "$root/etc/resolv.conf"
     ln -s /home/vino/.nix-profile/etc/ssl/certs/ca-bundle.crt "$root/etc/ssl/certs/ca-certificates.crt"
-    printf 'experimental-features = nix-command flakes\n# No user namespaces for uid 10417 here.\nsandbox = false\n' > "$root/home/vino/.config/nix/nix.conf"
+    printf 'experimental-features = nix-command flakes\n# No user namespaces for uid 10417 here.\nsandbox = false\nextra-substituters = https://github-bandit-nix.cachix.org\nextra-trusted-public-keys = github-bandit-nix.cachix.org-1:iaqre/ibQyXnNT8oRzHQHJ4UQfzvGAaFooRXs8v+Hks=\n' > "$root/home/vino/.config/nix/nix.conf"
     chown -R $uid:$uid "$root/nix" "$root/home/vino"
     for p in "$root"/nix/store/*; do chmod -w "$p"; done
     mounts

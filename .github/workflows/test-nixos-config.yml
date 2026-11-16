@@ -157,6 +157,43 @@ jobs:
           tail -50 /tmp/vm-boot.log
           exit 1
 
+  pong:
+    name: Build the phone's Home Manager config (aarch64)
+    # The laptop cannot build aarch64-linux; the phone only substitutes. On
+    # pushes the closure goes to Cachix so the phone does not compile.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+        with:
+          extra-conf: |
+            substituters = https://cache.nixos.org https://github-bandit-nix.cachix.org
+            trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= github-bandit-nix.cachix.org-1:iaqre/ibQyXnNT8oRzHQHJ4UQfzvGAaFooRXs8v+Hks=
+
+      - name: Build vino@pong
+        run: |
+          nix build '.#homeConfigurations."vino@pong".activationPackage' \
+            --print-build-logs \
+            --out-link result \
+            --no-update-lock-file \
+            --fallback
+
+      - name: Push closure to Cachix
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: |
+          nix profile install nixpkgs#cachix
+          cachix authtoken "${CACHIX_AUTH_TOKEN}"
+          nix path-info --recursive ./result | cachix push github-bandit-nix
+
   populate-cache:
     name: Populate Cachix binary cache
     runs-on: ubuntu-latest

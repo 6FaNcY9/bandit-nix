@@ -55,5 +55,14 @@ out=$(PONG_SU="$tmp/fakesu" PONG_NIX_ROOT="$tmp/full" sh "$here/pong-nix-install
 rc=$?
 [ $rc -ne 0 ] && echo "$out" | grep -q "not empty" && ok install_refuses || no install_refuses "rc=$rc $out"
 
+# switch: refuses to run outside the chroot
+out=$(env -u PONG_NIX sh "$here/pong-switch" 2>&1)
+rc=$?
+[ $rc -eq 2 ] && echo "$out" | grep -q "inside pong-nix-enter" && ok switch_outside || no switch_outside "rc=$rc $out"
+
+# termux hook: a non-interactive shell (scripts, Claude Code) is left alone
+out=$(zsh -c "source '$here/termux-hook.zsh'; echo still-here" 2>&1)
+[ "$out" = "still-here" ] && ok hook_noninteractive || no hook_noninteractive "$out"
+
 echo "$pass passed, $fail failed"
 [ $fail -eq 0 ]
