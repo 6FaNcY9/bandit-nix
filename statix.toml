@@ -1,0 +1,8 @@
+# These checks flag deliberate NixOS module option assignments as style issues.
+# manual_inherit_from (W04): `lib = pkgs.lib;` etc.; repeated_keys (W20): grouped
+# networking.firewall.* option paths. manual_inherit (W03) kept as insurance.
+disabled = [
+  "manual_inherit",
+  "manual_inherit_from",
+  "repeated_keys",
+]
