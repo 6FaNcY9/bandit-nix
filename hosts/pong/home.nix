@@ -76,7 +76,8 @@ in {
     user.signingkey = lib.mkForce "EED481B02CA38F6764056E3A2638AEF73F1A5A45";
   };
 
-  programs.zsh.initContent = ''
+  # .zshenv, so non-interactive shells (scripts, Claude Code) have it too.
+  programs.zsh.envExtra = ''
     [[ -r ${config.sops.secrets."gh/token".path} ]] && export GH_TOKEN="$(< ${config.sops.secrets."gh/token".path})"
   '';
 
