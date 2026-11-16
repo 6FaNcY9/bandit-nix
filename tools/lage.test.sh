@@ -980,4 +980,26 @@ session $child $s1 src-a "$HOME/w"
 before=$(grep -c '▶ wartet auf dich' "$t/out"); for i in {1..150}; do [[ $(grep -c '▶ wartet auf dich' "$t/out") -gt $before ]] && break; sleep 0.1; done
 [[ $(grep -c '▶ wartet auf dich' "$t/out") -gt $before ]]                              # found again
 
+# lage bar: counts like the pane; helpers count as busy; dead pids do not count
+fresh; live; p1=$pid; session $p1 $s1 src-a "$HOME/w"
+entry $s1 "$(assistant 14:12:00 '"tool_use"' '[{"type":"tool_use","name":"Read","input":{"file_path":"/x"}}]')"
+out=$(lage bar); jq -e '.text == "● 1" and .class == "busy"' <<<"$out"
+status $p1 waiting "Erlaubnis"; out=$(lage bar); jq -e '.text == "▲ 1" and .class == "waiting"' <<<"$out"
+jq -e '.tooltip | test("^▲ src-a")' <<<"$out"
+status $p1 idle; out=$(lage bar); jq -e '.text == "▲ 1"' <<<"$out"            # idle = wartet, like the pane
+sub=$HOME/.claude/projects/p/$s1/subagents; mkdir -p "$sub"
+echo '{}' >"$sub/agent-1.meta.json"; : >"$sub/agent-1.jsonl"
+out=$(lage bar); jq -e '.text == "● 1" and .class == "busy"' <<<"$out"        # helfer = busy
+live; session $pid bbbbbbbb-2 src-b "$HOME/w"; status $pid waiting
+out=$(lage bar); jq -e '.text == "● 1 ▲ 1" and .class == "waiting"' <<<"$out"
+fresh; session 999999 $s1 src-a "$HOME/w"; jq -e '.text == ""' <<<"$(lage bar)"  # dead pid: hidden
+# tail read: 1 MiB of filler before the last entry classifies like a full read; no marker in the tail falls back
+fresh; live; session $pid $s1 src-a "$HOME/w"
+entry $s1 "$(assistant 14:11:00 '"end_turn"' '[{"type":"text","text":"fertig"}]')"
+head -c 1048576 /dev/zero | tr '\0' 'x' | fold -w 1000 | sed 's/^/{"type":"progress","d":"/; s/$/"}/' >>"$HOME/.claude/projects/p/$s1.jsonl"
+echo >>"$HOME/.claude/projects/p/$s1.jsonl"  # fold leaves the last line open: end it, or the next entry joins it
+jq -e '.text == "▲ 1"' <<<"$(lage bar)"                                       # fallback found the end_turn
+entry $s1 "$(assistant 14:12:00 '"tool_use"' '[{"type":"tool_use","name":"Read","input":{"file_path":"/x"}}]')"
+jq -e '.text == "● 1"' <<<"$(lage bar)"                                       # tail sees the newest entry
+
 echo ok
