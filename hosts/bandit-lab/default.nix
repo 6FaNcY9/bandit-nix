@@ -22,6 +22,7 @@ in {
     ./services/beszel
     ./services/vaultwarden
     ./services/memory
+    ./services/dns
     ./services/bnet
     "${craft}/minecraft"
     "${craft}/minecraft/sandbox.nix"

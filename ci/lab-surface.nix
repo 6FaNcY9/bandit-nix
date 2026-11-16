@@ -46,6 +46,8 @@ in
   assert lib.assertMsg (lib.all (p: lib.elem p fw.interfaces.tailscale0.allowedTCPPorts) [22 139 445]) "tailscale0 must allow SSH (22) and SMB (139, 445)";
   # Minecraft (phase 5.5): Velocity's game port and voice chat, on tailscale0 only; Paper and RCON stay off every list.
   assert lib.assertMsg (lib.elem 25565 fw.interfaces.tailscale0.allowedTCPPorts && lib.elem 24454 fw.interfaces.tailscale0.allowedUDPPorts) "tailscale0 must allow Velocity (25565/tcp) and voice chat (24454/udp)";
+  # Tailnet DNS (services/dns): Blocky answers on the tailnet address only, and port 53 opens on tailscale0 only.
+  assert lib.assertMsg (lab.services.blocky.settings.ports.dns == "${tailnetIp}:53" && lib.elem 53 fw.interfaces.tailscale0.allowedUDPPorts && lib.elem 53 fw.interfaces.tailscale0.allowedTCPPorts) "Blocky must listen on ${tailnetIp}:53 only, with port 53 open on tailscale0";
   assert lib.assertMsg (noPorts fw) "the global firewall lists must be empty: open ports per interface, on tailscale0 only";
   assert lib.assertMsg (lib.all (i: noPorts fw.interfaces.${i}) otherInterfaces) "no interface other than tailscale0 may open ports (found: ${toString otherInterfaces})";
   assert lib.assertMsg (badPublished == []) "Container-published ports must bind 127.0.0.1 or ${tailnetIp}, never all interfaces: ${toString (map (x: "${x.name} ${x.p}") badPublished)}";
