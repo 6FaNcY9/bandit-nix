@@ -1,0 +1,31 @@
+#!/bin/sh
+# Proves the pong chroot is invisible to the rest of Android: no mount under
+# $PONG_NIX_ROOT may show up in init's or in other apps' mount tables.
+# Usage: pong-hide-check [mountinfo-file...]   (no args: init + 3 other apps, via su)
+root=${PONG_NIX_ROOT:-/data/nix-root}
+su=${PONG_SU:-su}
+
+if [ $# -eq 0 ]; then
+  tmp=$(mktemp -d) || exit 1
+  trap 'rm -rf "$tmp"' EXIT
+  # Other apps: uids u0_aNNN except Termux's own (its sessions may legitimately hold the mounts).
+  me=$(id -un)
+  pids=$($su -c "ps -A -o PID=,USER=" | awk -v me="$me" '$2 ~ /^u0_a[0-9]+$/ && $2 != me {print $1}' | head -3)
+  [ -n "$pids" ] || { echo "FAIL no other app processes found"; exit 1; }
+  for pid in 1 $pids; do
+    $su -c "cat /proc/$pid/mountinfo" > "$tmp/$pid" 2>/dev/null || : > "$tmp/$pid.unreadable"
+  done
+  set -- "$tmp"/*
+fi
+
+bad=0
+for f in "$@"; do
+  if [ ! -r "$f" ] || [ "${f%.unreadable}" != "$f" ]; then
+    echo "FAIL cannot read $f"; bad=1; continue
+  fi
+  # Field 5 of mountinfo is the mount point.
+  hits=$(awk -v r="$root" 'index($5, r) == 1' "$f")
+  [ -z "$hits" ] || { echo "FAIL $f shows:"; echo "$hits"; bad=1; }
+done
+[ $bad -eq 0 ] && echo "OK hidden"
+exit $bad

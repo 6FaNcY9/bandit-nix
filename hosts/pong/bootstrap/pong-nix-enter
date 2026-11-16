@@ -1,0 +1,26 @@
+#!/bin/sh
+# Enter the pong Nix chroot from Termux. No args: login shell. With args: run them
+# inside and return their status. The mounts live in a private mount namespace
+# that dies with the session (check: pong-hide-check).
+# Exit 2: no root or no chroot; the caller (Termux shell hook) then stays in Termux.
+here=$(cd "$(dirname "$0")" && pwd)
+root=${PONG_NIX_ROOT:-/data/nix-root}
+su=${PONG_SU:-su}
+bin=/data/data/com.termux/files/usr/bin
+
+[ "$($su -c 'id -u' 2>/dev/null)" = 0 ] || { echo "pong-nix: no root"; exit 2; }
+# .nix-profile is an absolute link that only resolves inside the chroot.
+$su -c "test -d '$root/nix/store' && test -L '$root/home/vino/.nix-profile'" 2>/dev/null ||
+  { echo "pong-nix: not installed at $root (run pong-nix-install)"; exit 2; }
+
+# KSU su joins all arguments into one string, so quote each one for sh.
+q() { printf "'%s'" "$(printf %s "$1" | sed "s/'/'\\\\''/g")"; }
+args=
+for a in "$@"; do args="$args $(q "$a")"; done
+# Android/Termux variables that app_process (termux-api, am) needs inside the chroot.
+envs=
+for v in $(env | grep -oE '^(BOOTCLASSPATH|DEX2OATBOOTCLASSPATH|SYSTEMSERVERCLASSPATH|ANDROID_[A-Z_]*|EXTERNAL_STORAGE|PREFIX|TERM|TERMUX_[A-Z_]*)='); do
+  v=${v%=}
+  envs="$envs $(q "$v=$(printenv "$v")")"
+done
+exec $su -c "$bin/unshare -m --propagation private /system/bin/sh $(q "$here/pong-nix-root") enter $(q "$root")$envs --$args"

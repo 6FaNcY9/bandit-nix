@@ -1,0 +1,94 @@
+#!/system/bin/sh
+# Root half of pong-nix-enter and pong-nix-install. Called through su inside
+# `unshare -m --propagation private`, so every mount here dies with the session.
+# Usage: pong-nix-root enter ROOT [cmd...] | pong-nix-root install ROOT INSTALLER_DIR
+set -e
+bin=/data/data/com.termux/files/usr/bin
+# Termux app uid and its Android groups (inet 3003 is needed for sockets, 1077/1079 for storage).
+uid=10417
+groups=10417,1077,1079,3003,9997,20417,50417
+action=$1 root=$2
+shift 2
+
+mounts() {
+  for d in proc sys dev data sdcard storage system apex linkerconfig vendor product odm system_ext; do
+    [ -e "/$d" ] || continue
+    mkdir -p "$root/$d"
+    case $d in
+      proc) mount -t proc proc "$root/proc" ;;
+      sys | dev | data | storage | apex) mount --rbind "/$d" "$root/$d" ;;
+      *) mount --bind "/$d" "$root/$d" ;;
+    esac
+  done
+}
+
+# Extra VAR=value words for the user environment, one per line (set by "enter").
+passenv=
+
+as_user() {
+  cert=/home/vino/.nix-profile/etc/ssl/certs/ca-bundle.crt
+  nl='
+'
+  set -f
+  IFS=$nl
+  # shellcheck disable=SC2086 # passenv is split on newlines on purpose
+  exec "$bin/env" -i TERM=xterm-256color ANDROID_DATA=/data ANDROID_ROOT=/system $passenv \
+    HOME=/home/vino USER=vino LOGNAME=vino PONG_NIX=1 LANG=C.UTF-8 \
+    NIX_SSL_CERT_FILE=$cert SSL_CERT_FILE=$cert \
+    PATH=/home/vino/.nix-profile/bin:/bin:/usr/bin:/system/bin \
+    "$bin/chroot" --userspec=$uid:$uid --groups=$groups "$root" \
+    /bin/sh -c 'cd /home/vino 2>/dev/null || cd /; exec "$@"' sh "$@"
+}
+
+case $action in
+  enter)
+    while [ $# -gt 0 ] && [ "$1" != -- ]; do
+      passenv="$passenv
+$1"
+      shift
+    done
+    [ "$1" = -- ] && shift
+    mounts
+    if [ $# -eq 0 ]; then
+      # Checked inside the chroot: .nix-profile is an absolute link.
+      set -- /bin/sh -c 'z=/home/vino/.nix-profile/bin/zsh; [ -x $z ] && exec $z -l; exec /bin/sh -l'
+    fi
+    as_user "$@"
+    ;;
+  install)
+    # The release's own installer needs coreutils, which its busybox (sh only) lacks,
+    # so its steps are done here: copy the store, then load-db and nix-env inside.
+    src=$1
+    [ -z "$(ls -A "$root" 2>/dev/null)" ] || { echo "pong-nix: $root is not empty"; exit 1; }
+    bb=$(cd "$src/store" && ls -d *-busybox-* | head -1)
+    nixp=$(cd "$src/store" && ls -d *-nix-[0-9]* | head -1)
+    cacert=$(cd "$src/store" && ls -d *-nss-cacert-* | head -1)
+    [ -n "$bb" ] && [ -n "$nixp" ] && [ -n "$cacert" ] || { echo "pong-nix: installer incomplete"; exit 1; }
+    mkdir -p "$root/nix/store" "$root/nix/var/nix" "$root/home/vino/.config/nix" "$root/tmp" \
+      "$root/etc/ssl/certs" "$root/bin" "$root/usr/bin"
+    chmod 1777 "$root/tmp"
+    for p in "$src"/store/*; do cp -a "$p" "$root/nix/store/"; done
+    "$bin/find" "$root/nix/store" -exec "$bin/touch" -h -d @1 {} +
+    ln -s "/nix/store/$bb/bin/busybox" "$root/bin/sh"
+    # Dangling until Home Manager puts coreutils in the profile.
+    ln -s /home/vino/.nix-profile/bin/env "$root/usr/bin/env"
+    printf 'root:x:0:0::/:/bin/sh\nvino:x:%s:%s::/home/vino:/bin/sh\n' $uid $uid > "$root/etc/passwd"
+    printf 'root:x:0:\nvino:x:%s:\ninet:x:3003:vino\n' $uid > "$root/etc/group"
+    printf 'passwd: files\ngroup: files\nhosts: files dns\n' > "$root/etc/nsswitch.conf"
+    printf '127.0.0.1 localhost\n::1 localhost\n' > "$root/etc/hosts"
+    # MagicDNS first for tailnet names; short timeout so a missing tailnet costs 1 s.
+    printf 'nameserver 100.100.100.100\nnameserver 1.1.1.1\noptions timeout:1 attempts:1\n' > "$root/etc/resolv.conf"
+    ln -s /home/vino/.nix-profile/etc/ssl/certs/ca-bundle.crt "$root/etc/ssl/certs/ca-certificates.crt"
+    printf 'experimental-features = nix-command flakes\n# No user namespaces for uid 10417 here.\nsandbox = false\n' > "$root/home/vino/.config/nix/nix.conf"
+    chown -R $uid:$uid "$root/nix" "$root/home/vino"
+    for p in "$root"/nix/store/*; do chmod -w "$p"; done
+    mounts
+    (as_user "/nix/store/$nixp/bin/nix-store" --load-db) < "$src/.reginfo"
+    (as_user "/nix/store/$nixp/bin/nix-env" -i "/nix/store/$nixp" "/nix/store/$cacert")
+    echo "pong-nix: installed at $root"
+    ;;
+  *)
+    echo "usage: pong-nix-root enter|install ROOT ..." >&2
+    exit 2
+    ;;
+esac

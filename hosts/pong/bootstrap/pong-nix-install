@@ -1,0 +1,23 @@
+#!/bin/sh
+# Install the pong Nix chroot: official Nix release, pinned and hash-checked,
+# single-user, owned by the Termux uid. Run from Termux; uses su for the root steps.
+# Refuses a target that is not empty. Usage: pong-nix-install
+set -e
+here=$(cd "$(dirname "$0")" && pwd)
+root=${PONG_NIX_ROOT:-/data/nix-root}
+su=${PONG_SU:-su}
+bin=/data/data/com.termux/files/usr/bin
+# Pinned from https://nixos.org/nix/install (2026-11-16). Bump both together.
+version=2.35.6
+sha256=1f177b572baadf8c09750028f047fe943a3615a34f3e4a43927367a1e0120801
+
+[ "$($su -c 'id -u' 2>/dev/null)" = 0 ] || { echo "pong-nix: no root"; exit 2; }
+[ -z "$($su -c "ls -A '$root' 2>/dev/null")" ] || { echo "pong-nix: $root is not empty"; exit 1; }
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+curl -fsSL -o "$tmp/nix.tar.xz" "https://releases.nixos.org/nix/nix-$version/nix-$version-aarch64-linux.tar.xz"
+echo "$sha256  $tmp/nix.tar.xz" | sha256sum -c --quiet
+tar -xJf "$tmp/nix.tar.xz" -C "$tmp"
+chmod 755 "$tmp"
+$su -c "mkdir -p '$root' && $bin/unshare -m --propagation private /system/bin/sh '$here/pong-nix-root' install '$root' '$tmp/nix-$version-aarch64-linux'"

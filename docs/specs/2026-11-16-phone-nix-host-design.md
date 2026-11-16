@@ -86,8 +86,13 @@ Other apps and personal files are explicitly not in scope.
 - Proot is not used. A KSU module is **not** planned; per-session namespaces should make it
   unnecessary. If the builder finds one is needed, that is an owner decision (see
   anti-goals).
-- The user's home stays `/data/data/com.termux/files/home` so existing files, `~/.claude`
-  and project checkouts keep working.
+- Inside the chroot `HOME` is `/home/vino` (on `/data/nix-root`), so Home Manager never
+  writes links into `/nix/store` into the Termux home (they would break the rescue kit's
+  `ssh`/`git`). Shared state (`~/projects`, `~/src`, `~/.claude`, `~/.claude.json`,
+  `~/storage`) is reached through symlinks into the Termux home. *(Refined in the plan.)*
+- The chroot shell runs as uid 10417 but in SELinux domain `u:r:ksu:s0`: this KSU build
+  refuses both dyntransition and exec transition into Termux's `untrusted_app_27` context
+  (checked 2026-11-16). Consequence: Termux:API calls hang inside the chroot.
 
 ### In this repo
 
