@@ -64,6 +64,7 @@
     assert lib.assertMsg (n.networkConfig.VirtualEthernet == true) "${name} needs a private veth";
     assert lib.assertMsg (lib.sort lib.lessThan n.filesConfig.Bind == ["/dev/net/tun" "/srv/${name}/box:/data"]) "${name} must bind only /data from /srv/${name}/box (and /dev/net/tun)";
     assert lib.assertMsg (d.overrideStrategy == "asDropin" && lib.elem "multi-user.target" d.wantedBy) "${unit} must be a drop-in on the stock template, started at boot";
+    assert lib.assertMsg (d.restartIfChanged == false) "${unit} must not be restarted by a deploy (the box is live)";
     assert lib.assertMsg (d.unitConfig.ConditionPathExists == marker) "${unit} must wait for the seed marker ${marker}";
     assert lib.assertMsg (d.serviceConfig.DeviceAllow == ["" "/dev/net/tun rwm" "char-pts rw"] && d.serviceConfig.DevicePolicy == "closed") "${unit} may only reach /dev/net/tun and ptys";
     assert lib.assertMsg (lib.hasInfix "addr replace ${e.net}.1 dev ve-${name}" post && lib.hasInfix "route replace ${e.net}.2 dev ve-${name}" post) "${unit} must address the host side of ve-${name} as ${e.net}.1 with a route to ${e.net}.2";

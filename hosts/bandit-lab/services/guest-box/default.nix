@@ -169,6 +169,7 @@
         "systemd-nspawn@${name}" = {
           overrideStrategy = "asDropin";
           wantedBy = ["multi-user.target"]; # machines.target is not used on the lab
+          restartIfChanged = false; # as container@: a deploy must not restart a guest's live box
           unitConfig.ConditionPathExists = marker name; # waits for guest-debian-init
           serviceConfig = {
             # The empty entry resets the template's list (fuse, loop, device-mapper): only tun and ptys stay.
