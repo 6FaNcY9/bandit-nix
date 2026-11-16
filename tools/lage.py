@@ -258,7 +258,7 @@ class Transcript:
         return self.path
 
     def tail(self, nbytes=262144):
-        """The first read of a big file starts nbytes before its end, at a line start; a tail without a turn reads it all."""
+        """The first read of a big file starts nbytes before its end, at a line start; a tail without a settled entry reads it all."""
         if self.pos or self.locate() is None:
             return
         try:
@@ -271,7 +271,7 @@ class Transcript:
         except OSError:
             return
         self.update()
-        if self.last is None and self.pos:
+        if self.settled is None and self.pos:  # settled is None whenever last is; jetzt() reads either one
             self.__init__(self.session_id)
             self.update()
 

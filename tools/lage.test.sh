@@ -993,13 +993,38 @@ out=$(lage bar); jq -e '.text == "● 1" and .class == "busy"' <<<"$out"        
 live; session $pid bbbbbbbb-2 src-b "$HOME/w"; status $pid waiting
 out=$(lage bar); jq -e '.text == "● 1 ▲ 1" and .class == "waiting"' <<<"$out"
 fresh; session 999999 $s1 src-a "$HOME/w"; jq -e '.text == ""' <<<"$(lage bar)"  # dead pid: hidden
-# tail read: 1 MiB of filler before the last entry classifies like a full read; no marker in the tail falls back
+# tail read: 1 MiB of filler before the last entry classifies like a full read; no settled entry in the tail falls back
+filler() { # filler <sid>: 1 MiB of progress lines, the last one ended (fold leaves it open and the next entry would join it)
+  head -c 1048576 /dev/zero | tr '\0' 'x' | fold -w 1000 | sed 's/^/{"type":"progress","d":"/; s/$/"}/' >>"$HOME/.claude/projects/p/$1.jsonl"
+  echo >>"$HOME/.claude/projects/p/$1.jsonl"
+}
+tailed() { # tailed <sid>: true when a tail read of the transcript did not see the owner prompt at its start (the tail was kept)
+  python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import lage; t = lage.Transcript(sys.argv[2]); t.tail(); print(t.owner_ts is None)' "$here" "$1"
+}
 fresh; live; session $pid $s1 src-a "$HOME/w"
+owner 14:00
 entry $s1 "$(assistant 14:11:00 '"end_turn"' '[{"type":"text","text":"fertig"}]')"
-head -c 1048576 /dev/zero | tr '\0' 'x' | fold -w 1000 | sed 's/^/{"type":"progress","d":"/; s/$/"}/' >>"$HOME/.claude/projects/p/$s1.jsonl"
-echo >>"$HOME/.claude/projects/p/$s1.jsonl"  # fold leaves the last line open: end it, or the next entry joins it
+filler $s1
 jq -e '.text == "▲ 1"' <<<"$(lage bar)"                                       # fallback found the end_turn
+[[ $(tailed $s1) == False ]]                                                   # ... by reading the whole file
 entry $s1 "$(assistant 14:12:00 '"tool_use"' '[{"type":"tool_use","name":"Read","input":{"file_path":"/x"}}]')"
 jq -e '.text == "● 1"' <<<"$(lage bar)"                                       # tail sees the newest entry
+[[ $(tailed $s1) == True ]]                                                    # ... and did not read the start
+status $pid ""; jq -e '.text == "● 1"' <<<"$(lage bar)"                       # no status: the tail settles on the tool call too
+# helpers on the tail path: end_turn inside the window, a helper still running
+fresh; live; session $pid $s1 src-a "$HOME/w"
+owner 14:00; filler $s1
+entry $s1 "$(assistant 14:11:00 '"end_turn"' '[{"type":"text","text":"fertig"}]')"
+jq -e '.text == "▲ 1"' <<<"$(lage bar)"
+[[ $(tailed $s1) == True ]]
+sub=$HOME/.claude/projects/p/$s1/subagents; mkdir -p "$sub"
+echo '{}' >"$sub/agent-1.meta.json"; : >"$sub/agent-1.jsonl"
+jq -e '.text == "● 1" and (.tooltip | test("Helfer arbeiten"))' <<<"$(lage bar)"
+# no status: the settling tool call is outside the window, only an unsettled owner prompt inside: falls back, like a full read
+fresh; live; session $pid $s1 src-a "$HOME/w"; status $pid ""
+entry $s1 "$(assistant 14:11:00 '"tool_use"' '[{"type":"tool_use","name":"Read","input":{"file_path":"/x"}}]')"
+filler $s1
+entry $s1 '{"type":"user","timestamp":"2026-11-15T14:12:00Z","message":{"content":"hallo"}}'
+jq -e '.text == "● 1" and (.tooltip | test("liest x"))' <<<"$(lage bar)"
 
 echo ok
