@@ -36,7 +36,7 @@
   ];
   # Suspended (not stopped) while ARTEX runs; real guests, state is kept.
   guestUnits = [
-    "container@jerry.service"
+    "systemd-nspawn@jerry.service" # Debian guest (guest-box/guests.nix os = "debian")
     "container@martin.service"
   ];
 
