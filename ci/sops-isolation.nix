@@ -50,7 +50,9 @@ in
 
     bandit=$(sed -n 's/.*&host_bandit \(age1[a-z0-9]*\).*/\1/p' sops.yaml)
     lab=$(sed -n 's/.*&host_bandit_lab \(age1[a-z0-9]*\).*/\1/p' sops.yaml)
-    [[ -n $bandit && -n $lab && $bandit != "$lab" ]] || { echo "host recipients not found in .sops.yaml" >&2; exit 1; }
+    pong=$(sed -n 's/.*&host_pong \(age1[a-z0-9]*\).*/\1/p' sops.yaml)
+    [[ -n $bandit && -n $lab && -n $pong && $bandit != "$lab" && $pong != "$bandit" && $pong != "$lab" ]] ||
+      { echo "host recipients not found in .sops.yaml" >&2; exit 1; }
 
     # Catch-all must be last and user-only so a stray file fails safe.
     n=$(yq '.creation_rules[-1].key_groups[0].age | length' sops.yaml)
@@ -61,16 +63,18 @@ in
     for f in secrets/*.yaml; do
       name=$(basename "$f")
       r=$(recipients "$f")
-      has_bandit=0; has_lab=0
+      has_bandit=0; has_lab=0; has_pong=0
       grep -qx "$bandit" <<<"$r" && has_bandit=1
       grep -qx "$lab" <<<"$r" && has_lab=1
+      grep -qx "$pong" <<<"$r" && has_pong=1
       case "$name" in
-        lab.yaml) want="0 1" ;;
-        bandit.yaml|github.yaml) want="1 0" ;;
+        lab.yaml) want="0 1 0" ;;
+        bandit.yaml|github.yaml) want="1 0 0" ;;
+        pong.yaml) want="0 0 1" ;;
         *) echo "unexpected secrets file $name: add it to the isolation policy" >&2; exit 1 ;;
       esac
-      [[ "$has_bandit $has_lab" == "$want" ]] || {
-        echo "$name has wrong host recipients (bandit/lab = $has_bandit/$has_lab, want $want)" >&2; exit 1; }
+      [[ "$has_bandit $has_lab $has_pong" == "$want" ]] || {
+        echo "$name has wrong host recipients (bandit/lab/pong = $has_bandit/$has_lab/$has_pong, want $want)" >&2; exit 1; }
     done
 
     # Declared keys must exist in their file; lab.yaml must hold nothing else.

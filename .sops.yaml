@@ -4,6 +4,8 @@ keys:
   - &user  age134u5vtdts98pnept0k9v0uy4m6guthggfguw0ycvzn0evjeqgemsgl0krt
   - &host_bandit age1r6cncetmt3xx9mv2hedvwm8dwc2nhy9rmekhah747kxeguzygplq6a875l
   - &host_bandit_lab age1urtv4pr4sgg5dvpx9kpkxaq8ef2rx98mn37gmncnjtdnf7c2h9uslg820j
+  # The phone's chroot key (hosts/pong); its private half is kept in Bitwarden.
+  - &host_pong age1cj0wnwluzcsqdfultmytl474uthe2wxxef5ngk6rda7y9846640s43v4m7
 # sops uses the FIRST matching rule, so specific rules come first and the
 # catch-all last. Per-host files: a host key may only appear in the files that
 # host consumes (docs/runbooks/sops-split.md). The catch-all encrypts to `user`
@@ -19,6 +21,11 @@ creation_rules:
       - age:
           - *user
           - *host_bandit
+  - path_regex: (^|/)secrets/pong\.yaml$
+    key_groups:
+      - age:
+          - *user
+          - *host_pong
   - path_regex: (^|/)secrets/.*\.ya?ml$
     key_groups:
       - age:
