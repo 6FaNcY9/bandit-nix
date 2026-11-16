@@ -1,0 +1,5 @@
+# These checks flag deliberate NixOS module option assignments as style issues.
+disabled = [
+  "manual_inherit",
+  "repeated_keys",
+]
