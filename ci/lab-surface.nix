@@ -48,6 +48,8 @@ in
   assert lib.assertMsg (lib.elem 25565 fw.interfaces.tailscale0.allowedTCPPorts && lib.elem 24454 fw.interfaces.tailscale0.allowedUDPPorts) "tailscale0 must allow Velocity (25565/tcp) and voice chat (24454/udp)";
   # Tailnet DNS (services/dns): Blocky answers on the tailnet address only, and port 53 opens on tailscale0 only.
   assert lib.assertMsg (lab.services.blocky.settings.ports.dns == "${tailnetIp}:53" && lib.elem 53 fw.interfaces.tailscale0.allowedUDPPorts && lib.elem 53 fw.interfaces.tailscale0.allowedTCPPorts) "Blocky must listen on ${tailnetIp}:53 only, with port 53 open on tailscale0";
+  # Tailscale's UDP port is open on the uplink only (services/webhost), never on a guest's ve-* link.
+  assert lib.assertMsg (lib.hasInfix "iptables -w -A nixos-fw -i enp44s0 -p udp --dport 41641 -j nixos-fw-accept" fw.extraCommands && lib.hasInfix "ip6tables -w -A nixos-fw -i enp44s0 -p udp --dport 41641 -j nixos-fw-accept" fw.extraCommands && lib.length (lib.splitString "-i enp44s0 -p udp --dport 41641" fw.extraCommands) == 3) "the Tailscale UDP port 41641 must be open on enp44s0 only, once for IPv4 and once for IPv6";
   assert lib.assertMsg (noPorts fw) "the global firewall lists must be empty: open ports per interface, on tailscale0 only";
   assert lib.assertMsg (lib.all (i: noPorts fw.interfaces.${i}) otherInterfaces) "no interface other than tailscale0 may open ports (found: ${toString otherInterfaces})";
   assert lib.assertMsg (badPublished == []) "Container-published ports must bind 127.0.0.1 or ${tailnetIp}, never all interfaces: ${toString (map (x: "${x.name} ${x.p}") badPublished)}";

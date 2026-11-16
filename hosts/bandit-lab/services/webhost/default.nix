@@ -2,12 +2,14 @@
 # Provides: server UI, PostgreSQL, Docker, Tailscale VPN, SMB storage.
 # HTTP routing handled by Traefik (traefik.nix). TLS terminated by Cloudflare.
 {
+  config,
   lib,
   pkgs,
   repoConfig,
   ...
 }: let
   username = repoConfig.workstation.username;
+  tailscaleRule = op: "-w ${op} nixos-fw -i enp44s0 -p udp --dport ${toString config.services.tailscale.port} -j nixos-fw-accept";
 in {
   # bandit-lab: vino needs docker group for container management.
   # Keep server group scope tighter than the desktop laptop profile.
@@ -118,6 +120,12 @@ in {
   # home Wi-Fi/LAN uplinks. WS-Discovery and NetBIOS are off because they only
   # advertise to the LAN; mount the share by tailnet address.
   networking.firewall.interfaces.tailscale0.allowedTCPPorts = [139 445];
+
+  # Tailscale direct connections: without an open UDP port the lab is reachable directly only by hole
+  # punching, which needs a working DERP relay; when that failed, slayerpc lost the lab (2026-11-16).
+  # WireGuard drops every packet without a valid key. Only on the uplink, never on the guests' ve-* links.
+  networking.firewall.extraCommands = "iptables ${tailscaleRule "-A"}\nip6tables ${tailscaleRule "-A"}";
+  networking.firewall.extraStopCommands = "iptables ${tailscaleRule "-D"} || true\nip6tables ${tailscaleRule "-D"} || true";
 
   # ── Docker ────────────────────────────────────────────────────────────────
   virtualisation.docker = {
