@@ -18,6 +18,8 @@ When the screen is shared, it must not leak IPs or the hostname.
 2. Top bar right: agents (`● 2 ▲ 1` = 2 busy, 1 waiting for the owner) and weekly limit (`AI ▰▰▰▰▰▰▱▱▱▱ 68%`).
 3. Bottom bar left, after the health line: hacking target (`󰖂 10.10.14.7 → 󰓾 10.10.11.5`), only while a VPN or a target exists.
 4. Stream mode: while a screen share runs (or toggled by hand), IPs and hostname show as `•••` and notifications are silent.
+5. DNS shield: while the laptop is connected to the tailnet, a small shield shows whether the lab's ad-blocking DNS
+   (Blocky, live since 2026-11-16) protects it. Display only.
 
 ## Non-goals
 
@@ -33,6 +35,9 @@ When the screen is shared, it must not leak IPs or the hostname.
 - Stream mode keeps showing an IP or the hostname for more than one privacy poll (3 s) after a share starts.
 - New polling that costs noticeable CPU (no heavy command every second; each module run well under 200 ms).
 - Credentials or tokens read or copied anywhere.
+- The bar changes network or DNS settings by itself. Owner 2026-11-17: "nur wenn ich verbinde, nicht automatisch" —
+  the bar only shows; connecting stays the owner's action. (Stream mode's notification mute is the one automatic
+  action, approved with the plan.)
 
 ## Constraints
 
@@ -126,6 +131,18 @@ titles on the bar).
 - Known limit: up to 3 s (one poll) before an automatic share is detected. The built-in `network` tooltip is not
   masked.
 
+### 5. DNS shield: `custom/dns`
+
+Bottom bar right, before `network`; `interval = 60`.
+- Hidden unless `tailscale0` has a tailnet IPv4 (cheap `ip -4 -j addr`, no `tailscale` CLI). Not connected → no shield,
+  no alarm.
+- Connected: resolve one domain that is on the Blocky lists (e.g. `doubleclick.net`) through the system resolver with
+  a short timeout. Answer `0.0.0.0` → `󰒃 DNS` teal, class `ok`, tooltip "Werbeblocker aktiv (bandit-lab)". Any real
+  address or timeout → `󰦞 DNS` red, class `off`, tooltip "Tailnet verbunden, aber Werbung kommt durch".
+- No click action yet (the Netz-Panel, a separate lab project in `~/src/bandit-nix-netz-panel`, may become the click
+  target later). Never touches DNS or Tailscale settings.
+- Stream mode does not need to mask it (no address shown).
+
 ## Verification
 
 - `tools/lage.test.sh` gains cases for `lage bar` (busy/waiting/idle-with-helpers/no sessions → JSON text and class).
@@ -134,7 +151,8 @@ titles on the bar).
 - Owner on the laptop after switching the branch: both bars fit at 16, the `▲` sessions are the ones the LAGE pane
   lists as waiting (the pane shows no busy count, so only `▲` can be compared), click
   jumps to the waiting session, AI shows the same % as the Claude statusline, `pt` target appears/disappears, screen
-  share in a browser masks IPs and silences notifications, manual key toggles it.
+  share in a browser masks IPs and silences notifications, manual key toggles it, the DNS shield is teal with
+  Tailscale up and gone with Tailscale down.
 
 ## Left to the builder
 
