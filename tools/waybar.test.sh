@@ -93,4 +93,26 @@ rm "$t/ps"; if tg copy target; then false; fi; grep -q 'no address' "$t/notify" 
 if VPN=none tg copy vpn; then false; fi
 rc=0; tg copy bogus 2>/dev/null || rc=$?; [[ $rc == 2 ]]
 
+# --- waybar-stream: flag files in $XDG_RUNTIME_DIR, mako mode "stream", Waybar signal 8
+fresh() { rm -rf "$t/run"; mkdir "$t/run"; : >"$t/mako"; : >"$t/pkill"; }
+nr() { env -u XDG_RUNTIME_DIR bash "$here/waybar-stream.sh" "$@"; }
+fresh
+if st status; then false; fi                                                       # off at start
+st auto on; st status; grep -qx 'mode -a stream' "$t/mako"
+st toggle; st auto off; st status                                                  # manual keeps it on
+if grep -q 'mode -r stream' "$t/mako"; then false; fi                              # mako not released while a flag is left
+st toggle; if st status; then false; fi; grep -qx 'mode -r stream' "$t/mako"       # both gone: released
+grep -qx -- '-RTMIN+8 -x waybar' "$t/pkill"
+st auto on; st toggle; st auto off; st status; st toggle; if st status; then false; fi  # auto + manual: either alone keeps it on
+fresh
+chk '.text == "bandit"' <<<"$(st text bandit)"
+chk '.text == "a\"b\\c"' <<<"$(st text 'a"b\c')"                                   # JSON-escaped
+st toggle; chk '.text == "•••"' <<<"$(st text bandit)"
+fresh; MAKO=fail st toggle; st status; grep -q -- '-RTMIN+8' "$t/pkill"            # makoctl fails: still exit 0, signal still sent
+fresh; rc=0; st bogus 2>/dev/null || rc=$?; [[ $rc == 2 ]]
+if nr status; then false; fi                                                       # no XDG_RUNTIME_DIR: off, text unmasked, changes are a no-op note
+chk '.text == "bandit"' <<<"$(nr text bandit)"
+nr toggle 2>"$t/err"; grep -q XDG_RUNTIME_DIR "$t/err"; nr auto on 2>/dev/null
+[[ ! -s $t/mako && ! -s $t/pkill ]]
+
 echo ok

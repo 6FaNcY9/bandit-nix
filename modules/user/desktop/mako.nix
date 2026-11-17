@@ -44,6 +44,11 @@ in {
       "mode=dnd" = {
         invisible = 1;
       };
+
+      # own mode for waybar-stream, so ending a screen share never clears a DND the owner set (and vice versa)
+      "mode=stream" = {
+        invisible = 1;
+      };
     };
   };
 }
