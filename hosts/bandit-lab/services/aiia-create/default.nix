@@ -132,6 +132,10 @@ in {
             # fal calls <this>/<job id> when a picture is done (needs the
             # generator image at 85f8012 or later; signature checked in the API).
             FAL_WEBHOOK_URL = "${origin}/hooks/fal";
+            # Own profile pictures (image 3688bfb) go to the provider's vision
+            # model before they are stored. Off until the privacy notice says
+            # so: only the ten standard pictures, nothing leaves the site.
+            AVATAR_CHECK = "false";
             # Stage 2 (checkout): stays off until the image carries real variant
             # ids in config/shopify-variants.json (REPLACE_ME answers "not set up").
             # Off until the shop can sell and stage 3 is agreed: uncomment to open checkout.
