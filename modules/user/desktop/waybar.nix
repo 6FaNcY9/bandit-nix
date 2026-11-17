@@ -85,7 +85,7 @@
         '); then
           case " $items " in *" SCREEN "*) now=on ;; *) now=off ;; esac
           # Every waybar-stream call signals Waybar, so call it only when the share starts or stops (the first pass counts as a change).
-          if [ "$now" != "$screen" ]; then screen=$now; waybar-stream auto "$now"; fi
+          if [ "$now" != "$screen" ]; then screen=$now; waybar-stream auto "$now" || true; fi
         else
           items="" # pw-dump failed: hide the module, keep the last share state
         fi
@@ -139,7 +139,9 @@
         esac
         if [ -z "$ip" ]; then notify-send -t 2000 "$label" "no address"; exit 1; fi
         printf '%s' "$ip" | wl-copy
-        notify-send -t 2000 "$label copied" "$ip"
+        # the clipboard gets the real IP, the notification must not show it on stream
+        shown=$ip; if waybar-stream status; then shown=•••; fi
+        notify-send -t 2000 "$label copied" "$shown"
         exit 0
       fi
 
@@ -204,6 +206,7 @@ in {
         # An exec module so stream mode can hide the hostname; signal 8 redraws it at once.
         exec = "${barStream}/bin/waybar-stream text ${osConfig.networking.hostName}";
         return-type = "json";
+        interval = 5; # fallback if the signal is missed
         signal = 8;
         on-click = "${config.programs.rofi.package}/bin/rofi -show drun";
         tooltip = false;

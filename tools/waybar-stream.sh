@@ -24,8 +24,9 @@ case ${1:-}:${2:-} in
       auto:on) : >"$auto" ;;
       auto:off) rm -f "$auto" ;;
     esac
-    # mako leaves stream mode only when both flags are gone; signal 8 makes Waybar redraw its modules
-    if on; then makoctl mode -a stream || true; else makoctl mode -r stream || true; fi
-    pkill -RTMIN+8 -x waybar || true ;;
+    # mako leaves stream mode only when both flags are gone; signal 8 makes Waybar redraw its modules.
+    # `-a` appends without a duplicate check and `-r` removes one entry, so add only when absent (grep without -q: no SIGPIPE under pipefail).
+    if on; then makoctl mode | grep -x stream >/dev/null || makoctl mode -a stream || true; else makoctl mode -r stream || true; fi
+    pkill -RTMIN+8 -x '\.waybar-wrapped|waybar' || true ;;
   *) echo "usage: waybar-stream status | toggle | auto on|off | text <value>" >&2; exit 2 ;;
 esac

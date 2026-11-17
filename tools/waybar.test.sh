@@ -8,6 +8,7 @@ t=$(mktemp -d); trap 'rm -rf "$t"' EXIT
 
 # Stub commands, each steered per call by an env var: VPN=tun|none, TS=up|none, GETENT=block|real|hang,
 # STREAM=on|off (default off), MAKO=ok|fail. makoctl/pkill/notify-send log their args, wl-copy keeps its stdin.
+# makoctl also keeps a mode list in $t/modes like mako 1.11: `mode` lists, `-a X` appends without a duplicate check, `-r X` removes one entry.
 export BAR_TEST_DIR=$t
 mkdir "$t/stub"
 stub() { cat >"$t/stub/$1"; chmod +x "$t/stub/$1"; } # stub <name>: stdin is the script
@@ -38,7 +39,13 @@ EOF
 stub makoctl <<'EOF'
 #!/usr/bin/env bash
 echo "$*" >>"$BAR_TEST_DIR/mako"
-[[ ${MAKO:-ok} == ok ]]
+[[ ${MAKO:-ok} == ok ]] || exit 1
+m=$BAR_TEST_DIR/modes
+case ${1:-}:${2:-} in
+  mode:) cat "$m" ;;
+  mode:-a) echo "$3" >>"$m" ;;
+  mode:-r) awk -v x="$3" '!d && $0 == x {d = 1; next} {print}' "$m" >"$m.new"; mv "$m.new" "$m" ;;
+esac
 EOF
 stub pkill <<'EOF'
 #!/usr/bin/env bash
@@ -94,7 +101,7 @@ if VPN=none tg copy vpn; then false; fi
 rc=0; tg copy bogus 2>/dev/null || rc=$?; [[ $rc == 2 ]]
 
 # --- waybar-stream: flag files in $XDG_RUNTIME_DIR, mako mode "stream", Waybar signal 8
-fresh() { rm -rf "$t/run"; mkdir "$t/run"; : >"$t/mako"; : >"$t/pkill"; }
+fresh() { rm -rf "$t/run"; mkdir "$t/run"; : >"$t/mako"; : >"$t/pkill"; : >"$t/modes"; }
 nr() { env -u XDG_RUNTIME_DIR bash "$here/waybar-stream.sh" "$@"; }
 fresh
 if st status; then false; fi                                                       # off at start
@@ -102,8 +109,10 @@ st auto on; st status; grep -qx 'mode -a stream' "$t/mako"
 st toggle; st auto off; st status                                                  # manual keeps it on
 if grep -q 'mode -r stream' "$t/mako"; then false; fi                              # mako not released while a flag is left
 st toggle; if st status; then false; fi; grep -qx 'mode -r stream' "$t/mako"       # both gone: released
-grep -qx -- '-RTMIN+8 -x waybar' "$t/pkill"
+grep -qxF -- '-RTMIN+8 -x \.waybar-wrapped|waybar' "$t/pkill"                       # nixpkgs Waybar's comm is .waybar-wrapped; a loose match would hit waybar-privacy
 st auto on; st toggle; st auto off; st status; st toggle; if st status; then false; fi  # auto + manual: either alone keeps it on
+fresh; st auto on; st toggle; [[ $(grep -cx stream "$t/modes") == 1 ]]               # both flags on: one stream entry, not two
+st toggle; st auto off; if grep -qx stream "$t/modes"; then false; fi              # share on, manual on, manual off, share off: mako left stream mode
 fresh
 chk '.text == "bandit"' <<<"$(st text bandit)"
 chk '.text == "a\"b\\c"' <<<"$(st text 'a"b\c')"                                   # JSON-escaped
