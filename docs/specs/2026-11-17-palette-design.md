@@ -27,6 +27,7 @@ drafted with the architect. The owner picked look **A** (one flat list) from bro
 | KI | `Claude in Ordner …` | second list (below) |
 | Hacken | `Ziel-IP kopieren` · value | `waybar-target copy target` (row hidden without target) |
 | Hacken | `VPN-IP kopieren` · value | `waybar-target copy vpn` (row hidden without tun* IPv4) |
+| Hacken | `Ziel entfernen` | `pt target clear` (row hidden without target; added 2026-11-17 at the owner's request; needs sec `feat/target-clear`, because clearing only `target=` lets pt restore the old IP from `.ctf-session`) |
 | Schalter | `Stream: AN/AUS` (AN yellow) | `waybar-stream toggle` |
 | Schalter | `Ruhe: AN/AUS` | `makoctl mode -t dnd` |
 | Menüs | `Programme` · `Super+D` | `rofi -show drun` |

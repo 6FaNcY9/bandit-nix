@@ -56,7 +56,7 @@ echo "cliphist $*" >>"$BAR_TEST_DIR/log"
 [[ ${1:-} == list ]] && echo '1 clip'
 exit 0
 EOF
-for c in kitty keybinds-menu net-menu powermenu hypr-cockpit hypr-screenshot notify-send wl-copy; do
+for c in kitty keybinds-menu net-menu powermenu hypr-cockpit hypr-screenshot notify-send wl-copy pt; do
   stub "$c" <<'EOF'
 #!/usr/bin/env bash
 echo "$(basename "$0")${*:+ $*}" >>"$BAR_TEST_DIR/log" # no trailing space without args
@@ -70,9 +70,9 @@ no() { if "$@"; then echo "FAIL at line ${BASH_LINENO[0]}: unexpected: $*" >&2; 
 
 PICK=Stream pal; grep -qx 'waybar-stream toggle' "$t/log"
 grep -q -- '-mesg Claude wartet: 2 · Stream AUS · Ziel 10.10.11.5' "$t/rofi.1.args"
-[[ $(rows | wc -l) == 13 ]]; rows | head -1 | grep -q 'Claude wartet: 2'
+[[ $(rows | wc -l) == 14 ]]; rows | head -1 | grep -q 'Claude wartet: 2'
 flags() { local f; for f in "${@:2}"; do grep -q -- "$f" "$1" || { echo "FAIL at line ${BASH_LINENO[0]}: no $f in $1" >&2; exit 1; }; done; } # flags <args file> <flag>...
-flags "$t/rofi.1.args" -dmenu -i -markup-rows "-format i" "-p befehl" "-theme retro-eighties" -no-show-icons "-theme-str listview { lines: 13; }"
+flags "$t/rofi.1.args" -dmenu -i -markup-rows "-format i" "-p befehl" "-theme retro-eighties" -no-show-icons "-theme-str listview { lines: 14; }"
 grep -qw -- -no-sort "$t/rofi.1.args"                                                     # table order must win over fuzzy sorting
 rows | grep -qF 'Menüs    Netz'; rows | grep -qF 'Hacken   Ziel-IP kopieren'                # group padded to 8 characters, not bytes
 grep -q 'color="#fdb827">Claude wartet: 2<' "$t/rofi.1"; grep -q 'color="#848488">KI ' "$t/rofi.1"   # default colours without the Nix wrapper
@@ -81,6 +81,7 @@ MODES=$'default\ndnd\nstream' PICK=x pal; rows | grep -q 'Ruhe: AN'
 grep -q 'Ruhe: <span color="#fdb827">AN</span>' "$t/rofi.1"
 PICK=hack pal; grep -qx 'waybar-target copy target' "$t/log"
 PICK='VPN-IP' pal; grep -qx 'waybar-target copy vpn' "$t/log"
+PICK='Ziel entfernen' pal; grep -qx 'pt target clear' "$t/log"
 PICK=Netz pal; grep -qx 'net-menu' "$t/log"
 PAL_DIM=DIM PAL_WARN=WARN PICK=x pal; grep -q 'color="WARN">Claude wartet: 2<' "$t/rofi.1"; grep -q 'color="DIM">Hacken' "$t/rofi.1"
 STREAM=on PICK=x pal; no grep -q '10\.10\.' "$t/rofi.1" "$t/rofi.1.args"; grep -q '•••' "$t/rofi.1"; grep -q 'Stream AN · Ziel •••' "$t/rofi.1.args"

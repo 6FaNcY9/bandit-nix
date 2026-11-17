@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # rofi command palette: Claude, hack and switch rows plus the other menus in one list; the picked action runs after rofi has returned.
 # Env: PAL_DIM / PAL_WARN (pango colours). Stream mode masks target and VPN IP with •••.
-# Commands: rofi lage waybar-target waybar-stream makoctl hypr-cockpit keybinds-menu net-menu powermenu hypr-screenshot cliphist wl-copy kitty notify-send jq sed grep ls
+# Commands: rofi lage waybar-target pt waybar-stream makoctl hypr-cockpit keybinds-menu net-menu powermenu hypr-screenshot cliphist wl-copy kitty notify-send jq sed grep ls
 set -euo pipefail
 PATH=$PATH:$HOME/.local/bin # Hyprland's PATH lacks it; appended so Nix inputs and test stubs win
 dim=${PAL_DIM:-#848488} warn=${PAL_WARN:-#fdb827}
@@ -47,6 +47,7 @@ row hypr-cockpit KI Cockpit Super+C
 row folder KI "Claude in Ordner …"
 if [[ -n $target ]]; then row "waybar-target copy target" Hacken "Ziel-IP kopieren" "$(shown "$target")"; fi
 if [[ -n $vpn ]]; then row "waybar-target copy vpn" Hacken "VPN-IP kopieren" "$(shown "$vpn")"; fi
+if [[ -n $target ]]; then row "pt target clear" Hacken "Ziel entfernen"; fi
 sw "waybar-stream toggle" Stream "$stream"
 sw "makoctl mode -t dnd" Ruhe "$dnd"
 row "rofi -show drun" Menüs Programme Super+D
@@ -63,7 +64,7 @@ if [[ -n $target ]]; then mesg+=" · Ziel $(shown "$target")"; fi
 
 i=$(
   for k in "${!acts[@]}"; do printf '%s\0display\x1f%s\n' "${plain[k]}" "${marks[k]}"; done |
-    pick -markup-rows -p befehl -theme-str 'listview { lines: 13; }' -mesg "$(esc "$mesg")"
+    pick -markup-rows -p befehl -theme-str 'listview { lines: 14; }' -mesg "$(esc "$mesg")"
 ) || exit 0
 
 # the action words are a command line; folder and clip are the functions above
