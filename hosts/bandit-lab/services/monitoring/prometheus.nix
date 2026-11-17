@@ -1,4 +1,8 @@
-{pkgs, ...}: let
+{
+  pkgs,
+  repoConfig,
+  ...
+}: let
   # Prometheus scrape configuration, linked to a stable path for the
   # host-managed monitoring stack (docs/runbooks/monitoring.md).
   prometheusYml = pkgs.writeText "prometheus.yml" ''
@@ -13,6 +17,11 @@
       - job_name: node
         static_configs:
           - targets: ["localhost:9100"]
+
+      # Blocky's HTTP listener on the tailnet address, reachable from the proxy network only (firewall rule in services/dns).
+      - job_name: blocky
+        static_configs:
+          - targets: ["${repoConfig.lab.tailscaleIp}:4000"]
 
       # Public endpoint reachability. Cloudflare Access can return a login
       # redirect without contacting the tunnel or origin application.

@@ -3,7 +3,12 @@
 Blocky (`hosts/bandit-lab/services/dns`) answers DNS on `100.125.161.81:53`, tailnet only.
 It sends each query to two of Cloudflare, Quad9 and Google (DoH by IP), picked by recent
 speed, and takes the first answer; popular names are prefetched before they expire. Ads
-and trackers (StevenBlack hosts, OISD big) get `0.0.0.0`. No query log is kept. The lab
+and trackers (StevenBlack hosts, OISD big) get `0.0.0.0`. Blocky keeps a query log for 7
+days in the Postgres database `blocky` (table `log_entries`), reached over the Unix socket
+only; Postgres has no TCP listener beyond loopback. The owner will read it through Grafana
+(dashboard Netzwerk, coming in a later step), with the read-only role `grafana` (`SELECT`
+only). To wipe it now: `sudo -u postgres psql -d blocky -c 'truncate log_entries'`. If
+Postgres is down, DNS still answers and the queries in that time are not logged. The lab
 itself still uses systemd-resolved.
 
 ## Owner console steps (after the deploy)

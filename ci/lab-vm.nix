@@ -9,6 +9,7 @@
   modules,
   specialArgs,
 }: let
+  tailnetIp = specialArgs.repoConfig.lab.tailscaleIp;
   canaryImage = pkgs.dockerTools.buildImage {
     name = "canary";
     tag = "test";
@@ -53,6 +54,19 @@ in
       imports = modules;
       # The test VM forces videoDrivers to modesetting and has no GPU, so the toolkit's driver assertion cannot hold.
       hardware.nvidia-container-toolkit.enable = pkgs.lib.mkForce false;
+      # Blocky binds the tailnet address, which only tailscaled provides; the VM puts it on lo instead.
+      # (networking.interfaces.lo.ipv4.addresses does not work: its network-addresses-lo unit has no
+      # [Install] section and no lo.device unit exists to pull it in, so it never starts.)
+      systemd.services.tailnet-ip-on-lo = {
+        wantedBy = ["blocky.service"];
+        before = ["blocky.service"];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = "${pkgs.iproute2}/bin/ip addr add ${tailnetIp}/32 dev lo";
+        };
+      };
+      services.blocky.settings.customDNS.mapping."canary.test" = "10.0.0.1";
       virtualisation = {
         memorySize = 4096;
         cores = 2;
@@ -78,6 +92,9 @@ in
     };
     testScript = ''
       import json
+      import re
+
+      ip = "${tailnetIp}"
 
       lab.wait_for_unit("multi-user.target")
       lab.wait_for_unit("sshd.service")
@@ -126,5 +143,28 @@ in
       for p in lab.succeed("podman ps --format '{{.Ports}}'").split():
           port = p.split("->")[0].rsplit(":", 1)[-1]
           lab.fail(f"curl -sS -o /dev/null --max-time 3 http://{lan}:{port}/")
+
+      # Blocky's query log: written to Postgres over the socket, read-only for grafana,
+      # and DNS keeps answering while Postgres is down.
+      lab.wait_for_unit("blocky.service")
+      lab.wait_for_unit("blocky-db-grants.service")
+      lab.wait_until_succeeds(f"dig +short @{ip} canary.test | grep -x 10.0.0.1")
+      # Metrics on the tailnet address, scraped by the monitoring pod (counters exist after the first query).
+      lab.wait_until_succeeds("podman exec prometheus wget -qO- http://${tailnetIp}:4000/metrics | grep -q blocky_query_total")
+      lab.wait_until_succeeds("sudo -u postgres psql -d blocky -tAc \"select count(*) from log_entries where question_name like 'canary.test%'\" | grep -v '^0$'", timeout=120)
+      grafana = "sudo -u grafana psql -h /run/postgresql -d blocky"
+      out = lab.succeed(f"{grafana} -tAc 'select count(*) from log_entries'").strip()
+      assert re.fullmatch("[0-9]+", out), out
+      for stmt in ["delete from log_entries", "insert into log_entries (request_ts) values (now())", "truncate log_entries"]:
+          status, out = lab.execute(f'{grafana} -c "{stmt}" 2>&1')
+          assert status != 0 and "permission denied for table log_entries" in out, (stmt, status, out)
+      lab.succeed("systemctl stop postgresql.service")
+      lab.succeed(f"dig +short @{ip} canary.test | grep -x 10.0.0.1")
+      # Blocky must also START while Postgres is down (DNS first, log second).
+      lab.succeed("systemctl stop blocky.service")
+      lab.succeed("systemctl start --job-mode=ignore-dependencies blocky.service")  # plain start would pull Postgres back up via Wants=
+      lab.fail("systemctl is-active postgresql.service")
+      lab.wait_until_succeeds(f"dig +short @{ip} canary.test | grep -x 10.0.0.1")
+      lab.succeed("systemctl start postgresql.service")
     '';
   }

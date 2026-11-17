@@ -48,6 +48,13 @@ in
   assert lib.assertMsg (lib.elem 25565 fw.interfaces.tailscale0.allowedTCPPorts && lib.elem 24454 fw.interfaces.tailscale0.allowedUDPPorts) "tailscale0 must allow Velocity (25565/tcp) and voice chat (24454/udp)";
   # Tailnet DNS (services/dns): Blocky answers on the tailnet address only, and port 53 opens on tailscale0 only.
   assert lib.assertMsg (lab.services.blocky.settings.ports.dns == "${tailnetIp}:53" && lib.elem 53 fw.interfaces.tailscale0.allowedUDPPorts && lib.elem 53 fw.interfaces.tailscale0.allowedTCPPorts) "Blocky must listen on ${tailnetIp}:53 only, with port 53 open on tailscale0";
+  # Blocky's query log (owner request 2026-11-16): Postgres over the Unix socket, 7 days, no TCP listener.
+  assert lib.assertMsg (lab.services.blocky.settings.queryLog.type == "postgresql" && lab.services.blocky.settings.queryLog.logRetentionDays == 7) "Blocky must log to Postgres and keep 7 days only";
+  assert lib.assertMsg (lab.services.blocky.settings.ports.http == "${tailnetIp}:4000") "Blocky HTTP (metrics + API) must bind the tailnet address ${tailnetIp}:4000";
+  assert lib.assertMsg (!(lib.elem 4000 fw.interfaces.tailscale0.allowedTCPPorts)) "Blocky HTTP port 4000 must not be open on tailscale0 (proxy network only)";
+  assert lib.assertMsg (lib.elem "malware" lab.services.blocky.settings.blocking.clientGroupsBlock.default) "Blocky must block the malware list for everyone";
+  assert lib.assertMsg (lib.hasInfix "host=/run/postgresql" lab.services.blocky.settings.queryLog.target) "Blocky must reach Postgres over the Unix socket, not TCP";
+  assert lib.assertMsg (!(lab.services.postgresql.enableTCPIP or false)) "Postgres must not listen on TCP beyond loopback";
   # Tailscale's UDP port is open on the uplink only (services/webhost), never on a guest's ve-* link.
   assert lib.assertMsg (lib.hasInfix "iptables -w -A nixos-fw -i enp44s0 -p udp --dport 41641 -j nixos-fw-accept" fw.extraCommands && lib.hasInfix "ip6tables -w -A nixos-fw -i enp44s0 -p udp --dport 41641 -j nixos-fw-accept" fw.extraCommands && lib.length (lib.splitString "-i enp44s0 -p udp --dport 41641" fw.extraCommands) == 3) "the Tailscale UDP port 41641 must be open on enp44s0 only, once for IPv4 and once for IPv6";
   assert lib.assertMsg (noPorts fw) "the global firewall lists must be empty: open ports per interface, on tailscale0 only";
