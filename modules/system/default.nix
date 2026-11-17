@@ -14,6 +14,7 @@
     ./boot.nix
     ./hardening.nix
     ./network.nix
+    ./tailnet-dns.nix
     ./firmware.nix
     ./users.nix
     ./health-check.nix

@@ -25,3 +25,12 @@ back to their own DNS within seconds. Removing `./services/dns` from
 
 Add it under `blocking.allowlists.ads` in `services/dns/default.nix` (a list of
 inline domains or URLs, see the Blocky docs) and deploy.
+
+## Laptop (bandit)
+
+The laptop has no global `~.` (`modules/system/tailnet-dns.nix`), so on the tailnet only
+Blocky answers. `dns-guard.service` asks Blocky directly every 10 s: after 2 misses it runs
+`tailscale set --accept-dns=false` (router + Cloudflare/Quad9 take over, ads come through),
+after 2 answers `--accept-dns=true`. Log: `journalctl -u dns-guard`.
+Rollback: `sudo systemctl stop dns-guard && sudo tailscale set --accept-dns=true`; for good,
+remove `./tailnet-dns.nix` from `modules/system/default.nix`.
