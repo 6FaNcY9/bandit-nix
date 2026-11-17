@@ -9,7 +9,7 @@ t=$(mktemp -d); trap 'rm -rf "$t"' EXIT
 # Stubs, steered per call by env vars: PICK='a|b' (n-th rofi call picks the first row containing the n-th pattern, none = Esc),
 # WAIT=N, LAGE=fail, VPN/TARGET (default 10.10.14.7 / 10.10.11.5), STREAM=on, MODES (makoctl mode output).
 # Everything but the read-only queries (lage bar, waybar-stream status, waybar-target get, makoctl mode) logs "<name> <args>" to $t/log.
-export BAR_TEST_DIR=$t HOME=$t/home
+export BAR_TEST_DIR=$t HOME=$t/home LC_ALL=C.UTF-8 # the palette pads the group column by characters, which needs a UTF-8 locale
 mkdir -p "$t/stub" "$HOME/src"
 stub() { cat >"$t/stub/$1"; chmod +x "$t/stub/$1"; } # stub <name>: stdin is the script
 stub rofi <<'EOF'
@@ -73,6 +73,8 @@ grep -q -- '-mesg Claude wartet: 2 · Stream AUS · Ziel 10.10.11.5' "$t/rofi.1.
 [[ $(rows | wc -l) == 13 ]]; rows | head -1 | grep -q 'Claude wartet: 2'
 flags() { local f; for f in "${@:2}"; do grep -q -- "$f" "$1" || { echo "FAIL at line ${BASH_LINENO[0]}: no $f in $1" >&2; exit 1; }; done; } # flags <args file> <flag>...
 flags "$t/rofi.1.args" -dmenu -i -markup-rows "-format i" "-p befehl" "-theme retro-eighties" -no-show-icons "-theme-str listview { lines: 13; }"
+grep -qw -- -no-sort "$t/rofi.1.args"                                                     # table order must win over fuzzy sorting
+rows | grep -qF 'Menüs    Netz'; rows | grep -qF 'Hacken   Ziel-IP kopieren'                # group padded to 8 characters, not bytes
 grep -q 'color="#fdb827">Claude wartet: 2<' "$t/rofi.1"; grep -q 'color="#848488">KI ' "$t/rofi.1"   # default colours without the Nix wrapper
 PICK=Ruhe pal; grep -qx 'makoctl mode -t dnd' "$t/log"
 MODES=$'default\ndnd\nstream' PICK=x pal; rows | grep -q 'Ruhe: AN'
@@ -101,7 +103,7 @@ touch -d '2 days ago' "$HOME/src/alpha/.git"
 PICK='in Ordner|zeta' pal; grep -qx "kitty --directory $HOME/src/zeta claude" "$t/log"
 [[ $(cat "$t/rofi.2") == $'zeta\nalpha' ]]
 PICK='in Ordner|alpha' pal; grep -qx "kitty --directory $HOME/src/alpha claude" "$t/log"
-flags "$t/rofi.2.args" -dmenu -i "-format i" "-p ordner" "-theme retro-eighties" -no-show-icons
+flags "$t/rofi.2.args" -dmenu -i "-format i" "-p ordner" "-theme retro-eighties" -no-show-icons; grep -qw -- -no-sort "$t/rofi.2.args"
 PICK='in Ordner' pal; no grep -q kitty "$t/log"                                           # Esc in the 2nd list
 PICK='in Ordner|@custom' pal; no grep -q kitty "$t/log"                                   # -1 in the 2nd list: not the last folder
 HOME=$t/none PICK='in Ordner' pal; grep -qx 'notify-send Palette Keine Ordner' "$t/log"; [[ ! -e $t/rofi.2 ]]

@@ -8,13 +8,13 @@ dim=${PAL_DIM:-#848488} warn=${PAL_WARN:-#fdb827}
 
 esc() { sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g' <<<"$1"; }
 shown() { if ((stream)); then echo '•••'; else echo "$1"; fi; }
-# pick <rofi args>: rows on stdin, prints the picked index; fails on Esc, an empty answer or -1 (typed text that matches no row)
-pick() { rofi -dmenu -i -format i -theme retro-eighties -no-show-icons "$@" | grep -xE '[0-9]+'; }
+# pick <rofi args>: -no-sort keeps list order (fuzzy sorting could rank Ruhe above Stream); rows on stdin, prints the picked index; fails on Esc, an empty answer or -1 (typed text that matches no row)
+pick() { rofi -dmenu -i -no-sort -format i -theme retro-eighties -no-show-icons "$@" | grep -xE '[0-9]+'; }
 
 acts=() plain=() marks=()
 row() { # row <action> <group> <label> [value or key hint] [label markup]: plain text is what rofi filters on, markup what it shows
   local g v=${4:-}
-  printf -v g '%-8s' "$2"
+  g=$2; while ((${#g} < 8)); do g+=' '; done # pad by characters (printf pads by bytes); relies on a UTF-8 locale
   acts+=("$1") plain+=("$g $3${v:+  $v}")
   marks+=("<span color=\"$dim\">$g</span> ${5:-$3}${v:+  <span color=\"$dim\">$(esc "$v")</span>}")
 }

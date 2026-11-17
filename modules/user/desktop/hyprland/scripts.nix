@@ -130,6 +130,7 @@ in {
             Mod+Return          kitty (terminal)
             Mod+Shift+W         firefox
             Mod+D               rofi app launcher
+            Mod+Space           command palette
             Mod+Shift+V         cliphist clipboard picker
             Mod+Shift+F         PCManFM file manager
 
