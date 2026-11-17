@@ -41,7 +41,8 @@ in
         && lib.hasInfix "iptables -A nixos-fw -s 10.250.77.0/29 -p tcp --dport 2586 -j nixos-fw-accept" fw.extraCommands
         && lib.length (lib.splitString "--dport 2586" fw.extraCommands) == 2))
   ) "ntfy must listen on loopback, or on all addresses with the firewall admitting port 2586 only from the mcbots subnet, and keep deny-all access";
-  assert lib.assertMsg (lab.services.ntfy-sh.settings.auth-access == ["mcbots:mcbots:wo" "phone:mcbots:ro"]) "ntfy must grant only topic-scoped publisher and reader access";
+  # mrija-watch reuses the same two users on its own topic (services/ntfy, fb5b81a); no new users.
+  assert lib.assertMsg (lab.services.ntfy-sh.settings.auth-access == ["mcbots:mcbots:wo" "phone:mcbots:ro" "mcbots:mrija:wo" "phone:mrija:ro"]) "ntfy must grant only topic-scoped publisher and reader access";
   assert lib.assertMsg (!lab.services.openssh.openFirewall) "sshd must not open the firewall globally; port 22 is allowed on tailscale0 only";
   assert lib.assertMsg (lib.all (p: lib.elem p fw.interfaces.tailscale0.allowedTCPPorts) [22 139 445]) "tailscale0 must allow SSH (22) and SMB (139, 445)";
   # Minecraft (phase 5.5): Velocity's game port and voice chat, on tailscale0 only; Paper and RCON stay off every list.
