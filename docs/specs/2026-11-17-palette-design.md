@@ -87,5 +87,6 @@ No history/frecency, no per-session Claude list, no entries for parts 3-4 yet, n
 
 ## Left to the builder
 
-- Whether `-markup-rows` keeps fuzzy matching on the visible text; if not, plain text rows with spacing.
+- Settled during planning: rofi 2.0 filters on the plain row text when the colours go into the `\0display\x1f<markup>`
+  row option (with plain `-markup-rows` rows it matched the markup itself).
 - Line count via `-theme-str` so 13-14 rows fit at font 16.
