@@ -94,6 +94,7 @@
     (execBinding "${mod} + SHIFT + e" "${pkgs.thunderbird}/bin/thunderbird" "open Thunderbird")
     (execBinding "${mod} + SHIFT + f" "${pkgs.pcmanfm}/bin/pcmanfm" "open file manager")
     (execBinding "${mod} + d" "${config.programs.rofi.package}/bin/rofi -show drun" "app launcher (rofi)")
+    (execBinding "${mod} + SPACE" "~/.local/bin/palette" "command palette")
     (execBinding "${mod} + SHIFT + v" "${pkgs.cliphist}/bin/cliphist list | ${config.programs.rofi.package}/bin/rofi -dmenu | ${pkgs.cliphist}/bin/cliphist decode | ${pkgs.wl-clipboard}/bin/wl-copy" "clipboard history picker")
 
     (bind "${mod} + SHIFT + q" "hl.dsp.window.close()" "close window")

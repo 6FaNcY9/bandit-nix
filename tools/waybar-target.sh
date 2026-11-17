@@ -12,11 +12,13 @@ vpn=$(timeout 2 ip -4 -j addr 2>/dev/null | jq -r '[.[] | select((.ifname // "")
 target=$(sed -n 's/^target=//p' "$session" 2>/dev/null | tail -n1 | tr -d '\r ' || true)
 mask=0; if waybar-stream status >/dev/null 2>&1; then mask=1; fi
 
+# raw values for the palette: line 1 VPN IP, line 2 target, unmasked
+if [[ ${1:-} == get ]]; then printf '%s\n%s\n' "$vpn" "$target"; exit 0; fi
 if [[ ${1:-} == copy ]]; then
   case ${2:-} in
     target) val=$target label="Target" ;;
     vpn) val=$vpn label="VPN IP" ;;
-    *) echo "usage: waybar-target [copy target|vpn]" >&2; exit 2 ;;
+    *) echo "usage: waybar-target [get|copy target|vpn]" >&2; exit 2 ;;
   esac
   if [[ -z $val ]]; then notify-send -t 2000 "$label" "no address"; exit 1; fi
   printf '%s' "$val" | wl-copy
