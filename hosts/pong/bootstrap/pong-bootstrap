@@ -1,0 +1,67 @@
+#!/data/data/com.termux/files/usr/bin/sh
+# Rebuild the phone's Nix side after a reset (docs/runbooks/pong-restore.md).
+# Run in plain Termux, root already granted in the KSU manager:
+#   curl -fsSLO https://raw.githubusercontent.com/6FaNcY9/bandit-nix/main/hosts/pong/bootstrap/pong-bootstrap
+#   sh pong-bootstrap [--no-termux-hook]
+# Steps it finds done are skipped, so it can be run again after a failure.
+# PONG_NIX_ROOT: chroot to build (default /data/nix-root; the drill uses another).
+# PONG_AGE_KEY_FROM: root-readable file with the age key, instead of Bitwarden (drill only).
+set -e
+hook=1
+[ "$1" = --no-termux-hook ] && hook=0
+export PONG_NIX_ROOT=${PONG_NIX_ROOT:-/data/nix-root}
+root=$PONG_NIX_ROOT
+repo=$HOME/src/bandit-nix
+b=$repo/hosts/pong/bootstrap
+enter() { sh "$b/pong-nix-enter" "$@"; }
+
+echo "== Termux rescue kit"
+# python: pkt; openssh/git: ssh pc, repo; util-linux: unshare; termux-api: bridge;
+# xz-utils/curl: the Nix release; zsh, bat, eza, fd, fzf, neovim, zoxide: Termux ~/.zshrc.
+pkg install -y git openssh python curl xz-utils coreutils util-linux termux-api zsh \
+  bat eza fd fzf neovim zoxide ripgrep gh jq
+
+echo "== repo"
+[ -d "$repo/.git" ] || git clone https://github.com/6FaNcY9/bandit-nix "$repo"
+
+echo "== Nix chroot at $root"
+su -c "test -d '$root/nix/store'" || sh "$b/pong-nix-install"
+
+echo "== age key"
+key=/home/vino/.config/sops/age/keys.txt
+# The key goes from stdin straight into the file; it is never printed.
+put_key='umask 077; mkdir -p ~/.config/sops/age; cat > ~/.config/sops/age/keys.txt.new; mv ~/.config/sops/age/keys.txt.new ~/.config/sops/age/keys.txt'
+if su -c "test -s '$root$key'"; then
+  echo "already there"
+elif [ -n "$PONG_AGE_KEY_FROM" ]; then
+  su -c "cat '$PONG_AGE_KEY_FROM'" | enter sh -c "$put_key"
+else
+  bw='nix shell nixpkgs#bitwarden-cli -c bw'
+  echo "Bitwarden login (email, master password, 2FA):"
+  enter sh -c "$bw login --check >/dev/null 2>&1 || $bw login >/dev/null"
+  # stdout carries only the key, so the prompt goes to stderr.
+  enter sh -c "stty -echo; printf 'Master password again (unlock): ' >&2; read -r BW_PASSWORD; stty echo; echo >&2
+    export BW_PASSWORD; s=\$($bw unlock --passwordenv BW_PASSWORD --raw) && $bw get notes 'pong age key' --session \"\$s\"" |
+    enter sh -c "$put_key"
+fi
+su -c "grep -q '^AGE-SECRET-KEY-' '$root$key'" || { echo "pong-bootstrap: age key missing or wrong in $root$key"; exit 1; }
+
+echo "== Home Manager"
+enter sh "$b/pong-switch"
+
+echo "== rescue links in Termux"
+mkdir -p ~/.local/bin ~/.claude/scripts
+ln -sfn "$repo/pkgs/pkt/bin/pkt" ~/.local/bin/pkt
+# The phone's CLAUDE.md calls these by their old paths.
+for s in boot-backup root-doctor; do
+  [ -e ~/.claude/scripts/$s.sh ] || cp "$repo/pkgs/pong-tools/$s.sh" ~/.claude/scripts/
+done
+
+if [ $hook = 1 ] && ! grep -q termux-hook.zsh ~/.zshrc 2>/dev/null; then
+  echo "== Termux hook"
+  printf '\n# pong: new Termux sessions enter the Nix chroot (skip: touch ~/.no-pong-nix)\n[[ -r %s/termux-hook.zsh ]] && source %s/termux-hook.zsh\n' "$b" "$b" >> ~/.zshrc
+fi
+
+echo "== check"
+enter sh -lc 'ssh -o BatchMode=yes -o ConnectTimeout=10 pc true && echo "ssh pc ok"; pkt status >/dev/null && echo "pkt ok"; root-doctor >/dev/null && echo "root-doctor ok"'
+echo "pong-bootstrap: done. Next: log in to Claude and the MCP tokens by hand (runbook)."
