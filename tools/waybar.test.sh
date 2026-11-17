@@ -58,7 +58,7 @@ mkdir "$t/run"
 ai() { BAR_AI_FILE=$t/u.json BAR_NOW=1794880000 bash "$here/waybar-ai.sh"; }
 tg() { BAR_PENTEST_SESSION=$t/ps XDG_RUNTIME_DIR=$t/run bash "$here/waybar-target.sh" "$@"; }
 st() { XDG_RUNTIME_DIR=$t/run bash "$here/waybar-stream.sh" "$@"; }
-dns() { bash "$here/waybar-dns.sh" "$@"; }
+dns() { bash "$here/waybar-dns.sh"; }
 
 # --- waybar-ai: weekly limit from the claude-hud snapshot; BAR_NOW 1794880000 = 2026-11-17T01:46:40Z
 snap() { jq -n --argjson p "$1" --arg u "$2" '{updated_at:$u, five_hour:{used_percentage:12, resets_at:"2026-11-17T02:00:00Z"}, seven_day:{used_percentage:$p, resets_at:"2026-11-20T08:00:00Z"}}' >"$t/u.json"; }
@@ -114,5 +114,11 @@ if nr status; then false; fi                                                    
 chk '.text == "bandit"' <<<"$(nr text bandit)"
 nr toggle 2>"$t/err"; grep -q XDG_RUNTIME_DIR "$t/err"; nr auto on 2>/dev/null
 [[ ! -s $t/mako && ! -s $t/pkill ]]
+
+# --- waybar-dns: shield only while tailscale0 has IPv4; probe 0.0.0.0 = blocked
+chk '.text == ""' <<<"$(TS=none dns)"                                                # not on the tailnet: no shield
+chk '.class == "ok" and (.tooltip | test("Werbeblocker aktiv"))' <<<"$(TS=up GETENT=block dns)"
+chk '.class == "off" and (.tooltip | test("Werbung kommt durch"))' <<<"$(TS=up GETENT=real dns)"
+s=$SECONDS; chk '.class == "off"' <<<"$(TS=up GETENT=hang dns)"; (( SECONDS - s <= 4 ))  # timeout 3 s, never hangs the bar
 
 echo ok
