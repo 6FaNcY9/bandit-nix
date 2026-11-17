@@ -420,6 +420,30 @@ def bar_json():
     return {"text": " ".join(parts), "class": "waiting" if waiting else "busy", "tooltip": "\n".join(r[2] for r in sorted(rows, key=lambda r: (not r[0], r[1])))}
 
 
+def bar_focus():
+    """Focus the window of the live session that waits longest, else of the one busy longest. 0 when focused, 1 when no
+    session or no window matched. Probes down from each window only: walking up from a tmux pane never reaches one."""
+    now, rows = clock(), []
+    for s in sessions():
+        if s["alive"]:
+            state, since, _ = session_state(s)
+            rows.append((state != "wartet", since or now, s["sessionId"]))
+    if not rows:
+        return 1
+    target = min(rows)[2]
+    try:
+        clients = [c for c in json.loads(run("hyprctl", "clients", "-j")) if isinstance(c, dict)]
+    except (ValueError, TypeError):
+        return 1
+    for c in clients:
+        if isinstance(c.get("pid"), int) and isinstance(c.get("address"), str):
+            found = claude_session_under(c["pid"])
+            if found and found["sessionId"] == target:
+                run("hyprctl", "dispatch", f'hl.dsp.focus({{ window = "address:{c["address"]}" }})')  # also makes a group tab active
+                return 0
+    return 1
+
+
 def wartet_lines(followed_sid, cols):
     """A line per other session that waits for the owner: its tab title (else its name) and what it waits for. More
     than 3: the first 2 and a +N weitere line."""
@@ -854,6 +878,8 @@ def hook():
 def main():
     if sys.argv[1:] == ["hook"]:
         return hook()
+    if sys.argv[1:] == ["bar", "--focus"]:
+        return bar_focus()
     if sys.argv[1:2] == ["bar"]:
         try:
             out = bar_json()
