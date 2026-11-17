@@ -12,6 +12,7 @@
     ./powermenu.nix
     ./minecraft-keys.nix
     ./keybinds-menu.nix
+    ./palette.nix
     ./obsidian.nix
     ./discord.nix
     ./phone-link.nix
