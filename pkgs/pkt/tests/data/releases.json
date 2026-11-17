@@ -1,0 +1,19 @@
+[
+  {"tag_name": "r22", "draft": false, "prerelease": false, "published_at": "2026-10-29T19:07:02Z",
+   "assets": [
+    {"name": "5.10.269-android12-2026-10-BakaSU-AnyKernel3.zip", "size": 100, "digest": "sha256:aa", "browser_download_url": "https://example.invalid/r22/269-bakasu.zip"},
+    {"name": "5.10.252-android12-2026-04-BakaSU-AnyKernel3.zip", "size": 100, "digest": "sha256:bb", "browser_download_url": "https://example.invalid/r22/252-bakasu.zip"},
+    {"name": "5.10.269-android12-lts-BakaSU-AnyKernel3.zip", "size": 100, "digest": null, "browser_download_url": "https://example.invalid/r22/269-lts-bakasu.zip"},
+    {"name": "5.10.269-android12-2026-10-ReSukiSU-AnyKernel3.zip", "size": 100, "digest": "sha256:cc", "browser_download_url": "https://example.invalid/r22/resuki.zip"},
+    {"name": "5.10.269-android12-2026-10-KernelSU-Next-AnyKernel3.zip", "size": 100, "digest": "sha256:dd", "browser_download_url": "https://example.invalid/r22/next.zip"},
+    {"name": "5.15.150-android13-2026-10-BakaSU-AnyKernel3.zip", "size": 100, "digest": "sha256:ee", "browser_download_url": "https://example.invalid/r22/515.zip"},
+    {"name": "5.10.269-android12-2026-10-BakaSU-AnyKernel3.zip.sig", "size": 1, "digest": "sha256:ff", "browser_download_url": "https://example.invalid/r22/sig"}
+   ]},
+  {"tag_name": "r21", "draft": false, "prerelease": false, "published_at": "2026-09-01T00:00:00Z",
+   "assets": [
+    {"name": "5.10.269-android12-2026-10-BakaSU-AnyKernel3.zip", "size": 100, "digest": "sha256:old", "browser_download_url": "https://example.invalid/r21/269-bakasu.zip"},
+    {"name": "5.10.240-android12-2025-12-BakaSU-AnyKernel3.zip", "size": 100, "digest": "sha256:240", "browser_download_url": "https://example.invalid/r21/240.zip"}
+   ]},
+  {"tag_name": "r23-draft", "draft": true, "prerelease": false, "published_at": "2026-11-01T00:00:00Z",
+   "assets": [{"name": "5.10.300-android12-2026-11-BakaSU-AnyKernel3.zip", "size": 100, "digest": "sha256:dr", "browser_download_url": "https://example.invalid/draft.zip"}]}
+]

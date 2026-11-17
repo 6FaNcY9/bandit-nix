@@ -86,7 +86,11 @@ in {
     stateVersion = "25.11";
     # The chroot has only busybox sh; the basic userland comes from here.
     packages =
-      [termuxApi]
+      [
+        termuxApi
+        (pkgs.callPackage ../../pkgs/pkt {})
+        (pkgs.callPackage ../../pkgs/pong-tools {})
+      ]
       ++ (with pkgs; [
         bashInteractive
         bitwarden-cli

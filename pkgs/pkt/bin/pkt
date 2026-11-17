@@ -1,0 +1,9 @@
+#!/data/data/com.termux/files/usr/bin/sh
+# Resolve symlinks so ~/bin/pkt -> repo/bin/pkt still finds the package.
+p=$0
+while [ -L "$p" ]; do
+  d=$(cd "$(dirname "$p")" && pwd); p=$(readlink "$p")
+  case $p in /*) ;; *) p=$d/$p ;; esac
+done
+root=$(cd "$(dirname "$p")/.." && pwd)
+PYTHONPATH=$root${PYTHONPATH:+:$PYTHONPATH} exec python -m pkt.cli "$@"
