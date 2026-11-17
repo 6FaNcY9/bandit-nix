@@ -99,6 +99,9 @@ tg copy vpn; [[ $(cat "$t/clip") == 10.10.14.7 ]]
 rm "$t/ps"; if tg copy target; then false; fi; grep -q 'no address' "$t/notify"       # empty: notify + exit 1
 if VPN=none tg copy vpn; then false; fi
 rc=0; tg copy bogus 2>/dev/null || rc=$?; [[ $rc == 2 ]]
+echo 'target=10.10.11.5' >"$t/ps"; [[ $(tg get) == $'10.10.14.7\n10.10.11.5' ]]
+[[ $(STREAM=on tg get) == $'10.10.14.7\n10.10.11.5' ]]              # raw: the caller masks
+rm "$t/ps"; [[ $(VPN=none tg get | wc -l) == 2 && -z $(VPN=none tg get | tr -d '\n') ]]  # both empty, still 2 lines
 
 # --- waybar-stream: flag files in $XDG_RUNTIME_DIR, mako mode "stream", Waybar signal 8
 fresh() { rm -rf "$t/run"; mkdir "$t/run"; : >"$t/mako"; : >"$t/pkill"; : >"$t/modes"; }

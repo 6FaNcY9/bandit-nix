@@ -677,6 +677,8 @@ in {
 
   # Also bound to a key in hyprland/bindings.nix.
   home.file.".local/bin/waybar-stream".source = "${barStream}/bin/waybar-stream";
+  # read raw by the rofi palette (waybar-target get)
+  home.file.".local/bin/waybar-target".source = "${barTarget}/bin/waybar-target";
 
   # claude-hud writes its usage snapshot only into an existing directory (see barAi).
   xdg.cacheFile."claude-hud/.keep".text = "";
