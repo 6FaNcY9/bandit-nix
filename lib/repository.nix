@@ -166,12 +166,12 @@ in {
         name = "0xProto Nerd Font Mono";
       };
       sizes = {
-        terminal = 18;
-        applications = 18;
-        # One size everywhere (owner sits far from the screen); Waybar keeps
-        # IPs and containers in a hover drawer so 18 still fits 2256 px.
-        desktop = 18;
-        popups = 18;
+        terminal = 16;
+        applications = 16;
+        # One size everywhere (owner wants it smaller than 18); 16 frees room on the
+        # bars for agents, AI limit, target and DNS shield at 2256 px.
+        desktop = 16;
+        popups = 16;
       };
     };
     cursor = {

@@ -117,6 +117,7 @@
     # Mako notification controls
     (execBinding "${mod} + grave" "${pkgs.mako}/bin/makoctl restore" "restore last notification")
     (execBinding "${mod} + SHIFT + d" "${pkgs.mako}/bin/makoctl mode -t dnd" "toggle do-not-disturb")
+    (execBinding "${mod} + SHIFT + p" "~/.local/bin/waybar-stream toggle" "toggle stream mode (hide IPs, mute)")
     (execBinding "${mod} + SHIFT + period" "${pkgs.mako}/bin/makoctl dismiss --all" "dismiss all notifications")
   ];
 
