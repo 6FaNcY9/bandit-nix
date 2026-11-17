@@ -183,6 +183,13 @@ point at the Termux home (`~/projects`, `~/src`, `~/.claude`, `~/.claude.json`,
 
 ### Task 6: Claude Code inside the chroot
 
+> **Changed 2026-11-17 (owner's OK):** no `claude-code` from nixpkgs (2.1.303, behind) and no
+> `CLAUDE.md` in the public repo (it stays local, read through the `~/.claude` link). Claude Code
+> comes from the official installer into the chroot's `~/.local` (as on the laptop). It needs the
+> FHS loader: Home Manager links glibc's to `~/.local/lib/`, `pong-nix-root enter` links
+> `/lib/ld-linux-aarch64.so.1` to it inside the chroot. Updates: `claude update` (the shared
+> `~/.claude/settings.json` has `autoUpdates: false` for the Termux build).
+
 **Files:**
 - Modify: `lib/repository.nix` (add `"claude-code"` to `unfreePackageNames` if not already there)
 - Modify: `hosts/pong/home.nix` (`home.packages` += `claude-code`; `~/.claude` and `~/.claude.json` symlinks already come from Task 2)

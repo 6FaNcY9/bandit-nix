@@ -110,6 +110,13 @@ in {
         curl
         openssh
       ]);
-    file = lib.genAttrs ["projects" "src" "storage" "backups" ".claude" ".claude.json"] (n: {source = link n;});
+    file =
+      lib.genAttrs ["projects" "src" "storage" "backups" ".claude" ".claude.json"] (n: {source = link n;})
+      // {
+        # Claude Code's official build (installed by its own installer, like on the
+        # laptop) expects the FHS loader; pong-nix-root links /lib/ld-linux-aarch64.so.1 here.
+        ".local/lib/ld-linux-aarch64.so.1".source = "${pkgs.glibc}/lib/ld-linux-aarch64.so.1";
+      };
+    sessionPath = ["${config.home.homeDirectory}/.local/bin"];
   };
 }

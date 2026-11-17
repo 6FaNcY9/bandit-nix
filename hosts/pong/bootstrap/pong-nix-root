@@ -87,6 +87,8 @@ $1"
       shift
     done
     [ "$1" = -- ] && shift
+    # FHS loader for prebuilt glibc binaries (Claude Code); target comes from Home Manager.
+    [ -L "$root/lib/ld-linux-aarch64.so.1" ] || { mkdir -p "$root/lib" && ln -s /home/vino/.local/lib/ld-linux-aarch64.so.1 "$root/lib/"; }
     mounts
     if [ $# -eq 0 ]; then
       # Checked inside the chroot: .nix-profile is an absolute link.
