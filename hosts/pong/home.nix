@@ -98,6 +98,7 @@ in {
         diffutils
         findutils
         gawk
+        tzdata.out # share/zoneinfo, which TZ from pong-nix-root points at (default output is bin)
         gnugrep
         gnused
         gnutar
