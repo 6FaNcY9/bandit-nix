@@ -980,4 +980,82 @@ session $child $s1 src-a "$HOME/w"
 before=$(grep -c '▶ wartet auf dich' "$t/out"); for i in {1..150}; do [[ $(grep -c '▶ wartet auf dich' "$t/out") -gt $before ]] && break; sleep 0.1; done
 [[ $(grep -c '▶ wartet auf dich' "$t/out") -gt $before ]]                              # found again
 
+# lage bar: counts like the pane; helpers count as busy; dead pids do not count
+fresh; live; p1=$pid; session $p1 $s1 src-a "$HOME/w"
+entry $s1 "$(assistant 14:12:00 '"tool_use"' '[{"type":"tool_use","name":"Read","input":{"file_path":"/x"}}]')"
+out=$(lage bar); jq -e '.text == "● 1" and .class == "busy"' <<<"$out"
+status $p1 waiting "Erlaubnis"; out=$(lage bar); jq -e '.text == "▲ 1" and .class == "waiting"' <<<"$out"
+jq -e '.tooltip | test("^▲ src-a")' <<<"$out"
+status $p1 idle; out=$(lage bar); jq -e '.text == "▲ 1"' <<<"$out"            # idle = wartet, like the pane
+sub=$HOME/.claude/projects/p/$s1/subagents; mkdir -p "$sub"
+echo '{}' >"$sub/agent-1.meta.json"; : >"$sub/agent-1.jsonl"
+out=$(lage bar); jq -e '.text == "● 1" and .class == "busy"' <<<"$out"        # helfer = busy
+live; session $pid bbbbbbbb-2 src-b "$HOME/w"; status $pid waiting
+out=$(lage bar); jq -e '.text == "● 1 ▲ 1" and .class == "waiting"' <<<"$out"
+fresh; session 999999 $s1 src-a "$HOME/w"; jq -e '.text == ""' <<<"$(lage bar)"  # dead pid: hidden
+# tail read: 1 MiB of filler before the last entry classifies like a full read; no settled entry in the tail falls back
+filler() { # filler <sid>: 1 MiB of progress lines, the last one ended (fold leaves it open and the next entry would join it)
+  head -c 1048576 /dev/zero | tr '\0' 'x' | fold -w 1000 | sed 's/^/{"type":"progress","d":"/; s/$/"}/' >>"$HOME/.claude/projects/p/$1.jsonl"
+  echo >>"$HOME/.claude/projects/p/$1.jsonl"
+}
+tailed() { # tailed <sid>: true when a tail read of the transcript did not see the owner prompt at its start (the tail was kept)
+  python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import lage; t = lage.Transcript(sys.argv[2]); t.tail(); print(t.owner_ts is None)' "$here" "$1"
+}
+fresh; live; session $pid $s1 src-a "$HOME/w"
+owner 14:00
+entry $s1 "$(assistant 14:11:00 '"end_turn"' '[{"type":"text","text":"fertig"}]')"
+filler $s1
+jq -e '.text == "▲ 1"' <<<"$(lage bar)"                                       # fallback found the end_turn
+[[ $(tailed $s1) == False ]]                                                   # ... by reading the whole file
+entry $s1 "$(assistant 14:12:00 '"tool_use"' '[{"type":"tool_use","name":"Read","input":{"file_path":"/x"}}]')"
+jq -e '.text == "● 1"' <<<"$(lage bar)"                                       # tail sees the newest entry
+[[ $(tailed $s1) == True ]]                                                    # ... and did not read the start
+status $pid ""; jq -e '.text == "● 1"' <<<"$(lage bar)"                       # no status: the tail settles on the tool call too
+# helpers on the tail path: end_turn inside the window, a helper still running
+fresh; live; session $pid $s1 src-a "$HOME/w"
+owner 14:00; filler $s1
+entry $s1 "$(assistant 14:11:00 '"end_turn"' '[{"type":"text","text":"fertig"}]')"
+jq -e '.text == "▲ 1"' <<<"$(lage bar)"
+[[ $(tailed $s1) == True ]]
+sub=$HOME/.claude/projects/p/$s1/subagents; mkdir -p "$sub"
+echo '{}' >"$sub/agent-1.meta.json"; : >"$sub/agent-1.jsonl"
+jq -e '.text == "● 1" and (.tooltip | test("Helfer arbeiten"))' <<<"$(lage bar)"
+# no status: the settling tool call is outside the window, only an unsettled owner prompt inside: falls back, like a full read
+fresh; live; session $pid $s1 src-a "$HOME/w"; status $pid ""
+entry $s1 "$(assistant 14:11:00 '"tool_use"' '[{"type":"tool_use","name":"Read","input":{"file_path":"/x"}}]')"
+filler $s1
+entry $s1 '{"type":"user","timestamp":"2026-11-15T14:12:00Z","message":{"content":"hallo"}}'
+jq -e '.text == "● 1" and (.tooltip | test("liest x"))' <<<"$(lage bar)"
+
+# lage bar --focus: the window of the session that waits longest, else of the one busy longest. Fake windows as above;
+# a second hyprctl stub (first on PATH for these calls) also records the dispatches.
+mkdir -p "$t/fbin"
+cat >"$t/fbin/hyprctl" <<'FAKE'
+#!/bin/sh
+[ "$1" = clients ] && { printf '%s\n' "$CLIENTS"; exit 0; }
+echo "$*" >>"$DISPATCH"
+FAKE
+chmod +x "$t/fbin/hyprctl"
+export DISPATCH=$t/dispatch
+client() { cl "$2" kitty 3 0 0 | jq -c --arg a "$1" '. + {address: $a}'; } # client <addr> <pid>
+plain() { live; cls+=("$(client "$1" $pid)"); clients "${cls[@]}"; }       # plain <addr>: a window without claude
+win() { # win <addr> <sid> <status> <time>: a window with a claude session whose newest entry (a tool call) is at <time>
+  window "$t/bin/claude"
+  session $child "$2" src-$1 "$HOME/w"; status $child "$3"
+  entry "$2" "$(assistant "$4" '"tool_use"' '[{"type":"tool_use","name":"Read","input":{"file_path":"/x"}}]')"
+  cls+=("$(client "$1" $wrapper)"); clients "${cls[@]}"
+}
+focus() { : >"$DISPATCH"; rc=0; PATH=$t/fbin:$PATH lage bar --focus || rc=$?; } # exit code in $rc, the dispatches in $DISPATCH
+fresh; cls=(); plain 0xother; win 0xwin $s1 waiting 14:00:00
+focus; [[ $rc == 0 && $(<"$DISPATCH") == 'dispatch hl.dsp.focus({ window = "address:0xwin" })' ]]   # the plain window is skipped
+fresh; cls=(); plain 0xother; focus; [[ $rc == 1 && ! -s $DISPATCH ]]          # no session: exit 1, no dispatch
+fresh; session $$ $s1 src-a "$HOME/w"; status $$ waiting                       # a waiting session in no window
+focus; [[ $rc == 1 && ! -s $DISPATCH ]]
+CLIENTS=garbage focus; [[ $rc == 1 && ! -s $DISPATCH ]]                         # hyprctl output is no JSON
+# several sessions: waiting beats busy (even a longer-busy one), the longest-waiting of them wins; none waiting: the longest-busy
+fresh; cls=(); win 0xbusy bbbbbbbb-1 busy 14:00:00; win 0xnew bbbbbbbb-2 waiting 14:10:00; win 0xold bbbbbbbb-3 waiting 14:05:00
+focus; [[ $rc == 0 && $(<"$DISPATCH") == *'address:0xold'* ]]
+fresh; cls=(); win 0xnew bbbbbbbb-1 busy 14:10:00; win 0xold bbbbbbbb-2 busy 14:05:00
+focus; [[ $rc == 0 && $(<"$DISPATCH") == *'address:0xold'* ]]
+
 echo ok

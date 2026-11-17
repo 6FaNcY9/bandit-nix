@@ -4,6 +4,7 @@ lage [--once] [--full]   follow the Claude session in the Cockpit master window 
   started in DIR. The main view is a short overview; --full (or the key f) shows the whole board.
 lage [--dir DIR] --idea TEXT   add an owner idea to that session's board
 lage --probe PID   exit 0 when a Claude session runs under the window with pid PID, else 1; no output
+lage bar [--focus]   Waybar: one JSON line with busy/waiting session counts; --focus jumps to the waiting session
 lage hook   Claude Code hook (JSON on stdin): tells a session its board and each new owner idea once
 Everything is read from ~/.claude; nothing is written there. lage writes the board and, for the hook, a .shown file of hashes.
 """
@@ -250,11 +251,33 @@ class Transcript:
                 return
         self.steps.append((ts, text, 1))
 
-    def update(self):
-        """Read the complete lines added since the last call."""
+    def locate(self):
+        """The transcript file once it exists, else None."""
         if self.path is None:
             self.path = next(Path.home().glob(f".claude/projects/*/{self.session_id}.jsonl"), None)
-        if self.path is None:
+        return self.path
+
+    def tail(self, nbytes=262144):
+        """The first read of a big file starts nbytes before its end, at a line start; a tail without a settled entry reads it all."""
+        if self.pos or self.locate() is None:
+            return
+        try:
+            with self.path.open("rb") as f:
+                size = f.seek(0, os.SEEK_END)
+                if size > nbytes:
+                    f.seek(size - nbytes - 1)  # one byte early: a line that starts exactly at the cut stays whole
+                    f.readline()
+                    self.pos = f.tell()
+        except OSError:
+            return
+        self.update()
+        if self.settled is None and self.pos:  # settled is None whenever last is; jetzt() reads either one
+            self.__init__(self.session_id)
+            self.update()
+
+    def update(self):
+        """Read the complete lines added since the last call."""
+        if self.locate() is None:
             return
         try:
             with self.path.open("rb") as f:
@@ -367,6 +390,60 @@ def jetzt(tr, now, s):
     return [clean(f"{text}  {since}" if since else text, cols() - 2)], state
 
 
+def label(s, tr):
+    """The name a session goes by: its tab title, else its name, else the start of its id."""
+    name = s.get("name")
+    title = tr.titles.get("custom-title") or tr.titles.get("ai-title")
+    return clean(title or "", 18) or (clean(name, 12) if isinstance(name, str) else "") or clean(s["sessionId"][:6], 6)
+
+
+def session_state(s):
+    """(state, since, line) of a session: jetzt()'s state, the time of the entry it rests on (None without one), its ▶ line."""
+    tr = transcripts.setdefault(s["sessionId"], Transcript(s["sessionId"]))
+    tr.tail()
+    lines, state = jetzt(tr, clock(), s)
+    e = tr.last if s.get("status") else tr.settled
+    return state, parse_ts(e["timestamp"]) if e else None, lines[0]
+
+
+def bar_json():
+    """One Waybar JSON line: counts of busy (●) and waiting (▲) live sessions, a tooltip with one line each. Empty: no session."""
+    now, rows = clock(), []
+    for s in sessions():
+        if s["alive"]:
+            state, since, line = session_state(s)
+            rows.append((state == "wartet", since or now, f"{'▲' if state == 'wartet' else '●'} {label(s, transcripts[s['sessionId']])}: {line}"))
+    waiting = sum(r[0] for r in rows)
+    parts = [f"{sym} {n}" for sym, n in (("●", len(rows) - waiting), ("▲", waiting)) if n]
+    if not parts:
+        return {"text": ""}
+    return {"text": " ".join(parts), "class": "waiting" if waiting else "busy", "tooltip": "\n".join(r[2] for r in sorted(rows, key=lambda r: (not r[0], r[1])))}
+
+
+def bar_focus():
+    """Focus the window of the live session that waits longest, else of the one busy longest. 0 when focused, 1 when no
+    session or no window matched. Probes down from each window only: walking up from a tmux pane never reaches one."""
+    now, rows = clock(), []
+    for s in sessions():
+        if s["alive"]:
+            state, since, _ = session_state(s)
+            rows.append((state != "wartet", since or now, s["sessionId"]))
+    if not rows:
+        return 1
+    target = min(rows)[2]
+    try:
+        clients = [c for c in json.loads(run("hyprctl", "clients", "-j")) if isinstance(c, dict)]
+    except (ValueError, TypeError):
+        return 1
+    for c in clients:
+        if isinstance(c.get("pid"), int) and isinstance(c.get("address"), str):
+            found = claude_session_under(c["pid"])
+            if found and found["sessionId"] == target:
+                run("hyprctl", "dispatch", f'hl.dsp.focus({{ window = "address:{c["address"]}" }})')  # also makes a group tab active
+                return 0
+    return 1
+
+
 def wartet_lines(followed_sid, cols):
     """A line per other session that waits for the owner: its tab title (else its name) and what it waits for. More
     than 3: the first 2 and a +N weitere line."""
@@ -379,9 +456,7 @@ def wartet_lines(followed_sid, cols):
         tr.update()
         if jetzt(tr, now, s)[1] != "wartet":
             continue
-        name = s.get("name")
-        title = tr.titles.get("custom-title") or tr.titles.get("ai-title")
-        name = clean(title or "", 18) or (clean(name, 12) if isinstance(name, str) else "") or clean(sid[:6], 6)
+        name = label(s, tr)
         why = waiting_for(s) or tr.last_text
         rows.append((name, sid, clean(f"! {name} wartet" + (": " + why if why else ""), cols)))
     lines = [r[2] for r in sorted(rows)]
@@ -803,6 +878,16 @@ def hook():
 def main():
     if sys.argv[1:] == ["hook"]:
         return hook()
+    if sys.argv[1:] == ["bar", "--focus"]:
+        return bar_focus()
+    if sys.argv[1:2] == ["bar"]:
+        try:
+            out = bar_json()
+        except Exception as e:  # the bar polls: a broken round shows nothing, the next one retries
+            print("lage:", e, file=sys.stderr)
+            out = {"text": ""}
+        print(json.dumps(out, ensure_ascii=False))
+        return 0
     ap = argparse.ArgumentParser(prog="lage", description="Show what a Claude Code session is doing now.")
     ap.add_argument("--dir", help="follow the newest session started in this folder (default: the Cockpit master window)")
     ap.add_argument("--once", action="store_true", help="print one frame and exit")

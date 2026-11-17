@@ -62,18 +62,37 @@
     '';
   };
 
+  # Stream mode (hides IPs and the hostname, mutes mako). The wrappers that mask call it, so it must be in their runtimeInputs:
+  # a missing waybar-stream would silently leave the IPs visible.
+  barStream = pkgs.writeShellApplication {
+    name = "waybar-stream";
+    runtimeInputs = [pkgs.coreutils pkgs.mako pkgs.procps];
+    text = builtins.readFile ../../../tools/waybar-stream.sh;
+  };
+
   # MIC while an app records audio, SCREEN while a screen share runs; empty text hides the module.
   barPrivacy = pkgs.writeShellApplication {
     name = "waybar-privacy";
-    runtimeInputs = [pkgs.pipewire pkgs.jq pkgs.coreutils];
+    runtimeInputs = [pkgs.pipewire pkgs.jq pkgs.coreutils barStream];
     text = ''
+      screen=""
       while true; do
-        timeout 5 pw-dump 2>/dev/null | jq -c '
+        # Nixpkgs names the portal node ".xdg-desktop-portal-hyprland-wrapped", not "xdph…".
+        if items=$(timeout 5 pw-dump 2>/dev/null | jq -r '
           [.[] | select(.type == "PipeWire:Interface:Node" and .info.state == "running") | .info.props] as $n
           | [ (if any($n[]; .["media.class"] == "Stream/Input/Audio") then "MIC" else empty end),
-              (if any($n[]; .["media.class"] == "Video/Source" and ((.["node.name"] // "") | startswith("xdph"))) then "SCREEN" else empty end) ]
-          | if length > 0 then {text: join(" "), class: "active"} else {text: ""} end
-        ' || echo '{"text":""}'
+              (if any($n[]; .["media.class"] == "Video/Source" and ((.["node.name"] // "") | test("xdph|xdg-desktop-portal"))) then "SCREEN" else empty end) ]
+          | join(" ")
+        '); then
+          case " $items " in *" SCREEN "*) now=on ;; *) now=off ;; esac
+          # Every waybar-stream call signals Waybar, so call it only when the share starts or stops (the first pass counts as a change).
+          if [ "$now" != "$screen" ]; then screen=$now; waybar-stream auto "$now" || true; fi
+        else
+          items="" # pw-dump failed: hide the module, keep the last share state
+        fi
+        # A manual toggle without a share stays visible on the bar.
+        if waybar-stream status; then items="''${items:+$items }STREAM"; fi
+        if [ -n "$items" ]; then jq -cn --arg t "$items" '{text: $t, class: "active"}'; else echo '{"text":""}'; fi
         sleep 3
       done
     '';
@@ -106,7 +125,7 @@
   # LAN (default-route interface) and Tailscale IPv4; `copy lan|ts` puts one on the clipboard.
   barIp = pkgs.writeShellApplication {
     name = "waybar-ip";
-    runtimeInputs = [pkgs.jq pkgs.iproute2 pkgs.gawk pkgs.wl-clipboard pkgs.libnotify];
+    runtimeInputs = [pkgs.jq pkgs.iproute2 pkgs.gawk pkgs.wl-clipboard pkgs.libnotify barStream];
     text = ''
       v4() { ip -4 -o addr show dev "$1" 2>/dev/null | awk '{split($4, a, "/"); print a[1]; exit}'; }
       lan_dev=$(ip -4 route show default | awk '{for (i = 1; i < NF; i++) if ($i == "dev") {print $(i + 1); exit}}')
@@ -121,7 +140,14 @@
         esac
         if [ -z "$ip" ]; then notify-send -t 2000 "$label" "no address"; exit 1; fi
         printf '%s' "$ip" | wl-copy
-        notify-send -t 2000 "$label copied" "$ip"
+        # the clipboard gets the real IP, the notification must not show it on stream
+        shown=$ip; if waybar-stream status; then shown=•••; fi
+        notify-send -t 2000 "$label copied" "$shown"
+        exit 0
+      fi
+
+      if waybar-stream status; then
+        echo '{"text":"LAN ••• │ TS •••","tooltip":"•••"}'
         exit 0
       fi
 
@@ -134,6 +160,30 @@
       }'
     '';
   };
+
+  # Claude weekly limit from the claude-hud usage snapshot (its config.json points externalUsageWritePath there).
+  barAi = pkgs.writeShellApplication {
+    name = "waybar-ai";
+    runtimeInputs = [pkgs.jq pkgs.coreutils];
+    text = "BAR_AI_FILE='${config.xdg.cacheHome}/claude-hud/usage.json'\n" + builtins.readFile ../../../tools/waybar-ai.sh;
+  };
+
+  # VPN IP -> pt target; `copy target|vpn` for the clicks.
+  barTarget = pkgs.writeShellApplication {
+    name = "waybar-target";
+    runtimeInputs = [pkgs.coreutils pkgs.gnused pkgs.jq pkgs.iproute2 pkgs.wl-clipboard pkgs.libnotify barStream];
+    text = "BAR_PENTEST_SESSION='${config.home.homeDirectory}/src/sec/.pentest-session' BAR_GREEN='${colors.base0B}' BAR_RED='${colors.base08}'\n" + builtins.readFile ../../../tools/waybar-target.sh;
+  };
+
+  # Shield: does the lab's ad-blocking DNS answer while the laptop is on the tailnet? Display only.
+  barDns = pkgs.writeShellApplication {
+    name = "waybar-dns";
+    runtimeInputs = [pkgs.iproute2 pkgs.jq pkgs.coreutils pkgs.getent];
+    text = builtins.readFile ../../../tools/waybar-dns.sh;
+  };
+
+  # Installed by scripts.nix; same route as net-menu.
+  lage = "${bandit.workstation.homeDirectory}/.local/bin/lage";
 in {
   programs.waybar = {
     enable = true;
@@ -151,12 +201,32 @@ in {
 
       modules-left = ["custom/host" "hyprland/workspaces"];
       modules-center = ["clock"];
-      modules-right = ["hyprland/window"];
+      modules-right = ["custom/agents" "custom/ai"];
 
       "custom/host" = {
-        format = osConfig.networking.hostName;
+        # An exec module so stream mode can hide the hostname; signal 8 redraws it at once.
+        exec = "${barStream}/bin/waybar-stream text ${osConfig.networking.hostName}";
+        return-type = "json";
+        interval = 5; # fallback if the signal is missed
+        signal = 8;
         on-click = "${config.programs.rofi.package}/bin/rofi -show drun";
         tooltip = false;
+      };
+
+      # Busy and waiting Claude sessions, counted by lage like its pane; click focuses the waiting one.
+      "custom/agents" = {
+        exec = "${lage} bar";
+        return-type = "json";
+        interval = 5;
+        # The tooltip carries tool lines that may hold < and &; escape also covers the tooltip.
+        escape = true;
+        on-click = "${lage} bar --focus";
+      };
+
+      "custom/ai" = {
+        exec = "${barAi}/bin/waybar-ai";
+        return-type = "json";
+        interval = 30;
       };
 
       "hyprland/workspaces" = {
@@ -176,17 +246,6 @@ in {
           default = "+";
         };
         on-click = "activate";
-      };
-
-      "hyprland/window" = {
-        format = "{title}";
-        # Drop the spinner symbol Claude Code prepends to the terminal title.
-        # Literal alternation: Waybar's std::regex works on bytes, no \x{..} ranges.
-        rewrite = {
-          "^(◐|◓|◑|◒|✳|✶|✻|✽|✢|·|\\*) (.*)" = "$2";
-        };
-        max-length = 32;
-        separate-outputs = true;
       };
 
       clock = {
@@ -219,8 +278,8 @@ in {
       margin-bottom = 0;
       margin-left = 0;
 
-      modules-left = ["group/admin"];
-      modules-right = ["custom/privacy" "network" "group/system" "pulseaudio" "bluetooth" "battery" "group/traydrawer"];
+      modules-left = ["group/admin" "custom/target"];
+      modules-right = ["custom/privacy" "custom/dns" "network" "group/system" "pulseaudio" "bluetooth" "battery" "group/traydrawer"];
 
       "custom/privacy" = {
         exec = "${barPrivacy}/bin/waybar-privacy";
@@ -248,6 +307,22 @@ in {
         interval = 15;
         on-click = "${barIp}/bin/waybar-ip copy lan";
         on-click-right = "${barIp}/bin/waybar-ip copy ts";
+        signal = 8;
+      };
+
+      "custom/target" = {
+        exec = "${barTarget}/bin/waybar-target";
+        return-type = "json";
+        interval = 5;
+        signal = 8;
+        on-click = "${barTarget}/bin/waybar-target copy target";
+        on-click-right = "${barTarget}/bin/waybar-target copy vpn";
+      };
+
+      "custom/dns" = {
+        exec = "${barDns}/bin/waybar-dns";
+        return-type = "json";
+        interval = 60;
       };
 
       network = {
@@ -431,9 +506,12 @@ in {
       }
 
       #custom-host,
-      #window,
+      #custom-agents,
+      #custom-ai,
       #clock,
       #custom-privacy,
+      #custom-target,
+      #custom-dns,
       #admin,
       #network,
       #system,
@@ -511,15 +589,6 @@ in {
         color: ${colors.base08};
       }
 
-      #window {
-        color: ${colors.base04};
-      }
-
-      #window.empty {
-        padding: 0;
-        border-left: 0;
-      }
-
       #clock {
         padding: 0 16px;
         font-weight: bold;
@@ -531,6 +600,7 @@ in {
       #custom-logs,
       #custom-ip,
       #custom-containers,
+      #custom-target,
       #cpu,
       #memory,
       #temperature,
@@ -569,6 +639,27 @@ in {
         color: ${colors.base0E};
       }
 
+      /* Agents, AI limit, DNS shield: teal = fine or working, yellow = needs you, red = critical, grey = stale. */
+      #custom-agents.busy,
+      #custom-ai.ok,
+      #custom-dns.ok {
+        color: ${colors.base0C};
+      }
+
+      #custom-agents.waiting,
+      #custom-ai.warn {
+        color: ${colors.base0A};
+      }
+
+      #custom-ai.crit,
+      #custom-dns.off {
+        color: ${colors.base08};
+      }
+
+      #custom-ai.stale {
+        color: ${colors.base03};
+      }
+
       /* Opened drawer modules sit on a raised surface. */
       .drawer-child {
         background-color: ${colors.base01};
@@ -583,4 +674,10 @@ in {
   };
 
   home.packages = [pkgs.pavucontrol];
+
+  # Also bound to a key in hyprland/bindings.nix.
+  home.file.".local/bin/waybar-stream".source = "${barStream}/bin/waybar-stream";
+
+  # claude-hud writes its usage snapshot only into an existing directory (see barAi).
+  xdg.cacheFile."claude-hud/.keep".text = "";
 }
