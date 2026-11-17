@@ -77,10 +77,11 @@
     text = ''
       screen=""
       while true; do
+        # Nixpkgs names the portal node ".xdg-desktop-portal-hyprland-wrapped", not "xdph…".
         if items=$(timeout 5 pw-dump 2>/dev/null | jq -r '
           [.[] | select(.type == "PipeWire:Interface:Node" and .info.state == "running") | .info.props] as $n
           | [ (if any($n[]; .["media.class"] == "Stream/Input/Audio") then "MIC" else empty end),
-              (if any($n[]; .["media.class"] == "Video/Source" and ((.["node.name"] // "") | startswith("xdph"))) then "SCREEN" else empty end) ]
+              (if any($n[]; .["media.class"] == "Video/Source" and ((.["node.name"] // "") | test("xdph|xdg-desktop-portal"))) then "SCREEN" else empty end) ]
           | join(" ")
         '); then
           case " $items " in *" SCREEN "*) now=on ;; *) now=off ;; esac
