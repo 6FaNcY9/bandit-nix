@@ -358,6 +358,45 @@
         threshold = 1800;
         noData = "Alerting";
       }}
+                  # Malware spike: at least one client with >= 20 blocked
+                  # malware-list hits in 10 min. The query returns a single count
+                  # of such clients (a scalar the threshold can read directly; a
+                  # multi-column table frame is fragile in SSE). SQL datasource
+                  # (blocky-log), so it needs its own block, not the Prometheus
+                  # `rule` helper; grafana-ntfy forwards it unchanged.
+                  - uid: bandit-lab-malware-requests
+                    title: Malware-Anfragen
+                    condition: C
+                    for: 0m
+                    noDataState: OK
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: "Ein Gerät im Heimnetz hat in 10 Minuten >= 20 Malware-Domains angefragt (siehe Netzwerk-Dashboard)"
+                    data:
+                      - refId: A
+                        relativeTimeRange: {from: 600, to: 0}
+                        datasourceUid: blocky-log
+                        model:
+                          editorMode: code
+                          rawSql: "SELECT count(*) AS value FROM (SELECT 1 FROM log_entries WHERE request_ts > now() - interval '10 minutes' AND reason ILIKE '%malware%' GROUP BY client_name HAVING count(*) >= 20) spikes"
+                          format: table
+                          refId: A
+                          datasource: {type: grafana-postgresql-datasource, uid: blocky-log}
+                          intervalMs: 1000
+                          maxDataPoints: 43200
+                      - refId: C
+                        relativeTimeRange: {from: 600, to: 0}
+                        datasourceUid: __expr__
+                        model:
+                          type: threshold
+                          refId: C
+                          expression: A
+                          intervalMs: 1000
+                          maxDataPoints: 43200
+                          datasource: {type: __expr__, uid: __expr__}
+                          conditions:
+                            - evaluator: {type: gt, params: [0]}
     '';
   in
     pkgs.runCommand "grafana-provisioning" {} ''

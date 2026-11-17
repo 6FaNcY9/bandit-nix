@@ -22,6 +22,7 @@ in {
     ./dashboards.nix
     ./alerting.nix
     ./notify.nix
+    ./netwatch.nix
   ];
 
   # Host-side grafana system user so sops-install-secrets can resolve the

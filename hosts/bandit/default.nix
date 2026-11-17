@@ -1,4 +1,8 @@
-{lib, ...}: {
+{
+  lib,
+  repoConfig,
+  ...
+}: {
   imports = [
     ./hardware.nix
   ];
@@ -48,6 +52,15 @@
     tailscale.enable = true;
     # iOS device pairing over USB (SideStore/iloader sideloading).
     usbmuxd.enable = true;
+    # Per-interface traffic for the Grafana "Netzwerk" dashboard; the lab
+    # scrapes it over the tailnet (prometheus job "laptop"). Bound to the
+    # tailnet address and opened on tailscale0 only, never on the LAN or WAN.
+    prometheus.exporters.node = {
+      enable = true;
+      listenAddress = repoConfig.lab.workstationTailscaleIp;
+      port = 9100;
+      enabledCollectors = ["netdev"];
+    };
     # Tap AltGr for space, hold it (>200ms, not mid-typing) to keep AltGr
     # symbols (@ { } [ ] \ |) on the Austrian layout. Built-in keyboard only
     # (0001:0001, AT Translated Set 2); its own space key works again.
@@ -65,6 +78,18 @@
   # Random MAC per network, stable per SSID: defeats cross-network
   # tracking without breaking captive portals or per-network DHCP leases.
   networking.networkmanager.wifi.macAddress = "stable";
+  # The node exporter is reachable from the tailnet only (lab scrape).
+  networking.firewall.interfaces.tailscale0.allowedTCPPorts = [9100];
+  # node-exporter binds the tailnet IP; wait for tailscale and retry so a boot
+  # where the address appears late does not leave the exporter dead.
+  systemd.services.prometheus-node-exporter = {
+    after = ["tailscaled.service"];
+    wants = ["tailscaled.service"];
+    serviceConfig = {
+      Restart = "on-failure";
+      RestartSec = 5;
+    };
+  };
   # AMD CPU microcode updates — applied at boot for security and stability.
   # Redistributable firmware blobs for WiFi (ath11k) and Bluetooth.
   hardware = {

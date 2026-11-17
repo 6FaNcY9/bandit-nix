@@ -186,6 +186,24 @@ in
       )
       lab.succeed("curl -fsS -u admin:labtest http://127.0.0.1:3000/api/dashboards/uid/netzwerk | grep -q Netzwerk")
 
+      # Malware spike: 20 blocked malware-list hits for one client make the
+      # "Malware-Anfragen" rule (for: 0m) fire; grafana-ntfy forwards it.
+      lab.succeed(
+          "sudo -u postgres psql -d blocky -c \""
+          "insert into log_entries (request_ts, client_name, response_type, reason) "
+          "select now(), 'testgeraet', 'BLOCKED', 'BLOCKED (malware)' from generate_series(1,20)\""
+      )
+
+      def malware_firing(_last: bool) -> bool:
+          out = lab.succeed("curl -fsS -u admin:labtest http://127.0.0.1:3000/api/prometheus/grafana/api/v1/alerts")
+          alerts = json.loads(out).get("data", {}).get("alerts", [])
+          return any(
+              a.get("labels", {}).get("alertname") == "Malware-Anfragen" and a.get("state") == "Alerting"
+              for a in alerts
+          )
+
+      retry(malware_firing)
+
       lab.succeed("systemctl stop postgresql.service")
       lab.succeed(f"dig +short @{ip} canary.test | grep -x 10.0.0.1")
       # Blocky must also START while Postgres is down (DNS first, log second).

@@ -108,6 +108,13 @@
       - job_name: nvidia-gpu
         static_configs:
           - targets: ["localhost:9835"]
+
+      # Owner laptop traffic over the tailnet (node exporter bound to its
+      # tailnet address). Stale when the laptop is off the tailnet; the
+      # dashboard's stat panel shows the last-sample age.
+      - job_name: laptop
+        static_configs:
+          - targets: ["${repoConfig.lab.workstationTailscaleIp}:9100"]
   '';
 
   # Shared with the regression test so it exercises the deployed modules.
