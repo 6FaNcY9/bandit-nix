@@ -83,11 +83,13 @@ in {
             "${grafanaProvisioning}:/etc/grafana/provisioning:ro"
             "${grafanaDashboards}:/var/lib/grafana-dashboards:ro"
             "${secret}:${secret}:ro"
+            # Blocky query-log datasource reads Postgres over the socket (no TCP).
+            "/run/postgresql:/run/postgresql:ro"
           ];
         };
         unitConfig = {
-          After = ["prometheus.service"];
-          Wants = ["prometheus.service"];
+          After = ["prometheus.service" "postgresql.service"];
+          Wants = ["prometheus.service" "postgresql.service"];
         };
       };
       blackbox-exporter.containerConfig = {

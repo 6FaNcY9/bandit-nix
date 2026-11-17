@@ -66,6 +66,24 @@
           url: http://localhost:9090
           isDefault: true
     '';
+    # Blocky's query log, read-only role over the Unix socket (host starting
+    # with "/" is a socket dir for lib/pq). Postgres stays off TCP; a socket
+    # host keeps it that way.
+    datasourceBlocky = pkgs.writeTextDir "datasources/blocky.yaml" ''
+      apiVersion: 1
+      datasources:
+        - name: Blocky Query Log
+          uid: blocky-log
+          type: grafana-postgresql-datasource
+          access: proxy
+          url: /run/postgresql
+          user: grafana
+          isDefault: false
+          jsonData:
+            database: blocky
+            sslmode: disable
+            postgresVersion: 1600
+    '';
     dashboards = pkgs.writeTextDir "dashboards/bandit-lab.yaml" ''
       apiVersion: 1
       providers:
@@ -345,6 +363,8 @@
     pkgs.runCommand "grafana-provisioning" {} ''
       mkdir -p $out
       cp -rL ${datasources}/datasources $out/datasources
+      chmod -R u+w $out/datasources
+      cp -L ${datasourceBlocky}/datasources/blocky.yaml $out/datasources/blocky.yaml
       cp -rL ${dashboards}/dashboards $out/dashboards
       cp -rL ${alerting}/alerting $out/alerting
     '';

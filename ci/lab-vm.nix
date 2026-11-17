@@ -67,6 +67,26 @@ in
         };
       };
       services.blocky.settings.customDNS.mapping."canary.test" = "10.0.0.1";
+      # sops cannot decrypt in the VM (no age key), so Grafana's admin-password
+      # secret is absent and its container would fail the bind mount. Stand in a
+      # known password before Grafana starts so the datasource/dashboard checks
+      # can reach the API.
+      systemd.services.grafana-test-admin-secret = {
+        wantedBy = ["grafana.service"];
+        before = ["grafana.service"];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+        };
+        script = let
+          secret = config.sops.secrets."grafana-admin-password".path;
+        in ''
+          dir=$(${pkgs.coreutils}/bin/dirname ${secret})
+          [ -L "$dir" ] && ${pkgs.coreutils}/bin/rm -f "$dir"
+          ${pkgs.coreutils}/bin/mkdir -p "$dir"
+          ${pkgs.coreutils}/bin/printf labtest | ${pkgs.coreutils}/bin/install -m0400 -o grafana -g grafana /dev/stdin ${secret}
+        '';
+      };
       virtualisation = {
         memorySize = 4096;
         cores = 2;
@@ -158,6 +178,14 @@ in
       for stmt in ["delete from log_entries", "insert into log_entries (request_ts) values (now())", "truncate log_entries"]:
           status, out = lab.execute(f'{grafana} -c "{stmt}" 2>&1')
           assert status != 0 and "permission denied for table log_entries" in out, (stmt, status, out)
+      # Grafana reads the query log through the blocky-log datasource over the
+      # socket (Postgres still off TCP); health OK proves the role + socket work.
+      lab.wait_for_unit("grafana.service")
+      lab.wait_until_succeeds(
+          "curl -fsS -u admin:labtest http://127.0.0.1:3000/api/datasources/uid/blocky-log/health | grep -q '\"status\":\"OK\"'"
+      )
+      lab.succeed("curl -fsS -u admin:labtest http://127.0.0.1:3000/api/dashboards/uid/netzwerk | grep -q Netzwerk")
+
       lab.succeed("systemctl stop postgresql.service")
       lab.succeed(f"dig +short @{ip} canary.test | grep -x 10.0.0.1")
       # Blocky must also START while Postgres is down (DNS first, log second).

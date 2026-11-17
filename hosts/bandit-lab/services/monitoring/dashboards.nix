@@ -1,4 +1,10 @@
-{pkgs, ...}: let
+{
+  pkgs,
+  repoConfig,
+  ...
+}: let
+  # Tailnet suffix for the service links, e.g. ntopng.tail7facc9.ts.net.
+  tailnet = pkgs.lib.removePrefix "bandit-lab." repoConfig.lab.tailnetFqdn;
   # grafana.com id 1860 rev 45 (Node Exporter Full). Pinned by hash; bump the
   # revision deliberately. Uses a datasource template variable, so it picks
   # up the provisioned Prometheus datasource without patching.
@@ -1200,9 +1206,352 @@
     ];
   });
 
+  # "Netzwerk": what Blocky blocks per device, traffic per device, and freshness
+  # of the phone/laptop senders. Blocked/queries come from the Postgres query log
+  # (datasource blocky-log), traffic from Prometheus. German titles: the owner
+  # reads this one. Panels 6-8 stay empty until the phone sender (pong_*) and the
+  # laptop node exporter (job=laptop) land in later tasks.
+  blockyDs = {
+    type = "grafana-postgresql-datasource";
+    uid = "blocky-log";
+  };
+  sqlTable = {
+    id,
+    x,
+    y,
+    w,
+    h,
+    title,
+    sql,
+    description ? null,
+  }:
+    {
+      inherit id title;
+      type = "table";
+      datasource = blockyDs;
+      gridPos = {
+        inherit h w x y;
+      };
+      targets = [
+        {
+          refId = "A";
+          format = "table";
+          rawQuery = true;
+          rawSql = sql;
+        }
+      ];
+      fieldConfig = {
+        defaults = {};
+        overrides = [];
+      };
+      options = {
+        showHeader = true;
+        cellHeight = "sm";
+      };
+    }
+    // lib.optionalAttrs (description != null) {inherit description;};
+  # Postgres time series: the query returns time, a metric column and a value.
+  sqlTimeseries = {
+    id,
+    x,
+    y,
+    w,
+    h,
+    title,
+    sql,
+    stack ? false,
+  }: {
+    inherit id title;
+    type = "timeseries";
+    datasource = blockyDs;
+    gridPos = {
+      inherit h w x y;
+    };
+    targets = [
+      {
+        refId = "A";
+        format = "time_series";
+        rawQuery = true;
+        rawSql = sql;
+      }
+    ];
+    fieldConfig = {
+      defaults = {
+        min = 0;
+        custom = {
+          fillOpacity = 10;
+          stacking.mode =
+            if stack
+            then "normal"
+            else "none";
+        };
+      };
+      overrides = [];
+    };
+    options = {
+      legend = {
+        displayMode = "list";
+        placement = "bottom";
+        showLegend = true;
+      };
+      tooltip.mode = "multi";
+    };
+  };
+  dashboardNetzwerk = pkgs.writeText "grafana-dashboard-netzwerk.json" (builtins.toJSON {
+    title = "Netzwerk";
+    uid = "netzwerk";
+    schemaVersion = 39;
+    version = 1;
+    editable = false;
+    timezone = "browser";
+    refresh = "1m";
+    time = {
+      from = "now-24h";
+      to = "now";
+    };
+    templating.list = [
+      {
+        name = "domain";
+        type = "textbox";
+        label = "Domain-Suche";
+        query = "";
+        current = {
+          text = "";
+          value = "";
+        };
+      }
+      {
+        name = "geraet";
+        type = "query";
+        label = "Gerät";
+        multi = true;
+        includeAll = true;
+        datasource = blockyDs;
+        query = "select distinct client_name from log_entries where client_name <> '' order by 1";
+        # 2 = refresh on time-range change.
+        refresh = 2;
+      }
+    ];
+    panels = [
+      {
+        id = 1;
+        type = "stat";
+        title = "Anfragen (24 h) und Anteil geblockt";
+        datasource = blockyDs;
+        gridPos = {
+          h = 4;
+          w = 24;
+          x = 0;
+          y = 0;
+        };
+        targets = [
+          {
+            refId = "A";
+            format = "table";
+            rawQuery = true;
+            rawSql = ''
+              select
+                count(*) as "Anfragen 24 h",
+                round(100.0 * count(*) filter (where response_type = 'BLOCKED') / greatest(count(*), 1), 1) as "% geblockt"
+              from log_entries
+              where request_ts > now() - interval '24 hours'
+            '';
+          }
+        ];
+        fieldConfig = {
+          defaults = {
+            thresholds = {
+              mode = "absolute";
+              steps = plainSteps;
+            };
+          };
+          overrides = [(unitOverride "% geblockt" "percent")];
+        };
+        options = {
+          colorMode = "value";
+          graphMode = "none";
+          justifyMode = "auto";
+          orientation = "horizontal";
+          reduceOptions = {
+            calcs = ["lastNotNull"];
+            fields = "";
+            values = false;
+          };
+          textMode = "value_and_name";
+        };
+      }
+      (sqlTable {
+        id = 2;
+        x = 0;
+        y = 4;
+        w = 12;
+        h = 8;
+        title = "Top geblockte Domains (24 h)";
+        sql = ''
+          select question_name as "Domain", count(*) as "Anfragen", count(distinct client_name) as "Geräte"
+          from log_entries
+          where response_type = 'BLOCKED' and request_ts > now() - interval '24 hours'
+          group by question_name
+          order by count(*) desc
+          limit 20
+        '';
+      })
+      (sqlTimeseries {
+        id = 3;
+        x = 12;
+        y = 4;
+        w = 12;
+        h = 8;
+        title = "Anfragen pro Gerät und Stunde";
+        stack = true;
+        sql = ''
+          select date_trunc('hour', request_ts) as time, client_name as metric, count(*) as value
+          from log_entries
+          where request_ts > now() - interval '24 hours'
+          group by 1, 2
+          order by 1
+        '';
+      })
+      (sqlTable {
+        id = 4;
+        x = 0;
+        y = 12;
+        w = 24;
+        h = 10;
+        title = "Letzte 200 Anfragen";
+        description = "Mit den Variablen oben nach Domain und Gerät filtern.";
+        sql = ''
+          select request_ts as "Zeit", client_name as "Gerät", question_name as "Domain", response_type as "Typ", reason as "Grund"
+          from log_entries
+          where question_name ILIKE '%' || '$domain' || '%' and client_name in ($geraet)
+          order by request_ts desc
+          limit 200
+        '';
+      })
+      (sqlTable {
+        id = 5;
+        x = 0;
+        y = 22;
+        w = 12;
+        h = 8;
+        title = "Schadseiten-Treffer (7 Tage)";
+        sql = ''
+          select client_name as "Gerät", question_name as "Domain", count(*) as "Treffer"
+          from log_entries
+          where reason ILIKE '%malware%' and request_ts > now() - interval '7 days'
+          group by client_name, question_name
+          order by count(*) desc
+        '';
+      })
+      (graphPanel {
+        id = 6;
+        x = 12;
+        y = 22;
+        w = 12;
+        title = "Handy-Verkehr pro App (Top 10)";
+        unit = "bytes";
+        targets = [
+          {
+            expr = "topk(10, increase(pong_app_rx_bytes[1h]) + increase(pong_app_tx_bytes[1h]))";
+            legend = "{{app}}";
+          }
+        ];
+      })
+      {
+        id = 7;
+        type = "stat";
+        title = "Melder zuletzt vor";
+        description = "Rot über 15 Minuten: der Melder von Handy oder Laptop schweigt.";
+        datasource = prometheusDs;
+        gridPos = {
+          h = 4;
+          w = 24;
+          x = 0;
+          y = 30;
+        };
+        targets = [
+          {
+            refId = "A";
+            expr = "time() - pong_netstats_last_push_timestamp_seconds";
+            instant = true;
+            legendFormat = "Handy";
+          }
+          {
+            refId = "B";
+            expr = ''time() - max(timestamp(up{job="laptop"} == 1))'';
+            instant = true;
+            legendFormat = "Laptop";
+          }
+        ];
+        fieldConfig = {
+          defaults = {
+            unit = "s";
+            decimals = 0;
+            thresholds = {
+              mode = "absolute";
+              steps = highIsBad 900 900;
+            };
+          };
+          overrides = [];
+        };
+        options = {
+          colorMode = "background";
+          graphMode = "none";
+          justifyMode = "auto";
+          orientation = "horizontal";
+          reduceOptions = {
+            calcs = ["lastNotNull"];
+            fields = "";
+            values = false;
+          };
+          textMode = "value_and_name";
+        };
+      }
+      (graphPanel {
+        id = 8;
+        x = 0;
+        y = 34;
+        w = 12;
+        title = "Laptop-Verkehr";
+        unit = "Bps";
+        targets = [
+          {
+            expr = ''rate(node_network_receive_bytes_total{job="laptop", device!~"lo|tailscale0"}[5m])'';
+            legend = "{{device}} rx";
+          }
+          {
+            expr = ''rate(node_network_transmit_bytes_total{job="laptop", device!~"lo|tailscale0"}[5m])'';
+            legend = "{{device}} tx";
+          }
+        ];
+      })
+      {
+        id = 9;
+        type = "text";
+        title = "Mehr Ansichten";
+        gridPos = {
+          h = 8;
+          w = 12;
+          x = 12;
+          y = 34;
+        };
+        options = {
+          mode = "markdown";
+          content = ''
+            - [ntopng](https://ntopng.${tailnet}) — Live-Verkehr am Lab
+            - [Beszel](https://beszel.${tailnet}) — Netz-Bytes pro PC (albert, slayer)
+
+            CrowdSec-Bans schützen nur das Lab, nicht das ganze Netz: fürs Netz nur Domain-Sperren über DNS.
+          '';
+        };
+      }
+    ];
+  });
+
   grafanaDashboards = pkgs.runCommand "grafana-dashboards" {} ''
     mkdir -p $out
     cp -L ${dashboardAiia} $out/aiia.json
+    cp -L ${dashboardNetzwerk} $out/netzwerk.json
     cp -L ${dashboardLabOverview} $out/lab-overview.json
     cp -L ${dashboardNodeExporter} $out/node-exporter-full.json
     cp -L ${dashboardWanProbes} $out/wan-probes.json
