@@ -8,7 +8,21 @@
   config,
   pkgs,
   ...
-}: {
+}: let
+  # Keyless geolocation: ntopng reads a City db (country+city) and an ASN db from --geoip-dir.
+  # DB-IP lite needs no MaxMind licence key (already in nixpkgs, also used by mrija-watch);
+  # its filenames match ntopng's dbip-city / dbip-asn scan.
+  geoipDir = pkgs.linkFarm "ntopng-geoip" [
+    {
+      name = "dbip-city-lite.mmdb";
+      path = "${pkgs.dbip-city-lite}/share/dbip/dbip-city-lite.mmdb";
+    }
+    {
+      name = "dbip-asn-lite.mmdb";
+      path = "${pkgs.dbip-asn-lite}/share/dbip/dbip-asn-lite.mmdb";
+    }
+  ];
+in {
   services.ntopng = {
     enable = true;
     # configText replaces the module's generated file: its --http-port takes
@@ -19,6 +33,7 @@
       --http-port=127.0.0.1:3003
       --redis=${config.services.ntopng.redis.address}
       --data-dir=/var/lib/ntopng
+      --geoip-dir=${geoipDir}
       --user=ntopng
     '';
   };
