@@ -39,6 +39,7 @@ status() { # status <pid> <status|""> [waitingFor]: set or remove (empty) status
     "$HOME/.claude/sessions/$1.json" >"$t/status.json" && mv "$t/status.json" "$HOME/.claude/sessions/$1.json"
 }
 widest() { python3 -c 'import sys; print(max(len(l) for l in sys.stdin.read().split("\n")))'; }
+r46=$(printf '─%.0s' {1..46})  # one whole rule at the default 46 columns
 
 # test_tool_use
 fresh; session $$ $s1 src-a "$HOME/w"
@@ -188,7 +189,8 @@ board <<'EOF'
 - 14:08 normal
 EOF
 out=$(lage --dir "$HOME/w" --once)
-[[ $out == *$'\n DU\n 1  Mrija\n 2  Brief an die Behörde\n─'* && $out != *alt* && $out != *normal* && $out != *Fund* ]]
+[[ $out == *$'\n DU\n 1  Mrija\n 2  Brief an die Behörde\n─'* && $out != *alt* && $out != *normal* ]]
+[[ $out == *$'\n NEU\n 14:01  src-a\n    ein Fund ist kein Schritt\n─'* ]]   # a Fund is no step: it shows under NEU
 mkdir -p "$HOME/.local/state/liefern/warten"; touch "$HOME/.local/state/liefern/warten/1.eintrag"
 out=$(lage --dir "$HOME/w" --once);  [[ $out == *$'\n DU\n 1  liefern · 1 wartet\n 2  Mrija\n'* ]]
 touch "$HOME/.local/state/liefern/warten/2.eintrag"
@@ -206,6 +208,37 @@ fresh; session $$ $s1 src-a "$HOME/w"
 printf '## Für dich\n- 14:05 ! %s\n' "$(printf 'wort%02d ' {1..20})" | board
 out=$(lage --dir "$HOME/w" --once);  line=$(grep '^ 1  wort01' <<<"$out")
 [[ ${#line} -eq 46 && $line == *"…" && $(widest <<<"$out") -le 46 && $(grep -c wort02 <<<"$out") -eq 1 ]]
+
+# test_news: NEU shows the newest Fund of each live session (by time, not by place on the board) in the order of the
+# rows, its time and label, below it the text cut to the pane; another day shows DD.MM.; a shared lab board counts once;
+# a session without Funde has no entry
+fresh; session $$ $s1 src-a "$HOME/w"
+printf '## Funde\n- 13:50 ! alter Fund\n- 14:09 neuer Fund\n## Für dich\n- 14:11 ! kein Fund\n' | board
+live; session $pid bbbbbbbb-2 src-b "$HOME/empty" 1794700100000   # started later, no board: no entry
+out=$(lage --dir "$HOME/w" --once)
+[[ $out == *$'\n NEU\n 14:09  src-a\n    neuer Fund\n─'* && $out != *"alter Fund"* && $out != *$'src-b\n    '* ]]
+live; session $pid cccccccc-3 src-c "$HOME/empty" 1794700200000
+printf '## Funde\n- 2026-11-14 09:00 von gestern %s\n' "$(printf 'wort%02d ' {1..12})" >"$HOME/.local/state/lage/cccccccc-3.md"
+out=$(lage --dir "$HOME/w" --once);  line=$(grep '^    von gestern' <<<"$out")
+[[ $out == *$'\n NEU\n 14:09  src-a\n    neuer Fund\n 14.11.  src-c\n    von gestern'* && ${#line} -eq 46 && $line == *"…" ]]
+fresh; session $$ $s1 src-a "$HOME/src/sec/ctf/box1"; live; session $pid bbbbbbbb-2 src-b "$HOME/src/sec/ctf/box1/sub"
+mkdir -p "$HOME/src/sec/ctf/box1/.claude"; printf '## Funde\n- 14:05 Port 22 offen\n' >"$HOME/src/sec/ctf/box1/.claude/lage.md"
+out=$(lage --dir "$HOME/src/sec/ctf/box1" --once);  [[ $(grep -c 'Port 22 offen' <<<"$out") -eq 1 && $out == *$'\n 14:05  src-a\n'* ]]
+
+# test_delivered: GELIEFERT heute counts today's done liefern entries and shows the newest 3 with their time and the
+# owner's sentence; yesterday's entries and the moved scripts themselves do not count
+fresh; session $$ $s1 src-a "$HOME/w"
+d=$HOME/.local/state/liefern/fertig; mkdir -p "$d"
+for x in 0811-a 0956-b 1037-c 1047-d; do printf '/x/%s.sh\nSatz %s\n' "${x#*-}" "${x#*-}" >"$d/2026-11-15-$x.sh.eintrag"; done
+printf '/x/y.sh\nSatz gestern\n' >"$d/2026-11-14-2300-y.sh.eintrag"; : >"$d/2026-11-15-1047-d.sh"
+out=$(lage --dir "$HOME/w" --once)
+[[ $out == *$'\n GELIEFERT heute (4)\n 10:47  Satz d\n 10:37  Satz c\n 09:56  Satz b\n─'* && $out != *"Satz a"* && $out != *gestern* ]]
+# the order of the blocks; a small pane keeps today's frame first: NEU in whole pairs, GELIEFERT only with a row
+printf '## Funde\n- 14:09 neuer Fund\n' | board
+out=$(LINES=30 lage --dir "$HOME/w" --once)
+[[ $out == *$'\n ● src-a  arbeitet\n'"$r46"$'\n NEU\n 14:09  src-a\n    neuer Fund\n'"$r46"$'\n GELIEFERT heute (4)\n'*$'\n'"$r46"$'\n f alles   i Idee   ⏎ zur Sitzung' ]]
+out=$(LINES=12 lage --dir "$HOME/w" --once);  [[ $out == *$'\n    neuer Fund\n'"$r46"$'\n f alles'* && $out != *GELIEFERT* ]]
+out=$(LINES=9 lage --dir "$HOME/w" --once);   [[ $out == *$'\n ● src-a  arbeitet\n'"$r46"$'\n f alles'* && $out != *NEU* ]]
 
 # test_foot: the keys, on the right the Claude limits from claude-hud's snapshot (5 h only while it is a number); a
 # broken snapshot shows no numbers (Review Focus 3); without a followed session only Enter is offered
@@ -413,6 +446,8 @@ for i in 1 2 3 4 5 6; do live; session $pid "cap0000$i-1" "src-$i" "$HOME/empty"
 { for h in Funde Ungeprüft; do echo "## $h"; for m in 00 01 02 03 04; do echo "- 13:$m Eintrag $m"; done; done
   echo '## Für dich'; for m in 00 01 02 03 04; do echo "- 13:$m ! Eintrag $m"; done
   echo '## Deine Ideen'; for m in 00 01 02 03 04; do echo "- [ ] 13:$m Idee $m"; done; } | board
+d=$HOME/.local/state/liefern/fertig; mkdir -p "$d"   # GELIEFERT heute, so that both new blocks compete for the rows
+for x in 0811 0956 1037 1047; do printf '/x/s.sh\nSatz %s\n' $x >"$d/2026-11-15-$x-s.sh.eintrag"; done
 for C in 45 90; do for L in 60 40 27 20 11 8 5; do for v in "" --full; do
   out=$(COLUMNS=$C LINES=$L lage --dir "$HOME/w" --once $v)
   [[ $(wc -l <<<"$out") -le $((L - 1)) && $(widest <<<"$out") -le $C && $(sed -n 1p <<<"$out") == "LAGE  w"* ]] ||
@@ -424,10 +459,11 @@ for C in 45 90; do for L in 60 40 27 20 11 8 5; do for v in "" --full; do
       { echo "COLUMNS=$C LINES=$L: DU $steps+${more:-0}, sessions $rows+${hidden:-0}" >&2; false; }
   fi
 done; done; done
-out=$(LINES=27 lage --dir "$HOME/w" --once)   # main view: DU with the 3 newest ! lines, the 7 sessions between rules, the keys
-[[ $out == *$'\n DU\n 1  Eintrag 04\n 2  Eintrag 03\n 3  Eintrag 02\n    +2 weitere\n─'* && $(grep -c '^─' <<<"$out") -eq 2 ]]
+out=$(LINES=27 lage --dir "$HOME/w" --once)   # main view: DU with the 3 newest ! lines, the 7 sessions, NEU, GELIEFERT, the keys
+[[ $out == *$'\n DU\n 1  Eintrag 04\n 2  Eintrag 03\n 3  Eintrag 02\n    +2 weitere\n─'* && $(grep -c '^─' <<<"$out") -eq 4 ]]
 [[ $(grep -cE '^ [●○▲] ' <<<"$out") -eq 7 && $(tail -n 1 <<<"$out") == " f alles   i Idee   ⏎ zur Sitzung" ]]
-[[ $out != *LOG* && $out != *NEU* && $out != *Schritt* && $out != *"Eintrag 01"* && $out != *"▶"* ]]
+[[ $out == *$'\n'"$r46"$'\n NEU\n 13:04  src-a\n    Eintrag 04\n'"$r46"$'\n GELIEFERT heute (4)\n 10:47  Satz 1047\n 10:37  Satz 1037\n 09:56  Satz 0956\n'"$r46"$'\n'* ]]
+[[ $out != *LOG* && $out != *Schritt* && $out != *"Eintrag 01"* && $out != *"▶"* ]]
 out=$(LINES=27 lage --dir "$HOME/w" --once --full)
 [[ $out == *"! src-1 wartet"*"FUNDE"*"UNGEPRÜFT"*"FÜR DICH"*"DEINE IDEEN"*"i = Idee   f = zurück" && $out != *LOG* ]]
 

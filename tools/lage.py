@@ -675,6 +675,42 @@ def session_rows(live, width):
     return out or [paint(DIM, " keine Sitzung", lit)]
 
 
+def news_lines(live, width):
+    """NEU: the newest Fund of each live session, one per board (sessions in one lab folder share it), in the order of
+    the rows: as a pair, its time (DD.MM. on another day) and label, below it the text. Unreadable boards are skipped."""
+    lit, today, boards, out = sys.stdout.isatty(), clock().astimezone().date(), {}, []
+    for s, *_ in live:
+        boards.setdefault(board_of(s), s)
+    for path, s in boards.items():
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        e = max((e for e in parse_board(text, today)["Funde"] if e.ts), key=lambda e: e.ts, default=None)
+        if e:
+            when = f"{e.ts:%H:%M}" if e.ts.date() == today else f"{e.ts:%d.%m.}"
+            out.append((paint(TEAL, " " + clean(f"{when}  {label(s, transcripts[s['sessionId']])}", width - 1), lit),
+                        "    " + clean(e.text, max(width - 4, 1))))
+    return out
+
+
+def delivered_lines(width, most=3):
+    """GELIEFERT heute (N): the newest `most` of today's done liefern entries, the time from the file name
+    (fertig/YYYY-MM-DD-HHMM-<name>.eintrag), the owner's sentence from its second line; [] without one to show."""
+    lit, day = sys.stdout.isatty(), clock().astimezone().strftime("%Y-%m-%d")
+    done = sorted((Path.home() / ".local/state/liefern/fertig").glob(day + "-*.eintrag"), reverse=True)
+    rows = []
+    for f in done[:most]:
+        try:
+            said = (f.read_text(encoding="utf-8", errors="replace").split("\n") + ["", ""])[1]
+        except OSError:
+            continue
+        hm = f.name[len(day) + 1:len(day) + 5]
+        if said.strip():
+            rows.append(paint(DIM, " " + clean(f"{hm[:2]}:{hm[2:]}  {said}", width - 1), lit))
+    return [paint(DIM, " " + clean(f"GELIEFERT heute ({len(done)})", width - 1), lit)] + rows if rows else []
+
+
 def usage():
     """[5 h N %, Woche N %] from claude-hud's usage snapshot, each only while it is a number; [] when unreadable."""
     try:
@@ -720,7 +756,17 @@ def frame(session, ended, where, full=False, seen=frozenset()):
         free -= len(sess)
         foot = [foot_line(width, session is not None)] if free > 0 else []
         sep = [paint(GREY, rule, lit)] if free - len(foot) >= 2 else []
-        return (head + du + sep + sess + sep + foot)[:room]
+        # The rows left after all that, each block with its rule below: NEU in whole pairs, then GELIEFERT with a row.
+        left, more = free - len(foot) - 2 * len(sep), []
+        if sep:
+            pairs = news_lines(live, width)[:max((left - 2) // 2, 0)]
+            if pairs:
+                more += [paint(TEAL, " NEU", lit)] + [x for p in pairs for x in p] + sep
+                left -= 2 + 2 * len(pairs)
+            done = delivered_lines(width, max(min(3, left - 2), 0))
+            if done and len(done) < left:
+                more += done + sep
+        return (head + du + sep + sess + sep + more + foot)[:room]
     wartet = [paint(RED if x.startswith("!") else DIM, x, lit) for x in wartet_lines(session["sessionId"], width)]
     state, since = "", None
     if ended:
