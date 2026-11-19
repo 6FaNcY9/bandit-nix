@@ -636,7 +636,8 @@ def states():
 def du_lines(live, width, most=3):
     """DU: the owner's next steps in a fixed order: liefern's queue, the sessions waiting for him (longest first), the
     open ! lines under Für dich (no → yet) on the boards of live sessions, newest first and cut at the first ": " or
-    ". ". At most `most` steps; the rest is counted, so a ! line is never dropped silently."""
+    ". " when the part before it has at least 2 words. At most `most` steps; the rest is counted, so a ! line is never
+    dropped silently."""
     lit, steps = sys.stdout.isatty(), []
     queued = len(list((Path.home() / ".local/state/liefern/warten").glob("*.eintrag")))  # tools/liefern's queue
     if queued:
@@ -652,7 +653,9 @@ def du_lines(live, width, most=3):
             continue
         bangs += [e for e in parse_board(text, today)["Für dich"] if e.important and "→" not in e.text]
     bangs.sort(key=lambda e: (e.ts is None, datetime.max - e.ts if e.ts else timedelta()))
-    steps += [(RED, re.split(r": |\. ", e.text, maxsplit=1)[0] or e.text) for e in bangs]
+    for e in bangs:
+        head = re.split(r": |\. ", e.text, maxsplit=1)[0]
+        steps.append((RED, head if len(head.split()) >= 2 else e.text))  # a one-word head ("Handy", "Dr", "z") says too little
     if not steps:
         return [paint(DIM, " " + clean("DU  nichts offen", width - 1), lit)]
     out = [paint(YELLOW, " DU", lit)]

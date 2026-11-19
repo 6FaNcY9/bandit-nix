@@ -1,7 +1,7 @@
 # Cockpit: what fills the free rows (draft for the owner)
 
-Status: three variants, designed with architect (Fable) on 2026-11-19 for src-c5. Variant A is built as a prototype
-on `feat/lage-cockpit-space` (tests green), not shipped and not queued. The owner picks.
+Status: three variants, designed with architect (Fable) on 2026-11-19 for src-c5. The owner chose variant A the same
+day; it is built on `feat/lage-cockpit-space`. B and C stay drafts and are not pursued.
 
 ## Why
 
@@ -9,7 +9,7 @@ The new overview went live 2026-11-19 10:47. The owner: "schaut akzeptabel aus, 
 56 columns x 30 rows (measured on the live process); the view used 12 of its 29 lines. He reads short, simple German
 (dyslexia + ADHD): few full lines rather than many small ones. Font size 16 stays.
 
-## Variant A: NEU + GELIEFERT (recommended, prototype built)
+## Variant A: NEU + GELIEFERT (chosen by the owner, built)
 
 ```
 LAGE  src                                          10:51
@@ -130,4 +130,4 @@ LAGE  src                                          10:51
 - A session without a Fund has no NEU entry: honest, but he may wonder.
 - A stale DU step ("liefern tippen" after liefern ran) now stands above a GELIEFERT list that contradicts it: a board
   line that was never closed with "→", not a lage bug.
-- The pending owner decision on the cut rule (cut only when the head has at least 2 words) is untouched.
+- The cut rule now cuts only when the head has at least 2 words (owner, 2026-11-19; built on this branch).

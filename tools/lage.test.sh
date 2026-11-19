@@ -189,10 +189,10 @@ board <<'EOF'
 - 14:08 normal
 EOF
 out=$(lage --dir "$HOME/w" --once)
-[[ $out == *$'\n DU\n 1  Mrija\n 2  Brief an die Behörde\n─'* && $out != *alt* && $out != *normal* ]]
+[[ $out == *$'\n DU\n 1  Mrija. Passwort ändern\n 2  Brief an die Behörde\n─'* && $out != *alt* && $out != *normal* ]]
 [[ $out == *$'\n NEU\n 14:01  src-a\n    ein Fund ist kein Schritt\n─'* ]]   # a Fund is no step: it shows under NEU
 mkdir -p "$HOME/.local/state/liefern/warten"; touch "$HOME/.local/state/liefern/warten/1.eintrag"
-out=$(lage --dir "$HOME/w" --once);  [[ $out == *$'\n DU\n 1  liefern · 1 wartet\n 2  Mrija\n'* ]]
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *$'\n DU\n 1  liefern · 1 wartet\n 2  Mrija. Passwort ändern\n'* ]]
 touch "$HOME/.local/state/liefern/warten/2.eintrag"
 live; session $pid bbbbbbbb-2 src-b "$HOME/empty"; status $pid waiting 'Erlaubnis für Bash'
 live; session $pid bbbbbbbb-3 src-c "$HOME/empty"; status $pid waiting
@@ -208,6 +208,13 @@ fresh; session $$ $s1 src-a "$HOME/w"
 printf '## Für dich\n- 14:05 ! %s\n' "$(printf 'wort%02d ' {1..20})" | board
 out=$(lage --dir "$HOME/w" --once);  line=$(grep '^ 1  wort01' <<<"$out")
 [[ ${#line} -eq 46 && $line == *"…" && $(widest <<<"$out") -le 46 && $(grep -c wort02 <<<"$out") -eq 1 ]]
+
+# test_cut: a step is cut at the first ": " or ". " only when the part before it has at least 2 words (owner,
+# 2026-11-19): a one-word head ("Handy", "Dr", "z") says too little, so the whole text stays (cut to the pane with …)
+fresh; session $$ $s1 src-a "$HOME/w"
+printf '## Für dich\n- 14:01 ! Brief an die Behörde: Name fehlt\n- 14:02 ! Handy: Samsung zurücksetzen\n- 14:03 ! Dr. Maier anrufen\n' | board
+out=$(lage --dir "$HOME/w" --once)
+[[ $out == *$'\n DU\n 1  Dr. Maier anrufen\n 2  Handy: Samsung zurücksetzen\n 3  Brief an die Behörde\n'* ]]
 
 # test_news: NEU shows the newest Fund of each live session (by time, not by place on the board) in the order of the
 # rows, its time and label, below it the text cut to the pane; another day shows DD.MM.; a shared lab board counts once;

@@ -47,7 +47,8 @@ Colours: yellow #fdb827 = your turn; red #ed4749 = important and open; teal #00a
 - Order of the DU lines, fixed: 1. `liefern` when its queue (`~/.local/state/liefern/warten/`) is not empty,
   with the count; 2. a session whose status is `waiting` ("▲ wartet auf dich", yellow, with `waitingFor`);
   3. open `!` lines under "Für dich" (no "→" yet) from the boards of live sessions, newest first.
-- A step's text is cut at the first ": " or ". ". At most three steps; the rest is counted as "+N weitere · f".
+- A step's text is cut at the first ": " or ". " when the part before it has at least 2 words (owner,
+  2026-11-19: a one-word head like "Handy" or "Dr" said too little). At most three steps; the rest is counted as "+N weitere · f".
 - Sessions, from `~/.claude/sessions/*.json` and the log: working (`busy`, plus the last tool step), waiting
   for him (only `status: waiting`), resting (`idle`, plus age), helpers working (n), ended (process gone).
   `idle` reads "ruht". Today `jetzt()` shows `idle` as "wartet auf dich": that is wrong in the overview and
