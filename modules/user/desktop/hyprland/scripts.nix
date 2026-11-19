@@ -4,6 +4,11 @@
   ...
 }: let
   lage = pkgs.writers.writePython3Bin "lage" {flakeIgnore = ["E501"];} (builtins.readFile ../../../../tools/lage.py);
+  liefern = pkgs.writeShellApplication {
+    name = "liefern";
+    runtimeInputs = [pkgs.coreutils pkgs.gnused];
+    text = builtins.readFile ../../../../tools/liefern;
+  };
   # The Cockpit pane: lage on top, below it a small shell for deploys, sudo and the finger (kitty splits).
   cockpitSession = pkgs.writeText "cockpit-session" ''
     layout splits
@@ -35,6 +40,11 @@ in {
       };
 
       ".local/bin/lage".source = "${lage}/bin/lage";
+      # The owner's deploy queue (tools/liefern). force: a hand-placed copy from before the rebuild is replaced.
+      ".local/bin/liefern" = {
+        source = "${liefern}/bin/liefern";
+        force = true;
+      };
 
       # ─── Cockpit (Mod+C): master layout with a log pane, per workspace ───
       ".local/bin/hypr-cockpit" = {

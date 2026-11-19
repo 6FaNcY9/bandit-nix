@@ -668,7 +668,8 @@ def task_lines(cols, n):
     mine = [(m[1], m[2]) for m in map(TASK.fullmatch, cached) if m and "vino" in (m[3] or "vino").split("/")]
     now = clock()
     stale = (tasks_ok is None or (now - tasks_ok).total_seconds() > 900) and (now - mtime).total_seconds() > 900
-    count = clean(f"{len(mine)}" + (f"  (Stand {mtime.astimezone():%H:%M})" if stale else ""), max(cols - 10, 1))
+    queued = len(list((Path.home() / ".local/state/liefern/warten").glob("*.eintrag")))  # tools/liefern's queue
+    count = clean(f"{len(mine)}" + (f"  · liefern {queued}" if queued else "") + (f"  (Stand {mtime.astimezone():%H:%M})" if stale else ""), max(cols - 10, 1))
     head = [paint(TEAL, "AUFGABEN", lit) + "  " + paint(DIM, count, lit)]
     if n <= 0:
         return head
