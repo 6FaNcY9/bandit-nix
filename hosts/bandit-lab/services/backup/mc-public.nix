@@ -40,8 +40,9 @@ in {
   };
 
   systemd = {
-    # 0711: minecraft-snapshot copies as the box uid into ${staging}/paper (0700, that uid), so it must be searchable.
-    tmpfiles.rules = ["d ${staging} 0711 root root -"];
+    # 0755: minecraft-snapshot copies as the box uid into ${staging}/paper (0700, that uid). rsync 3.5 opens every
+    # folder on its destination path, so a searchable-only 0711 failed (code 3, 2026-11-19); paper stays private.
+    tmpfiles.rules = ["d ${staging} 0755 root root -"];
     services.restic-backups-mc-public = {
       after = ["restic-backups-peer.service" "container@mc-public.service" "tailscaled.service"];
       # As for the peer job: the laptop may be asleep or off the tailnet.
