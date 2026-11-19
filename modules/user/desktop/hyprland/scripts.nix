@@ -13,7 +13,7 @@
   cockpitSession = pkgs.writeText "cockpit-session" ''
     layout splits
     launch --title lage ${lage}/bin/lage
-    launch --location=hsplit --bias=35 --title shell
+    launch --location=hsplit --bias=25 --title shell
   '';
 in {
   home = {
