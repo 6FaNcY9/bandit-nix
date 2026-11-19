@@ -27,6 +27,8 @@ in {
 
     eza.enable = true;
     bat.enable = true;
+    # claude-everywhere step 1: sessions that survive SSH drops (laptop only; the phone has Termux's).
+    tmux.enable = desktop;
 
     btop = {
       enable = true;
