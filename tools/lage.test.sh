@@ -1067,4 +1067,52 @@ focus; [[ $rc == 0 && $(<"$DISPATCH") == *'address:0xold'* ]]
 fresh; cls=(); win 0xnew bbbbbbbb-1 busy 14:10:00; win 0xold bbbbbbbb-2 busy 14:05:00
 focus; [[ $rc == 0 && $(<"$DISPATCH") == *'address:0xold'* ]]
 
+# test_enter: in the view, Enter focuses the window of the session that waits longest, else of the one working longest;
+# a resting (idle) one never, unlike lage bar --focus, which takes idle for waiting (needs a pty)
+enter() { # enter <address|"">: lage in a pty, Enter, then the one dispatch it made; "": none, and lage keeps running
+  : >"$DISPATCH"
+  PATH=$t/fbin:$PATH python3 -B - "$here/lage.py" "$HOME/w" "$DISPATCH" "$1" <<'EOF'
+import os
+import pty
+import select
+import signal
+import sys
+import time
+
+prog, folder, dispatch, want = sys.argv[1:]
+pid, fd = pty.fork()
+if pid == 0:
+    os.execvp("python3", ["python3", prog, "--dir", folder])
+seen = b""
+
+
+def read_until(done, what):
+    global seen
+    end = time.time() + 8
+    while not done() and time.time() < end:
+        if select.select([fd], [], [], 0.2)[0]:
+            seen += os.read(fd, 4096)
+    assert done(), (what, seen[-300:])
+
+
+read_until(lambda: "⏎ zur Sitzung".encode() in seen, "first frame")
+seen = b""
+os.write(fd, b"\r")
+if want:
+    read_until(lambda: os.path.getsize(dispatch) > 0, "dispatch")
+    got = open(dispatch).read()
+    assert f'address:{want}"' in got and got.count("dispatch") == 1, got
+else:
+    read_until(lambda: seen.count(b"\x1b[H") >= 2, "two frames")  # the second frame starts after the Enter was read
+    assert os.path.getsize(dispatch) == 0, open(dispatch).read()
+os.kill(pid, signal.SIGINT)
+assert os.waitpid(pid, 0)[1] == 0
+EOF
+}
+fresh; cls=(); win 0xidle bbbbbbbb-1 idle 14:00:00; win 0xbusy bbbbbbbb-2 busy 14:05:00
+focus; [[ $(<"$DISPATCH") == *'address:0xidle'* ]]   # bar --focus takes the idle one
+enter 0xbusy
+win 0xwait bbbbbbbb-3 waiting 14:10:00; enter 0xwait
+fresh; cls=(); win 0xidle bbbbbbbb-1 idle 14:00:00; win 0xrest bbbbbbbb-2 idle 14:05:00; enter ""
+
 echo ok

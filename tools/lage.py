@@ -402,15 +402,26 @@ def bar_json():
 
 def bar_focus():
     """Focus the window of the live session that waits longest, else of the one busy longest. 0 when focused, 1 when no
-    session or no window matched. Probes down from each window only: walking up from a tmux pane never reaches one."""
+    session or no window matched."""
     now, rows = clock(), []
     for s in sessions():
         if s["alive"]:
             state, since, _ = session_state(s)
             rows.append((state != "wartet", since or now, s["sessionId"]))
-    if not rows:
-        return 1
-    target = min(rows)[2]
+    return focus(min(rows)[2]) if rows else 1
+
+
+def jump():
+    """Enter in the view: focus the window of the session that waits longest for the owner, else of the one working
+    longest; a resting one never (states(), unlike bar_focus(), does not take idle for waiting). 0 when focused, else 1."""
+    now = clock()
+    rows = [(state != "wartet", since or now, s["sessionId"]) for s, state, since, _ in states() if state != "ruht"]
+    return focus(min(rows)[2]) if rows else 1
+
+
+def focus(target):
+    """Focus the window whose Claude session has the id target. 0 when focused, 1 when no window matched. Probes down
+    from each window only: walking up from a tmux pane never reaches one."""
     try:
         clients = [c for c in json.loads(run("hyprctl", "clients", "-j")) if isinstance(c, dict)]
     except (ValueError, TypeError):
@@ -735,8 +746,9 @@ def frame(session, ended, where, full=False, seen=frozenset()):
 
 
 def wait(seconds, session):
-    """Sleep. On a terminal, the key i asks for an idea and adds it to the board, f ends the wait at once; other keys do
-    nothing. Returns the key that ended the wait, b"i" or b"f", else b""."""
+    """Sleep. On a terminal, the key i asks for an idea and adds it to the board, f ends the wait at once, Enter jumps to
+    the session that needs the owner (jump()); other keys do nothing. Returns the key that ended the wait, b"i" or b"f",
+    else b""."""
     if not sys.stdin.isatty():
         time.sleep(seconds)
         return b""
@@ -744,11 +756,13 @@ def wait(seconds, session):
     key, end = b"", time.monotonic() + seconds
     try:
         tty.setcbreak(fd, termios.TCSANOW)
-        while key not in (b"i", b"f") and (left := end - time.monotonic()) > 0:
+        while key not in (b"i", b"f", b"\r", b"\n") and (left := end - time.monotonic()) > 0:
             if select.select([fd], [], [], left)[0]:
                 key = os.read(fd, 1)
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, saved)
+    if key in (b"\r", b"\n"):
+        jump()  # no window or no session to go to: the view simply stays
     if key == b"i" and session is not None:
         try:
             add_idea(board_of(session), input("Idee: "), clock())
