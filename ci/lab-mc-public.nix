@@ -72,6 +72,8 @@ in
   assert lib.assertMsg (!(lib.hasInfix "DOCKER-USER -i ve-mc-public" fw.extraCommands) && !(lib.hasInfix "DOCKER-USER -o ve-mc-public" fw.extraCommands)) "mc-public's forward isolation must live in mangle FORWARD, not DOCKER-USER";
   assert lib.assertMsg (lib.all (l: lib.hasInfix l fw.extraStopCommands) stopLines) "firewall stop commands must mirror every mc-public rule";
   assert lib.assertMsg (!(fw.interfaces ? "ve-mc-public")) "the host opens no port for ve-mc-public";
+  assert lib.assertMsg (inner.services.journald.settings.Journal.MaxRetentionSec == "30day" && lib.all (d: lib.elem "e ${toString mc.dataDir}/${d}/logs - - - 30d" inner.systemd.tmpfiles.rules) ["paper" "velocity"]) "logs inside mc-public (journal, Paper's and Velocity's files) are deleted after 30 days, as the privacy policy promises";
+  assert lib.assertMsg (lib.hasInfix "max_referenced" prepare.script && !(lib.hasInfix "install -d" prepare.script)) "mc-public-prepare refuses to start the box without the world's qgroup limit, and never creates a quota-less world directory";
   assert lib.assertMsg (inner.networking.nameservers == ["9.9.9.9" "1.1.1.1"]) "mc-public must use fixed nameservers, not the host resolv.conf";
   # Own tailnet node; the game port on its tailscale0 only.
   assert lib.assertMsg (inner.services.tailscale.enable && lib.elem "--advertise-tags=tag:mc-public" inner.services.tailscale.extraUpFlags && lib.elem "--ssh=false" inner.services.tailscale.extraUpFlags && !inner.services.openssh.enable) "mc-public is its own tailnet node tagged tag:mc-public, without Tailscale SSH or sshd";
@@ -80,6 +82,14 @@ in
   assert lib.assertMsg (innerFw.enable && innerFw.trustedInterfaces == ["lo"] && innerFw.allowedTCPPorts == [] && innerFw.allowedUDPPorts == [] && innerFw.allowedTCPPortRanges == [] && innerFw.allowedUDPPortRanges == []) "the container's firewall is on, trusts only lo and opens nothing globally";
   assert lib.assertMsg (lib.attrNames innerFw.interfaces == ["eth0" "tailscale0"] && innerFw.interfaces.tailscale0.allowedTCPPorts == [25565] && innerFw.interfaces.tailscale0.allowedUDPPorts == [] && innerFw.interfaces.eth0.allowedTCPPorts == [25565] && innerFw.interfaces.eth0.allowedUDPPorts == []) "the game port (25565/tcp) is open on the container's tailscale0 (testers) and eth0 (the host's tunnel agent over the veth, nothing new is forwarded in) only, and nothing else is";
   assert lib.assertMsg (lab.systemd.services.playit.serviceConfig.User == "playit" && lab.systemd.services.playit.serviceConfig.NoNewPrivileges && !(lib.elem 25565 fw.allowedTCPPorts)) "the host's tunnel agent runs as the unprivileged playit user and opens no inbound port on the host (it dials out)";
+  assert lib.assertMsg (let
+    sc = lab.systemd.services.playit.serviceConfig;
+  in
+    lib.all (d: lib.elem d sc.IPAddressDeny) ["localhost" "link-local" "10.0.0.0/8" "172.16.0.0/12" "192.168.0.0/16" "100.64.0.0/10" "fc00::/7"]
+    && sc.IPAddressAllow == ["10.251.1.2/32" "127.0.0.53/32"]
+    && sc.CapabilityBoundingSet == ""
+    && sc.PrivateDevices
+    && sc.RestrictAddressFamilies == ["AF_INET" "AF_INET6" "AF_UNIX"]) "the tunnel agent reaches only Velocity and the DNS stub in private space, whatever the playit account says (no localhost, LAN, tailnet or link-local), with no capability and no devices";
   assert lib.assertMsg (!paper.openFirewall && !velocity.openFirewall && !mc.openFirewall) "nix-minecraft must not open any firewall port by itself";
   # One Velocity, one Paper.
   assert lib.assertMsg (lib.attrNames mc.servers == ["paper" "velocity"] && paper.enable && velocity.enable) "the container runs exactly one Paper and one Velocity";

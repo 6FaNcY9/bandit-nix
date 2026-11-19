@@ -140,6 +140,14 @@ in {
         Restart = "on-failure";
         RestartSec = "30s";
       };
+      # The privacy policy (bandit-craft docs/public/DATENSCHUTZ.md) promises server and chat logs go after about
+      # 30 days: the journal (Paper's console) and Paper's and Velocity's own log files, pruned daily by age.
+      # MaxFileSec: a journal file is only deleted whole, so it must not span a month itself.
+      services.journald.settings.Journal = {
+        MaxRetentionSec = "30day";
+        MaxFileSec = "1day";
+      };
+      systemd.tmpfiles.rules = ["e /srv/minecraft/paper/logs - - - 30d" "e /srv/minecraft/velocity/logs - - - 30d"];
       nix.enable = false; # the host nix daemon is not exposed to the guest
       system.stateVersion = "25.11";
     };
@@ -187,6 +195,15 @@ in {
         ProtectSystem = "strict";
         ProtectHome = true;
         PrivateTmp = true;
+        PrivateDevices = true;
+        CapabilityBoundingSet = "";
+        RestrictAddressFamilies = ["AF_INET" "AF_INET6" "AF_UNIX"];
+        # Where the tunnel leads is set in the playit account, not here: whoever holds that account must not be
+        # able to point it at a host or LAN service (Traefik on 127.0.0.1:80, the RCON forwarders, the LAN).
+        # Only Velocity and the host's DNS stub (127.0.0.53, the agent resolves through /etc/resolv.conf) stay
+        # reachable in private space; Allow wins over Deny. The internet stays open (playit's relays).
+        IPAddressDeny = ["localhost" "link-local" "multicast" "10.0.0.0/8" "172.16.0.0/12" "192.168.0.0/16" "100.64.0.0/10" "fc00::/7"];
+        IPAddressAllow = ["10.251.1.2/32" "127.0.0.53/32"];
       };
     };
     # The design's caps, on the whole container: 6G heap for Paper, 512M for Velocity, the rest is JVM
@@ -198,20 +215,30 @@ in {
       TasksMax = 2048;
       IOWeight = 50; # default 100
     };
-    # Before the container: the world directory (created once, owned by the container's root; an existing
-    # one, for example a quota subvolume from the runbook, is left alone) and the tailnet auth key, which
-    # enters the rootfs owned by the mapped root.
+    # Before the container: the world directory must be the runbook's btrfs subvolume with a qgroup limit (players
+    # must not fill the lab's root disk; without the quota the box does not start), and the tailnet auth key,
+    # which enters the rootfs owned by the mapped root.
     mc-public-prepare = {
-      description = "Create the public Minecraft world directory and place the container's tailnet auth key";
+      description = "Check the public Minecraft world's quota and place the container's tailnet auth key";
       requiredBy = ["container@mc-public.service"];
       before = ["container@mc-public.service"];
-      path = [pkgs.coreutils];
+      path = [pkgs.coreutils pkgs.btrfs-progs pkgs.util-linux];
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
       };
       script = ''
-        [ -d ${worldDir} ] || install -d -m 0755 -o ${owner} -g ${owner} ${worldDir}
+        # A subvolume's root is inode 256; its own qgroup's limit is in sysfs (0 = none).
+        if [ "$(stat -c %i ${worldDir} 2>/dev/null)" != 256 ]; then
+          echo "${worldDir} is not a btrfs subvolume: create it with its quota (bandit-craft PUBLIC.md, step 6)" >&2
+          exit 1
+        fi
+        id=$(btrfs inspect-internal rootid ${worldDir})
+        max=$(cat "/sys/fs/btrfs/$(findmnt -no UUID -T ${worldDir})/qgroups/0_$id/max_referenced" 2>/dev/null) || max=0
+        if [ "$max" -le 0 ]; then
+          echo "${worldDir} (subvolume $id) has no qgroup limit: btrfs qgroup limit 40G ${worldDir}" >&2
+          exit 1
+        fi
         install -D -m 0400 -o ${owner} -g ${owner} ${config.sops.secrets."mc-public-tailscale-authkey".path} ${authkey}
         install -D -m 0400 -o ${owner} -g ${owner} ${config.sops.secrets."discord-bridge-token".path} ${bridgeToken}
       '';
