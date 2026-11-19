@@ -75,6 +75,10 @@
     };
   };
 
+  # Finger stays for sudo and hyprlock but not the login screen (greetd uses the
+  # login stack): a finger login gives gkr-pam no password, so the login keyring stays locked.
+  security.pam.services.login.fprintAuth = false;
+
   # Random MAC per network, stable per SSID: defeats cross-network
   # tracking without breaking captive portals or per-network DHCP leases.
   networking.networkmanager.wifi.macAddress = "stable";
