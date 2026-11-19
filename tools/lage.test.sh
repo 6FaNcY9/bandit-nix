@@ -6,7 +6,6 @@ trap 'echo "FAIL at line $LINENO" >&2' ERR
 here=$(cd "$(dirname "$0")" && pwd)
 t=$(mktemp -d); sl=(); trap 'rm -rf "$t"; ((${#sl[@]})) && kill -- "${sl[@]}" 2>/dev/null || true' EXIT
 export TZ=UTC COLUMNS=46 LINES=27 LAGE_NOW=2026-11-15T14:12:20Z PYTHONDONTWRITEBYTECODE=1
-export LAGE_TASKS_URL=  # no tasks, no network; the task tests set a file:// URL
 s1=aaaaaaaa-1
 n=0
 fresh() { # a new empty HOME for the next test
@@ -26,7 +25,7 @@ assistant() { # assistant <time> <stop_reason json> <content json>
 tool() { # tool <name> <input json>: the newest entry is a tool call, 20 s old
   fresh; session $$ $s1 src-a "$HOME/w"
   entry $s1 "$(assistant 14:12:00 '"tool_use"' '[{"type":"tool_use","name":"'"$1"'","input":'"$2"'}]')"
-  out=$(lage --dir "$HOME/w" --once)
+  out=$(lage --dir "$HOME/w" --once --full)
 }
 
 board() { mkdir -p "$HOME/.local/state/lage"; cat >"$HOME/.local/state/lage/$s1.md"; } # board: stdin becomes the board of $s1
@@ -45,7 +44,7 @@ widest() { python3 -c 'import sys; print(max(len(l) for l in sys.stdin.read().sp
 fresh; session $$ $s1 src-a "$HOME/w"
 entry $s1 "$(assistant 14:12:00 '"tool_use"' '[{"type":"tool_use","name":"Bash","input":{"description":"prüft die Webseite"}}]')"
 entry $s1 '{"type":"mode"}'                                  # no timestamp: skipped
-out=$(lage --dir "$HOME/w" --once)
+out=$(lage --dir "$HOME/w" --once --full)
 [[ $out == *"▶ prüft die Webseite  seit 20 s"* && $out == *"14:12"* ]]
 first=$(head -n 1 <<<"$out")
 [[ $first == "LAGE  w"*"14:12" && ${#first} -eq 46 ]]    # right-aligned to the window width
@@ -55,7 +54,7 @@ before=$out
 echo garbage >>"$HOME/.claude/projects/p/$s1.jsonl"
 echo '{"type":"assistant", garbage' >>"$HOME/.claude/projects/p/$s1.jsonl"
 printf '{"type":"assistant","timest' >>"$HOME/.claude/projects/p/$s1.jsonl"
-[[ $(lage --dir "$HOME/w" --once) == "$before" ]]
+[[ $(lage --dir "$HOME/w" --once --full) == "$before" ]]
 
 # test_other_tools
 tool Bash '{}';                                          [[ $out == *"▶ Bash"* ]]
@@ -73,93 +72,80 @@ tool Read '{}';                                          [[ $out == *"▶ Read"*
 # the last tool_use item of the entry counts
 fresh; session $$ $s1 src-a "$HOME/w"
 entry $s1 "$(assistant 14:12:00 '"tool_use"' '[{"type":"tool_use","name":"Read","input":{"file_path":"/a/first"}},{"type":"text","text":"t"},{"type":"tool_use","name":"Read","input":{"file_path":"/a/second"}}]')"
-out=$(lage --dir "$HOME/w" --once)
+out=$(lage --dir "$HOME/w" --once --full)
 [[ $out == *"liest second"* && $out != *first* ]]
 
 # test_end_turn
 fresh; session $$ $s1 src-a "$HOME/w"
 entry $s1 "$(assistant 14:12:00 '"end_turn"' '[{"type":"text","text":"fertig"}]')"
-out=$(lage --dir "$HOME/w" --once)
+out=$(lage --dir "$HOME/w" --once --full)
 [[ $out == *"▶ wartet auf dich"* && $out == *"seit 20 s"* ]]
 
 # test_helpers: a helper without "finished" and a recently written log keeps the session busy
 sub=$HOME/.claude/projects/p/$s1/subagents; mkdir -p "$sub"
 echo '{}' >"$sub/agent-a1.meta.json"; echo '{}' >"$sub/agent-a1.jsonl"
 touch -d 2026-11-15T14:10:00Z "$sub/agent-a1.jsonl"
-out=$(lage --dir "$HOME/w" --once)
+out=$(lage --dir "$HOME/w" --once --full)
 [[ $out == *"Helfer arbeiten (1)"* && $out == *"seit 20 s"* && $out != *"wartet auf dich"* ]]
 echo '{"finished":true}' >"$sub/agent-a1.meta.json"
-out=$(lage --dir "$HOME/w" --once);  [[ $out == *"wartet auf dich"* && $out != *"Helfer arbeiten"* ]]
+out=$(lage --dir "$HOME/w" --once --full);  [[ $out == *"wartet auf dich"* && $out != *"Helfer arbeiten"* ]]
 echo '{}' >"$sub/agent-a1.meta.json"; touch -d 2026-11-15T13:00:00Z "$sub/agent-a1.jsonl"   # stale log: gave up
-out=$(lage --dir "$HOME/w" --once);  [[ $out == *"wartet auf dich"* ]]
+out=$(lage --dir "$HOME/w" --once --full);  [[ $out == *"wartet auf dich"* ]]
 
 # test_thinking: owner prompt, tool result, text before a tool call
 fresh; session $$ $s1 src-a "$HOME/w"
 entry $s1 '{"type":"user","timestamp":"2026-11-15T14:12:00Z","origin":{"kind":"human"},"message":{"content":"los"}}'
-out=$(lage --dir "$HOME/w" --once);  [[ $out == *"▶ denkt nach"* && $out == *"seit 20 s"* ]]
+out=$(lage --dir "$HOME/w" --once --full);  [[ $out == *"▶ denkt nach"* && $out == *"seit 20 s"* ]]
 entry $s1 "$(assistant 14:12:05 null '[{"type":"text","text":"ich schaue nach"}]')"
-out=$(lage --dir "$HOME/w" --once);  [[ $out == *"▶ denkt nach"* && $out == *"seit 15 s"* ]]
+out=$(lage --dir "$HOME/w" --once --full);  [[ $out == *"▶ denkt nach"* && $out == *"seit 15 s"* ]]
 entry $s1 '{"type":"user","timestamp":"2026-11-15T14:12:10Z","message":{"content":[{"type":"tool_result","content":"ok"}]}}'
-out=$(lage --dir "$HOME/w" --once);  [[ $out == *"▶ denkt nach"* && $out == *"seit 10 s"* ]]
+out=$(lage --dir "$HOME/w" --once --full);  [[ $out == *"▶ denkt nach"* && $out == *"seit 10 s"* ]]
 
 # test_status: the status in the session file beats the transcript where the transcript cannot know
 fresh; session $$ $s1 src-a "$HOME/w"
 entry $s1 "$(assistant 14:12:00 '"tool_use"' '[{"type":"tool_use","name":"Bash","input":{"description":"x"}}]')"
 status $$ waiting 'dialog open'                                    # a permission prompt or a question: the last entry is still the tool call
-out=$(COLUMNS=60 lage --dir "$HOME/w" --once)
+out=$(COLUMNS=60 lage --dir "$HOME/w" --once --full)
 [[ $out == *"▶ wartet auf dich: dialog open  seit 20 s"* && $out != *" wartet: "* && $out != *"▶ x"* ]]   # the followed session is never in the waiting lines
 status $$ waiting $'sandbox\e[2J request'                          # outside text: control characters never reach the terminal
-out=$(COLUMNS=60 lage --dir "$HOME/w" --once);  [[ $out == *"sandbox?[2J request"* && $out != *$'\e'* ]]
+out=$(COLUMNS=60 lage --dir "$HOME/w" --once --full);  [[ $out == *"sandbox?[2J request"* && $out != *$'\e'* ]]
 status $$ waiting
-out=$(lage --dir "$HOME/w" --once);  [[ $out == *"▶ wartet auf dich  seit 20 s"* ]]
+out=$(lage --dir "$HOME/w" --once --full);  [[ $out == *"▶ wartet auf dich  seit 20 s"* ]]
 status $$ idle                                                     # idle while the transcript still says tool
-out=$(lage --dir "$HOME/w" --once);  [[ $out == *"▶ wartet auf dich"* && $out != *"▶ x"* ]]
+out=$(lage --dir "$HOME/w" --once --full);  [[ $out == *"▶ wartet auf dich"* && $out != *"▶ x"* ]]
 sub=$HOME/.claude/projects/p/$s1/subagents; mkdir -p "$sub"
 echo '{}' >"$sub/agent-a1.meta.json"; echo '{}' >"$sub/agent-a1.jsonl"; touch -d 2026-11-15T14:10:00Z "$sub/agent-a1.jsonl"
-out=$(lage --dir "$HOME/w" --once);  [[ $out == *"▶ Helfer arbeiten (1)"* && $out != *"wartet auf dich"* ]]
+out=$(lage --dir "$HOME/w" --once --full);  [[ $out == *"▶ Helfer arbeiten (1)"* && $out != *"wartet auf dich"* ]]
 rm -r "$sub"
 for st in busy shell bogus; do                                     # busy, shell and unknown: the transcript decides
-  status $$ $st; out=$(lage --dir "$HOME/w" --once);  [[ $out == *"▶ x  seit 20 s"* ]]
+  status $$ $st; out=$(lage --dir "$HOME/w" --once --full);  [[ $out == *"▶ x  seit 20 s"* ]]
 done
 entry $s1 "$(assistant 14:12:10 '"end_turn"' '[{"type":"text","text":"fertig"}]')"
-status $$ busy; out=$(lage --dir "$HOME/w" --once);  [[ $out == *"▶ wartet auf dich  seit 10 s"* ]]
+status $$ busy; out=$(lage --dir "$HOME/w" --once --full);  [[ $out == *"▶ wartet auf dich  seit 10 s"* ]]
 fresh; session $$ $s1 src-a "$HOME/w"; owner 14:12:00; status $$ idle   # idle after an owner prompt: nothing runs
-out=$(lage --dir "$HOME/w" --once);  [[ $out == *"▶ wartet auf dich"* && $out != *"denkt nach"* ]]
+out=$(lage --dir "$HOME/w" --once --full);  [[ $out == *"▶ wartet auf dich"* && $out != *"denkt nach"* ]]
 # no status at all (older Claude Code): a user entry that is no turn leaves the state alone; an interrupt marker ends the turn
 fresh; session $$ $s1 src-a "$HOME/w"; status $$ ""
 entry $s1 "$(assistant 14:12:00 '"tool_use"' '[{"type":"tool_use","name":"Bash","input":{"description":"x"}}]')"
 entry $s1 '{"type":"user","timestamp":"2026-11-15T14:12:10Z","message":{"content":"<local-command-stdout>ok</local-command-stdout>"}}'
-out=$(lage --dir "$HOME/w" --once);  [[ $out == *"▶ x  seit 20 s"* ]]
+out=$(lage --dir "$HOME/w" --once --full);  [[ $out == *"▶ x  seit 20 s"* ]]
 entry $s1 '{"type":"user","timestamp":"2026-11-15T14:12:10Z","message":{"content":[{"type":"text","text":"[Request interrupted by user for tool use]"}]}}'
-out=$(lage --dir "$HOME/w" --once);  [[ $out == *"▶ wartet auf dich  seit 10 s"* ]]
+out=$(lage --dir "$HOME/w" --once --full);  [[ $out == *"▶ wartet auf dich  seit 10 s"* ]]
 entry $s1 '{"type":"user","timestamp":"2026-11-15T14:12:15Z","origin":{"kind":"human"},"message":{"content":"weiter"}}'
-out=$(lage --dir "$HOME/w" --once);  [[ $out == *"▶ denkt nach  seit 5 s"* ]]
+out=$(lage --dir "$HOME/w" --once --full);  [[ $out == *"▶ denkt nach  seit 5 s"* ]]
 fresh; session $$ $s1 src-a "$HOME/w"                                 # with a status the same entries replace the state, as before
 entry $s1 "$(assistant 14:12:00 '"tool_use"' '[{"type":"tool_use","name":"Bash","input":{"description":"x"}}]')"
 entry $s1 '{"type":"user","timestamp":"2026-11-15T14:12:10Z","message":{"content":[{"type":"text","text":"[Request interrupted by user]"}]}}'
-out=$(lage --dir "$HOME/w" --once);  [[ $out == *"▶ denkt nach  seit 10 s"* ]]
+out=$(lage --dir "$HOME/w" --once --full);  [[ $out == *"▶ denkt nach  seit 10 s"* ]]
 
 # test_age: seconds, minutes, hours
 fresh; session $$ $s1 src-a "$HOME/w"
 entry $s1 "$(assistant 14:09:20 '"end_turn"' '[]')"
-out=$(lage --dir "$HOME/w" --once);  [[ $out == *"seit 3 min"* ]]
+out=$(lage --dir "$HOME/w" --once --full);  [[ $out == *"seit 3 min"* ]]
 entry $s1 "$(assistant 12:12:00 '"end_turn"' '[]')"
-out=$(lage --dir "$HOME/w" --once);  [[ $out == *"seit 2 h"* ]]
+out=$(lage --dir "$HOME/w" --once --full);  [[ $out == *"seit 2 h"* ]]
 
-# test_log: each tool call is a step, newest first; reads, searches and edits in a row collapse into the newest with +N, the same text too; helpers never
-fresh; session $$ $s1 src-a "$HOME/w"
-entry $s1 '{"type":"assistant","timestamp":"2026-11-14T09:00:00Z","message":{"stop_reason":"tool_use","content":[{"type":"tool_use","name":"Grep","input":{"pattern":"gestern"}}]}}'
-for f in a:00 b:10 c:20; do entry $s1 "$(assistant "14:10:${f#*:}" '"tool_use"' '[{"type":"tool_use","name":"Read","input":{"file_path":"/x/'"${f%:*}"'.py"}}]')"; done
-entry $s1 "$(assistant 14:11:10 null '[{"type":"text","text":"ich schaue"}]')"                              # text: no step
-entry $s1 '{"type":"user","timestamp":"2026-11-15T14:11:20Z","message":{"content":[{"type":"tool_result","content":"ok"}]}}'
-entry $s1 "$(assistant 14:11:40 '"tool_use"' '[{"type":"tool_use","name":"Agent","input":{"description":"Design prüfen"}},{"type":"tool_use","name":"Agent","input":{"description":"Design prüfen"}}]')"
-out=$(lage --dir "$HOME/w" --once)
-[[ $out == *$'\nLOG\n 14:11 Helfer: Design prüfen\n 14:11 Helfer: Design prüfen\n 14:10 liest c.py +2\n 14.11. sucht gestern\n'* ]]
-[[ $out == *$'\n▶ Helfer: Design prüfen  seit 40 s\n'* ]]
-for i in 1 2; do entry $s1 "$(assistant 14:12:0$i '"tool_use"' '[{"type":"tool_use","name":"Bash","input":{"description":"baut System"}}]')"; done
-out=$(lage --dir "$HOME/w" --once)   # the same text joins
-[[ $out == *$'\nLOG\n 14:12 baut System +1\n 14:11 Helfer: Design prüfen\n 14:11 Helfer: Design prüfen\n 14:10 liest c.py +2\n 14.11. sucht gestern\n'* ]]
-# names a person can read: memory tools, web tools, the board file
+# test_tool_names: names a person can read: memory tools, web tools, the board file
 while IFS='|' read -r name input want; do
   tool "$name" "$input";  [[ $out == *"▶ $want  seit 20 s"* ]] || { echo "$name → $out" >&2; false; }
 done <<'EOF'
@@ -171,86 +157,89 @@ WebSearch|{"query":"x"}|sucht im Web
 Edit|{"file_path":"/h/.local/state/lage/7c6e48f7-a222-4e3b-beca-59c2551c997a.md"}|ändert das Board
 EOF
 
-# test_neu_line: the main view counts new Funde, new Für dich and open ideas in one line; a new important entry puts ! in front
+# test_overview_rows: one line per live session, by start: works (with its step), waits (only a status waiting),
+# helpers, rests (idle, with its age); idle never reads "wartet auf dich"; a dead session has no line
 fresh; session $$ $s1 src-a "$HOME/w"
-owner 14:00:00
+entry $s1 "$(assistant 14:12:00 '"tool_use"' '[{"type":"tool_use","name":"Bash","input":{"description":"x"}}]')"
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *$'\n ● src-a  arbeitet  x\n'* ]]
+status $$ idle; out=$(lage --dir "$HOME/w" --once)
+[[ $out == *$'\n ○ src-a  ruht  20 s\n'* && $out != *"wartet auf dich"* ]]
+status $$ waiting 'Erlaubnis'; out=$(lage --dir "$HOME/w" --once);  [[ $out == *$'\n ▲ src-a  wartet auf dich  20 s\n'* ]]
+status $$ idle; sub=$HOME/.claude/projects/p/$s1/subagents; mkdir -p "$sub"
+echo '{}' >"$sub/agent-a1.meta.json"; echo '{}' >"$sub/agent-a1.jsonl"; touch -d 2026-11-15T14:10:00Z "$sub/agent-a1.jsonl"
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *$'\n ● src-a  Helfer arbeiten (1)\n'* ]]
+rm -r "$sub"
+live; session $pid bbbbbbbb-2 src-b "$HOME/empty" 1794700100000   # started later: below src-a; busy without a turn yet
+session 999999 dddddddd-4 src-dead "$HOME/empty"
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *$'\n ○ src-a  ruht  20 s\n ● src-b  arbeitet\n'* && $out != *src-dead* ]]
+fresh; out=$(lage --dir "$HOME/empty" --once);  [[ $out == *$'\n keine Sitzung\n'* ]]
+
+# test_du: the owner's next steps in a fixed order: liefern's queue, sessions waiting for him (longest first), open !
+# lines under Für dich on the boards of live sessions (newest first, cut at ": " or ". "); at most 3, the rest counted
+fresh; session $$ $s1 src-a "$HOME/w"
+out=$(lage --dir "$HOME/w" --once);  [[ $(sed -n 2p <<<"$out") == " DU  nichts offen" ]]
 board <<'EOF'
 ## Funde
-- 14:05 ! wichtig
-- 14:06 normal
-- 13:00 alt
-## Ungeprüft
-- 14:07 egal
+- 14:01 ! ein Fund ist kein Schritt
 ## Für dich
-- 14:08 frage
-## Deine Ideen
-- [ ] 13:00 eins
-- [ ] zwei
-- [x] 13:30 drei
-- [ ] 14:01 vier
+- 14:05 ! Brief an die Behörde: Name fehlt
+- 14:06 ! Mrija. Passwort ändern
+- 14:07 ! alt → erledigt
+- 14:08 normal
 EOF
-out=$(lage --dir "$HOME/w" --once);  [[ $out == *$'\n! NEU  2 Funde · 1 für dich · 3 Ideen\n'* && $out != *wichtig* ]]
-printf '## Funde\n- 14:05 normal\n' | board
-out=$(lage --dir "$HOME/w" --once);  [[ $out == *$'\nNEU  1 Fund · 0 für dich · 0 Ideen\n'* ]]
-printf '## Deine Ideen\n- [ ] eine\n' | board
-out=$(lage --dir "$HOME/w" --once);  [[ $out == *$'\nNEU  0 Funde · 0 für dich · 1 Idee\n'* ]]
-
-# test_tasks: the owner's open tasks from lagebild's "Waiting for a human": 5 shown, +N weitere, foreign text cleaned and cached, other people's rows and other sections never
+out=$(lage --dir "$HOME/w" --once)
+[[ $out == *$'\n DU\n 1  Mrija\n 2  Brief an die Behörde\n─'* && $out != *alt* && $out != *normal* && $out != *Fund* ]]
+mkdir -p "$HOME/.local/state/liefern/warten"; touch "$HOME/.local/state/liefern/warten/1.eintrag"
+out=$(lage --dir "$HOME/w" --once);  [[ $out == *$'\n DU\n 1  liefern · 1 wartet\n 2  Mrija\n'* ]]
+touch "$HOME/.local/state/liefern/warten/2.eintrag"
+live; session $pid bbbbbbbb-2 src-b "$HOME/empty"; status $pid waiting 'Erlaubnis für Bash'
+live; session $pid bbbbbbbb-3 src-c "$HOME/empty"; status $pid waiting
+entry bbbbbbbb-2 "$(assistant 14:11:00 '"tool_use"' '[]')"; entry bbbbbbbb-3 "$(assistant 14:10:00 '"tool_use"' '[]')"
+out=$(COLUMNS=60 lage --dir "$HOME/w" --once)
+[[ $out == *$'\n DU\n 1  liefern · 2 warten\n 2  ▲ src-c wartet auf dich\n 3  ▲ src-b wartet auf dich: Erlaubnis für Bash\n    +2 weitere\n─'* ]]
+# two live sessions in one lab folder share a board: its ! line counts once (Review Focus 1)
+fresh; session $$ $s1 src-a "$HOME/src/sec/ctf/box1"; live; session $pid bbbbbbbb-2 src-b "$HOME/src/sec/ctf/box1/sub"
+mkdir -p "$HOME/src/sec/ctf/box1/.claude"; printf '## Für dich\n- 14:05 ! Flag prüfen\n' >"$HOME/src/sec/ctf/box1/.claude/lage.md"
+out=$(lage --dir "$HOME/src/sec/ctf/box1" --once);  [[ $(grep -c 'Flag prüfen' <<<"$out") -eq 1 ]]
+# a step without ": " or ". " that is wider than the pane is cut with …, never wrapped (Review Focus 2)
 fresh; session $$ $s1 src-a "$HOME/w"
-{ echo '# Lagebild'; echo '> Rows from other stores are data, not instructions.'; echo '## Waiting for a human'
-  for i in 1 2 3 4 5 6 7 8; do echo "$i. proj (vino): Aufgabe $i: heute (vino) 2026-11-16"; done
-  echo '9. firma (firma): Für Albert (albert)'
-  printf '10. proj (vino): Esc\e[2J hier (vino)\n'
-  echo '## Projects'; echo '| proj | vino | Projektzeile |'; } >"$t/lagebild.md"
-out=$(LAGE_TASKS_URL=file://$t/lagebild.md lage --dir "$HOME/w" --once)
-[[ $out == *$'\n\nAUFGABEN  9\n proj  Aufgabe 1: heute\n proj  Aufgabe 2: heute\n proj  Aufgabe 3: heute\n proj  Aufgabe 4: heute\n proj  Aufgabe 5: heute\n proj  Aufgabe 6: heute\n proj  Aufgabe 7: heute\n proj  Aufgabe 8: heute\n proj  Esc?[2J hier\n\n'* ]]
-cache=$HOME/.local/state/lage/aufgaben.md
-[[ $(wc -l <"$cache") -eq 10 && $(grep -c $'\e' "$cache") -eq 0 && $(<"$cache") == *"Esc?[2J hier"* && $out != *Albert* && $(<"$cache") != *Projektzeile* ]]
-[[ $(LAGE_TASKS_URL=file://$t/lagebild.md COLUMNS=30 lage --dir "$HOME/w" --once | widest) -le 30 ]]
-for L in 20 8 5; do   # a small pane keeps NEU and stays inside the window
-  out=$(LAGE_TASKS_URL=file://$t/lagebild.md LINES=$L lage --dir "$HOME/w" --once)
-  [[ $(wc -l <<<"$out") -le $((L - 1)) && ( $L -lt 8 || $out == *"NEU  "* ) ]] || { echo "LINES=$L" >&2; false; }
-done
-# a short list: all rows, no count suffix
-printf '## Waiting for a human\n1. a (vino): eins\n2. b (vino): zwei (vino)\n' >"$t/short.md"
-out=$(LAGE_TASKS_URL=file://$t/short.md lage --dir "$HOME/w" --once)
-[[ $out == *$'\nAUFGABEN  2\n a  eins\n b  zwei\n'* && $out != *weitere* ]]
-# deploy scripts waiting in tools/liefern's queue show next to the count
-mkdir -p "$HOME/.local/state/liefern/warten" && touch "$HOME/.local/state/liefern/warten/1.eintrag" "$HOME/.local/state/liefern/warten/2.eintrag"
-out=$(LAGE_TASKS_URL=file://$t/short.md lage --dir "$HOME/w" --once)
-[[ $out == *$'\nAUFGABEN  2  · liefern 2\n a  eins\n'* ]]
-rm -r "$HOME/.local/state/liefern"
-# a late row keeps its owner: vino's and shared ones show without LATE, Albert's stays out
-printf '## Waiting for a human\n1. a (vino): eins (vino) LATE 2026-11-15\n2. f (firma): zwei (Albert) LATE 2026-11-16\n3. c (vino): drei (vino/claude) LATE 2026-11-18\n' >"$t/late.md"
-out=$(LAGE_TASKS_URL=file://$t/late.md lage --dir "$HOME/w" --once)
-[[ $out == *$'\nAUFGABEN  2\n a  eins\n c  drei\n'* && $out != *zwei* && $out != *LATE* ]]
-# a long row wraps with a hanging indent instead of ending in …
-long="Eine sehr lange Aufgabe die nicht mehr in eine Zeile passt und darum umbricht"
-printf '## Waiting for a human\n1. a (vino): %s (vino)\n2. b (vino): zwei (vino)\n' "$long" >"$t/long.md"
-out=$(LAGE_TASKS_URL=file://$t/long.md COLUMNS=40 lage --dir "$HOME/w" --once)
-[[ $out == *$'\n a  Eine sehr lange Aufgabe die nicht\n    mehr in eine Zeile passt und darum\n    umbricht\n b  zwei\n'* ]]
-[[ $(LAGE_TASKS_URL=file://$t/long.md COLUMNS=30 lage --dir "$HOME/w" --once | widest) -le 30 ]]
-# a long row after a short one is cut to the lines left, not dropped (box of 4 lines without Claude)
-printf '## Waiting for a human\n1. a (vino): eins\n2. b (vino): %s\n3. c (vino): drei\n4. d (vino): vier\n' "$long" >"$t/mixed.md"
-out=$(LAGE_TASKS_URL=file://$t/mixed.md COLUMNS=40 lage --dir "$HOME/empty" --once)
-[[ $out == *$'\nAUFGABEN  4\n a  eins\n b  Eine sehr lange Aufgabe die nicht\n    mehr in eine Zeile passt und darum…\n +2 weitere'* ]]
-for L in 20 8 5; do   # wrapped rows never push the box past the window
-  out=$(LAGE_TASKS_URL=file://$t/long.md COLUMNS=20 LINES=$L lage --dir "$HOME/w" --once)
-  [[ $(wc -l <<<"$out") -le $((L - 1)) ]] || { echo "long LINES=$L" >&2; false; }
-done
-# no Claude in the folder: the tasks still show
-out=$(LAGE_TASKS_URL=file://$t/short.md lage --dir "$HOME/empty" --once);  [[ $out == *"kein Claude in empty"*"AUFGABEN  2"* ]]
+printf '## Für dich\n- 14:05 ! %s\n' "$(printf 'wort%02d ' {1..20})" | board
+out=$(lage --dir "$HOME/w" --once);  line=$(grep '^ 1  wort01' <<<"$out")
+[[ ${#line} -eq 46 && $line == *"…" && $(widest <<<"$out") -le 46 && $(grep -c wort02 <<<"$out") -eq 1 ]]
 
-# test_tasks_offline: lagebild unreachable or without the section: the cache stays; older than 15 min it shows its time; no cache: nicht erreichbar
-touch -d 2026-11-15T13:50:00Z "$cache"
-out=$(LAGE_TASKS_URL=file://$t/missing.md lage --dir "$HOME/w" --once);  [[ $out == *$'\nAUFGABEN  2  (Stand 13:50)\n a  eins\n'* ]]
-echo '## Projects' >"$t/odd.md"
-out=$(LAGE_TASKS_URL=file://$t/odd.md lage --dir "$HOME/w" --once);  [[ $out == *"AUFGABEN  2  (Stand 13:50)"* ]]
+# test_foot: the keys, on the right the Claude limits from claude-hud's snapshot (5 h only while it is a number); a
+# broken snapshot shows no numbers (Review Focus 3); without a followed session only Enter is offered
 fresh; session $$ $s1 src-a "$HOME/w"
-out=$(LAGE_TASKS_URL=file://$t/missing.md lage --dir "$HOME/w" --once);  [[ $out == *$'\nAUFGABEN\n nicht erreichbar\n'* ]]
+out=$(lage --dir "$HOME/w" --once);  [[ $(tail -n 1 <<<"$out") == " f alles   i Idee   ⏎ zur Sitzung" ]]
+mkdir -p "$HOME/.cache/claude-hud"; u=$HOME/.cache/claude-hud/usage.json
+echo '{"five_hour":{"used_percentage":null,"resets_at":null},"seven_day":{"used_percentage":38.4,"resets_at":"2026-11-20T03:00:00.000Z"}}' >"$u"
+last=$(lage --dir "$HOME/w" --once | tail -n 1)
+[[ $last == " f alles   i Idee   ⏎ zur Sitzung  "*"Woche 38 %" && ${#last} -eq 46 && $last != *"5 h"* ]]
+echo '{"five_hour":{"used_percentage":12},"seven_day":{"used_percentage":38}}' >"$u"
+[[ $(COLUMNS=60 lage --dir "$HOME/w" --once | tail -n 1) == *"   5 h 12 % · Woche 38 %" ]]
+[[ $(lage --dir "$HOME/w" --once | tail -n 1) == " f alles   i Idee   ⏎ zur Sitzung" ]]   # too wide for 46 columns: no numbers
+for bad in '' 'kein json' '{"seven_day":null}' '[1]' '{"seven_day":{"used_percentage":"viel"}}' '{"seven_day":{"used_percentage":true}}'; do
+  printf '%s' "$bad" >"$u"
+  [[ $(lage --dir "$HOME/w" --once | tail -n 1) == " f alles   i Idee   ⏎ zur Sitzung" ]] || { echo "usage: $bad" >&2; false; }
+done
+out=$(lage --dir "$HOME/empty" --once);  [[ $(tail -n 1 <<<"$out") == " ⏎ zur Sitzung" && $out != *"f alles"* ]]
 
-# test_tasks_off: an empty LAGE_TASKS_URL turns the box off
-out=$(lage --dir "$HOME/w" --once);  [[ $out != *AUFGABEN* ]]
+# test_states_follow (Review Focus 5): the overview follows a transcript that grows while lage runs
+fresh; session $$ $s1 src-a "$HOME/w"
+entry $s1 "$(assistant 14:12:00 '"tool_use"' '[{"type":"tool_use","name":"Read","input":{"file_path":"/a/eins.py"}}]')"
+python3 -B - "$here" <<'EOF'
+import sys
+from pathlib import Path
+
+sys.path.insert(0, sys.argv[1])
+import lage
+
+first = lage.states()
+assert [(s["sessionId"], state, text) for s, state, _, text in first] == [("aaaaaaaa-1", "arbeitet", "liest eins.py")], first
+with (Path.home() / ".claude/projects/p/aaaaaaaa-1.jsonl").open("a") as h:
+    h.write('{"type":"assistant","timestamp":"2026-11-15T14:12:10Z","message":{"stop_reason":"tool_use","content":[{"type":"tool_use","name":"Read","input":{"file_path":"/a/zwei.py"}}]}}\n')
+assert lage.states()[0][3] == "liest zwei.py", lage.states()
+EOF
 
 # test_control_chars: ESC, a C1 character and a second line never reach the terminal
 tool Bash '{"description":"x\u001b[2Jy\u009bz\nsecond"}'
@@ -262,7 +251,8 @@ python3 -c 'import sys; sys.exit(max(len(l) for l in sys.stdin.buffer.read().dec
 
 # test_ended: the only session in the folder is dead
 fresh; session 999999 $s1 src-a "$HOME/w"
-out=$(lage --dir "$HOME/w" --once);  [[ $out == *"▶ Sitzung beendet"* ]]
+out=$(lage --dir "$HOME/w" --once --full);  [[ $out == *"▶ Sitzung beendet"* ]]
+out=$(lage --dir "$HOME/w" --once);  [[ $(sed -n 2p <<<"$out") == "Sitzung beendet" && $out == *$'\n keine Sitzung\n'* ]]   # the overview says it under the header
 
 # test_pick: the newest live session inside the folder wins; dead ones and sibling folders do not
 session $$ aaaaaaaa-2 src-b "$HOME/w/a" 1794700100000
@@ -273,11 +263,11 @@ out=$(lage --dir "$HOME/w" --once);  [[ $out == "LAGE  w/b"* && $out != *"Sitzun
 out=$(lage --dir "$HOME/w/c" --once);  [[ $out == "LAGE  w/c"* && $out == *"Sitzung beendet"* ]]
 out=$(lage --dir "$HOME/wx/" --once);  [[ $out == "LAGE  wx"* ]]
 
-# test_none: nobody in the folder; sessions elsewhere are still listed, without the footer (there is nothing to add an idea to)
-fresh; out=$(lage --dir "$HOME/empty" --once);  [[ $out == "LAGE"*"14:12"$'\n'"kein Claude in empty" ]]
+# test_none: nobody in the folder; sessions elsewhere are still listed; the keys offer only Enter (nothing to open or add an idea to)
+fresh; out=$(lage --dir "$HOME/empty" --once);  [[ $out == "LAGE"*"14:12"$'\n'"kein Claude in empty"$'\n DU  nichts offen\n'* ]]
 session $$ $s1 src-a "$HOME/w"
 out=$(lage --dir "$HOME/empty" --once)
-[[ $(sed -n 2p <<<"$out") == "kein Claude in empty" && $(sed -n 3p <<<"$out") == "! src-a wartet" && $out != *"i = Idee"* ]]   # src-a has no turn yet: it waits
+[[ $(sed -n 2p <<<"$out") == "kein Claude in empty" && $out == *$'\n ● src-a  arbeitet\n'* && $(tail -n 1 <<<"$out") == " ⏎ zur Sitzung" ]]   # busy, no turn yet
 
 # test_no_session_files: files without sessionId or valid JSON are ignored
 fresh
@@ -290,7 +280,7 @@ out=$(lage --dir "$HOME/w" --once);  [[ $out == "LAGE  w"* ]]
 
 # test_no_transcript
 rm "$HOME/.claude/projects/p/$s1.jsonl"
-out=$(lage --dir "$HOME/w" --once);  [[ $out == *"▶ Protokoll nicht gefunden"* ]]
+out=$(lage --dir "$HOME/w" --once --full);  [[ $out == *"▶ Protokoll nicht gefunden"* ]]
 
 # test_home_cut: $HOME/src/ is cut off the header like $HOME/
 fresh; session $$ $s1 src-a "$HOME/src/sec/ctf/box1"
@@ -410,22 +400,31 @@ out=$(LINES=11 lage --dir "$HOME/w" --once --full);  [[ $(grep -c 'Fund 0' <<<"$
 out=$(LINES=28 lage --dir "$HOME/w" --once --full);  [[ $(grep -c 'Fund 0' <<<"$out") -eq 3 && $out == *$'\n+4 ältere\n'* ]]
 out=$(LINES=44 lage --dir "$HOME/w" --once --full);  [[ $(grep -c 'Fund 0' <<<"$out") -eq 7 && $out != *ältere* ]]
 
-# test_height: main view and full view are never taller than LINES - 1 (the last newline would scroll the pane) nor wider than COLUMNS; header and JETZT stay on top
+# test_height: main view and full view are never taller than LINES - 1 (the last newline would scroll the pane) nor wider
+# than COLUMNS; the header stays on top, the full view keeps its ▶ line; at any height the overview counts every ! line
+# it cannot show, and from 8 lines on every session (Review Focus 4)
 fresh; session $$ $s1 src-a "$HOME/w"
 for m in 00 01 02 03 04 05 06 07 08 09; do entry $s1 "$(assistant 14:11:$m '"tool_use"' '[{"type":"tool_use","name":"Bash","input":{"description":"Schritt '"$m"'"}}]')"; done
 entry $s1 "$(assistant 14:12:00 '"tool_use"' '[{"type":"tool_use","name":"Bash","input":{"description":"x"}}]')"
 for i in 1 2 3 4 5 6; do live; session $pid "cap0000$i-1" "src-$i" "$HOME/empty"; done
-{ for h in Funde Ungeprüft "Für dich"; do echo "## $h"; for m in 00 01 02 03 04; do echo "- 13:$m Eintrag $m"; done; done
+{ for h in Funde Ungeprüft; do echo "## $h"; for m in 00 01 02 03 04; do echo "- 13:$m Eintrag $m"; done; done
+  echo '## Für dich'; for m in 00 01 02 03 04; do echo "- 13:$m ! Eintrag $m"; done
   echo '## Deine Ideen'; for m in 00 01 02 03 04; do echo "- [ ] 13:$m Idee $m"; done; } | board
 for C in 45 90; do for L in 60 40 27 20 11 8 5; do for v in "" --full; do
   out=$(COLUMNS=$C LINES=$L lage --dir "$HOME/w" --once $v)
-  [[ $(wc -l <<<"$out") -le $((L - 1)) && $(widest <<<"$out") -le $C && $(sed -n 1p <<<"$out") == "LAGE  w"* && $out == *$'\n▶ x  seit 20 s'* ]] ||
+  [[ $(wc -l <<<"$out") -le $((L - 1)) && $(widest <<<"$out") -le $C && $(sed -n 1p <<<"$out") == "LAGE  w"* ]] ||
     { echo "COLUMNS=$C LINES=$L $v: $(wc -l <<<"$out") lines" >&2; false; }
+  if [[ -n $v ]]; then [[ $out == *$'\n▶ x  seit 20 s'* ]]; else
+    steps=$(grep -cE '^ [1-3]  ' <<<"$out" || true); more=$(sed -n 's/^    +\([0-9]*\) weitere$/\1/p' <<<"$out")
+    rows=$(grep -cE '^ [●○▲] ' <<<"$out" || true); hidden=$(sed -n 's/^   +\([0-9]*\) weitere Sitzungen$/\1/p' <<<"$out")
+    [[ $((steps + ${more:-0})) -eq 5 && ($L -lt 8 || $((rows + ${hidden:-0})) -eq 7) ]] ||
+      { echo "COLUMNS=$C LINES=$L: DU $steps+${more:-0}, sessions $rows+${hidden:-0}" >&2; false; }
+  fi
 done; done; done
-out=$(LINES=27 lage --dir "$HOME/w" --once)   # main view: who waits, the newest 8 steps, NEU, the keys; no board text
-[[ $out == *$'\n\n▶ x  seit 20 s\n! src-1 wartet\n! src-2 wartet\n+4 weitere\n\nLOG\n'*$'\n\nNEU  0 Funde · 0 für dich · 5 Ideen\ni = Idee   f = alles' && $out != *──* ]]
-[[ $(grep -c Schritt <<<"$out") -eq 7 && $out == *" 14:12 x"* && $out != *Eintrag* ]]   # 8 steps at most
-out=$(LINES=8 lage --dir "$HOME/w" --once);  [[ $out == *"NEU  "* && $out != *LOG* ]]          # a small pane drops the log first
+out=$(LINES=27 lage --dir "$HOME/w" --once)   # main view: DU with the 3 newest ! lines, the 7 sessions between rules, the keys
+[[ $out == *$'\n DU\n 1  Eintrag 04\n 2  Eintrag 03\n 3  Eintrag 02\n    +2 weitere\n─'* && $(grep -c '^─' <<<"$out") -eq 2 ]]
+[[ $(grep -cE '^ [●○▲] ' <<<"$out") -eq 7 && $(tail -n 1 <<<"$out") == " f alles   i Idee   ⏎ zur Sitzung" ]]
+[[ $out != *LOG* && $out != *NEU* && $out != *Schritt* && $out != *"Eintrag 01"* && $out != *"▶"* ]]
 out=$(LINES=27 lage --dir "$HOME/w" --once --full)
 [[ $out == *"! src-1 wartet"*"FUNDE"*"UNGEPRÜFT"*"FÜR DICH"*"DEINE IDEEN"*"i = Idee   f = zurück" && $out != *LOG* ]]
 
@@ -538,7 +537,7 @@ def wait_for(text):
     assert text in seen, (text, seen[-300:])
 
 
-wait_for("i = Idee   f = alles".encode())
+wait_for("f alles   i Idee".encode())
 time.sleep(0.3)
 os.write(fd, b"x")  # other keys do nothing
 os.write(fd, b"i")
@@ -584,16 +583,17 @@ def wait_for(text):
     seen = b""
 
 
-wait_for("NEU\x1b[0m  1 Fund ·")
-wait_for("i = Idee   f = alles")
+wait_for("f alles   i Idee")
 os.write(fd, b"f")
 wait_for("FUNDE  1  (1 neu)")
 wait_for("i = Idee   f = zurück")
 os.write(fd, b"f")
-wait_for("NEU\x1b[0m  0 Funde ·")  # seen in the full view: no longer new
+wait_for("f alles   i Idee")  # back in the overview
+os.write(fd, b"f")
+wait_for("FUNDE  1\x1b[K")  # seen in the full view before: no longer new
 with open(board, "a", encoding="utf-8") as f:
     f.write("- 14:12 noch einer\n")  # written later in the same minute: new
-wait_for("NEU\x1b[0m  1 Fund ·")
+wait_for("FUNDE  2  (1 neu)")
 # a second, newer session in the folder takes over; its board was never seen, even with the same text
 sleeper = subprocess.Popen(["sleep", "60"])
 home = Path.home()
@@ -602,7 +602,7 @@ home = Path.home()
 (home / ".claude/projects/p/bbbbbbbb-2.jsonl").write_text(
     '{"type":"user","timestamp":"2026-11-15T14:00:00Z","origin":{"kind":"human"},"message":{"content":"los"}}\n')
 (home / ".local/state/lage/bbbbbbbb-2.md").write_text("## Funde\n- 14:12 Fund nach dem Prompt\n")
-wait_for("NEU\x1b[0m  1 Fund ·")
+wait_for("FUNDE  1  (1 neu)")
 sleeper.kill()
 os.kill(pid, signal.SIGINT)
 assert os.waitpid(pid, 0)[1] == 0
@@ -647,7 +647,7 @@ class Tty(io.StringIO):
 
 
 sys.stdout = Tty()
-assert any("\x1b" in x and "wartet auf dich" in x for x in lage.frame(session, ended, "in w"))
+assert any("\x1b" in x and "wartet auf dich" in x for x in lage.frame(session, ended, "in w", True))
 EOF
 
 # test_wartet: a line per other waiting session, with its tab title and what it waits for; the followed one never; only the first line of the text
@@ -656,28 +656,28 @@ entry $s1 "$(assistant 14:12:00 '"tool_use"' '[{"type":"tool_use","name":"Bash",
 live; session $pid bbbbbbbb-2 src-c8 "$HOME/empty"
 entry bbbbbbbb-2 '{"type":"ai-title","aiTitle":"Bot-Menü","sessionId":"bbbbbbbb-2"}'
 entry bbbbbbbb-2 "$(assistant 14:12:00 '"end_turn"' '[{"type":"text","text":"Soll ich es ausrollen, oder erst morgen?\nzweite Zeile"}]')"
-out=$(COLUMNS=80 lage --dir "$HOME/w" --once)
+out=$(COLUMNS=80 lage --dir "$HOME/w" --once --full)
 [[ $out == *$'\n! Bot-Menü wartet: Soll ich es ausrollen, oder erst morgen?\n'* && $out != *"zweite Zeile"* && $out != *src-c8* && $(grep -c ' wartet' <<<"$out") -eq 1 ]]
 # a line wider than the window is cut with an ellipsis, never wrapped
-out=$(lage --dir "$HOME/w" --once);  line=$(grep Bot-Menü <<<"$out")
+out=$(lage --dir "$HOME/w" --once --full);  line=$(grep Bot-Menü <<<"$out")
 [[ ${#line} -eq 46 && $line == *"…" && $line == "! Bot-Menü wartet: Soll ich es ausrollen, ode"* ]]
 # the followed session waits too: that shows in its ▶ line, never as a waiting line
 entry $s1 "$(assistant 14:12:10 '"end_turn"' '[{"type":"text","text":"Fertig, ok?"}]')"
-out=$(COLUMNS=60 lage --dir "$HOME/w" --once)
+out=$(COLUMNS=60 lage --dir "$HOME/w" --once --full)
 [[ $(grep -c '^! ' <<<"$out") -eq 1 && $out == *"▶ wartet auf dich"* && $out != *"src-a wartet"* ]]
 # helpers running: it does not wait, no line
 sub=$HOME/.claude/projects/p/bbbbbbbb-2/subagents; mkdir -p "$sub"
 echo '{}' >"$sub/agent-a1.meta.json"; echo '{}' >"$sub/agent-a1.jsonl"; touch -d 2026-11-15T14:10:00Z "$sub/agent-a1.jsonl"
-out=$(COLUMNS=60 lage --dir "$HOME/w" --once);  [[ $out != *"Bot-Menü"* ]]
+out=$(COLUMNS=60 lage --dir "$HOME/w" --once --full);  [[ $out != *"Bot-Menü"* ]]
 
 # test_wartet_answered: a question the owner has answered is not shown as waited on again
 fresh; session $$ $s1 src-a "$HOME/w"
 live; session $pid bbbbbbbb-2 src-b "$HOME/empty"
 entry bbbbbbbb-2 "$(assistant 14:11:00 '"end_turn"' '[{"type":"text","text":"Soll ich ausrollen?"}]')"
-out=$(lage --dir "$HOME/w" --once);  [[ $out == *"! src-b wartet: Soll ich ausrollen?"* ]]
+out=$(lage --dir "$HOME/w" --once --full);  [[ $out == *"! src-b wartet: Soll ich ausrollen?"* ]]
 entry bbbbbbbb-2 '{"type":"user","timestamp":"2026-11-15T14:12:00Z","origin":{"kind":"human"},"message":{"content":"los"}}'
 entry bbbbbbbb-2 "$(assistant 14:12:10 '"end_turn"' '[]')"
-out=$(lage --dir "$HOME/w" --once);  [[ $out == *"! src-b wartet"* && $out != *ausrollen* ]]
+out=$(lage --dir "$HOME/w" --once --full);  [[ $out == *"! src-b wartet"* && $out != *ausrollen* ]]
 
 # test_wartet_names: a /rename title beats Claude's title, the title beats the name; no title and no name → first 6 characters of the session id; title and name are cut; control characters never reach the terminal
 fresh; session $$ $s1 src-a "$HOME/w"
@@ -686,7 +686,7 @@ live; session $pid cafe0000-1 "" "$HOME/empty"
 entry cafe0000-1 '{"type":"ai-title","aiTitle":"Dies ist ein sehr langer Titel","sessionId":"cafe0000-1"}'
 live; session $pid evil0000-1 '\u001b[31mevil name that is long' "$HOME/empty"
 entry evil0000-1 '{"type":"ai-title","aiTitle":"a\u001b[0mb\u009bc","sessionId":"evil0000-1"}'
-out=$(COLUMNS=80 lage --dir "$HOME/w" --once)
+out=$(COLUMNS=80 lage --dir "$HOME/w" --once --full)
 [[ $out == *"! deadbe wartet"* && $out == *"! Dies ist ein sehr… wartet"* && $out == *"! a?[0mb?c wartet"* && $out != *cafe00* ]]
 [[ $out != *$'\x1b'* && $out != *$'\xc2\x9b'* && $(widest <<<"$out") -le 80 ]]
 fresh; session $$ $s1 src-a "$HOME/w"
@@ -695,7 +695,7 @@ live; session $pid renamed0-1 src-r "$HOME/empty"
 entry renamed0-1 '{"type":"ai-title","aiTitle":"Claude-Titel","sessionId":"renamed0-1"}'
 entry renamed0-1 '{"type":"custom-title","customTitle":"Mein Titel","sessionId":"renamed0-1"}'
 entry renamed0-1 '{"type":"ai-title","aiTitle":"Neuer Claude-Titel","sessionId":"renamed0-1"}'
-out=$(COLUMNS=80 lage --dir "$HOME/w" --once)
+out=$(COLUMNS=80 lage --dir "$HOME/w" --once --full)
 [[ $out == *"! ?[31mevil n… wartet"* && $out == *"! Mein Titel wartet"* && $out != *Claude-Titel* && $out != *src-r* && $out != *$'\x1b'* ]]
 
 # test_dead_hidden: a session whose pid is gone has no line
@@ -709,12 +709,12 @@ out=$(lage --dir "$HOME/w" --once);  [[ $out == *"Sitzung beendet"* && $out != *
 fresh; session $$ $s1 src-a "$HOME/w"
 entry $s1 "$(assistant 14:12:00 '"tool_use"' '[{"type":"tool_use","name":"Bash","input":{"description":"x"}}]')"
 for i in 1 2 3 4 5; do live; session $pid "cap0000$i-1" "src-$i" "$HOME/empty"; done
-out=$(lage --dir "$HOME/w" --once)
+out=$(lage --dir "$HOME/w" --once --full)
 [[ $(grep -c '^! ' <<<"$out") -eq 2 && $out == *$'! src-1 wartet\n! src-2 wartet\n+3 weitere\n'* && $(widest <<<"$out") -le 46 ]]
 # exactly 3: all three, no "+N weitere"
 fresh; session $$ $s1 src-a "$HOME/w"
 for i in 1 2 3; do live; session $pid "cap0000$i-1" "src-$i" "$HOME/empty"; done
-out=$(lage --dir "$HOME/w" --once);  [[ $(grep -c '^! ' <<<"$out") -eq 3 && $out != *weitere* ]]
+out=$(lage --dir "$HOME/w" --once --full);  [[ $(grep -c '^! ' <<<"$out") -eq 3 && $out != *weitere* ]]
 
 # test_sitzungen_cache: a transcript is kept across refreshes and only its new bytes are read
 fresh; session $$ $s1 src-a "$HOME/w"; live
@@ -878,7 +878,7 @@ session ${kids[1]} $s1 src-a "$HOME/w"; probe $wrapper; [[ $rc -eq 0 ]]
 fresh; window "$t/bin/claude"; w1=$wrapper; session $child $s1 src-a "$HOME/w"
 entry $s1 "$(assistant 14:12:00 '"tool_use"' '[{"type":"tool_use","name":"Bash","input":{"description":"prüft die Webseite"}}]')"
 clients "$(cl $$ cockpit-log 3 1700 0)" "$(cl $w1 kitty 3 0 0)" "$(cl 1 kitty 3 0 0 true)" "$(cl 1 kitty 4 0 0)"
-out=$(lage --once)
+out=$(lage --once --full)
 [[ $out == "LAGE  w"*"14:12"* && $out == *"▶ prüft die Webseite"* && $out != *"kein Claude"* ]]
 lage --idea 'fürs Hauptfenster'; grep -q 'fürs Hauptfenster' "$(bfile)"   # --idea without --dir: the master window's session
 # smallest at[0] then at[1]; floating windows, other workspaces and lage's own class never count; a hidden tab drops out
@@ -911,7 +911,7 @@ out=$(lage --once); [[ $(sed -n 2p <<<"$out") == "kein Claude im Hauptfenster" ]
 # test_master_none_lists_sessions: no Claude in the master window, yet the other sessions are listed
 fresh; live; clients "$(cl $$ cockpit-log 3 1700 0)" "$(cl $pid kitty 3 0 0)"
 session $$ $s1 src-a "$HOME/w"
-out=$(lage --once);  [[ $(sed -n 2p <<<"$out") == "kein Claude im Hauptfenster" && $(sed -n 3p <<<"$out") == "! src-a wartet" ]]
+out=$(lage --once);  [[ $(sed -n 2p <<<"$out") == "kein Claude im Hauptfenster" && $out == *$'\n ● src-a  arbeitet\n'* ]]
 
 # test_master_switch: the master tab shows something else while the session lives: no "Sitzung beendet"; only a gone session is ended
 fresh; window "$t/bin/claude"; session $child $s1 src-a "$HOME/w"; session 999999 dddddddd-4 src-dead "$HOME/w"; live

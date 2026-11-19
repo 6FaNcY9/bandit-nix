@@ -18,10 +18,8 @@ import shutil
 import sys
 import termios
 import textwrap
-import threading
 import time
 import tty
-from collections import deque
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import NamedTuple
@@ -42,9 +40,9 @@ TOOLS = {
     "WebFetch": ("liest eine Webseite", ""),
     "WebSearch": ("sucht im Web", ""),
 }
-VERBS = ("liest ", "sucht ", "ändert ")  # LOG steps with one of these in a row join into one line
 HIGHLIGHT, RED, RESET = "\x1b[1;7m", "\x1b[1;31m", "\x1b[0m"
-TEAL, YELLOW, PURPLE, DIM = "\x1b[1;36m", "\x1b[1;33m", "\x1b[35m", "\x1b[2m"  # the theme's own ANSI colours
+TEAL, YELLOW, DIM = "\x1b[1;36m", "\x1b[1;33m", "\x1b[2m"  # the theme's own ANSI colours
+GREY = "\x1b[90m"  # kitty color8 = base02 #303034: the overview's rules
 MEMORY = ("basic-memory", "firma")  # MCP servers shown as Gedächtnis
 BOARD = re.compile(r"lage\.md|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.md")
 HEADINGS = ("Funde", "Ungeprüft", "Für dich", "Deine Ideen")
@@ -56,10 +54,6 @@ ENTRY = re.compile(
     re.ASCII,
 )
 transcripts = {}  # sessionId -> Transcript, so each refresh reads only new bytes
-TASKS_URL = "https://memory.tail7facc9.ts.net/notes/.wartet.md"  # LAGE_TASKS_URL overrides it; empty turns tasks off
-# N. project (store): text (who) [[LATE ]date]; text may hold ": "; .wartet.md cuts it with … only past 280 characters
-TASK = re.compile(r"\d+\.\s+(\S+) \([^)]*\): (.*?)(?: \(([^)]*)\))?(?: (?:LATE )?\d{4}-\d\d-\d\d)?")
-tasks_ok = None  # clock() of the last fetch of the tasks that worked, in this process
 
 
 def clean(s, limit):
@@ -239,17 +233,6 @@ class Transcript:
         self.owner_ts = None
         self.last_text = None
         self.titles = {}  # the tab title: "custom-title" (/rename) beats "ai-title"
-        self.steps = deque(maxlen=8)  # LOG: (time, text, count), oldest first
-
-    def step(self, ts, text):
-        """Add a LOG step; after a step with the same text or the same verb (VERBS) it joins that one. Helpers never join."""
-        if self.steps and not text.startswith("Helfer: "):
-            _, last, count = self.steps[-1]
-            verb = next((v for v in VERBS if text.startswith(v)), None)
-            if last == text or (verb and last.startswith(verb)):
-                self.steps[-1] = (ts, text, count + 1)
-                return
-        self.steps.append((ts, text, 1))
 
     def locate(self):
         """The transcript file once it exists, else None."""
@@ -315,9 +298,6 @@ class Transcript:
             text = item.get("text")
             if item.get("type") == "text" and isinstance(text, str) and text.strip():
                 self.last_text = clean(text, 10000)
-            elif item.get("type") == "tool_use":
-                tool_input = item.get("input")
-                self.step(ts, tool_text(str(item.get("name") or "Tool"), tool_input if isinstance(tool_input, dict) else {}))
         self.last = e
         if kind == "assistant" or "origin" in e or any(i.get("type") == "tool_result" for i in items(e)):
             self.settled = e
@@ -567,127 +547,6 @@ def is_new(e, cut, seen=frozenset()):
     return cut is not None and e.done is None and e.ts is not None and e.ts >= cut and e not in seen
 
 
-def neu_line(board, since, seen=frozenset()):
-    """NEU  <new> Funde · <new> für dich · <open> Ideen, with ! in front when a new one is important."""
-    cut = cut_of(since)
-    new = {h: [e for e in board[h] if is_new(e, cut, seen)] for h in ("Funde", "Für dich")}
-    bang = "! " if any(e.important for x in new.values() for e in x) else ""
-    ideas = sum(e.done is False for e in board[IDEAS])
-    funde = len(new["Funde"])
-    return f"{bang}NEU  {funde} Fund{'' if funde == 1 else 'e'} · {len(new['Für dich'])} für dich · {ideas} Idee{'' if ideas == 1 else 'n'}"
-
-
-def log_lines(tr, cols, n):
-    """The newest n LOG steps, newest first: HH:MM (DD.MM. on another day), the text, +N for steps joined into it."""
-    today, lit = clock().astimezone().date(), sys.stdout.isatty()
-    out = []
-    for ts, text, count in list(reversed(tr.steps))[:n]:
-        t = ts.astimezone()
-        when = f"{t:%H:%M}" if t.date() == today else f"{t:%d.%m.}"
-        line = clean(f"{when} {text}" + (f" +{count - 1}" if count > 1 else ""), cols - 1)
-        out.append(" " + (DIM + when + RESET + line[len(when):] if lit else line))
-    return out
-
-
-def tasks_url():
-    return os.environ.get("LAGE_TASKS_URL", TASKS_URL)
-
-
-def tasks_cache():
-    return Path.home() / ".local/state/lage/aufgaben.md"
-
-
-def fetch_tasks(url):
-    """The rows under '## Waiting for a human' in lagebild, at most 10, cleaned; None when that cannot be read."""
-    import urllib.request  # late: only the view needs it
-    try:
-        with urllib.request.urlopen(url, timeout=3) as r:
-            text = r.read(65536).decode("utf-8", errors="replace")
-    except Exception:  # any network or protocol error: keep the cache
-        return None
-    rows, inside = None, False
-    for line in text.splitlines():
-        name = heading(line)
-        if name is not None:
-            if inside:
-                break
-            inside = name == "Waiting for a human"
-            rows = [] if inside else rows
-        elif inside and line.strip():
-            rows.append(clean(line, 300))
-    return None if rows is None else rows[:10]
-
-
-def refresh_tasks(url):
-    """Fetch the tasks and replace the cache (atomic, as add_idea) when that worked."""
-    global tasks_ok
-    rows = fetch_tasks(url)
-    if rows is None:
-        return
-    path = tasks_cache()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
-    try:
-        tmp.write_text("".join(r + "\n" for r in rows), encoding="utf-8")
-        os.replace(tmp, path)
-    finally:
-        tmp.unlink(missing_ok=True)
-    tasks_ok = clock()
-
-
-def start_tasks():
-    """A daemon thread that refreshes the tasks now and every 5 minutes, so a hanging network never stops the keys.
-    Returns an event set after the first try, or None when tasks are off."""
-    url, first = tasks_url(), threading.Event()
-    if not url:
-        return None
-
-    def loop():
-        while True:
-            try:
-                refresh_tasks(url)
-            except OSError:
-                pass  # the cache cannot be written: the box keeps what it has
-            first.set()
-            time.sleep(300)
-
-    threading.Thread(target=loop, daemon=True).start()
-    return first
-
-
-def task_lines(cols, n):
-    """AUFGABEN from the cache: the owner's rows (who vino or none), project and text in two columns, at most n lines
-    below the heading; when they do not all fit, the last of them is +N weitere."""
-    lit = sys.stdout.isatty()
-    path = tasks_cache()
-    try:
-        cached = path.read_text(encoding="utf-8", errors="replace").splitlines()
-        mtime = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc)
-    except OSError:
-        return [paint(TEAL, "AUFGABEN", lit), " " + paint(DIM, "nicht erreichbar", lit)][:1 + max(n, 0)]
-    mine = [(m[1], m[2]) for m in map(TASK.fullmatch, cached) if m and "vino" in (m[3] or "vino").split("/")]
-    now = clock()
-    stale = (tasks_ok is None or (now - tasks_ok).total_seconds() > 900) and (now - mtime).total_seconds() > 900
-    queued = len(list((Path.home() / ".local/state/liefern/warten").glob("*.eintrag")))  # tools/liefern's queue
-    count = clean(f"{len(mine)}" + (f"  · liefern {queued}" if queued else "") + (f"  (Stand {mtime.astimezone():%H:%M})" if stale else ""), max(cols - 10, 1))
-    head = [paint(TEAL, "AUFGABEN", lit) + "  " + paint(DIM, count, lit)]
-    if n <= 0:
-        return head
-    w = min(max((len(p) for p, _ in mine[:n]), default=0), 14)
-    rows, shown = [], 0
-    for i, (project, text) in enumerate(mine):
-        room = min(3, n - len(rows) - (i + 1 < len(mine)))  # keep a line for +N weitere while more follow
-        if room <= 0:
-            break
-        parts = textwrap.wrap(text, max(cols - 1 - w - 2, 1), max_lines=room, placeholder="…") or [""]
-        first = clean(f"{project[:w]:<{w}}  {parts[0]}", cols - 1)
-        rows.append(" " + (paint(PURPLE, first[:w], lit) + first[w:] if lit else first))
-        rows += [" " + " " * (w + 2) + p for p in parts[1:]]
-        shown += 1
-    more = [" " + paint(DIM, f"+{len(mine) - shown} weitere", lit)] if shown < len(mine) else []
-    return head + rows + more
-
-
 def paint(code, s, lit):
     return code + s + RESET if lit else s
 
@@ -743,10 +602,89 @@ def board_entries(session):
     return frozenset(e for x in parse_board(text, clock().astimezone().date()).values() for e in x)
 
 
+def states():
+    """(session, state, since, text) per live session, oldest start first. state: wartet (only a status waiting), helfer,
+    arbeitet (jetzt()'s tool or denkt, or a status busy) or ruht; text: jetzt()'s step for arbeitet and helfer, else
+    empty. Unlike jetzt(), idle and a finished turn are ruht here: only the status proves that a session waits."""
+    out = []
+    for s in sorted((s for s in sessions() if s["alive"]), key=lambda s: (started(s), s["sessionId"])):
+        transcripts.setdefault(s["sessionId"], Transcript(s["sessionId"])).update()  # session_state() alone tails only once
+        kind, since, line = session_state(s)
+        cut = line.rfind("  seit ")
+        text = line[:cut] if cut > 0 else line
+        if s.get("status") == "waiting":
+            state = "wartet"
+        elif kind == "helfer":
+            state = "helfer"
+        else:
+            state = "arbeitet" if kind in ("tool", "denkt") or s.get("status") == "busy" else "ruht"
+        out.append((s, state, since, text if kind in ("tool", "denkt", "helfer") else ""))
+    return out
+
+
+def du_lines(live, width, most=3):
+    """DU: the owner's next steps in a fixed order: liefern's queue, the sessions waiting for him (longest first), the
+    open ! lines under Für dich (no → yet) on the boards of live sessions, newest first and cut at the first ": " or
+    ". ". At most `most` steps; the rest is counted, so a ! line is never dropped silently."""
+    lit, steps = sys.stdout.isatty(), []
+    queued = len(list((Path.home() / ".local/state/liefern/warten").glob("*.eintrag")))  # tools/liefern's queue
+    if queued:
+        steps.append((YELLOW, f"liefern · {queued} {'wartet' if queued == 1 else 'warten'}"))
+    for s, _, _, _ in sorted((x for x in live if x[1] == "wartet"), key=lambda x: x[2] or clock()):
+        why = waiting_for(s)
+        steps.append((YELLOW, f"▲ {label(s, transcripts[s['sessionId']])} wartet auf dich" + (": " + why if why else "")))
+    today, bangs = clock().astimezone().date(), []
+    for path in dict.fromkeys(board_of(s) for s, *_ in live):  # sessions in one lab folder share its board
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        bangs += [e for e in parse_board(text, today)["Für dich"] if e.important and "→" not in e.text]
+    bangs.sort(key=lambda e: (e.ts is None, datetime.max - e.ts if e.ts else timedelta()))
+    steps += [(RED, re.split(r": |\. ", e.text, maxsplit=1)[0] or e.text) for e in bangs]
+    if not steps:
+        return [paint(DIM, " " + clean("DU  nichts offen", width - 1), lit)]
+    out = [paint(YELLOW, " DU", lit)]
+    out += [paint(code, " " + clean(f"{i}  {text}", width - 1), lit) for i, (code, text) in enumerate(steps[:most], 1)]
+    return out + ([paint(DIM, "    " + clean(f"+{len(steps) - most} weitere", max(width - 4, 1)), lit)] if len(steps) > most else [])
+
+
+def session_rows(live, width):
+    """One line per live session of states(): ● arbeitet with its step, ▲ wartet auf dich, ● Helfer, ○ ruht with its age."""
+    lit, now, out = sys.stdout.isatty(), clock(), []
+    for s, state, since, text in live:
+        age = ago((now - since).total_seconds()) if since else ""
+        sym, code, rest = {
+            "wartet": ("▲", YELLOW, "wartet auf dich  " + age),
+            "helfer": ("●", TEAL, text),
+            "arbeitet": ("●", TEAL, "arbeitet  " + text),
+            "ruht": ("○", DIM, "ruht  " + age),
+        }[state]
+        out.append(paint(code, " " + clean(f"{sym} {label(s, transcripts[s['sessionId']])}  {rest}", width - 1), lit))
+    return out or [paint(DIM, " keine Sitzung", lit)]
+
+
+def usage():
+    """5 h N % · Woche N % from claude-hud's usage snapshot, 5 h only while it is a number; empty when unreadable."""
+    try:
+        u = json.loads((Path.home() / ".cache/claude-hud/usage.json").read_text())
+        found = [(name, (u.get(key) or {}).get("used_percentage")) for name, key in (("5 h", "five_hour"), ("Woche", "seven_day"))]
+        return " · ".join(f"{name} {round(p)} %" for name, p in found if type(p) in (int, float))
+    except (OSError, ValueError, OverflowError, AttributeError):
+        return ""  # missing, no JSON, or not shaped like claude-hud's snapshot: no numbers
+
+
+def foot_line(width, keys):
+    """The keys (f and i only with a followed session), on the right usage() when it fits."""
+    left, right = " f alles   i Idee   ⏎ zur Sitzung" if keys else " ⏎ zur Sitzung", usage()
+    gap = width - len(left) - len(right)
+    return paint(DIM, left + " " * gap + right if right and gap >= 1 else left[:width], sys.stdout.isatty())
+
+
 def frame(session, ended, where, full=False, seen=frozenset()):
     """The whole pane as lines, at most one fewer than the pane is high (the newline after the last would scroll it).
-    where finishes the sentence "kein Claude ", e.g. "in w". full: the whole board instead of the overview. seen: the
-    entries the owner saw when last closing the full view of this session; they are no longer NEU."""
+    where finishes the sentence "kein Claude ", e.g. "in w". full: the session's whole board instead of the overview.
+    seen: the entries the owner saw when last closing the full view of this session; they are no longer NEU."""
     n, width, room = clock(), cols(), max(rows() - 1, 1)
     lit = sys.stdout.isatty()
     stand = n.astimezone().strftime("%H:%M")
@@ -754,12 +692,24 @@ def frame(session, ended, where, full=False, seen=frozenset()):
     left = clean(left, width - len(stand) - 1)
     head = [paint(TEAL, "LAGE", lit) + left[4:] + " " * (width - len(left) - len(stand)) + paint(DIM, stand, lit)]
     rule = "─" * width
-    wartet = [paint(RED if x.startswith("!") else DIM, x, lit) for x in wartet_lines(session and session["sessionId"], width)]
-    if session is None:
-        top = head + [clean("kein Claude " + where, width)] + wartet
-        box = task_lines(width, min(4, room - len(top) - 2)) if tasks_url() else []
-        return (top + ([""] + box if box else []))[:room]
-    state, since, tr = "", None, None
+    if session is None or not full:
+        # Overview, also without a session: head, DU, the sessions between two rules, the keys. A small pane drops the
+        # rules first, then the keys, then the sessions that do not fit (counted); DU folds its steps into its +N line.
+        head += [clean("kein Claude " + where, width)] if session is None else ["Sitzung beendet"] if ended else []
+        live = states()
+        free = room - len(head)
+        du = du_lines(live, width, max(min(3, free - 2), 0))
+        free -= len(du)
+        sess = session_rows(live, width)
+        if len(sess) > free:
+            keep = max(free - 1, 0)
+            sess = sess[:keep] + [paint(DIM, "   " + clean(f"+{len(sess) - keep} weitere Sitzungen", max(width - 3, 1)), lit)] if free > 0 else []
+        free -= len(sess)
+        foot = [foot_line(width, session is not None)] if free > 0 else []
+        sep = [paint(GREY, rule, lit)] if free - len(foot) >= 2 else []
+        return (head + du + sep + sess + sep + foot)[:room]
+    wartet = [paint(RED if x.startswith("!") else DIM, x, lit) for x in wartet_lines(session["sessionId"], width)]
+    state, since = "", None
     if ended:
         line = "Sitzung beendet"
     else:
@@ -775,42 +725,13 @@ def frame(session, ended, where, full=False, seen=frozenset()):
     except OSError:
         text = ""
     board = parse_board(text, n.astimezone().date())
-    if full:
-        top = head + [line] + wartet
-        foot = [rule, "i = Idee   f = zurück"]
-        free = room - len(top) - 1 - len(foot)
-        # lines per section: what is left, less the 4 headings and the 4 +N ältere lines; a pane too small for it loses
-        # the end of the board first, then the end of the foot
-        body = board_lines(board, since, width, max(1, (free - 8) // 4), seen)
-        return (top + [rule] + body[:max(free, 0)] + foot)[:room]
-    # Overview: header, the ▶ line, the waiting lines, the tasks heading and NEU always; then, while they fit, the LOG
-    # with 3 steps, the key line, the blank lines between the parts, up to 6 task lines, and last up to 8 steps. A pane
-    # too small even for the fixed lines loses its end.
-    steps = log_lines(tr, width, 8) if tr else []
-    neu = clean(neu_line(board, since, seen), width)
-    if lit:
-        bang = neu.startswith("! ")
-        neu = (paint(RED, "! ", True) if bang else "") + paint(YELLOW, "NEU", True) + neu[2 + 3 if bang else 3:]
-    on = bool(tasks_url())
-    used, shown = 3 + len(wartet) + on, 0
-    if steps and used + 1 + min(3, len(steps)) <= room:
-        shown = min(3, len(steps))
-        used += 1 + shown
-    keys = [paint(DIM, "i = Idee   f = alles", lit)] if used < room else []
-    used += len(keys)
-    gaps = 2 + on + bool(shown)  # between header, ▶ block, tasks, LOG and NEU
-    gap = [""] if used + gaps <= room else []
-    used += gaps if gap else 0
-    box = task_lines(width, min(10, room - used)) if on else []
-    used += max(len(box) - 1, 0)
-    if shown:
-        shown += min(len(steps) - shown, room - used)
-    log = [paint(TEAL, "LOG", lit)] + steps[:shown] if shown else []
-    parts = [p for p in (head, [line] + wartet, box, log, [neu] + keys) if p]
-    out = parts[0]
-    for p in parts[1:]:
-        out = out + gap + p
-    return out[:room]
+    top = head + [line] + wartet
+    foot = [rule, "i = Idee   f = zurück"]
+    free = room - len(top) - 1 - len(foot)
+    # lines per section: what is left, less the 4 headings and the 4 +N ältere lines; a pane too small for it loses
+    # the end of the board first, then the end of the foot
+    body = board_lines(board, since, width, max(1, (free - 8) // 4), seen)
+    return (top + [rule] + body[:max(free, 0)] + foot)[:room]
 
 
 def wait(seconds, session):
@@ -914,9 +835,6 @@ def main():
             print("lage:", e, file=sys.stderr)
             return 1
         return 0
-    first = start_tasks()
-    if args.once and first:
-        first.wait(3)  # one frame: show fresh tasks if they come quickly, else the cache
     session, full, seen = None, args.full, {}  # seen: sessionId -> the board entries shown when the full view closed
     try:
         while True:
