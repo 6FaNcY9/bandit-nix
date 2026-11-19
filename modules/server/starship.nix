@@ -59,7 +59,8 @@ in {
         staged = "+";
         deleted = "x";
         stashed = "stash";
-        format = "[\\[$all_status$ahead_behind\\]]($style) ";
+        # ( ) hides the box when the repo is clean; it showed as an empty [].
+        format = "([\\[$all_status$ahead_behind\\]]($style) )";
       };
 
       nix_shell = {
