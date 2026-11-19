@@ -3,7 +3,8 @@
 # peer repository, apart from the peer job on purpose: a public world that will not flush (lag machine,
 # crashed server) fails this run only, never the one that carries Vaultwarden and the private world.
 # The host takes the copy: saves are flushed and frozen through the container's console
-# (minecraft-snapshot with MC_MACHINE), so nothing is added inside the box and it gets no secret.
+# (minecraft-snapshot with MC_MACHINE, from inside the box) and copied as the box uid, never as host root on
+# box-owned paths; nothing is added inside the box and it gets no secret.
 {
   config,
   pkgs,
@@ -39,7 +40,8 @@ in {
   };
 
   systemd = {
-    tmpfiles.rules = ["d ${staging} 0700 root root -"];
+    # 0711: minecraft-snapshot copies as the box uid into ${staging}/paper (0700, that uid), so it must be searchable.
+    tmpfiles.rules = ["d ${staging} 0711 root root -"];
     services.restic-backups-mc-public = {
       after = ["restic-backups-peer.service" "container@mc-public.service" "tailscaled.service"];
       # As for the peer job: the laptop may be asleep or off the tailnet.
