@@ -676,20 +676,22 @@ def session_rows(live, width):
 
 
 def usage():
-    """5 h N % · Woche N % from claude-hud's usage snapshot, 5 h only while it is a number; empty when unreadable."""
+    """[5 h N %, Woche N %] from claude-hud's usage snapshot, each only while it is a number; [] when unreadable."""
     try:
         u = json.loads((Path.home() / ".cache/claude-hud/usage.json").read_text())
         found = [(name, (u.get(key) or {}).get("used_percentage")) for name, key in (("5 h", "five_hour"), ("Woche", "seven_day"))]
-        return " · ".join(f"{name} {round(p)} %" for name, p in found if type(p) in (int, float))
+        return [f"{name} {round(p)} %" for name, p in found if type(p) in (int, float)]
     except (OSError, ValueError, OverflowError, AttributeError):
-        return ""  # missing, no JSON, or not shaped like claude-hud's snapshot: no numbers
+        return []  # missing, no JSON, or not shaped like claude-hud's snapshot: no numbers
 
 
 def foot_line(width, keys):
-    """The keys (f and i only with a followed session), on the right usage() when it fits."""
-    left, right = " f alles   i Idee   ⏎ zur Sitzung" if keys else " ⏎ zur Sitzung", usage()
-    gap = width - len(left) - len(right)
-    return paint(DIM, left + " " * gap + right if right and gap >= 1 else left[:width], sys.stdout.isatty())
+    """The keys (f and i only with a followed session), on the right usage() when it fits, else its last part (the week)."""
+    left, parts = " f alles   i Idee   ⏎ zur Sitzung" if keys else " ⏎ zur Sitzung", usage()
+    for right in (" · ".join(parts), parts[-1] if parts else ""):
+        if right and len(left) + len(right) < width:
+            return paint(DIM, left + " " * (width - len(left) - len(right)) + right, sys.stdout.isatty())
+    return paint(DIM, left[:width], sys.stdout.isatty())
 
 
 def frame(session, ended, where, full=False, seen=frozenset()):
@@ -762,7 +764,10 @@ def wait(seconds, session):
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, saved)
     if key in (b"\r", b"\n"):
-        jump()  # no window or no session to go to: the view simply stays
+        try:
+            jump()  # no window or no session to go to: the view simply stays
+        except Exception:  # as in main(): an odd session file must not end the view; the next round shows the error
+            pass
     if key == b"i" and session is not None:
         try:
             add_idea(board_of(session), input("Idee: "), clock())
@@ -852,9 +857,14 @@ def main():
     session, full, seen = None, args.full, {}  # seen: sessionId -> the board entries shown when the full view closed
     try:
         while True:
-            session, ended = pick(session)
-            sid = session and session["sessionId"]
-            lines = frame(session, ended, where, full, seen.get(sid, frozenset()))
+            try:
+                session, ended = pick(session)
+                sid = session and session["sessionId"]
+                lines = frame(session, ended, where, full, seen.get(sid, frozenset()))
+            except Exception as e:  # the view runs for hours (it reads every live session): a bad round shows why, the next one tries again
+                if args.once:
+                    raise
+                lines = [clean(f"lage: {e}", cols())]
             if args.once:
                 print("\n".join(lines))
                 return 0

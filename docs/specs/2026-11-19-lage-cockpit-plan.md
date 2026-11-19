@@ -59,7 +59,7 @@ the full branch is untouched. `bar_focus()` is split so Enter reuses its window 
   since, jetzt text without `  seit …`), live sessions only, by `startedAt`; `du_lines(live, width, most=3) -> list[str]`;
   `session_rows(live, width) -> list[str]`; `foot_line(width, keys) -> str`; `GREY`.
 
-- [ ] **Step 1: Write the failing tests** in `tools/lage.test.sh` (replace test_log, test_neu_line, test_tasks,
+- [x] **Step 1: Write the failing tests** in `tools/lage.test.sh` (replace test_log, test_neu_line, test_tasks,
   test_tasks_offline, test_tasks_off; drop `LAGE_TASKS_URL`):
   - `test_overview_rows`: busy tool call → ` ● src-a  arbeitet  x`; `status idle` → ` ○ src-a  ruht  20 s` and no
     `wartet auf dich`; `status waiting 'Erlaubnis'` → ` ▲ src-a  wartet auf dich  Erlaubnis`; idle with a running
@@ -77,11 +77,11 @@ the full branch is untouched. `bar_focus()` is split so Enter reuses its window 
     test_master's `▶` check, test_wartet*, and test_incremental's highlight (`frame(..., True)`); test_none,
     test_master_none_lists_sessions, test_idea_key and test_f_key follow the new overview (f_key: NEU through
     the full view's `(1 neu)`).
-- [ ] **Step 2: Run** `bash tools/lage.test.sh` → FAIL at the first new assertion.
-- [ ] **Step 3: Implement** the Interfaces above and the overview branch of `frame()` (also for `session is None`);
+- [x] **Step 2: Run** `bash tools/lage.test.sh` → FAIL at the first new assertion.
+- [x] **Step 3: Implement** the Interfaces above and the overview branch of `frame()` (also for `session is None`);
   `session_state()` stays, `states()` calls `tr.update()` before it; remove the orphans listed above.
-- [ ] **Step 4: Run** `bash tools/lage.test.sh` → `ok`; `flake8 --ignore=E501 tools/lage.py` → clean.
-- [ ] **Step 5: Commit** `feat(lage): cockpit overview shows DU and one line per session`.
+- [x] **Step 4: Run** `bash tools/lage.test.sh` → `ok`; `flake8 --ignore=E501 tools/lage.py` → clean.
+- [x] **Step 5: Commit** `feat(lage): cockpit overview shows DU and one line per session`.
 
 ### Task 2: Enter jumps to the session that needs the owner
 
@@ -90,22 +90,22 @@ the full branch is untouched. `bar_focus()` is split so Enter reuses its window 
 **Interfaces:**
 - Consumes: `states()`. Produces: `focus(sid: str) -> int` (0 focused, 1 no window), `jump() -> int`.
 
-- [ ] **Step 1: Write the failing test** `test_enter` after the `bar --focus` tests, with the same fake windows: in a
+- [x] **Step 1: Write the failing test** `test_enter` after the `bar --focus` tests, with the same fake windows: in a
   pty, Enter (`\r`) with an idle window (14:00) and a busy one (14:05) dispatches `address:0xbusy` (bar --focus would
   take the idle one); with a waiting one added, `address:0xwait`; only idle windows → no dispatch, lage keeps running.
-- [ ] **Step 2: Run** → FAIL (no dispatch).
-- [ ] **Step 3: Implement**: split `bar_focus()` into the choice and `focus(sid)`; `jump()` picks the longest-waiting
+- [x] **Step 2: Run** → FAIL (no dispatch).
+- [x] **Step 3: Implement**: split `bar_focus()` into the choice and `focus(sid)`; `jump()` picks the longest-waiting
   `wartet`, else the longest-working `arbeitet`/`helfer`; `wait()` ends on `\r`/`\n` and calls `jump()`.
-- [ ] **Step 4: Run** `bash tools/lage.test.sh` → `ok` (the `bar --focus` cases unchanged).
-- [ ] **Step 5: Commit** `feat(lage): Enter jumps to the session that waits, else the one that works`.
+- [x] **Step 4: Run** `bash tools/lage.test.sh` → `ok` (the `bar --focus` cases unchanged).
+- [x] **Step 5: Commit** `feat(lage): Enter jumps to the session that waits, else the one that works`.
 
 ### Task 3: More rows for lage, check against the mock-up
 
 **Files:** Modify `modules/user/desktop/hyprland/scripts.nix` (`--bias=35` → `--bias=25`), this plan's boxes
 
-- [ ] **Step 1:** Change the bias; `alejandra` on the file.
-- [ ] **Step 2:** `COLUMNS=56 LINES=26 python3 tools/lage.py --once` on the laptop: compare with the mock-up (DU on top,
+- [x] **Step 1:** Change the bias; `alejandra` on the file.
+- [x] **Step 2:** `COLUMNS=56 LINES=26 python3 tools/lage.py --once` on the laptop: compare with the mock-up (DU on top,
   rules, one row per live session, foot with `Woche`).
-- [ ] **Step 3:** `nix build .#nixosConfigurations.bandit.config.home-manager.users.vino.home-files --no-link` (lage
+- [x] **Step 3:** `nix build .#nixosConfigurations.bandit.config.home-manager.users.vino.home-files --no-link` (lage
   with its flake8 run; never the full flake check).
-- [ ] **Step 4: Commit** `feat(cockpit): lage gets three quarters of the pane`; queue the laptop switch with `liefern add`.
+- [x] **Step 4: Commit** `feat(cockpit): lage gets three quarters of the pane`; queue the laptop switch with `liefern add`.

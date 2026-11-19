@@ -217,7 +217,10 @@ last=$(lage --dir "$HOME/w" --once | tail -n 1)
 [[ $last == " f alles   i Idee   ⏎ zur Sitzung  "*"Woche 38 %" && ${#last} -eq 46 && $last != *"5 h"* ]]
 echo '{"five_hour":{"used_percentage":12},"seven_day":{"used_percentage":38}}' >"$u"
 [[ $(COLUMNS=60 lage --dir "$HOME/w" --once | tail -n 1) == *"   5 h 12 % · Woche 38 %" ]]
-[[ $(lage --dir "$HOME/w" --once | tail -n 1) == " f alles   i Idee   ⏎ zur Sitzung" ]]   # too wide for 46 columns: no numbers
+last=$(lage --dir "$HOME/w" --once | tail -n 1)   # both are too wide for 46 columns: the week alone
+[[ $last == " f alles   i Idee   ⏎ zur Sitzung  "*"Woche 38 %" && ${#last} -eq 46 && $last != *"5 h"* ]]
+echo '{"five_hour":{"used_percentage":100},"seven_day":{"used_percentage":100}}' >"$u"   # full limits in today's pane
+last=$(COLUMNS=56 lage --dir "$HOME/w" --once | tail -n 1);  [[ $last == *"  Woche 100 %" && $last != *"5 h"* ]]
 for bad in '' 'kein json' '{"seven_day":null}' '[1]' '{"seven_day":{"used_percentage":"viel"}}' '{"seven_day":{"used_percentage":true}}'; do
   printf '%s' "$bad" >"$u"
   [[ $(lage --dir "$HOME/w" --once | tail -n 1) == " f alles   i Idee   ⏎ zur Sitzung" ]] || { echo "usage: $bad" >&2; false; }
@@ -1114,5 +1117,46 @@ focus; [[ $(<"$DISPATCH") == *'address:0xidle'* ]]   # bar --focus takes the idl
 enter 0xbusy
 win 0xwait bbbbbbbb-3 waiting 14:10:00; enter 0xwait
 fresh; cls=(); win 0xidle bbbbbbbb-1 idle 14:00:00; win 0xrest bbbbbbbb-2 idle 14:05:00; enter ""
+
+# test_never_dies: an odd session file (a NUL in its id) never ends the view: the round shows the error, Enter does
+# nothing (it runs for hours in the Cockpit; --once still fails loudly)
+fresh; session $$ $s1 src-a "$HOME/w"; live
+python3 -c 'import json, sys; print(json.dumps({"pid": int(sys.argv[1]), "sessionId": "b\0d", "cwd": sys.argv[2], "status": "busy"}))' \
+  "$pid" "$HOME/w" >"$HOME/.claude/sessions/$pid.json"
+rc=0; lage --dir "$HOME/w" --once >/dev/null 2>&1 || rc=$?;  [[ $rc -ne 0 ]]
+python3 -B - "$here/lage.py" "$HOME/w" <<'EOF'
+import os
+import pty
+import select
+import signal
+import sys
+import time
+
+prog, folder = sys.argv[1:]
+pid, fd = pty.fork()
+if pid == 0:
+    os.execvp("python3", ["python3", prog, "--dir", folder])
+seen = b""
+
+
+def read_until(done, what):
+    global seen
+    end = time.time() + 8
+    while not done() and time.time() < end:
+        if select.select([fd], [], [], 0.2)[0]:
+            try:
+                seen += os.read(fd, 4096)
+            except OSError:  # lage ended: its side of the pty is gone
+                break
+    assert done(), (what, seen[-300:])
+
+
+read_until(lambda: b"lage: " in seen, "error line")
+seen = b""
+os.write(fd, b"\r")
+read_until(lambda: seen.count(b"\x1b[H") >= 2, "two rounds after Enter")
+os.kill(pid, signal.SIGINT)
+assert os.waitpid(pid, 0)[1] == 0
+EOF
 
 echo ok
