@@ -57,8 +57,8 @@ ENTRY = re.compile(
 )
 transcripts = {}  # sessionId -> Transcript, so each refresh reads only new bytes
 TASKS_URL = "https://memory.tail7facc9.ts.net/notes/.wartet.md"  # LAGE_TASKS_URL overrides it; empty turns tasks off
-# N. project (store): text (who) [date]; text may hold ": "; .wartet.md cuts it with … only past 280 characters
-TASK = re.compile(r"\d+\.\s+(\S+) \([^)]*\): (.*?)(?: \(([^)]*)\))?(?: \d{4}-\d\d-\d\d)?")
+# N. project (store): text (who) [[LATE ]date]; text may hold ": "; .wartet.md cuts it with … only past 280 characters
+TASK = re.compile(r"\d+\.\s+(\S+) \([^)]*\): (.*?)(?: \(([^)]*)\))?(?: (?:LATE )?\d{4}-\d\d-\d\d)?")
 tasks_ok = None  # clock() of the last fetch of the tasks that worked, in this process
 
 
@@ -665,7 +665,7 @@ def task_lines(cols, n):
         mtime = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc)
     except OSError:
         return [paint(TEAL, "AUFGABEN", lit), " " + paint(DIM, "nicht erreichbar", lit)][:1 + max(n, 0)]
-    mine = [(m[1], m[2]) for m in map(TASK.fullmatch, cached) if m and m[3] in (None, "vino")]
+    mine = [(m[1], m[2]) for m in map(TASK.fullmatch, cached) if m and "vino" in (m[3] or "vino").split("/")]
     now = clock()
     stale = (tasks_ok is None or (now - tasks_ok).total_seconds() > 900) and (now - mtime).total_seconds() > 900
     count = clean(f"{len(mine)}" + (f"  (Stand {mtime.astimezone():%H:%M})" if stale else ""), max(cols - 10, 1))

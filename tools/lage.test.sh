@@ -215,6 +215,10 @@ done
 printf '## Waiting for a human\n1. a (vino): eins\n2. b (vino): zwei (vino)\n' >"$t/short.md"
 out=$(LAGE_TASKS_URL=file://$t/short.md lage --dir "$HOME/w" --once)
 [[ $out == *$'\nAUFGABEN  2\n a  eins\n b  zwei\n'* && $out != *weitere* ]]
+# a late row keeps its owner: vino's and shared ones show without LATE, Albert's stays out
+printf '## Waiting for a human\n1. a (vino): eins (vino) LATE 2026-11-15\n2. f (firma): zwei (Albert) LATE 2026-11-16\n3. c (vino): drei (vino/claude) LATE 2026-11-18\n' >"$t/late.md"
+out=$(LAGE_TASKS_URL=file://$t/late.md lage --dir "$HOME/w" --once)
+[[ $out == *$'\nAUFGABEN  2\n a  eins\n c  drei\n'* && $out != *zwei* && $out != *LATE* ]]
 # a long row wraps with a hanging indent instead of ending in …
 long="Eine sehr lange Aufgabe die nicht mehr in eine Zeile passt und darum umbricht"
 printf '## Waiting for a human\n1. a (vino): %s (vino)\n2. b (vino): zwei (vino)\n' "$long" >"$t/long.md"
