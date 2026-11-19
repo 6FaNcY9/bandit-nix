@@ -200,10 +200,15 @@ in {
         RestrictAddressFamilies = ["AF_INET" "AF_INET6" "AF_UNIX"];
         # Where the tunnel leads is set in the playit account, not here: whoever holds that account must not be
         # able to point it at a host or LAN service (Traefik on 127.0.0.1:80, the RCON forwarders, the LAN).
-        # Only Velocity and the host's DNS stub (127.0.0.53, the agent resolves through /etc/resolv.conf) stay
-        # reachable in private space; Allow wins over Deny. The internet stays open (playit's relays).
+        # Only Velocity stays reachable in private space (Allow wins over Deny); the internet stays open
+        # (playit's relays). No lo at all: the host's own global IPv6 addresses are delivered over lo too, and
+        # sshd, Samba and the private Velocity listen on every address.
         IPAddressDeny = ["localhost" "link-local" "multicast" "10.0.0.0/8" "172.16.0.0/12" "192.168.0.0/16" "100.64.0.0/10" "fc00::/7"];
-        IPAddressAllow = ["10.251.1.2/32" "127.0.0.53/32"];
+        IPAddressAllow = ["10.251.1.2/32"];
+        RestrictNetworkInterfaces = "~lo";
+        # So DNS needs no lo: playitd is static musl and reads /etc/resolv.conf itself (no nsswitch), which on the
+        # lab points at resolved's stub 127.0.0.53. Its own file instead (systemd follows the symlink).
+        BindReadOnlyPaths = ["${pkgs.writeText "playit-resolv.conf" "nameserver 9.9.9.9\nnameserver 1.1.1.1\n"}:/etc/resolv.conf"];
       };
     };
     # The design's caps, on the whole container: 6G heap for Paper, 512M for Velocity, the rest is JVM

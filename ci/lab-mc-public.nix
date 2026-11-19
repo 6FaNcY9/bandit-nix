@@ -86,10 +86,11 @@ in
     sc = lab.systemd.services.playit.serviceConfig;
   in
     lib.all (d: lib.elem d sc.IPAddressDeny) ["localhost" "link-local" "10.0.0.0/8" "172.16.0.0/12" "192.168.0.0/16" "100.64.0.0/10" "fc00::/7"]
-    && sc.IPAddressAllow == ["10.251.1.2/32" "127.0.0.53/32"]
+    && sc.IPAddressAllow == ["10.251.1.2/32"]
+    && sc.RestrictNetworkInterfaces == "~lo"
     && sc.CapabilityBoundingSet == ""
     && sc.PrivateDevices
-    && sc.RestrictAddressFamilies == ["AF_INET" "AF_INET6" "AF_UNIX"]) "the tunnel agent reaches only Velocity and the DNS stub in private space, whatever the playit account says (no localhost, LAN, tailnet or link-local), with no capability and no devices";
+    && sc.RestrictAddressFamilies == ["AF_INET" "AF_INET6" "AF_UNIX"]) "the tunnel agent reaches only Velocity in private space and nothing over lo, whatever the playit account says (no localhost, LAN, tailnet or link-local), with no capability and no devices";
   assert lib.assertMsg (!paper.openFirewall && !velocity.openFirewall && !mc.openFirewall) "nix-minecraft must not open any firewall port by itself";
   # One Velocity, one Paper.
   assert lib.assertMsg (lib.attrNames mc.servers == ["paper" "velocity"] && paper.enable && velocity.enable) "the container runs exactly one Paper and one Velocity";
