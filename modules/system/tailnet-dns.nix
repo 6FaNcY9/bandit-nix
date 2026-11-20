@@ -16,6 +16,9 @@ in {
   # Without it tailscale0 wins alone; network.nix keeps "~." for the lab.
   services.resolved.settings.Resolve.Domains = lib.mkForce [];
 
+  # LLMNR answers name lookups from anyone on the WLAN (spoofing risk); the tailnet and mDNS cover what we use.
+  services.resolved.settings.Resolve.LLMNR = "false";
+
   systemd.services.dns-guard = {
     description = "Tailnet DNS guard (Blocky or fallback)";
     wantedBy = ["multi-user.target"];
