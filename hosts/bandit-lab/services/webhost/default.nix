@@ -79,6 +79,9 @@ in {
           # Legacy SMB1 has known remote-code-execution history; every
           # supported client speaks SMB2+.
           "server min protocol" = "SMB2";
+          # Unsigned sessions can be relayed or altered by another tailnet peer;
+          # every SMB2+ client can sign.
+          "server signing" = "mandatory";
           # Defense in depth behind the per-interface firewall: only loopback
           # and the tailnet (IPv4 and IPv6) may talk SMB. `hosts deny = ALL`,
           # not 0.0.0.0/0, which would leave every IPv6 client unmatched.
