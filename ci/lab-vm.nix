@@ -138,7 +138,7 @@ in
       lab.fail(f"curl -fsS --max-time 3 http://{lan}:8080/")
 
       # Container -> container by name over the podman proxy network (aardvark DNS + bridge forward),
-      # and container -> another host while docker.service owns FORWARD DROP (netavark's NETAVARK_FORWARD chain).
+      # and container -> another host while docker.service owns FORWARD DROP (the firewall's FORWARD accepts for podman+; netavark's own nft table cannot override that policy).
       lab.wait_for_unit("proxy-network.service")
       lab.wait_for_unit("canary2.service")
       lab.succeed("podman exec canary2 wget -qO- http://canary:8080/ | grep canary")

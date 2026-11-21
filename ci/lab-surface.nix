@@ -59,7 +59,9 @@ in
   # Tailscale's UDP port is open on the uplink only (services/webhost), never on a guest's ve-* link.
   assert lib.assertMsg (lib.hasInfix "iptables -w -A nixos-fw -i enp44s0 -p udp --dport 41641 -j nixos-fw-accept" fw.extraCommands && lib.hasInfix "ip6tables -w -A nixos-fw -i enp44s0 -p udp --dport 41641 -j nixos-fw-accept" fw.extraCommands && lib.length (lib.splitString "-i enp44s0 -p udp --dport 41641" fw.extraCommands) == 3) "the Tailscale UDP port 41641 must be open on enp44s0 only, once for IPv4 and once for IPv6";
   assert lib.assertMsg (noPorts fw) "the global firewall lists must be empty: open ports per interface, on tailscale0 only";
-  assert lib.assertMsg (lib.all (i: noPorts fw.interfaces.${i}) otherInterfaces) "no interface other than tailscale0 may open ports (found: ${toString otherInterfaces})";
+  # podman+ carries only aardvark DNS (53): with netavark's nftables driver the NixOS Podman module opens it (dns.openFirewall).
+  assert lib.assertMsg (lib.all (i: noPorts fw.interfaces.${i}) (lib.remove "podman+" otherInterfaces)) "no interface other than tailscale0 may open ports (found: ${toString otherInterfaces})";
+  assert lib.assertMsg (lib.all (i: i == "tailscale0" || i == "podman+" && lib.all (p: p == 53) (fw.interfaces.${i}.allowedTCPPorts ++ fw.interfaces.${i}.allowedUDPPorts) && fw.interfaces.${i}.allowedTCPPortRanges == [] && fw.interfaces.${i}.allowedUDPPortRanges == []) (lib.attrNames fw.interfaces)) "podman+ may open port 53 (container DNS) only";
   assert lib.assertMsg (badPublished == []) "Container-published ports must bind 127.0.0.1 or ${tailnetIp}, never all interfaces: ${toString (map (x: "${x.name} ${x.p}") badPublished)}";
   assert lib.assertMsg (!(lib.any (lib.hasPrefix "ssh://") tunnelTargets)) "the public Cloudflare tunnel must not publish SSH (Tailscale is the admin path)";
   assert lib.assertMsg (fw.enable && !lab.networking.nftables.enable && fw.trustedInterfaces == ["lo"]) "the iptables firewall must be on, with no trusted interface besides lo (a trusted tailscale0 would open every port)";

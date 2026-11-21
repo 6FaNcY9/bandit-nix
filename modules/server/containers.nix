@@ -22,9 +22,6 @@
 
   config.virtualisation = {
     podman.enable = true;
-    # The lab firewall and Docker use iptables (networking.nftables is off), so
-    # netavark must not pick nftables.
-    containers.containersConf.settings.network.firewall_driver = "iptables";
     # Shared network for migrated services (phase 4): container names resolve
     # through aardvark-dns like on the Docker proxy network. Explicit subnet so
     # firewall rules can name it; collides with no LAN, tailnet or Docker range.
@@ -33,4 +30,13 @@
       gateways = ["10.89.0.1"];
     };
   };
+
+  # Podman 6 only has the nftables driver: netavark's accepts live in its own nft table and do not
+  # override Docker's FORWARD policy DROP in the iptables filter table, so forward is allowed here.
+  # Same scope netavark's iptables chains had: anything from a podman bridge, only replies to it.
+  # -C first: a firewall reload does not flush FORWARD, appending again would stack duplicates.
+  config.networking.firewall.extraCommands = ''
+    iptables -w -C FORWARD -i podman+ -j ACCEPT 2>/dev/null || iptables -w -A FORWARD -i podman+ -j ACCEPT
+    iptables -w -C FORWARD -o podman+ -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || iptables -w -A FORWARD -o podman+ -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+  '';
 }

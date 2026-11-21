@@ -80,8 +80,8 @@ in
   "every lab quadlet container must set containerConfig.user and no userns (found: ${toString rootContainers})";
   assert lib.assertMsg (podman.enable && !podman.dockerCompat && !podman.dockerSocket.enable)
   "Podman must run without taking over the docker CLI or /run/docker.sock";
-  assert lib.assertMsg (lab.virtualisation.containers.containersConf.settings.network.firewall_driver == "iptables")
-  "netavark must use iptables like the lab firewall and Docker";
+  assert lib.assertMsg (!(lab.virtualisation.containers.containersConf.settings.network or {} ? firewall_driver) && lib.hasInfix "FORWARD -i podman+" lab.networking.firewall.extraCommands)
+  "netavark must use its default nftables driver (Podman 6) and the firewall must accept forward from podman bridges past Docker's FORWARD DROP";
   assert lib.assertMsg (has "hardened" "NoNewPrivileges=true" && has "hardened" "DropCapability=all" && has "hardened" "ReadOnly=true")
   "quadlet containers must default to no-new-privileges, cap-drop all and a read-only root:\n${unit "hardened"}";
   assert lib.assertMsg (has "relaxed" "ReadOnly=false" && has "relaxed" "NoNewPrivileges=true")
