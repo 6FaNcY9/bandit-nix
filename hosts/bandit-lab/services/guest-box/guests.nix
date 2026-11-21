@@ -12,7 +12,7 @@
     key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAID4PNbKtaXkyHqz7p8sXH1xtPpiP+FiIgeRpfm6x1/U+ jerry";
     hostAccept = ["-A nixos-fw -i ve-jerry -p udp --dport 41641 -j nixos-fw-accept"]; # host tailscaled (WireGuard authenticates): direct backup path
   };
-  # Shared box for several friends, "freunde" in the tailnet. Inside the lab it keeps the name martin
+  # Shared box for several friends, "guest-box" in the tailnet. Inside the lab it keeps the name martin
   # (unit, tag:martin-box, sops secret, /srv/martin) so no new auth key or rootfs is needed.
   # users: NixOS boxes only; one normal account per friend, one key each, no root, no sudo.
   # They share the box's 1 CPU / 4G, so a new friend costs no extra core.
@@ -21,7 +21,7 @@
     net = "10.251.2";
     memory = "4G";
     key = ""; # nobody is root on a shared box
-    hostname = "freunde";
+    hostname = "guest-box";
     users = {
       martin = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG9CD8nqgC8lbrzUinbW8iKXhFkW5RQWeAOACpjheUAy martin";
     };

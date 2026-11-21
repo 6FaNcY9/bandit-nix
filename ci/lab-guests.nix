@@ -20,7 +20,7 @@
       net = "10.251.2";
       memory = "4G";
       hostAccept = [];
-      hostname = "freunde";
+      hostname = "guest-box";
       users = ["martin"];
     };
   };
