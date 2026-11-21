@@ -591,6 +591,7 @@ os.write(fd, b"i")
 wait_for(b"Idee: ")
 os.write(fd, b"Cookie anschauen\n")
 wait_for(b"Cookie anschauen\r\n")  # echoed: the terminal was restored for input()
+wait_for("Gesendet. Die Sitzung liest es bei ihrem nächsten Schritt.".encode())  # feedback (R13)
 end = time.time() + 5
 while not os.path.exists(board) and time.time() < end:
     time.sleep(0.1)
@@ -1266,7 +1267,8 @@ jq -e '.zeit == "2026-11-15T14:12:20+00:00" and .status == "laeuft" and .was == 
   and .gesendet == "g1" and .ziel == "Router" and .weg == "Web" and .antwort == "" and .bedeutung == ""
   and (keys | length) == 9' "$sf"
 
-# test_schritt_finish: without WAS the newest step that is neither offen nor warn is copied, given fields win, status kept unless given
+# test_schritt_finish: without WAS the step shown on top of the work view is copied (R9: the running step above a side-effect warn,
+# else the newest row, never an offen line), given fields win, status kept unless given
 lage schritt "Y später" --weg "Seriell" --status offen
 lage schritt --antwort "teil"
 lage schritt --antwort "a1" --bedeutung "b1" --status fund
@@ -1283,6 +1285,14 @@ fresh; session $$ $s1 src-a "$HOME/w"; rc=0; lage schritt "x" --status info 2>/d
 lage schritt "y"; sf=$HOME/.local/state/lage/$s1.schritte.jsonl; before=$(<"$sf")
 rc=0; lage schritt 2>"$t/err" || rc=$?; [[ $rc -eq 1 && $(<"$t/err") == *"nichts zu ändern"* && $(<"$sf") == "$before" ]]
 rc=0; lage schritt "  " 2>"$t/err" || rc=$?; [[ $rc -eq 1 && $(<"$t/err") == *"nichts zu ändern"* && $(<"$sf") == "$before" ]]
+
+# test_schritt_offen (R14): --status offen is a way for later and needs --weg; the running step it would leave is not touched
+fresh; session $$ $s1 src-a "$HOME/w"; sf=$HOME/.local/state/lage/$s1.schritte.jsonl
+rc=0; lage schritt "x" --status offen 2>"$t/err" || rc=$?; [[ $rc -eq 1 && $(<"$t/err") == "lage: offen braucht --weg" && ! -e $sf ]]
+lage schritt "Scan"; before=$(<"$sf")
+rc=0; lage schritt --status offen 2>"$t/err" || rc=$?; [[ $rc -eq 1 && $(<"$t/err") == "lage: offen braucht --weg" && $(<"$sf") == "$before" ]]
+rc=0; lage schritt --status offen --weg "  " 2>"$t/err" || rc=$?; [[ $rc -eq 1 && $(<"$sf") == "$before" ]]
+lage schritt "Y später" --status offen --weg "Seriell"; [[ $(jq -sr '.[-1] | .status + .weg' "$sf") == offenSeriell ]]
 
 # test_schritt_clean: first line only, control characters as ?, cut to 200 with …; an empty WAS counts as missing
 fresh; session $$ $s1 src-a "$HOME/w"
@@ -1434,7 +1444,7 @@ out=$(lage --dir "$HOME/w" --once --arbeit); [[ $(sed -n 2p <<<"$out") == "✖ P
 # test_work_keys: in the pty, a opens the work view; s, ? and i ask one line and write the owner idea for the step on top to
 # the board of the step's session (not always the followed one); without a step, s and ? do nothing and i is a plain idea;
 # the bar's request file switches a running view; leaving the full view by a still records what was seen
-keys() { # keys <own|other|none|long|seen> [board...]: lage in a pty, the keys of that scenario
+keys() { # keys <own|other|none|long|quote|seen> [board...]: lage in a pty, the keys of that scenario
   python3 -B - "$here/lage.py" "$HOME/w" "$@" <<'EOF'
 import os
 import pty
@@ -1450,6 +1460,7 @@ if pid == 0:
     os.execvp("python3", ["python3", prog, "--dir", folder])
 seen = b""
 FOOT = b"f alles   a Arbeit   i Idee"
+SENT = "Gesendet. Die Sitzung liest es bei ihrem nächsten Schritt.".encode()
 
 
 def read_until(text, seconds=8):
@@ -1459,7 +1470,8 @@ def read_until(text, seconds=8):
         if select.select([fd], [], [], 0.2)[0]:
             seen += os.read(fd, 4096)
     assert text in seen, (text, seen[-300:])
-    seen = b""
+    got, seen = seen, b""
+    return got
 
 
 def press(key, prompt=None, answer=None):
@@ -1486,12 +1498,13 @@ read_until(FOOT)
 if scenario == "own":
     press(b"a")
     read_until("src-a · ARBEIT".encode())  # LAGE is painted
-    press(b"s", b"Stopp (Grund, Enter sendet): ", b"Grund\r")
+    press(b"s", b"Stopp (Grund, Enter sendet, Strg+C bricht ab): ", b"Grund\r")
+    read_until(SENT)  # feedback (R13), then the view is back
     read_until(b"ARBEIT")
-    press(b"s", b"Stopp (Grund, Enter sendet): ", b"\r")  # no reason: still a Stopp
+    press(b"s", b"Stopp (Grund, Enter sendet, Strg+C bricht ab): ", b"\r")  # no reason: still a Stopp
     read_until(b"ARBEIT")
-    press(b"?", b"Frage: ", b"\r")  # empty: dropped
-    read_until(b"ARBEIT")
+    press(b"?", b"Frage: ", b"\r")  # empty: dropped, nothing to confirm
+    assert b"Gesendet" not in read_until(b"ARBEIT")
     press(b"?", b"Frage: ", b"wieso?\r")
     read_until(b"ARBEIT")
     press(b"i", b"Idee: ", b"x\r")
@@ -1502,7 +1515,7 @@ if scenario == "own":
 elif scenario == "other":  # the followed session has no step: the one with steps is shown and gets the lines
     press(b"a")
     read_until("src-b · ARBEIT".encode())
-    press(b"s", b"Stopp (Grund, Enter sendet): ", b"weil\r")
+    press(b"s", b"Stopp (Grund, Enter sendet, Strg+C bricht ab): ", b"weil\r")
     read_until(b"ARBEIT")
     press(b"i", b"Idee: ", b"y\r")
     read_until(b"ARBEIT")
@@ -1514,14 +1527,21 @@ elif scenario == "none":  # no step anywhere; the request file (touched from out
     press(b"s")
     press(b"?")
     press(b"i", b"Idee: ", b"plain\r")  # a prompt for i only: s and ? did nothing
+    read_until(SENT)
     read_until(b"ARBEIT")
     check(boards[0], ["plain"])
 elif scenario == "long":  # a long step title is cut to 60 characters, so the reason survives add_idea's 200
     press(b"a")
     read_until(b"ARBEIT")
-    press(b"s", b"Stopp (Grund, Enter sendet): ", ("g" * 120 + "\r").encode())
+    press(b"s", b"Stopp (Grund, Enter sendet, Strg+C bricht ab): ", ("g" * 120 + "\r").encode())
     read_until(b"ARBEIT")
     check(boards[0], ["Stopp bei „" + "x" * 59 + "…“: " + "g" * 120])
+elif scenario == "quote":  # a step title with quotes never puts quotes inside the idea line the hook presents (R15)
+    press(b"a")
+    read_until(b"ARBEIT")
+    press(b"s", b"Stopp (Grund, Enter sendet, Strg+C bricht ab): ", b"\r")
+    read_until(SENT)
+    check(boards[0], ["Stopp bei „Er sagt hi und so“"])
 elif scenario == "seen":  # the full view closed by a: what it showed is not new in the next full view
     press(b"f")
     read_until("FUNDE  1  (1 neu)".encode())
@@ -1543,6 +1563,7 @@ echo '{"zeit":"2026-11-15T14:00:00+00:00","ziel":"","weg":"","was":"fremd","waru
 keys other "$HOME/.local/state/lage/bbbbbbbb-2.md" "$(bfile)"
 fresh; session $$ $s1 src-a "$HOME/w"; keys none "$(bfile)"; rm -f "$XDG_RUNTIME_DIR/lage-arbeit"
 fresh; session $$ $s1 src-a "$HOME/w"; lage schritt "$(printf 'x%.0s' {1..150})"; keys long "$(bfile)"
+fresh; session $$ $s1 src-a "$HOME/w"; lage schritt 'Er sagt "hi" und „so“'; keys quote "$(bfile)"
 fresh; session $$ $s1 src-a "$HOME/w"; owner 14:00:00; printf '## Funde\n- 14:12 Fund nach dem Prompt\n' | board
 keys seen
 
@@ -1595,21 +1616,29 @@ jq -e '.text == "▶ Scan"' <<<"$(bs)"                                          
 fresh; session $$ $s1 src-a "$HOME/w"; step $s1 14:00:00 fund "A" "Altes Ziel"; step $s1 14:10:00 warn "B" "Neues Ziel"; step $s1 14:12:00 laeuft "C"
 jq -e '.tooltip == "src-a · Neues Ziel"' <<<"$(bs)"
 
-# test_bar_step_flip (R10): a fund/warn at most 120 s old wins over a running step, warn first, then the newest; after
-# 120 s the running step is back and the flip ends; a fund alone gets class alt then, a running step keeps laeuft
+# test_bar_step_flip (R10, R12): the newest fund/warn row at most 120 s old that happened once wins over a running step (a merged
+# repeat ×N never flips again, so a repeating side-effect warn does not pin the bar); after 120 s the running step is back and
+# the flip ends; a fund alone gets class alt then, a running step keeps laeuft
 fresh; session $$ $s1 src-a "$HOME/w"
 LAGE_NOW=2026-11-15T14:12:20Z lage schritt "Geprüft" --status fund
 LAGE_NOW=2026-11-15T14:12:30Z lage schritt "Weiter"
 jq -e '.text == "✔ Geprüft" and .class == "fund"' <<<"$(at 14:13:00)"
 jq -e '.text == "▶ Weiter" and .class == "laeuft"' <<<"$(at 14:15:00)"
 fresh; session $$ $s1 src-a "$HOME/w"; step $s1 14:12:00 warn "Aussetzer"; step $s1 14:12:10 fund "Treffer"; step $s1 14:12:15 laeuft "Weiter"
-jq -e '.text == "⚠ Aussetzer" and .class == "warn"' <<<"$(bs)"                # a warn and a newer fund, both held: the warn
+jq -e '.text == "✔ Treffer" and .class == "fund"' <<<"$(bs)"                  # a warn and a newer fund, both held: the newest
 jq -e '.text == "✔ Treffer" and .class == "fund"' <<<"$(at 14:14:05)"        # the warn is 125 s old, the fund 115 s
 fresh; session $$ $s1 src-a "$HOME/w"                                         # (a) a side-effect warn never pins the bar
 LAGE_NOW=2026-11-15T14:00:00Z lage schritt "Scan"
 LAGE_NOW=2026-11-15T14:01:00Z lage schritt "Aussetzer" --status warn
 jq -e '.text == "⚠ Aussetzer" and .class == "warn"' <<<"$(at 14:01:30)"
 jq -e '.text == "▶ Scan" and .class == "laeuft"' <<<"$(at 14:04:00)"
+# R12: the same warn again at 14:02:00 is a repeat (×2): it never flips again, the running step stays; a different warn does
+LAGE_NOW=2026-11-15T14:02:00Z lage schritt "Aussetzer" --status warn
+jq -e '.text == "▶ Scan" and .class == "laeuft"' <<<"$(at 14:02:30)"
+LAGE_NOW=2026-11-15T14:03:00Z lage schritt "Anderer Aussetzer" --status warn
+jq -e '.text == "⚠ Anderer Aussetzer" and .class == "warn"' <<<"$(at 14:03:30)"
+fresh; session $$ $s1 src-a "$HOME/w"; step $s1 14:00:00 warn "Aussetzer"; step $s1 14:00:30 fund "Treffer"   # a fund right after a warn
+jq -e '.text == "✔ Treffer" and .class == "fund"' <<<"$(at 14:00:40)"
 fresh; session $$ $s1 src-a "$HOME/w"; step $s1 14:00:00 fund "Treffer"          # (b) a fund alone: the text stays, the class goes
 out=$(at 14:03:00); [[ $(jq -r .text <<<"$out") == "✔ Treffer" && $(jq -r .class <<<"$out") == alt ]]
 jq -e '.class == "fund"' <<<"$(at 14:01:00)"
@@ -1629,12 +1658,27 @@ step $s1 "" fund "Ohne Zeit"; jq -e '.text == ""' <<<"$(bs)"                  # 
 step $s1 14:12:10 laeuft "Scan"; step $s1 "" warn "Ohne Zeit 2"
 jq -e '.text == "▶ Scan"' <<<"$(bs)"                                          # ... and is never held
 step $s1 14:30:00 warn "Aus der Zukunft"; jq -e '.text == "⚠ Aus der Zukunft" and .class == "warn"' <<<"$(bs)"
-for case in "0001-01-01T00:00:00+05:00|▶ Scan" "9999-12-31T23:59:59-23:00|⚠ Rand" "kaputt|▶ Scan"; do   # a far past, a far future, no time
+for case in "0001-01-01T00:00:00+05:00|▶ Scan" "9999-12-31T23:59:59-23:00|▶ Scan" "kaputt|▶ Scan"; do   # a far past, a far future, no time
   fresh; session $$ $s1 src-a "$HOME/w"; mkdir -p "$HOME/.local/state/lage"
   jq -nc --arg z "${case%%|*}" '{zeit: $z, ziel: "", weg: "", was: "Rand", warum: "", gesendet: "", antwort: "", bedeutung: "", status: "warn"}' >>"$HOME/.local/state/lage/$s1.schritte.jsonl"
   step $s1 14:12:10 laeuft "Scan"; rc=0; out=$(bs 2>"$t/err") || rc=$?
   [[ $rc -eq 0 && ! -s $t/err ]]; jq -e --arg w "${case#*|}" '.text | startswith($w)' <<<"$out"
 done
+
+# test_zeit_extreme (A3): a parseable zeit that has no local time (year 1 with +02:00) is no time, not an error in every round
+fresh; session $$ $s1 src-a "$HOME/w"; mkdir -p "$HOME/.local/state/lage"
+jq -nc '{zeit: "0001-01-01T00:00:00+02:00", ziel: "", weg: "", was: "Uralt", warum: "", gesendet: "", antwort: "", bedeutung: "", status: "fund"}' >"$HOME/.local/state/lage/$s1.schritte.jsonl"
+rc=0; out=$(lage --dir "$HOME/w" --once --arbeit 2>&1) || rc=$?; [[ $rc -eq 0 && $out != *"lage: "* && $out == *"✔ Uralt"* ]]   # the view shows a fund with its time
+rc=0; out=$(bs 2>&1) || rc=$?; [[ $rc -eq 0 && $out == "$none" ]]               # no time: the session is not fresh
+step $s1 14:12:10 fund "Treffer"; jq -e '.text == "✔ Treffer"' <<<"$(bs)"      # a record with a time next to it works
+
+# test_zeit_local (R16): a zeit without an offset is local time, as LAGE_NOW without one is. TZ=CET-1 is Vienna in November
+# and needs no tzdata; 15:12:00 there is 14:12:00Z, 20 s before the clock
+fresh; session $$ $s1 src-a "$HOME/w"; mkdir -p "$HOME/.local/state/lage"
+jq -nc '{zeit: "2026-11-15T15:12:00", ziel: "", weg: "", was: "Lokal", warum: "", gesendet: "", antwort: "", bedeutung: "", status: "laeuft"}' >"$HOME/.local/state/lage/$s1.schritte.jsonl"
+out=$(TZ=CET-1 lage --dir "$HOME/w" --once --arbeit); [[ $out == *"▶ Lokal"*"seit 20 s"* ]]
+jq -e '.text == "▶ Lokal"' <<<"$(TZ=CET-1 lage bar schritt)"
+out=$(lage --dir "$HOME/w" --once --arbeit); [[ $out == *"▶ Lokal"*"seit 0 s"* ]]   # in UTC it is an hour ahead: age 0
 
 # test_bar_step_open: the click focuses the window of the session the bar shows, asks the Cockpit for the work view by
 # touching $XDG_RUNTIME_DIR/lage-arbeit and starts hypr-cockpit unless this workspace already has one (it is a toggle);

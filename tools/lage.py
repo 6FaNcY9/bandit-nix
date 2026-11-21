@@ -2,14 +2,17 @@
 
 lage [--once] [--full] [--arbeit]   follow the Claude session in the Cockpit master window (Hyprland); with --dir DIR the
   newest one started in DIR. The main view is a short overview; --full (or the key f) shows the whole board; --arbeit
-  starts with the work view, the steps of a session.
+  starts with the work view, the steps of a session. Keys: f whole board, a work view; in the work view s Stopp, ? Frage and
+  i Idee write an owner idea about the step on top, Enter jumps to the session that needs you.
 lage [--dir DIR] --idea TEXT   add an owner idea to that session's board
 lage --probe PID   exit 0 when a Claude session runs under the window with pid PID, else 1; no output
 lage bar [--focus]   Waybar: one JSON line with busy/waiting session counts; --focus jumps to the waiting session
+lage bar schritt [--open]   Waybar: the step field of the bottom bar; --open (click) focuses that session and opens the work view
 lage schritt [WAS] [--warum T] [--gesendet T] [--antwort T] [--bedeutung T] [--status S] [--ziel T] [--weg T]
   a session reports one step of its work; without WAS it changes the step the work view shows on top
 lage hook   Claude Code hook (JSON on stdin): tells a session its board and each new owner idea once
-Everything is read from ~/.claude; nothing is written there. lage writes the board and, for the hook, a .shown file of hashes.
+Everything is read from ~/.claude; nothing is written there. lage writes the board, the step file next to it
+(*.schritte.jsonl) and, for the hook, a .shown file of hashes.
 """
 import argparse
 import hashlib
@@ -643,7 +646,8 @@ def own_session():
 
 
 def read_steps(path):
-    """The newest steps in the file, oldest first: every STEP_KEYS key as a clean str, plus ts (aware datetime or None).
+    """The newest steps in the file, oldest first: every STEP_KEYS key as a clean str, plus ts (aware datetime or None; a zeit
+    without an offset is local time, one that cannot be shown in local time is None).
     Reads only the tail; bad JSON, non-objects, an unknown status and an empty was are skipped. Never raises."""
     try:
         with path.open("rb") as f:
@@ -664,8 +668,10 @@ def read_steps(path):
             continue
         step = {k: clean(d[k], 200) if isinstance(d.get(k), str) else "" for k in STEP_KEYS}
         try:
-            step["ts"] = parse_ts(step["zeit"])
-        except ValueError:
+            ts = datetime.fromisoformat(step["zeit"])
+            step["ts"] = ts if ts.tzinfo else ts.astimezone()  # no offset: local time, as clock() reads LAGE_NOW
+            step["ts"].astimezone()  # a time without a local time (year 1) would fail in the view's every round: it is no time
+        except (OverflowError, OSError, ValueError):
             step["ts"] = None
         if step["was"]:
             found.append(step)
@@ -684,6 +690,9 @@ def write_step(argv):
     was = clean(args.was or "", 200)
     if not (was or args.status or any(getattr(args, k) is not None for k in texts)):
         print("lage: nichts zu ändern", file=sys.stderr)
+        return 1
+    if args.status == "offen" and not clean(args.weg or "", 200):  # an offen line only seeds a way and is never shown as a step
+        print("lage: offen braucht --weg", file=sys.stderr)
         return 1
     session = own_session()
     if session is None:
@@ -786,8 +795,9 @@ def step_class(r, now):
 def bar_step():
     """(session, record) the bottom bar shows, else (None, None). Each step file counts once (sessions in one lab folder
     share it; the newest started speaks for it); a session is skipped without rows or when its newest line, an offen seed
-    too, is older than STEP_STALE. A held fund/warn row of the others wins (warn first, then the newest), so the flip is
-    seen and ends after STEP_HOLD; else the session with the newest line shows the step on top of its work view."""
+    too, is older than STEP_STALE. The newest held fund/warn row (at most STEP_HOLD old, count 1) of the others wins, so
+    the flip is seen and ends after STEP_HOLD; else the session with the newest line shows the step on top of its work
+    view."""
     now, seen, live = clock(), set(), []
     for s in sorted((s for s in sessions() if s["alive"]), key=lambda s: (started(s), s["sessionId"]), reverse=True):
         path = steps_path(s)
@@ -798,9 +808,11 @@ def bar_step():
         rows, newest = step_rows(steps), max((x["ts"] for x in steps if x["ts"]), default=None)
         if rows and newest is not None and seconds_since(newest, now) <= STEP_STALE:
             live.append((s, steps, rows, newest))
-    flips = [(r["status"] == "warn", r["ts"], s, r) for s, _, rows, _ in live for r, _ in rows if held(r, now)]
+    # shortcut: a merged repeat (count > 1) never flips again, even after a long pause, so a side-effect warn that comes back
+    # does not pin the bar; keep the previous occurrence's ts in step_rows() if that matters
+    flips = [(r["ts"], s, r) for s, _, rows, _ in live for r, n in rows if n == 1 and held(r, now)]
     if flips:
-        *_, s, r = max(flips, key=lambda f: f[:2])
+        _, s, r = max(flips, key=lambda f: f[0])
         return s, r
     if live:
         s, steps, _, _ = max(live, key=lambda f: f[3])
@@ -839,12 +851,12 @@ def bar_step_open():
     session, r = bar_step()
     if r is None:
         return
-    found = focus(session["sessionId"])
+    missed = focus(session["sessionId"])  # 0 when the window was focused
     request = request_path()
     if request is None:
         return
     request.touch()
-    if found:
+    if missed:
         return
     try:
         workspace = json.loads(run("hyprctl", "activeworkspace", "-j"))["id"]
@@ -1142,7 +1154,8 @@ def wait(seconds, session, src=None):
     „was“[: Grund], Frage zu „was“: ..., Idee zu „was“: ...; without a step s and ? do nothing and i is a plain idea.
     Returns the key that ended the wait, b"i", b"f" or b"a", else b"" (also for s and ?)."""
     rows = shown_rows(src[1]) if src and src[0] else []
-    was = clean(rows[0][0]["was"], 60) if rows else None  # short, so a reason still fits add_idea's 200 characters
+    # short, so a reason still fits add_idea's 200 characters; no quotes, the hook presents "Stopp bei „was“" as the owner's own words
+    was = clean(re.sub('[„“"]', "", rows[0][0]["was"]), 60) if rows else None
     if not sys.stdin.isatty():
         time.sleep(seconds)
         return b""
@@ -1161,23 +1174,28 @@ def wait(seconds, session, src=None):
             jump()  # no window or no session to go to: the view simply stays
         except Exception:  # as in main(): an odd session file must not end the view; the next round shows the error
             pass
-    if was is not None and key in (b"s", b"?", b"i"):
-        try:
+    target = text = None  # the board and the line of the idea to write
+    sent = False
+    try:
+        if was is not None and key in (b"s", b"?", b"i"):
             if key == b"s":
-                reason = input("Stopp (Grund, Enter sendet): ").strip()
+                reason = input("Stopp (Grund, Enter sendet, Strg+C bricht ab): ").strip()
                 text = f"Stopp bei „{was}“" + (f": {reason}" if reason else "")
             else:
                 ask, head = ("Frage: ", "Frage zu") if key == b"?" else ("Idee: ", "Idee zu")
                 text = input(ask).strip()
                 text = f"{head} „{was}“: {text}" if text else ""
-            add_idea(board_of(src[0]), text, clock())
-        except (EOFError, KeyboardInterrupt, OSError):
-            pass  # cancelled, or the board is not writable: the next refresh shows no new idea
-    elif key == b"i" and session is not None:
-        try:
-            add_idea(board_of(session), input("Idee: "), clock())
-        except (EOFError, KeyboardInterrupt, OSError):
-            pass  # cancelled, or the board is not writable: the next refresh shows no new idea
+            target = board_of(src[0])
+        elif key == b"i" and session is not None:
+            text, target = input("Idee: "), board_of(session)
+        if target is not None and text.strip():
+            add_idea(target, text, clock())
+            print("Gesendet. Die Sitzung liest es bei ihrem nächsten Schritt.", flush=True)
+            sent = True
+    except (EOFError, KeyboardInterrupt, OSError):
+        pass  # cancelled, or the board is not writable: the next refresh shows no new idea
+    if sent:
+        time.sleep(1.5)  # long enough to read it before the next frame; outside the try, so Ctrl+C here still ends lage
     return key if key in (b"i", b"f", b"a") else b""
 
 
