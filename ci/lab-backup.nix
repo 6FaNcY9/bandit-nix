@@ -17,7 +17,7 @@
   prepare = b.backupPrepareCommand;
   secretNames = lib.filter (n: lib.hasPrefix "restic-" n && !lib.hasPrefix "restic-peer-" n) (lib.attrNames labOn.sops.secrets);
   expectedSecrets = ["restic-password" "restic-repository" "restic-s3-access-key-id" "restic-s3-secret-access-key"];
-  mustBackUp = ["/var/backup/postgresql" "/srv/containers/aiia/content-data" "/srv/containers/mrija-archive/maildir"];
+  mustBackUp = ["/var/backup/postgresql" "/srv/containers/aiia/content-data" "/srv/containers/mrija-archive/maildir" "/srv/containers/memory/data" "/srv/containers/memory-albert/data" "/srv/containers/memory-firma/data"];
 in
   assert lib.assertMsg (lib.sort lib.lessThan secretNames == expectedSecrets) "backup secrets must be exactly ${toString expectedSecrets}, found ${toString secretNames}";
   assert lib.assertMsg ((b.repository or null) == null && !(b ? password)) "repository and password must come from sops files, never from inline Nix strings (they would land in the world-readable store)";

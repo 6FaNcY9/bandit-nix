@@ -54,6 +54,7 @@ disabled until the secrets exist. Evaluated in its enabled form by the
 | AiiA / Ghost content | `/srv/containers/aiia/content-{images,media,files,data}` |
 | PostgreSQL | the existing 03:15 dumps in `/var/backup/postgresql` |
 | Mrija archive | `maildir/` plus an `sqlite3 .backup` snapshot of `mail_index.sqlite` |
+| basic-memory stores (`memory`, `memory-albert`, `memory-firma`) | the markdown notes in `/srv/containers/<store>/data`; `home/.basic-memory/memory.db` is a derived index and is not backed up |
 | Minecraft (once the panel change is deployed) | `minecraft-snapshot`: saves flushed and frozen while rsync copies the data directory (worlds, plugins, panel accounts), then re-enabled; excludes caches, logs, panel backups, BlueMap tiles |
 
 Not included on purpose: Portainer (retired; local rollback archive exists),
