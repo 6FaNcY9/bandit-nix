@@ -43,9 +43,15 @@ in {
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
-      TimeoutStartSec = "120s";
+      TimeoutStartSec = "420s";
     };
-    script = pkgs.lib.concatStrings (pkgs.lib.mapAttrsToList serve services);
+    # Right after boot tailscaled is up but not logged in yet ("unexpected state: NoState"): every serve call
+    # then fails and no service is advertised (2026-11-21). Wait until the node is running, at most 2 minutes.
+    script =
+      ''
+        for _ in $(seq 60); do tailscale status > /dev/null 2>&1 && break; sleep 2; done
+      ''
+      + pkgs.lib.concatStrings (pkgs.lib.mapAttrsToList serve services);
     preStop = pkgs.lib.concatMapStrings (name: "timeout 30 tailscale serve clear svc:${name} || true\n") (builtins.attrNames services);
   };
 }
