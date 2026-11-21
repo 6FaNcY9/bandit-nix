@@ -1,7 +1,8 @@
 """lage: a terminal view of what a Claude Code session is doing right now.
 
-lage [--once] [--full]   follow the Claude session in the Cockpit master window (Hyprland); with --dir DIR the newest one
-  started in DIR. The main view is a short overview; --full (or the key f) shows the whole board.
+lage [--once] [--full] [--arbeit]   follow the Claude session in the Cockpit master window (Hyprland); with --dir DIR the
+  newest one started in DIR. The main view is a short overview; --full (or the key f) shows the whole board; --arbeit
+  starts with the work view, the steps of a session.
 lage [--dir DIR] --idea TEXT   add an owner idea to that session's board
 lage --probe PID   exit 0 when a Claude session runs under the window with pid PID, else 1; no output
 lage bar [--focus]   Waybar: one JSON line with busy/waiting session counts; --focus jumps to the waiting session
@@ -616,6 +617,7 @@ def board_entries(session):
 
 
 STEPS = {"laeuft": "▶", "fund": "✔", "zu": "✖", "offen": "?", "warn": "⚠"}  # status -> symbol
+STEP_COLOURS = {"laeuft": TEAL, "fund": YELLOW, "warn": RED, "offen": DIM}  # zu has none
 STEP_KEYS = ("zeit", "ziel", "weg", "was", "warum", "gesendet", "antwort", "bedeutung", "status")
 STEP_TAIL = 262144  # bytes read from the end of a step file
 STEP_LINES = 500  # newest steps kept
@@ -706,6 +708,40 @@ def write_step(argv):
     finally:
         os.close(fd)
     return 0
+
+
+def step_rows(steps):
+    """(record, count) rows for the work view, newest first. offen lines only seed ways; a laeuft line whose next line has
+    the same was is an earlier state of that step; equal (status, weg, was) merge into the newest of them."""
+    kept = [s for s in steps if s["status"] != "offen"]
+    kept = [s for s, nxt in zip(kept, kept[1:] + [None]) if not (s["status"] == "laeuft" and nxt and nxt["was"] == s["was"])]
+    merged = {}
+    for s in reversed(kept):
+        key = (s["status"], s["weg"], s["was"])
+        merged[key] = (s, 1) if key not in merged else (merged[key][0], merged[key][1] + 1)
+    return list(merged.values())
+
+
+def way_rows(steps):
+    """(weg, status) in order of first appearance: the status of the way's newest fund/zu/offen line, else offen
+    (a warn or a running line never changes it)."""
+    ways = {}
+    for s in steps:
+        if s["weg"]:
+            ways[s["weg"]] = s["status"] if s["status"] in ("fund", "zu", "offen") else ways.get(s["weg"], "offen")
+    return list(ways.items())
+
+
+def step_source(followed):
+    """(session, steps) the work view shows: the followed session when its step file has a record, else the live session
+    whose newest record is newest, else (None, [])."""
+    if followed:
+        steps = read_steps(steps_path(followed))
+        if steps:
+            return followed, steps
+    never = datetime.min.replace(tzinfo=timezone.utc)
+    found = [(s, read_steps(steps_path(s))) for s in sessions() if s["alive"]]
+    return max((f for f in found if f[1]), key=lambda f: (f[1][-1]["ts"] or never, started(f[0])), default=(None, []))
 
 
 def states():
@@ -819,19 +855,109 @@ def usage():
         return []  # missing, no JSON, or not shaped like claude-hud's snapshot: no numbers
 
 
-def foot_line(width, keys):
-    """The keys (f and i only with a followed session), on the right usage() when it fits, else its last part (the week)."""
-    left, parts = " f alles   i Idee   ⏎ zur Sitzung" if keys else " ⏎ zur Sitzung", usage()
+def foot_line(width, keys, left=None):
+    """The keys (f and i only with a followed session), on the right usage() when it fits, else its last part (the week).
+    left replaces the key text."""
+    left, parts = left or (" f alles   i Idee   ⏎ zur Sitzung" if keys else " ⏎ zur Sitzung"), usage()
     for right in (" · ".join(parts), parts[-1] if parts else ""):
         if right and len(left) + len(right) < width:
             return paint(DIM, left + " " * (width - len(left) - len(right)) + right, sys.stdout.isatty())
     return paint(DIM, left[:width], sys.stdout.isatty())
 
 
-def frame(session, ended, where, full=False, seen=frozenset()):
+def work_lines(src, width, room):
+    """The work view of src = (session, steps) in at most room lines: head, ZIEL, the newest step with every field, the older
+    steps (each whole, the rest counted), WEGE and the keys, the blocks between rules. WEGE gets its room before the older
+    steps; a pane too small for head, newest step and keys loses the end of the newest step."""
+    session, steps = src
+    lit, now = sys.stdout.isatty(), clock()
+    rows, ways, today = step_rows(steps), way_rows(steps), now.astimezone().date()
+
+    def when(ts):  # HH:MM, DD.MM. on another day, "" without a time
+        return "" if ts is None else ts.astimezone().strftime("%H:%M" if ts.astimezone().date() == today else "%d.%m.")
+
+    def tint(status, s):
+        return paint(STEP_COLOURS.get(status, ""), s, lit and status in STEP_COLOURS)
+
+    stand, name = now.astimezone().strftime("%H:%M"), " · "
+    if session:
+        tr = transcripts.setdefault(session["sessionId"], Transcript(session["sessionId"]))
+        tr.update()  # for the tab title
+        name = f"  {label(session, tr)} · "
+    left = clean("LAGE" + name + "ARBEIT", width - len(stand) - 1)
+    top = [paint(TEAL, "LAGE", lit) + left[4:] + " " * (width - len(left) - len(stand)) + paint(DIM, stand, lit)]
+    ziel = next((s["ziel"] for s in reversed(steps) if s["ziel"]), "")
+    top += [clean("ZIEL  " + ziel, width)] if ziel else []
+    if rows:
+        step, n = rows[0]
+        mult = f"  ×{n}" if n > 1 else ""
+        right = "seit " + ago((now - step["ts"]).total_seconds()) if step["status"] == "laeuft" and step["ts"] else when(step["ts"])
+        text = clean(step["was"], max(width - 2 - len(mult) - (len(right) + 2 if right else 0), 1))
+        line = f"{STEPS[step['status']]} {text}{mult}"
+        top.append(tint(step["status"], line) + (" " * (width - len(line) - len(right)) + paint(DIM, right, lit) if right else ""))
+        for key, field in (("warum", "warum"), ("gesendet", "sendet"), ("antwort", "←"), ("bedeutung", "=")):
+            none = key == "antwort" and not step[key] and step["status"] == "laeuft"  # still running: no answer yet
+            lines = textwrap.wrap("noch keine Antwort" if none else step[key], max(width - 10, 1))
+            if len(lines) > 2:
+                lines = [lines[0], lines[1][:-1] + "…"]
+            top += [paint(DIM, ("  " + field.ljust(8) if i == 0 else " " * 10) + x, lit and none) for i, x in enumerate(lines)]
+    else:
+        top += [paint(DIM, clean(x, width), lit) for x in ("Noch keine Schritte.", "Sitzungen melden sie mit: lage schritt")]
+    foot = [foot_line(width, True, " s Stopp  ? Frage  i Idee  a zurück")]
+    free = room - len(top) - len(foot) - 1  # lines left for the blocks between top and foot, less the rule above the foot
+    if free < 0:
+        return (top[:max(room - 1, 1)] + foot)[:room]
+
+    wege = []
+    if ways:
+        state = dict(ways)
+        running = rows[0][0]["weg"] if rows and rows[0][0]["status"] == "laeuft" else ""
+        nxt = next((w for w, st in ways if st == "offen" and w != running), "")
+        order = [w for w in (running, nxt) if w] + [w for w, _ in ways if w not in (running, nxt)]
+        counts = [f"{STEPS[st]} {c}" for st in ("fund", "zu", "offen") if (c := list(state.values()).count(st))]
+        # the rule above, the header, k ways (6 at most) and a +N weitere when some are left out must fit
+        k = next((k for k in range(min(len(order), 6), 0, -1) if 2 + k + (k < len(order)) <= free), 0)
+
+        def way(w):
+            sym, status = ("▶", "laeuft") if w == running else (STEPS[state[w]], state[w])
+            if w != nxt:
+                return tint(status, clean(f"{sym} {w}", width))
+            tag = "→ als Nächstes"
+            line = clean(f"{sym} {w}", max(width - len(tag) - 2, 1))
+            return tint(status, line) + " " * (width - len(line) - len(tag)) + paint(DIM, tag, lit)
+
+        if k:
+            wege = ["WEGE  " + "  ".join(counts)] + [way(w) for w in order[:k]]
+            wege += [paint(DIM, f"+{len(order) - k} weitere", lit)] if k < len(order) else []
+            free -= len(wege) + 1
+
+    def older(step, n):  # one row: its first line, then the answer and the meaning, a line each
+        started = step["status"] == "laeuft"  # not the newest and no result reported
+        mult = f"  ×{n}" if n > 1 else ""
+        head = f"{'·' if started else STEPS[step['status']]} {when(step['ts']) or ' ' * 5}  "
+        line = head + clean(step["was"], max(width - len(head) - len(mult), 1)) + mult
+        return [paint(DIM, line, lit) if started else tint(step["status"], line)] + [
+            "  " + clean(f"{sym} {step[key]}", width - 2) for sym, key in (("←", "antwort"), ("=", "bedeutung")) if step[key]]
+
+    old, j, used = [older(s, n) for s, n in rows[1:]], 0, 0
+    while j < len(old) and used + len(old[j]) + (j + 1 < len(old)) <= free - 1:  # a row whole or not at all; keep 1 for +N ältere
+        used += len(old[j])
+        j += 1
+    block = [x for r in old[:j] for x in r] + ([paint(DIM, f"+{len(old) - j} ältere", lit)] if j < len(old) else [])
+    block = block if len(block) < free else []
+    out, rule = top, paint(GREY, "─" * width, lit)
+    for part in (block, wege, foot):
+        out += ([rule] + part) if part else []
+    return out
+
+
+def frame(session, ended, where, full=False, seen=frozenset(), src=None):
     """The whole pane as lines, at most one fewer than the pane is high (the newline after the last would scroll it).
     where finishes the sentence "kein Claude ", e.g. "in w". full: the session's whole board instead of the overview.
-    seen: the entries the owner saw when last closing the full view of this session; they are no longer NEU."""
+    seen: the entries the owner saw when last closing the full view of this session; they are no longer NEU.
+    src: (session, steps) of the work view, which then replaces the rest."""
+    if src is not None:
+        return work_lines(src, cols(), max(rows() - 1, 1))
     n, width, room = clock(), cols(), max(rows() - 1, 1)
     lit = sys.stdout.isatty()
     stand = n.astimezone().strftime("%H:%M")
@@ -979,6 +1105,7 @@ def main():
     ap.add_argument("--dir", help="follow the newest session started in this folder (default: the Cockpit master window)")
     ap.add_argument("--once", action="store_true", help="print one frame and exit")
     ap.add_argument("--full", action="store_true", help="start with the whole board (the key f switches)")
+    ap.add_argument("--arbeit", action="store_true", help="start with the work view: the steps of a session")
     ap.add_argument("--idea", metavar="TEXT", help="add an idea to the board of the followed session and exit")
     ap.add_argument("--probe", type=int, metavar="PID", help="exit 0 if a Claude session runs under the window with this pid, else 1")
     args = ap.parse_args()
@@ -1006,7 +1133,7 @@ def main():
             try:
                 session, ended = pick(session)
                 sid = session and session["sessionId"]
-                lines = frame(session, ended, where, full, seen.get(sid, frozenset()))
+                lines = frame(session, ended, where, full, seen.get(sid, frozenset()), step_source(session) if args.arbeit else None)
             except Exception as e:  # the view runs for hours (it reads every live session): a bad round shows why, the next one tries again
                 if args.once:
                     raise

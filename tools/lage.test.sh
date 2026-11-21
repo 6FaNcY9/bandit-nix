@@ -1286,4 +1286,62 @@ g.write_text("".join(json.dumps({**rec, "was": w, "status": "fund"}, ensure_asci
 assert [r["was"] for r in lage.read_steps(g)] == ["a\u2028b\u2029c", "danach"], lage.read_steps(g)
 EOF
 
+# test_work_three_steps (Done 1): three steps, the newest on top with all five fields, the older ones with ← and =
+fresh; session $$ $s1 src-a "$HOME/w"
+lage schritt "Port 80 prüfen" --warum "w1" --gesendet "g1"; lage schritt --antwort "a1" --bedeutung "b1" --status zu
+lage schritt "Login testen" --warum "w2"
+lage schritt "NTP fragen" --ziel "Router" --warum "w3" --gesendet "g3" --antwort "a3" --bedeutung "b3" --status fund
+out=$(lage --dir "$HOME/w" --once --arbeit)
+[[ $(head -n 1 <<<"$out") == "LAGE  src-a · ARBEIT"*"14:12" && $out == *$'\nZIEL  Router\n'* ]]
+[[ $out == *"✔ NTP fragen"* && $out == *"warum   w3"* && $out == *"sendet  g3"* && $out == *"←       a3"* && $out == *"=       b3"* ]]
+[[ $out == *"· 14:12  Login testen"* && $out == *"✖ 14:12  Port 80 prüfen"*$'\n  ← a1\n  = b1'* ]]
+[[ $out != *"Port 80 prüfen"*"Port 80 prüfen"* ]]          # the finish hides its start line
+widest <<<"$out" | { read -r w; ((w <= 46)); }
+out30=$(COLUMNS=30 lage --dir "$HOME/w" --once --arbeit); widest <<<"$out30" | { read -r w; ((w <= 30)); }
+# a running top step says that no answer is there yet, and how long it runs
+lage schritt "Scan" --warum "w4"; out=$(LAGE_NOW=2026-11-15T14:13:00Z lage --dir "$HOME/w" --once --arbeit)
+[[ $out == *"▶ Scan"*"seit 40 s"* && $out == *"←       noch keine Antwort"* ]]
+
+# test_work_merge (Done 2): 20 equal warnings between other steps are one row
+fresh; session $$ $s1 src-a "$HOME/w"
+for i in $(seq 20); do lage schritt "IPv4 fällt aus" --status warn --bedeutung "Aussetzer"; ((i % 7)) || lage schritt "Schritt $i" --status zu; done
+out=$(LINES=40 lage --dir "$HOME/w" --once --arbeit)
+[[ $(grep -c "IPv4 fällt aus" <<<"$out") -eq 1 && $out == *"IPv4 fällt aus  ×20"* ]]
+
+# test_work_ways (Review Focus 5): a warn never changes a way, the first open way not running is next
+fresh; session $$ $s1 src-a "$HOME/w"
+lage schritt "X1" --weg "Web" --status fund; lage schritt "Y" --weg "Seriell" --status offen
+lage schritt "Z" --weg "Chip" --status offen; lage schritt "Aussetzer" --weg "Web" --status warn
+lage schritt "Chip lesen" --weg "Chip"
+out=$(lage --dir "$HOME/w" --once --arbeit)
+[[ $out == *$'\nWEGE  ✔ 1  ? 2\n▶ Chip\n? Seriell'*"→ als Nächstes"* && $out == *"✔ Web"* && $out != *"⚠ Web"* ]]
+
+# test_work_ways_cap: at most 6 ways, the rest counted
+fresh; session $$ $s1 src-a "$HOME/w"
+for i in 1 2 3 4 5 6 7 8; do lage schritt "W$i" --weg "Weg $i" --status offen; done; lage schritt "Los"
+out=$(LINES=40 lage --dir "$HOME/w" --once --arbeit)
+[[ $out == *$'WEGE  ? 8\n? Weg 1'*"→ als Nächstes"*$'\n? Weg 6\n+2 weitere'* && $out != *"Weg 7"* ]]
+
+# test_work_empty and test_work_source: no steps; the followed session has none, another live one has
+fresh; session $$ $s1 src-a "$HOME/w"; out=$(lage --dir "$HOME/w" --once --arbeit); [[ $out == *"Noch keine Schritte"* && $out == *"lage schritt"* ]]
+live; session $pid bbbbbbbb-2 src-b "$HOME/empty"; mkdir -p "$HOME/.local/state/lage"
+echo '{"zeit":"2026-11-15T14:00:00+00:00","ziel":"","weg":"","was":"fremd","warum":"","gesendet":"","antwort":"","bedeutung":"","status":"laeuft"}' \
+  >"$HOME/.local/state/lage/bbbbbbbb-2.schritte.jsonl"
+out=$(lage --dir "$HOME/w" --once --arbeit); [[ $(head -n 1 <<<"$out") == "LAGE  src-b · ARBEIT"* && $out == *"▶ fremd"* ]]
+
+# test_work_days: a time on another day shows DD.MM., a record without a time shows none
+fresh; session $$ $s1 src-a "$HOME/w"; mkdir -p "$HOME/.local/state/lage"
+rec() { jq -nc --arg z "$1" --arg w "$2" --arg s "$3" '{zeit:$z,ziel:"",weg:"",was:$w,warum:"",gesendet:"",antwort:"",bedeutung:"",status:$s}'; }
+{ rec 2026-11-13T09:00:00+00:00 Älter zu; rec "" Ohne zu; rec 2026-11-14T09:00:00+00:00 Gestern fund; } >"$HOME/.local/state/lage/$s1.schritte.jsonl"
+out=$(lage --dir "$HOME/w" --once --arbeit); blank='✖ {8}Ohne'
+[[ $out == *"✔ Gestern"*"14.11."$'\n'* && $out == *"✖ 13.11.  Älter"* && $out =~ $blank ]]
+
+# test_work_small: a small pane keeps head, top and foot and drops older steps first (+N ältere)
+fresh; session $$ $s1 src-a "$HOME/w"
+for i in 1 2 3 4 5 6; do lage schritt "Schritt $i" --weg "Weg $((i % 3))" --antwort "a$i" --bedeutung "b$i" --status zu; done
+out=$(LINES=14 lage --dir "$HOME/w" --once --arbeit)
+[[ $(wc -l <<<"$out") -le 13 && $(head -n 1 <<<"$out") == "LAGE  src-a · ARBEIT"* && $(tail -n 1 <<<"$out") == " s Stopp  ? Frage  i Idee  a zurück" ]]
+[[ $out == *"✖ Schritt 6"* && $out == *"+5 ältere"* && $out == *"WEGE"* ]]
+out=$(LINES=3 lage --dir "$HOME/w" --once --arbeit); [[ $(wc -l <<<"$out") -eq 2 ]]   # only the head and the foot fit
+
 echo ok
