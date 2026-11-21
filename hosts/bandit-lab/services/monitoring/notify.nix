@@ -74,7 +74,7 @@
     ++ lib.optional config.bandit-lab.mcbots.enable "docker-mcbots";
 in {
   # The memory*.service units come from the podman quadlet generator, so their OnFailure goes in the .container file.
-  virtualisation.quadlet.containers = lib.genAttrs ["memory" "memory-albert" "memory-firma"] (_: {unitConfig.OnFailure = "notify-failure@%n.service";});
+  virtualisation.quadlet.containers = lib.genAttrs ["memory" "memory-albert" "memory-firma" "vaultwarden" "mrija-archive" "aiia-mysql" "aiia-ghost"] (_: {unitConfig.OnFailure = "notify-failure@%n.service";});
 
   systemd.services =
     {
