@@ -278,7 +278,7 @@ in {
       margin-bottom = 0;
       margin-left = 0;
 
-      modules-left = ["group/admin" "custom/target"];
+      modules-left = ["group/admin" "custom/target" "custom/schritt"];
       modules-right = ["custom/privacy" "custom/dns" "network" "group/system" "pulseaudio" "bluetooth" "battery" "group/traydrawer"];
 
       "custom/privacy" = {
@@ -317,6 +317,16 @@ in {
         signal = 8;
         on-click = "${barTarget}/bin/waybar-target copy target";
         on-click-right = "${barTarget}/bin/waybar-target copy vpn";
+      };
+
+      # The newest step of a Claude session (lage schritt), a fund or warn flips it; click opens the work view; escape: step text may hold < and &.
+      "custom/schritt" = {
+        exec = "${lage} bar schritt";
+        return-type = "json";
+        interval = 2;
+        signal = 8;
+        escape = true;
+        on-click = "${lage} bar schritt --open";
       };
 
       "custom/dns" = {
@@ -511,6 +521,7 @@ in {
       #clock,
       #custom-privacy,
       #custom-target,
+      #custom-schritt,
       #custom-dns,
       #admin,
       #network,
@@ -601,6 +612,7 @@ in {
       #custom-ip,
       #custom-containers,
       #custom-target,
+      #custom-schritt,
       #cpu,
       #memory,
       #temperature,
@@ -637,6 +649,21 @@ in {
 
       #custom-privacy.active {
         color: ${colors.base0E};
+      }
+
+      /* Step field: running = teal text; a fund or warn flips it to a background for 2 minutes. */
+      #custom-schritt.laeuft {
+        color: ${colors.base0C};
+      }
+
+      #custom-schritt.fund {
+        background-color: ${colors.base0A};
+        color: ${colors.base00};
+      }
+
+      #custom-schritt.warn {
+        background-color: ${colors.base08};
+        color: ${colors.base00};
       }
 
       /* Agents, AI limit, DNS shield: teal = fine or working, yellow = needs you, red = critical, grey = stale. */

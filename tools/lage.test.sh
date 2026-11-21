@@ -1089,10 +1089,11 @@ mkdir -p "$t/fbin"
 cat >"$t/fbin/hyprctl" <<'FAKE'
 #!/bin/sh
 [ "$1" = clients ] && { printf '%s\n' "$CLIENTS"; exit 0; }
+[ "$1" = activeworkspace ] && { printf '%s\n' "$WORKSPACE"; exit 0; }
 echo "$*" >>"$DISPATCH"
 FAKE
 chmod +x "$t/fbin/hyprctl"
-export DISPATCH=$t/dispatch
+export DISPATCH=$t/dispatch WORKSPACE='{"id":3}'
 client() { cl "$2" kitty 3 0 0 | jq -c --arg a "$1" '. + {address: $a}'; } # client <addr> <pid>
 plain() { live; cls+=("$(client "$1" $pid)"); clients "${cls[@]}"; }       # plain <addr>: a window without claude
 win() { # win <addr> <sid> <status> <time>: a window with a claude session whose newest entry (a tool call) is at <time>
@@ -1556,5 +1557,108 @@ rm "$rq"
 # an unsearchable runtime folder is no request, not an error that replaces the view (the mode is restored before any check)
 mkdir "$t/locked"; chmod 000 "$t/locked"; rc=0; out=$(XDG_RUNTIME_DIR=$t/locked lage --dir "$HOME/w" --once 2>&1) || rc=$?; chmod 755 "$t/locked"
 [[ $rc -eq 0 && $out != *ARBEIT* && $out != *"lage: "* && $out == *"zur Sitzung"* ]]
+
+# test_bar_step: lage bar schritt shows the step of the live sessions as `<symbol> <was>` (40 characters), class laeuft for
+# a running step, the tooltip with session, Ziel and the fields; a session without a step, or whose newest line is older
+# than 30 minutes, shows nothing
+bs() { lage bar schritt; }
+at() { LAGE_NOW=2026-11-15T${1}Z lage bar schritt; } # at <HH:MM:SS>: the bar at that time
+step() { # step <sid> <HH:MM:SS|""> <status> <was> [ziel]: one record straight into a session's step file (no claude process needed)
+  mkdir -p "$HOME/.local/state/lage"
+  jq -nc --arg z "${2:+2026-11-15T$2+00:00}" --arg s "$3" --arg w "$4" --arg g "${5:-}" \
+    '{zeit: $z, ziel: $g, weg: "", was: $w, warum: "", gesendet: "", antwort: "", bedeutung: "", status: $s}' >>"$HOME/.local/state/lage/$1.schritte.jsonl"
+}
+none='{"text": ""}'
+fresh; session $$ $s1 src-a "$HOME/w"
+[[ $(bs) == "$none" ]]                                                        # no step at all
+LAGE_NOW=2026-11-15T14:12:00Z lage schritt "Scan" --ziel Router --weg Web --warum weil --gesendet "nmap -p 80" --antwort a1 --bedeutung b1
+jq -e '.text == "▶ Scan" and .class == "laeuft" and .tooltip == "src-a · Router\nWeg: Web\nwarum: weil\nsendet: nmap -p 80\n← a1\n= b1"' <<<"$(bs)"
+fresh; session $$ $s1 src-a "$HOME/w"; step $s1 14:12:00 laeuft "Scan"
+jq -e '.tooltip == "src-a"' <<<"$(bs)"                                        # only the set fields
+fresh; session 999999 $s1 src-a "$HOME/w"; step $s1 14:12:00 laeuft "Scan"
+[[ $(bs) == "$none" ]]                                                        # the session is gone
+# 30 minutes: the newest line of any kind decides, an offen line too
+fresh; session $$ $s1 src-a "$HOME/w"; step $s1 14:12:00 laeuft "Alt"
+jq -e '.text == "▶ Alt"' <<<"$(at 14:42:00)"; [[ $(at 14:42:01) == "$none" ]]
+step $s1 14:40:00 offen "Idee"; jq -e '.text == "▶ Alt"' <<<"$(at 14:55:00)"
+# a was of 60 characters is cut to 40 with …
+fresh; session $$ $s1 src-a "$HOME/w"; lage schritt "$(printf 'a%.0s' {1..60})"
+jq -e '.text == "▶ " + ("a" * 39) + "…"' <<<"$(bs)"
+# stream mode: the symbol only, neither was nor warum anywhere in the output
+fresh; session $$ $s1 src-a "$HOME/w"; lage schritt "Scan" --warum "weil"
+for flag in manual auto; do
+  touch "$XDG_RUNTIME_DIR/bar-stream-$flag"; out=$(bs); rm "$XDG_RUNTIME_DIR/bar-stream-$flag"
+  jq -e '.text == "▶" and .class == "laeuft" and .tooltip == ""' <<<"$out"; [[ $out != *Scan* && $out != *weil* ]]
+done
+jq -e '.text == "▶ Scan"' <<<"$(bs)"                                          # the flags are gone: the text is back
+# the tooltip's Ziel is the one of the work view: the newest record of any status that has one
+fresh; session $$ $s1 src-a "$HOME/w"; step $s1 14:00:00 fund "A" "Altes Ziel"; step $s1 14:10:00 warn "B" "Neues Ziel"; step $s1 14:12:00 laeuft "C"
+jq -e '.tooltip == "src-a · Neues Ziel"' <<<"$(bs)"
+
+# test_bar_step_flip (R10): a fund/warn at most 120 s old wins over a running step, warn first, then the newest; after
+# 120 s the running step is back and the flip ends; a fund alone gets class alt then, a running step keeps laeuft
+fresh; session $$ $s1 src-a "$HOME/w"
+LAGE_NOW=2026-11-15T14:12:20Z lage schritt "Geprüft" --status fund
+LAGE_NOW=2026-11-15T14:12:30Z lage schritt "Weiter"
+jq -e '.text == "✔ Geprüft" and .class == "fund"' <<<"$(at 14:13:00)"
+jq -e '.text == "▶ Weiter" and .class == "laeuft"' <<<"$(at 14:15:00)"
+fresh; session $$ $s1 src-a "$HOME/w"; step $s1 14:12:00 warn "Aussetzer"; step $s1 14:12:10 fund "Treffer"; step $s1 14:12:15 laeuft "Weiter"
+jq -e '.text == "⚠ Aussetzer" and .class == "warn"' <<<"$(bs)"                # a warn and a newer fund, both held: the warn
+jq -e '.text == "✔ Treffer" and .class == "fund"' <<<"$(at 14:14:05)"        # the warn is 125 s old, the fund 115 s
+fresh; session $$ $s1 src-a "$HOME/w"                                         # (a) a side-effect warn never pins the bar
+LAGE_NOW=2026-11-15T14:00:00Z lage schritt "Scan"
+LAGE_NOW=2026-11-15T14:01:00Z lage schritt "Aussetzer" --status warn
+jq -e '.text == "⚠ Aussetzer" and .class == "warn"' <<<"$(at 14:01:30)"
+jq -e '.text == "▶ Scan" and .class == "laeuft"' <<<"$(at 14:04:00)"
+fresh; session $$ $s1 src-a "$HOME/w"; step $s1 14:00:00 fund "Treffer"          # (b) a fund alone: the text stays, the class goes
+out=$(at 14:03:00); [[ $(jq -r .text <<<"$out") == "✔ Treffer" && $(jq -r .class <<<"$out") == alt ]]
+jq -e '.class == "fund"' <<<"$(at 14:01:00)"
+# (c) two live sessions: the older one's warn (60 s) wins over the newer one's running step, until it is 120 s old
+fresh; live; session $pid $s1 src-a "$HOME/w"; live; session $pid bbbbbbbb-2 src-b "$HOME/empty"
+step $s1 14:11:20 warn "Aussetzer"; step bbbbbbbb-2 14:12:10 laeuft "Scan"
+jq -e '.text == "⚠ Aussetzer" and .class == "warn" and (.tooltip | startswith("src-a"))' <<<"$(bs)"
+jq -e '.text == "▶ Scan" and .class == "laeuft" and (.tooltip | startswith("src-b"))' <<<"$(at 14:13:30)"
+# sessions in one lab folder share a step file: it counts once, the newest started session speaks for it
+fresh; mkdir -p "$HOME/src/sec/live/x"; live; session $pid $s1 src-a "$HOME/src/sec/live/x" 1794700000000; live; session $pid bbbbbbbb-2 src-b "$HOME/src/sec/live/x" 1794700500000
+mkdir -p "$HOME/src/sec/live/x/.claude"; step_lab=$HOME/src/sec/live/x/.claude/lage.schritte.jsonl
+jq -nc '{zeit: "2026-11-15T14:12:10+00:00", ziel: "", weg: "", was: "Scan", warum: "", gesendet: "", antwort: "", bedeutung: "", status: "laeuft"}' >"$step_lab"
+jq -e '.text == "▶ Scan" and (.tooltip | startswith("src-b"))' <<<"$(bs)"
+# odd records never raise: no time, a time in the future (age 0, so a warn from there is held), times at the ends of the range
+fresh; session $$ $s1 src-a "$HOME/w"
+step $s1 "" fund "Ohne Zeit"; jq -e '.text == ""' <<<"$(bs)"                  # a record without a time never makes a session fresh
+step $s1 14:12:10 laeuft "Scan"; step $s1 "" warn "Ohne Zeit 2"
+jq -e '.text == "▶ Scan"' <<<"$(bs)"                                          # ... and is never held
+step $s1 14:30:00 warn "Aus der Zukunft"; jq -e '.text == "⚠ Aus der Zukunft" and .class == "warn"' <<<"$(bs)"
+for case in "0001-01-01T00:00:00+05:00|▶ Scan" "9999-12-31T23:59:59-23:00|⚠ Rand" "kaputt|▶ Scan"; do   # a far past, a far future, no time
+  fresh; session $$ $s1 src-a "$HOME/w"; mkdir -p "$HOME/.local/state/lage"
+  jq -nc --arg z "${case%%|*}" '{zeit: $z, ziel: "", weg: "", was: "Rand", warum: "", gesendet: "", antwort: "", bedeutung: "", status: "warn"}' >>"$HOME/.local/state/lage/$s1.schritte.jsonl"
+  step $s1 14:12:10 laeuft "Scan"; rc=0; out=$(bs 2>"$t/err") || rc=$?
+  [[ $rc -eq 0 && ! -s $t/err ]]; jq -e --arg w "${case#*|}" '.text | startswith($w)' <<<"$out"
+done
+
+# test_bar_step_open: the click focuses the window of the session the bar shows, asks the Cockpit for the work view by
+# touching $XDG_RUNTIME_DIR/lage-arbeit and starts hypr-cockpit unless this workspace already has one (it is a toggle);
+# no step, no window, no runtime folder: nothing more than that, and the exit code is 0
+export MARKER=$t/cockpit-started rq=$XDG_RUNTIME_DIR/lage-arbeit
+opened() { # opened: the click, with fake hyprctl and a fake hypr-cockpit that leaves a marker; exit code in $rc
+  : >"$DISPATCH"; rm -f "$MARKER" "$rq"; rc=0
+  mkdir -p "$HOME/.local/bin"; printf '#!/bin/sh\n: >"$MARKER"\n' >"$HOME/.local/bin/hypr-cockpit"; chmod +x "$HOME/.local/bin/hypr-cockpit"
+  PATH=$t/fbin:$PATH lage bar schritt --open || rc=$?
+}
+started() { local i; for i in {1..40}; do [[ -e $MARKER ]] && return 0; sleep 0.05; done; return 1; } # the detached Cockpit start takes a moment
+fresh; cls=(); win 0xwin $s1 busy 14:12:00; step $s1 14:12:10 laeuft "Scan"
+opened; [[ $rc -eq 0 && $(<"$DISPATCH") == 'dispatch hl.dsp.focus({ window = "address:0xwin" })' && -e $rq ]]; started
+mkdir -p "$XDG_RUNTIME_DIR/hypr-cockpit"; : >"$XDG_RUNTIME_DIR/hypr-cockpit/3"           # this workspace has a Cockpit: starting it again would close it
+opened; sleep 0.3; [[ $rc -eq 0 && $(<"$DISPATCH") == *'address:0xwin'* && -e $rq && ! -e $MARKER ]]
+rm "$XDG_RUNTIME_DIR/hypr-cockpit/3"
+WORKSPACE=garbage opened; sleep 0.3; [[ $rc -eq 0 && -e $rq && ! -e $MARKER ]]            # the workspace is unknown: do not risk the toggle
+rm "$HOME/.local/bin/hypr-cockpit"; rc=0; PATH=$t/fbin:$PATH lage bar schritt --open 2>/dev/null || rc=$?; [[ $rc -eq 0 ]]   # no hypr-cockpit: still 0
+: >"$DISPATCH"; rm -f "$MARKER" "$rq"; rc=0; (unset XDG_RUNTIME_DIR; PATH=$t/fbin:$PATH lage bar schritt --open) || rc=$?
+sleep 0.3; [[ $rc -eq 0 && $(<"$DISPATCH") == *'address:0xwin'* && ! -e $rq && ! -e $MARKER ]]   # no runtime folder: focus only
+fresh; cls=(); plain 0xother; session $$ $s1 src-a "$HOME/w"; step $s1 14:12:10 laeuft "Scan"
+opened; sleep 0.3; [[ $rc -eq 0 && ! -s $DISPATCH && ! -e $MARKER ]]                     # no window for the session
+fresh; cls=(); win 0xwin $s1 busy 14:12:00
+opened; sleep 0.3; [[ $rc -eq 0 && ! -s $DISPATCH && ! -e $rq && ! -e $MARKER ]]          # no step: nothing happens
+rm -f "$rq"
 
 echo ok

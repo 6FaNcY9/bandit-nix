@@ -621,6 +621,8 @@ STEP_COLOURS = {"laeuft": TEAL, "fund": YELLOW, "warn": RED, "offen": DIM}  # zu
 STEP_KEYS = ("zeit", "ziel", "weg", "was", "warum", "gesendet", "antwort", "bedeutung", "status")
 STEP_TAIL = 262144  # bytes read from the end of a step file
 STEP_LINES = 500  # newest steps kept
+STEP_HOLD = 120  # seconds a fund or warn stays in the bottom bar above a running step
+STEP_STALE = 1800  # seconds after the newest line of a session, then the bottom bar skips it
 
 
 def steps_path(session):
@@ -748,6 +750,11 @@ def way_rows(steps):
     return list(ways.items())
 
 
+def step_ziel(steps):
+    """The ziel of the newest record that has one, of any status; empty when none has."""
+    return next((s["ziel"] for s in reversed(steps) if s["ziel"]), "")
+
+
 def step_source(followed):
     """(session, steps) the work view shows: the followed session when its step file has a record, else the live session
     whose newest record is newest, else (None, [])."""
@@ -758,6 +765,95 @@ def step_source(followed):
     never = datetime.min.replace(tzinfo=timezone.utc)
     found = [(s, read_steps(steps_path(s))) for s in sessions() if s["alive"]]
     return max((f for f in found if f[1]), key=lambda f: (f[1][-1]["ts"] or never, started(f[0])), default=(None, []))
+
+
+def seconds_since(ts, now):
+    """Age of ts in seconds, 0 for a time in the future; None without a time."""
+    return None if ts is None else max((now - ts).total_seconds(), 0)
+
+
+def held(r, now):
+    """A fund or warn record at most STEP_HOLD seconds old: the bottom bar shows it above a running step."""
+    age = seconds_since(r["ts"], now)
+    return r["status"] in ("fund", "warn") and age is not None and age <= STEP_HOLD
+
+
+def step_class(r, now):
+    """The bottom bar's class of a record: its status while held, laeuft while running, else alt (no CSS rule: dim)."""
+    return r["status"] if held(r, now) else "laeuft" if r["status"] == "laeuft" else "alt"
+
+
+def bar_step():
+    """(session, record) the bottom bar shows, else (None, None). Each step file counts once (sessions in one lab folder
+    share it; the newest started speaks for it); a session is skipped without rows or when its newest line, an offen seed
+    too, is older than STEP_STALE. A held fund/warn row of the others wins (warn first, then the newest), so the flip is
+    seen and ends after STEP_HOLD; else the session with the newest line shows the step on top of its work view."""
+    now, seen, live = clock(), set(), []
+    for s in sorted((s for s in sessions() if s["alive"]), key=lambda s: (started(s), s["sessionId"]), reverse=True):
+        path = steps_path(s)
+        if path in seen:
+            continue
+        seen.add(path)
+        steps = read_steps(path)
+        rows, newest = step_rows(steps), max((x["ts"] for x in steps if x["ts"]), default=None)
+        if rows and newest is not None and seconds_since(newest, now) <= STEP_STALE:
+            live.append((s, steps, rows, newest))
+    flips = [(r["status"] == "warn", r["ts"], s, r) for s, _, rows, _ in live for r, _ in rows if held(r, now)]
+    if flips:
+        *_, s, r = max(flips, key=lambda f: f[:2])
+        return s, r
+    if live:
+        s, steps, _, _ = max(live, key=lambda f: f[3])
+        return s, shown_rows(steps)[0][0]
+    return None, None
+
+
+def streaming():
+    """Stream mode (waybar-stream) is on while one of its flag files exists."""
+    runtime = os.environ.get("XDG_RUNTIME_DIR", "")
+    return bool(runtime) and any(os.path.exists(f"{runtime}/bar-stream-{k}") for k in ("auto", "manual"))
+
+
+def bar_step_json():
+    """One Waybar JSON line for bar_step(): `<symbol> <was>` cut to 40 characters, class from step_class(), the tooltip holds
+    the session with its Ziel and the set fields; in stream mode the symbol only. Empty text: nothing to show."""
+    session, r = bar_step()
+    if r is None:
+        return {"text": ""}
+    sym, cls = STEPS[r["status"]], step_class(r, clock())
+    if streaming():
+        return {"text": sym, "class": cls, "tooltip": ""}
+    tr = transcripts.setdefault(session["sessionId"], Transcript(session["sessionId"]))
+    tr.tail()  # for the tab title, as bar_json() does
+    ziel = step_ziel(read_steps(steps_path(session)))
+    tip = [label(session, tr) + (" · " + ziel if ziel else "")]
+    fields = (("Weg: ", "weg"), ("warum: ", "warum"), ("sendet: ", "gesendet"), ("← ", "antwort"), ("= ", "bedeutung"))
+    tip += [prefix + r[key] for prefix, key in fields if r[key]]
+    return {"text": f"{sym} {clean(r['was'], 40)}", "class": cls, "tooltip": "\n".join(tip)}
+
+
+def bar_step_open():
+    """The bar's click: focus the window of the session whose step the bar shows and ask the Cockpit for the work view
+    (touch request_path()); start hypr-cockpit when that workspace has none yet, as the script is a toggle. Nothing without
+    a step; without XDG_RUNTIME_DIR it only focuses."""
+    session, r = bar_step()
+    if r is None:
+        return
+    found = focus(session["sessionId"])
+    request = request_path()
+    if request is None:
+        return
+    request.touch()
+    if found:
+        return
+    try:
+        workspace = json.loads(run("hyprctl", "activeworkspace", "-j"))["id"]
+    except (ValueError, TypeError, KeyError):
+        return  # an unknown workspace: starting the toggle might close a Cockpit
+    if not (request.parent / "hypr-cockpit" / str(workspace)).exists():
+        import subprocess  # late, as in run()
+        subprocess.Popen([str(Path.home() / ".local/bin/hypr-cockpit")], start_new_session=True,
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def states():
@@ -902,7 +998,7 @@ def work_lines(src, width, room):
         name = f"  {label(session, tr)} · "
     left = clean("LAGE" + name + "ARBEIT", width - len(stand) - 1)
     top = [paint(TEAL, "LAGE", lit) + left[4:] + " " * (width - len(left) - len(stand)) + paint(DIM, stand, lit)]
-    ziel = next((s["ziel"] for s in reversed(steps) if s["ziel"]), "")
+    ziel = step_ziel(steps)
     top += [clean("ZIEL  " + ziel, width)] if ziel else []
     if rows:
         step, n = rows[0]
@@ -1132,6 +1228,18 @@ def main():
         return write_step(sys.argv[2:])
     if sys.argv[1:] == ["bar", "--focus"]:
         return bar_focus()
+    if sys.argv[1:3] == ["bar", "schritt"]:
+        opening, out = sys.argv[3:] == ["--open"], {"text": ""}
+        try:
+            if opening:
+                bar_step_open()
+            else:
+                out = bar_step_json()
+        except Exception as e:  # the bar polls and a click must not fail: a broken round shows nothing, the next one retries
+            print("lage:", e, file=sys.stderr)
+        if not opening:
+            print(json.dumps(out, ensure_ascii=False))
+        return 0
     if sys.argv[1:2] == ["bar"]:
         try:
             out = bar_json()

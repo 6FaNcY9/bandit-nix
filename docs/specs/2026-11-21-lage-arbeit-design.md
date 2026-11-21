@@ -90,10 +90,13 @@ WEGE  ✔ 2  ✖ 8  ? 3
 
 ## Bottom bar: `custom/schritt` next to `custom/target`
 
-- `lage bar schritt`: the newest step over the live sessions; a `fund`/`warn` younger than 120 s wins over a running
-  step (warn first), so the flip is visible. Text `<symbol> <was>` cut to 40 characters, class = status, tooltip with
-  session, Ziel/Weg and the fields. Empty when the newest step is older than 30 minutes. Stream mode
-  (`$XDG_RUNTIME_DIR/bar-stream-{auto,manual}`): the symbol only, no tooltip. Interval 2 s, signal 8.
+- `lage bar schritt`: per live session (a step file shared by one lab folder counts once) a session with no step, or
+  whose newest line (an `offen` seed too) is older than 30 minutes, is skipped. A `fund`/`warn` row at most 120 s old
+  wins over everything else (warn first, then the newest), so the flip is visible and ends after 120 s; otherwise the
+  session with the newest line shows its work view's top step (a running step stays above a side-effect warn). Text
+  `<symbol> <was>` cut to 40 characters; class = the status while a `fund`/`warn` is held, `laeuft` for a running step,
+  else `alt` (no rule: the base style is dim); tooltip with session, Ziel/Weg and the fields. Empty when no session is
+  left. Stream mode (`$XDG_RUNTIME_DIR/bar-stream-{auto,manual}`): the symbol only, no tooltip. Interval 2 s, signal 8.
 - Click `lage bar schritt --open`: focus that session's window, touch `$XDG_RUNTIME_DIR/lage-arbeit`, and run
   `hypr-cockpit` when that workspace has no Cockpit yet. A view switches to the work view when that file is newer than
   it last saw (start: 10 s before its own start, so a Cockpit opened by the click starts there).
