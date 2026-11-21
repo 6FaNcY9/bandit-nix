@@ -110,6 +110,23 @@ WEGE  ✔ 2  ✖ 8  ? 3
    investigations). It goes into `~/.claude/CLAUDE.md` (a plain file) with the delivery, not before: before the switch
    `lage schritt` does not exist.
 
+## Switching the sec prototype
+
+The hand-made page in the sec repo (`live/home-router/notes/karte.py` + `live.tsv`) can write the step file instead of
+its own events; lage never needs to know the target. Its events map to `lage schritt` like this:
+
+| prototype | `lage schritt` |
+|---|---|
+| `ev now X` | `lage schritt "X" --warum …` (a new running step) |
+| `send` | `lage schritt --gesendet …` (changes the step on top) |
+| `recv` | `lage schritt --antwort …` |
+| `fund` / `zu` | `lage schritt --bedeutung … --status fund` (or `zu`) |
+| `warn X` | `lage schritt "X" --status warn` (its own step) |
+| `info` | `lage schritt --bedeutung …`, or dropped |
+| a PATHS entry | `lage schritt "<note>" --weg "<title>" --status offen` (or `fund`, `zu`) |
+
+`karte.py` can keep drawing its map from the same file: one JSON object per line with the nine keys above.
+
 ## Delivery
 
 The laptop runs exactly main 9925636 (checked: same system path), the commit before the nixpkgs bump; the bump needs
