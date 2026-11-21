@@ -651,7 +651,7 @@ def read_steps(path):
     except OSError:
         return []
     found = []
-    for line in data.decode("utf-8", errors="replace").splitlines():
+    for line in data.decode("utf-8", errors="replace").split("\n"):  # not splitlines(): it also splits at U+2028 inside a record
         try:
             d = json.loads(line)
         except ValueError:
@@ -677,12 +677,16 @@ def write_step(argv):
         ap.add_argument("--" + k)
     ap.add_argument("--status", choices=tuple(STEPS))
     args = ap.parse_args(argv)
+    was = clean(args.was or "", 200)
+    if not (was or args.status or any(getattr(args, k) is not None for k in texts)):
+        print("lage: nichts zu ändern", file=sys.stderr)
+        return 1
     session = own_session()
     if session is None:
         print("lage: keine Claude-Sitzung über diesem Befehl", file=sys.stderr)
         return 1
     path = steps_path(session)
-    was = clean(args.was or "", 200)
+    started = ""  # a running step that stays running keeps its zeit: "seit" counts from its start
     if was:
         step = {**dict.fromkeys(STEP_KEYS, ""), "was": was, "status": "laeuft"}
     else:
@@ -691,9 +695,10 @@ def write_step(argv):
             print("lage: noch kein Schritt zum Ändern", file=sys.stderr)
             return 1
         step = {k: newest[-1][k] for k in STEP_KEYS}
+        started = step["zeit"] if step["status"] == "laeuft" else ""
     step.update({k: clean(getattr(args, k), 200) for k in texts if getattr(args, k) is not None})
     step["status"] = args.status or step["status"]
-    step["zeit"] = clock().astimezone().isoformat(timespec="seconds")
+    step["zeit"] = started if started and step["status"] == "laeuft" else clock().astimezone().isoformat(timespec="seconds")
     path.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
     try:  # one write on an O_APPEND descriptor: parallel writers never interleave a line

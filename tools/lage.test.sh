@@ -1226,6 +1226,9 @@ rc=0; lage schritt --antwort x 2>"$t/err" || rc=$?; [[ $rc -eq 1 && $(<"$t/err")
 fresh; session 999999 $s1 src-a "$HOME/w"
 rc=0; lage schritt "x" 2>"$t/err" || rc=$?; [[ $rc -eq 1 && $(<"$t/err") == *"keine Claude-Sitzung"* && ! -e $HOME/.local/state ]]
 fresh; session $$ $s1 src-a "$HOME/w"; rc=0; lage schritt "x" --status info 2>/dev/null || rc=$?; [[ $rc -eq 2 ]]
+lage schritt "y"; sf=$HOME/.local/state/lage/$s1.schritte.jsonl; before=$(<"$sf")
+rc=0; lage schritt 2>"$t/err" || rc=$?; [[ $rc -eq 1 && $(<"$t/err") == *"nichts zu ändern"* && $(<"$sf") == "$before" ]]
+rc=0; lage schritt "  " 2>"$t/err" || rc=$?; [[ $rc -eq 1 && $(<"$t/err") == *"nichts zu ändern"* && $(<"$sf") == "$before" ]]
 
 # test_schritt_clean: first line only, control characters as ?, cut to 200 with …; an empty WAS counts as missing
 fresh; session $$ $s1 src-a "$HOME/w"
@@ -1234,6 +1237,17 @@ lage schritt "$(printf 'a\033[2Jb\nzweite')" --warum "$(printf 'x%.0s' {1..300})
 jq -e '.was == "a?[2Jb" and (.warum | length) == 200 and (.warum | endswith("…"))' "$sf"
 lage schritt "  " --antwort "leer"
 jq -se 'length == 2 and .[1].was == "a?[2Jb" and .[1].antwort == "leer"' "$sf"
+
+# test_schritt_zeit: an update of a running step keeps its start time, any other change takes the new time
+fresh; session $$ $s1 src-a "$HOME/w"
+sf=$HOME/.local/state/lage/$s1.schritte.jsonl
+lage schritt "läuft lange"
+LAGE_NOW=2026-11-15T14:13:00Z lage schritt --gesendet x
+LAGE_NOW=2026-11-15T14:14:00Z lage schritt --antwort a --status fund
+LAGE_NOW=2026-11-15T14:15:00Z lage schritt --antwort b
+jq -se 'length == 4 and .[0].zeit == "2026-11-15T14:12:20+00:00" and .[1].zeit == "2026-11-15T14:12:20+00:00" and .[1].gesendet == "x"
+  and .[2].zeit == "2026-11-15T14:14:00+00:00" and .[2].status == "fund"
+  and .[3].zeit == "2026-11-15T14:15:00+00:00" and .[3].status == "fund"' "$sf"
 
 # test_schritt_lab: a session started inside a lab folder writes next to the lab board
 fresh; mkdir -p "$HOME/src/sec/live/x/sub"; session $$ $s1 src-a "$HOME/src/sec/live/x/sub"
@@ -1267,6 +1281,9 @@ got = lage.read_steps(f)
 assert len(got) == 500 and got[0]["was"] == "s10" and got[-1]["was"] == "s509", (len(got), got[0]["was"])
 assert all(r["ts"] is not None and set(lage.STEP_KEYS) <= set(r) for r in got)
 assert lage.read_steps(Path.home() / "nope.jsonl") == []
+g = Path.home() / "sep.jsonl"  # U+2028 and U+2029 inside a record must not split its line
+g.write_text("".join(json.dumps({**rec, "was": w, "status": "fund"}, ensure_ascii=False) + "\n" for w in ("a\u2028b\u2029c", "danach")))
+assert [r["was"] for r in lage.read_steps(g)] == ["a\u2028b\u2029c", "danach"], lage.read_steps(g)
 EOF
 
 echo ok
