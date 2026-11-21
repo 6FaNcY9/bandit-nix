@@ -5,6 +5,8 @@ lage [--once] [--full]   follow the Claude session in the Cockpit master window 
 lage [--dir DIR] --idea TEXT   add an owner idea to that session's board
 lage --probe PID   exit 0 when a Claude session runs under the window with pid PID, else 1; no output
 lage bar [--focus]   Waybar: one JSON line with busy/waiting session counts; --focus jumps to the waiting session
+lage schritt [WAS] [--warum T] [--gesendet T] [--antwort T] [--bedeutung T] [--status S] [--ziel T] [--weg T]
+  a session reports one step of its work; without WAS it changes the newest step
 lage hook   Claude Code hook (JSON on stdin): tells a session its board and each new owner idea once
 Everything is read from ~/.claude; nothing is written there. lage writes the board and, for the hook, a .shown file of hashes.
 """
@@ -613,6 +615,94 @@ def board_entries(session):
     return frozenset(e for x in parse_board(text, clock().astimezone().date()).values() for e in x)
 
 
+STEPS = {"laeuft": "▶", "fund": "✔", "zu": "✖", "offen": "?", "warn": "⚠"}  # status -> symbol
+STEP_KEYS = ("zeit", "ziel", "weg", "was", "warum", "gesendet", "antwort", "bedeutung", "status")
+STEP_TAIL = 262144  # bytes read from the end of a step file
+STEP_LINES = 500  # newest steps kept
+
+
+def steps_path(session):
+    """The step file next to the session's board: lage.md -> lage.schritte.jsonl."""
+    return board_of(session).with_suffix(".schritte.jsonl")
+
+
+def own_session():
+    """The live session whose claude process is this process or its nearest ancestor; None outside a session."""
+    live = {s["pid"]: s for s in sessions() if s["alive"]}
+    table, p, seen = procs(), os.getpid(), set()
+    while p in table and p not in seen:
+        if p in live:
+            return live[p]
+        seen.add(p)
+        p = table[p][0]
+    return None
+
+
+def read_steps(path):
+    """The newest steps in the file, oldest first: every STEP_KEYS key as a clean str, plus ts (aware datetime or None).
+    Reads only the tail; bad JSON, non-objects, an unknown status and an empty was are skipped. Never raises."""
+    try:
+        with path.open("rb") as f:
+            size = f.seek(0, os.SEEK_END)
+            f.seek(max(size - STEP_TAIL, 0))
+            data = f.read()
+        if size > STEP_TAIL:
+            data = data.partition(b"\n")[2]  # the first line is cut
+    except OSError:
+        return []
+    found = []
+    for line in data.decode("utf-8", errors="replace").splitlines():
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(d, dict) or not isinstance(d.get("status"), str) or d["status"] not in STEPS:
+            continue
+        step = {k: clean(d[k], 200) if isinstance(d.get(k), str) else "" for k in STEP_KEYS}
+        try:
+            step["ts"] = parse_ts(step["zeit"])
+        except ValueError:
+            step["ts"] = None
+        if step["was"]:
+            found.append(step)
+    return found[-STEP_LINES:]
+
+
+def write_step(argv):
+    """lage schritt: append one step to the own session's step file. Exit code."""
+    ap = argparse.ArgumentParser(prog="lage schritt", description="Report one step of the work.")
+    ap.add_argument("was", nargs="?", help="what is being done; without it the newest step is changed")
+    texts = [k for k in STEP_KEYS[1:-1] if k != "was"]  # --ziel --weg --warum --gesendet --antwort --bedeutung
+    for k in texts:
+        ap.add_argument("--" + k)
+    ap.add_argument("--status", choices=tuple(STEPS))
+    args = ap.parse_args(argv)
+    session = own_session()
+    if session is None:
+        print("lage: keine Claude-Sitzung über diesem Befehl", file=sys.stderr)
+        return 1
+    path = steps_path(session)
+    was = clean(args.was or "", 200)
+    if was:
+        step = {**dict.fromkeys(STEP_KEYS, ""), "was": was, "status": "laeuft"}
+    else:
+        newest = [s for s in read_steps(path) if s["status"] != "offen"]  # an offen line only seeds a way
+        if not newest:
+            print("lage: noch kein Schritt zum Ändern", file=sys.stderr)
+            return 1
+        step = {k: newest[-1][k] for k in STEP_KEYS}
+    step.update({k: clean(getattr(args, k), 200) for k in texts if getattr(args, k) is not None})
+    step["status"] = args.status or step["status"]
+    step["zeit"] = clock().astimezone().isoformat(timespec="seconds")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+    try:  # one write on an O_APPEND descriptor: parallel writers never interleave a line
+        os.write(fd, (json.dumps(step, ensure_ascii=False) + "\n").encode())
+    finally:
+        os.close(fd)
+    return 0
+
+
 def states():
     """(session, state, since, text) per live session, oldest start first. state: wartet (only a status waiting), helfer,
     arbeitet (jetzt()'s tool or denkt, or a status busy) or ruht; text: jetzt()'s step for arbeitet and helfer, else
@@ -868,6 +958,8 @@ def hook():
 def main():
     if sys.argv[1:] == ["hook"]:
         return hook()
+    if sys.argv[1:2] == ["schritt"]:
+        return write_step(sys.argv[2:])
     if sys.argv[1:] == ["bar", "--focus"]:
         return bar_focus()
     if sys.argv[1:2] == ["bar"]:

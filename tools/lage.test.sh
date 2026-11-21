@@ -5,6 +5,7 @@ set -euo pipefail
 trap 'echo "FAIL at line $LINENO" >&2' ERR
 here=$(cd "$(dirname "$0")" && pwd)
 t=$(mktemp -d); sl=(); trap 'rm -rf "$t"; ((${#sl[@]})) && kill -- "${sl[@]}" 2>/dev/null || true' EXIT
+export XDG_RUNTIME_DIR=$t/run; mkdir -p "$XDG_RUNTIME_DIR"
 export TZ=UTC COLUMNS=46 LINES=27 LAGE_NOW=2026-11-15T14:12:20Z PYTHONDONTWRITEBYTECODE=1
 s1=aaaaaaaa-1
 n=0
@@ -1200,6 +1201,72 @@ os.write(fd, b"\r")
 read_until(lambda: seen.count(b"\x1b[H") >= 2, "two rounds after Enter")
 os.kill(pid, signal.SIGINT)
 assert os.waitpid(pid, 0)[1] == 0
+EOF
+
+# test_schritt_new: a new step, every key, status laeuft, the session's own file
+fresh; session $$ $s1 src-a "$HOME/w"
+lage schritt "Port 80 prüfen" --warum "w1" --gesendet "g1" --ziel "Router" --weg "Web"
+sf=$HOME/.local/state/lage/$s1.schritte.jsonl
+[[ $(wc -l <"$sf") -eq 1 ]]
+jq -e '.zeit == "2026-11-15T14:12:20+00:00" and .status == "laeuft" and .was == "Port 80 prüfen" and .warum == "w1"
+  and .gesendet == "g1" and .ziel == "Router" and .weg == "Web" and .antwort == "" and .bedeutung == ""
+  and (keys | length) == 9' "$sf"
+
+# test_schritt_finish: without WAS the newest non-offen step is copied, given fields win, status kept unless given
+lage schritt "Y später" --weg "Seriell" --status offen
+lage schritt --antwort "teil"
+lage schritt --antwort "a1" --bedeutung "b1" --status fund
+[[ $(wc -l <"$sf") -eq 4 ]]
+jq -se '.[2].status == "laeuft" and .[2].was == "Port 80 prüfen" and .[2].antwort == "teil"
+  and .[3].status == "fund" and .[3].warum == "w1" and .[3].gesendet == "g1" and .[3].weg == "Web" and .[3].bedeutung == "b1"' "$sf"
+
+# test_schritt_errors: nothing to change, no session, a wrong status; nothing is written then
+fresh; session $$ $s1 src-a "$HOME/w"
+rc=0; lage schritt --antwort x 2>"$t/err" || rc=$?; [[ $rc -eq 1 && $(<"$t/err") == *"noch kein Schritt"* ]]
+fresh; session 999999 $s1 src-a "$HOME/w"
+rc=0; lage schritt "x" 2>"$t/err" || rc=$?; [[ $rc -eq 1 && $(<"$t/err") == *"keine Claude-Sitzung"* && ! -e $HOME/.local/state ]]
+fresh; session $$ $s1 src-a "$HOME/w"; rc=0; lage schritt "x" --status info 2>/dev/null || rc=$?; [[ $rc -eq 2 ]]
+
+# test_schritt_clean: first line only, control characters as ?, cut to 200 with …; an empty WAS counts as missing
+fresh; session $$ $s1 src-a "$HOME/w"
+sf=$HOME/.local/state/lage/$s1.schritte.jsonl
+lage schritt "$(printf 'a\033[2Jb\nzweite')" --warum "$(printf 'x%.0s' {1..300})"
+jq -e '.was == "a?[2Jb" and (.warum | length) == 200 and (.warum | endswith("…"))' "$sf"
+lage schritt "  " --antwort "leer"
+jq -se 'length == 2 and .[1].was == "a?[2Jb" and .[1].antwort == "leer"' "$sf"
+
+# test_schritt_lab: a session started inside a lab folder writes next to the lab board
+fresh; mkdir -p "$HOME/src/sec/live/x/sub"; session $$ $s1 src-a "$HOME/src/sec/live/x/sub"
+lage schritt "im Lab"; [[ -s $HOME/src/sec/live/x/.claude/lage.schritte.jsonl ]]
+
+# test_schritt_parallel (Review Focus 1): two writers at once never interleave a line (lines longer than 150 bytes)
+fresh; session $$ $s1 src-a "$HOME/w"
+wp=(); for w in a b; do (for i in $(seq 25); do lage schritt "$w$i" --warum "$(printf 'y%.0s' {1..150})"; done) & wp+=($!); done
+wait "${wp[@]}"  # not a bare wait: it would also wait for the sleeping `live` processes
+[[ $(jq -c . "$HOME/.local/state/lage/$s1.schritte.jsonl" | wc -l) -eq 50 ]]
+
+# test_read_steps (Review Focus 2): only the last 500 good lines, bad lines skipped, a missing file is empty
+fresh
+python3 -B - "$here" <<'EOF'
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, sys.argv[1])
+import lage
+
+f = Path.home() / "steps.jsonl"
+rec = {k: "" for k in lage.STEP_KEYS}
+lines = []
+for i in range(510):
+    lines.append(json.dumps({**rec, "zeit": "2026-11-15T14:12:20+00:00", "was": f"s{i}", "status": "laeuft"}))
+    if i == 100:
+        lines += ["{broken", json.dumps({**rec, "was": "info", "status": "info"}), "[1, 2]"]
+f.write_text("\n".join(lines) + "\n")
+got = lage.read_steps(f)
+assert len(got) == 500 and got[0]["was"] == "s10" and got[-1]["was"] == "s509", (len(got), got[0]["was"])
+assert all(r["ts"] is not None and set(lage.STEP_KEYS) <= set(r) for r in got)
+assert lage.read_steps(Path.home() / "nope.jsonl") == []
 EOF
 
 echo ok
