@@ -524,7 +524,9 @@ def check_http(url: str):
     except Exception:
         cert_days = 0
     try:
-        with urllib.request.urlopen(url, timeout=15) as resp:
+        # Cloudflare answers 403 to the default "Python-urllib" User-Agent.
+        req = urllib.request.Request(url, headers={"User-Agent": "mrija-watch/1"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
             ok = 200 <= resp.status < 400
     except Exception:
         ok = False
