@@ -1553,5 +1553,8 @@ touch -d '-1 hour' "$rq"; out=$(lage --dir "$HOME/w" --once); [[ $out != *ARBEIT
 rm "$rq"; out=$(lage --dir "$HOME/w" --once); [[ $out != *ARBEIT* && $out == *"zur Sitzung"* ]]
 touch "$rq"; out=$(unset XDG_RUNTIME_DIR; lage --dir "$HOME/w" --once); [[ $out != *ARBEIT* && $out == *"zur Sitzung"* ]]
 rm "$rq"
+# an unsearchable runtime folder is no request, not an error that replaces the view (the mode is restored before any check)
+mkdir "$t/locked"; chmod 000 "$t/locked"; rc=0; out=$(XDG_RUNTIME_DIR=$t/locked lage --dir "$HOME/w" --once 2>&1) || rc=$?; chmod 755 "$t/locked"
+[[ $rc -eq 0 && $out != *ARBEIT* && $out != *"lage: "* && $out == *"zur Sitzung"* ]]
 
 echo ok

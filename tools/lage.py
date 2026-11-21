@@ -1167,9 +1167,12 @@ def main():
             return 1
         return 0
 
-    def requested():  # when the bar last asked for the work view, 0 without a request
+    def requested():  # when the bar last asked for the work view, 0 without a request (or one that cannot be read)
         path = request_path()
-        return path.stat().st_mtime if path and path.exists() else 0
+        try:
+            return path.stat().st_mtime if path else 0
+        except OSError:
+            return 0
 
     # view: overview, full (the whole board) or work (the steps); seen: sessionId -> the board entries shown when the full view closed;
     # sid is set before the first round: a key after a failed first pick reads it
