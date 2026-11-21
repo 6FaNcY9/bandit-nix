@@ -131,6 +131,7 @@ requires MySQL application tables, reports the PostgreSQL application database
 count (0 is valid: no service uses the native instance yet), and boots the
 restored Minecraft world.
 It restores Ghost `content-data` too and verifies the restored files with restic.
+It also restores the owner's basic-memory notes (`/srv/containers/memory/data`) and requires at least one note.
 The laptop drill restores and verifies `Documents`, requiring at least one file.
 These are bounded recovery samples, not a complete application or home recovery.
 

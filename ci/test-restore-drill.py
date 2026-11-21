@@ -23,6 +23,8 @@ if command == 'restic-peer':
         else:
             stage=root/'var/backup/restic-staging-peer'
             (root/'srv/containers/aiia/content-data').mkdir(parents=True)
+            if mode!='no-memory':
+                n=root/'srv/containers/memory/data/basic-memory/projects/a.md'; n.parent.mkdir(parents=True); n.write_text('fixture')
             for rel in ['vaultwarden/db.sqlite3','mrija/mail_index.sqlite']:
                 p=stage/rel; p.parent.mkdir(parents=True); db=sqlite3.connect(p); db.execute('create table fixture(x)'); db.close()
                 if rel.startswith('vaultwarden'):
@@ -89,7 +91,7 @@ with tempfile.TemporaryDirectory(prefix='drill-fixture-') as temp:
         ('lab','mrija-links',True), ('lab','mrija-escape',False), ('lab','mrija-parent-escape',False),
         ('lab','import-failure',False), ('lab','empty-db',False), ('lab','pg-empty',True),
         ('lab','mc-timeout',False), ('lab','mc-error',False), ('lab','cleanup-failure',False),
-        ('lab','mc-exit',False), ('lab','signal',False),
+        ('lab','mc-exit',False), ('lab','signal',False), ('lab','no-memory',False),
     ]:
         root = base / f'{role}-{mode}'
         root.mkdir()
@@ -111,6 +113,6 @@ with tempfile.TemporaryDirectory(prefix='drill-fixture-') as temp:
             assert not list(state.glob('restore-drill-*')), (role,mode,'container leaked')
         if mode == 'mrija-parent-escape':
             assert (state/'live-mrija/mailboxes/admin/maildir').is_symlink(), 'drill deleted through a symlinked parent'
-        if role == 'laptop' or mode in ['wrong-host','restore-failure','symlink','mrija-escape','mrija-parent-escape']:
+        if role == 'laptop' or mode in ['wrong-host','restore-failure','symlink','mrija-escape','mrija-parent-escape','no-memory']:
             assert not (state/'calls.jsonl').exists(), 'Docker used before input checks'
-print('ok: 16 fixture cases; scratch/container cleanup, isolation, SIGTERM and failure propagation')
+print('ok: 17 fixture cases; scratch/container cleanup, isolation, SIGTERM and failure propagation')

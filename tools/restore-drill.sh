@@ -5,7 +5,7 @@ umask 077
 role=${1:?usage: restore-drill.sh lab|laptop [snapshot-id]}
 snapshot=${2:-latest}
 case "$role" in
-  lab) source_host=bandit-lab; includes=(/var/backup/restic-staging-peer /var/backup/postgresql /srv/containers/aiia/content-data) ;;
+  lab) source_host=bandit-lab; includes=(/var/backup/restic-staging-peer /var/backup/postgresql /srv/containers/aiia/content-data /srv/containers/memory/data) ;;
   laptop) source_host=bandit; includes=(/home/vino/Documents) ;;
   *) echo 'role must be lab or laptop' >&2; exit 2 ;;
 esac
@@ -60,6 +60,9 @@ stage=$work/restored/var/backup/restic-staging-peer
 pgdump=$work/restored/var/backup/postgresql/all.sql.gz
 test -f "$stage/aiia/mysql.sql.gz" && test -f "$pgdump" || fail 'database dumps missing'
 test -d "$work/restored/srv/containers/aiia/content-data" || fail 'Ghost content-data missing'
+notes=$(find "$work/restored/srv/containers/memory/data" -type f -name '*.md' 2>/dev/null | wc -l)
+(( notes > 0 )) || fail 'no basic-memory notes in the lab snapshot'
+echo "PASS basic-memory notes=$notes"
 # A restored symlink must not turn a scratch check into a read of a live path. Mrija links each
 # mailbox to its container mount /maildir/<box> (the mail itself is backed up from the host
 # maildir); nothing below reads mailboxes, so only those links are exempt.
