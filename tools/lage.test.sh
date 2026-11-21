@@ -244,27 +244,27 @@ out=$(lage --dir "$HOME/w" --once)
 # the order of the blocks; a small pane keeps today's frame first: NEU in whole pairs, GELIEFERT only with a row
 printf '## Funde\n- 14:09 neuer Fund\n' | board
 out=$(LINES=30 lage --dir "$HOME/w" --once)
-[[ $out == *$'\n ● src-a  arbeitet\n'"$r46"$'\n NEU\n 14:09  src-a\n    neuer Fund\n'"$r46"$'\n GELIEFERT heute (4)\n'*$'\n'"$r46"$'\n f alles   i Idee   ⏎ zur Sitzung' ]]
+[[ $out == *$'\n ● src-a  arbeitet\n'"$r46"$'\n NEU\n 14:09  src-a\n    neuer Fund\n'"$r46"$'\n GELIEFERT heute (4)\n'*$'\n'"$r46"$'\n f alles   a Arbeit   i Idee   ⏎ zur Sitzung' ]]
 out=$(LINES=12 lage --dir "$HOME/w" --once);  [[ $out == *$'\n    neuer Fund\n'"$r46"$'\n f alles'* && $out != *GELIEFERT* ]]
 out=$(LINES=9 lage --dir "$HOME/w" --once);   [[ $out == *$'\n ● src-a  arbeitet\n'"$r46"$'\n f alles'* && $out != *NEU* ]]
 
 # test_foot: the keys, on the right the Claude limits from claude-hud's snapshot (5 h only while it is a number); a
 # broken snapshot shows no numbers (Review Focus 3); without a followed session only Enter is offered
 fresh; session $$ $s1 src-a "$HOME/w"
-out=$(lage --dir "$HOME/w" --once);  [[ $(tail -n 1 <<<"$out") == " f alles   i Idee   ⏎ zur Sitzung" ]]
+out=$(lage --dir "$HOME/w" --once);  [[ $(tail -n 1 <<<"$out") == " f alles   a Arbeit   i Idee   ⏎ zur Sitzung" ]]
 mkdir -p "$HOME/.cache/claude-hud"; u=$HOME/.cache/claude-hud/usage.json
 echo '{"five_hour":{"used_percentage":null,"resets_at":null},"seven_day":{"used_percentage":38.4,"resets_at":"2026-11-20T03:00:00.000Z"}}' >"$u"
-last=$(lage --dir "$HOME/w" --once | tail -n 1)
-[[ $last == " f alles   i Idee   ⏎ zur Sitzung  "*"Woche 38 %" && ${#last} -eq 46 && $last != *"5 h"* ]]
+last=$(COLUMNS=56 lage --dir "$HOME/w" --once | tail -n 1)
+[[ $last == " f alles   a Arbeit   i Idee   ⏎ zur Sitzung  "*"Woche 38 %" && ${#last} -eq 56 && $last != *"5 h"* ]]
 echo '{"five_hour":{"used_percentage":12},"seven_day":{"used_percentage":38}}' >"$u"
-[[ $(COLUMNS=60 lage --dir "$HOME/w" --once | tail -n 1) == *"   5 h 12 % · Woche 38 %" ]]
-last=$(lage --dir "$HOME/w" --once | tail -n 1)   # both are too wide for 46 columns: the week alone
-[[ $last == " f alles   i Idee   ⏎ zur Sitzung  "*"Woche 38 %" && ${#last} -eq 46 && $last != *"5 h"* ]]
+[[ $(COLUMNS=70 lage --dir "$HOME/w" --once | tail -n 1) == *"   5 h 12 % · Woche 38 %" ]]
+last=$(COLUMNS=56 lage --dir "$HOME/w" --once | tail -n 1)   # both are too wide for 56 columns: the week alone
+[[ $last == " f alles   a Arbeit   i Idee   ⏎ zur Sitzung  "*"Woche 38 %" && ${#last} -eq 56 && $last != *"5 h"* ]]
 echo '{"five_hour":{"used_percentage":100},"seven_day":{"used_percentage":100}}' >"$u"   # full limits in today's pane
-last=$(COLUMNS=56 lage --dir "$HOME/w" --once | tail -n 1);  [[ $last == *"  Woche 100 %" && $last != *"5 h"* ]]
+last=$(COLUMNS=58 lage --dir "$HOME/w" --once | tail -n 1);  [[ $last == *"  Woche 100 %" && $last != *"5 h"* ]]
 for bad in '' 'kein json' '{"seven_day":null}' '[1]' '{"seven_day":{"used_percentage":"viel"}}' '{"seven_day":{"used_percentage":true}}'; do
   printf '%s' "$bad" >"$u"
-  [[ $(lage --dir "$HOME/w" --once | tail -n 1) == " f alles   i Idee   ⏎ zur Sitzung" ]] || { echo "usage: $bad" >&2; false; }
+  [[ $(lage --dir "$HOME/w" --once | tail -n 1) == " f alles   a Arbeit   i Idee   ⏎ zur Sitzung" ]] || { echo "usage: $bad" >&2; false; }
 done
 out=$(lage --dir "$HOME/empty" --once);  [[ $(tail -n 1 <<<"$out") == " ⏎ zur Sitzung" && $out != *"f alles"* ]]
 
@@ -469,7 +469,7 @@ for C in 45 90; do for L in 60 40 27 20 11 8 5; do for v in "" --full; do
 done; done; done
 out=$(LINES=27 lage --dir "$HOME/w" --once)   # main view: DU with the 3 newest ! lines, the 7 sessions, NEU, GELIEFERT, the keys
 [[ $out == *$'\n DU\n 1  Eintrag 04\n 2  Eintrag 03\n 3  Eintrag 02\n    +2 weitere\n─'* && $(grep -c '^─' <<<"$out") -eq 4 ]]
-[[ $(grep -cE '^ [●○▲] ' <<<"$out") -eq 7 && $(tail -n 1 <<<"$out") == " f alles   i Idee   ⏎ zur Sitzung" ]]
+[[ $(grep -cE '^ [●○▲] ' <<<"$out") -eq 7 && $(tail -n 1 <<<"$out") == " f alles   a Arbeit   i Idee   ⏎ zur Sitzung" ]]
 [[ $out == *$'\n'"$r46"$'\n NEU\n 13:04  src-a\n    Eintrag 04\n'"$r46"$'\n GELIEFERT heute (4)\n 10:47  Satz 1047\n 10:37  Satz 1037\n 09:56  Satz 0956\n'"$r46"$'\n'* ]]
 [[ $out != *LOG* && $out != *Schritt* && $out != *"Eintrag 01"* && $out != *"▶"* ]]
 out=$(LINES=27 lage --dir "$HOME/w" --once --full)
@@ -584,7 +584,7 @@ def wait_for(text):
     assert text in seen, (text, seen[-300:])
 
 
-wait_for("f alles   i Idee".encode())
+wait_for("f alles   a Arbeit   i Idee".encode())
 time.sleep(0.3)
 os.write(fd, b"x")  # other keys do nothing
 os.write(fd, b"i")
@@ -630,12 +630,12 @@ def wait_for(text):
     seen = b""
 
 
-wait_for("f alles   i Idee")
+wait_for("f alles   a Arbeit   i Idee")
 os.write(fd, b"f")
 wait_for("FUNDE  1  (1 neu)")
 wait_for("i = Idee   f = zurück")
 os.write(fd, b"f")
-wait_for("f alles   i Idee")  # back in the overview
+wait_for("f alles   a Arbeit   i Idee")  # back in the overview
 os.write(fd, b"f")
 wait_for("FUNDE  1\x1b[K")  # seen in the full view before: no longer new
 with open(board, "a", encoding="utf-8") as f:
@@ -1376,5 +1376,122 @@ out=$(LAGE_NOW=2026-11-15T14:13:00Z lage --dir "$HOME/w" --once --arbeit)
 lage schritt --status zu --antwort a
 jq -se '.[-1].was == "Port-Scan über IPv6" and .[-1].status == "zu" and .[-1].antwort == "a" and .[-1].warum == "Welche Dienste offen sind"' "$sf"
 out=$(lage --dir "$HOME/w" --once --arbeit); [[ $(sed -n 2p <<<"$out") == "✖ Port-Scan über IPv6"* && $out == *"⚠ 14:12  IPv4 fällt aus"* ]]
+
+# test_work_keys: in the pty, a opens the work view; s, ? and i ask one line and write the owner idea for the step on top to
+# the board of the step's session (not always the followed one); without a step, s and ? do nothing and i is a plain idea;
+# the bar's request file switches a running view; leaving the full view by a still records what was seen
+keys() { # keys <own|other|none|seen> [board...]: lage in a pty, the keys of that scenario
+  python3 -B - "$here/lage.py" "$HOME/w" "$@" <<'EOF'
+import os
+import pty
+import select
+import signal
+import sys
+import time
+from pathlib import Path
+
+prog, folder, scenario, *boards = sys.argv[1:]
+pid, fd = pty.fork()
+if pid == 0:
+    os.execvp("python3", ["python3", prog, "--dir", folder])
+seen = b""
+FOOT = b"f alles   a Arbeit   i Idee"
+
+
+def read_until(text, seconds=8):
+    global seen
+    end = time.time() + seconds
+    while text not in seen and time.time() < end:
+        if select.select([fd], [], [], 0.2)[0]:
+            seen += os.read(fd, 4096)
+    assert text in seen, (text, seen[-300:])
+    seen = b""
+
+
+def press(key, prompt=None, answer=None):
+    time.sleep(0.3)  # lage reads keys only between two frames
+    os.write(fd, key)
+    if prompt:
+        read_until(prompt)
+        os.write(fd, answer)
+
+
+def ideas(board):
+    try:
+        return [x for x in Path(board).read_text(encoding="utf-8").splitlines() if x.startswith("- [ ]")]
+    except OSError:
+        return []
+
+
+def check(board, want):
+    got = [x[len("- [ ] 2026-11-15 14:12 "):] for x in ideas(board)]
+    assert got == want, (board, got)
+
+
+read_until(FOOT)
+if scenario == "own":
+    press(b"a")
+    read_until("src-a · ARBEIT".encode())  # LAGE is painted
+    press(b"s", b"Stopp (Grund, Enter sendet): ", b"Grund\r")
+    read_until(b"ARBEIT")
+    press(b"s", b"Stopp (Grund, Enter sendet): ", b"\r")  # no reason: still a Stopp
+    read_until(b"ARBEIT")
+    press(b"?", b"Frage: ", b"\r")  # empty: dropped
+    read_until(b"ARBEIT")
+    press(b"?", b"Frage: ", b"wieso?\r")
+    read_until(b"ARBEIT")
+    press(b"i", b"Idee: ", b"x\r")
+    read_until(b"ARBEIT")
+    press(b"a")
+    read_until(FOOT)  # the overview again
+    check(boards[0], ["Stopp bei „Scan“: Grund", "Stopp bei „Scan“", "Frage zu „Scan“: wieso?", "Idee zu „Scan“: x"])
+elif scenario == "other":  # the followed session has no step: the one with steps is shown and gets the lines
+    press(b"a")
+    read_until("src-b · ARBEIT".encode())
+    press(b"s", b"Stopp (Grund, Enter sendet): ", b"weil\r")
+    read_until(b"ARBEIT")
+    press(b"i", b"Idee: ", b"y\r")
+    read_until(b"ARBEIT")
+    check(boards[0], ["Stopp bei „fremd“: weil", "Idee zu „fremd“: y"])
+    check(boards[1], [])
+elif scenario == "none":  # no step anywhere; the request file (touched from outside) opens the view
+    Path(os.environ["XDG_RUNTIME_DIR"], "lage-arbeit").touch()
+    read_until(b"Noch keine Schritte")
+    press(b"s")
+    press(b"?")
+    press(b"i", b"Idee: ", b"plain\r")  # a prompt for i only: s and ? did nothing
+    read_until(b"ARBEIT")
+    check(boards[0], ["plain"])
+elif scenario == "seen":  # the full view closed by a: what it showed is not new in the next full view
+    press(b"f")
+    read_until("FUNDE  1  (1 neu)".encode())
+    press(b"a")
+    read_until(b"ARBEIT")
+    press(b"a")
+    read_until(FOOT)
+    press(b"f")
+    read_until("FUNDE  1\x1b[K".encode())
+os.kill(pid, signal.SIGINT)
+assert os.waitpid(pid, 0)[1] == 0
+EOF
+}
+fresh; session $$ $s1 src-a "$HOME/w"; lage schritt "Scan" --warum "w"
+keys own "$(bfile)"
+fresh; session $$ $s1 src-a "$HOME/w"; live; session $pid bbbbbbbb-2 src-b "$HOME/empty"; mkdir -p "$HOME/.local/state/lage"
+echo '{"zeit":"2026-11-15T14:00:00+00:00","ziel":"","weg":"","was":"fremd","warum":"","gesendet":"","antwort":"","bedeutung":"","status":"laeuft"}' \
+  >"$HOME/.local/state/lage/bbbbbbbb-2.schritte.jsonl"
+keys other "$HOME/.local/state/lage/bbbbbbbb-2.md" "$(bfile)"
+fresh; session $$ $s1 src-a "$HOME/w"; keys none "$(bfile)"; rm -f "$XDG_RUNTIME_DIR/lage-arbeit"
+fresh; session $$ $s1 src-a "$HOME/w"; owner 14:00:00; printf '## Funde\n- 14:12 Fund nach dem Prompt\n' | board
+keys seen
+
+# test_work_request: the bar's click touches $XDG_RUNTIME_DIR/lage-arbeit; a new view starting with that file newer than
+# 10 s before its start shows the work view; an old file, no file and no XDG_RUNTIME_DIR show the overview
+fresh; session $$ $s1 src-a "$HOME/w"; lage schritt "Scan" --warum "w"; rq=$XDG_RUNTIME_DIR/lage-arbeit
+touch "$rq"; out=$(lage --dir "$HOME/w" --once); [[ $out == *"· ARBEIT"* && $out == *"▶ Scan"* ]]
+touch -d '-1 hour' "$rq"; out=$(lage --dir "$HOME/w" --once); [[ $out != *ARBEIT* && $out == *"zur Sitzung"* ]]
+rm "$rq"; out=$(lage --dir "$HOME/w" --once); [[ $out != *ARBEIT* && $out == *"zur Sitzung"* ]]
+touch "$rq"; out=$(unset XDG_RUNTIME_DIR; lage --dir "$HOME/w" --once); [[ $out != *ARBEIT* && $out == *"zur Sitzung"* ]]
+rm "$rq"
 
 echo ok

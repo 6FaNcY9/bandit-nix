@@ -872,9 +872,9 @@ def usage():
 
 
 def foot_line(width, keys, left=None):
-    """The keys (f and i only with a followed session), on the right usage() when it fits, else its last part (the week).
+    """The keys (f, a and i only with a followed session), on the right usage() when it fits, else its last part (the week).
     left replaces the key text."""
-    left, parts = left or (" f alles   i Idee   ⏎ zur Sitzung" if keys else " ⏎ zur Sitzung"), usage()
+    left, parts = left or (" f alles   a Arbeit   i Idee   ⏎ zur Sitzung" if keys else " ⏎ zur Sitzung"), usage()
     for right in (" · ".join(parts), parts[-1] if parts else ""):
         if right and len(left) + len(right) < width:
             return paint(DIM, left + " " * (width - len(left) - len(right)) + right, sys.stdout.isatty())
@@ -1033,18 +1033,29 @@ def frame(session, ended, where, full=False, seen=frozenset(), src=None):
     return (top + [rule] + body[:max(free, 0)] + foot)[:room]
 
 
-def wait(seconds, session):
-    """Sleep. On a terminal, the key i asks for an idea and adds it to the board, f ends the wait at once, Enter jumps to
-    the session that needs the owner (jump()); other keys do nothing. Returns the key that ended the wait, b"i" or b"f",
-    else b""."""
+def request_path():
+    """The file the bar's click (lage bar schritt --open) touches to ask for the work view; None without a runtime folder."""
+    runtime = os.environ.get("XDG_RUNTIME_DIR")
+    return Path(runtime) / "lage-arbeit" if runtime else None
+
+
+def wait(seconds, session, src=None):
+    """Sleep. On a terminal, the key i asks for an idea and adds it to the board, f and a end the wait at once, Enter jumps
+    to the session that needs the owner (jump()); other keys do nothing. With src (the work view's (session, steps)) and a
+    step on top, s, ? and i ask one line and write an owner idea about that step to the board of src's session: Stopp bei
+    „was“[: Grund], Frage zu „was“: ..., Idee zu „was“: ...; without a step s and ? do nothing and i is a plain idea.
+    Returns the key that ended the wait, b"i", b"f" or b"a", else b"" (also for s and ?)."""
+    rows = shown_rows(src[1]) if src and src[0] else []
+    was = rows[0][0]["was"] if rows else None
     if not sys.stdin.isatty():
         time.sleep(seconds)
         return b""
     fd, saved = sys.stdin.fileno(), termios.tcgetattr(sys.stdin.fileno())
+    ends = (b"i", b"f", b"a", b"\r", b"\n") + ((b"s", b"?") if was is not None else ())
     key, end = b"", time.monotonic() + seconds
     try:
         tty.setcbreak(fd, termios.TCSANOW)
-        while key not in (b"i", b"f", b"\r", b"\n") and (left := end - time.monotonic()) > 0:
+        while key not in ends and (left := end - time.monotonic()) > 0:
             if select.select([fd], [], [], left)[0]:
                 key = os.read(fd, 1)
     finally:
@@ -1054,12 +1065,24 @@ def wait(seconds, session):
             jump()  # no window or no session to go to: the view simply stays
         except Exception:  # as in main(): an odd session file must not end the view; the next round shows the error
             pass
-    if key == b"i" and session is not None:
+    if was is not None and key in (b"s", b"?", b"i"):
+        try:
+            if key == b"s":
+                reason = input("Stopp (Grund, Enter sendet): ").strip()
+                text = f"Stopp bei „{was}“" + (f": {reason}" if reason else "")
+            else:
+                ask, head = ("Frage: ", "Frage zu") if key == b"?" else ("Idee: ", "Idee zu")
+                text = input(ask).strip()
+                text = f"{head} „{was}“: {text}" if text else ""
+            add_idea(board_of(src[0]), text, clock())
+        except (EOFError, KeyboardInterrupt, OSError):
+            pass  # cancelled, or the board is not writable: the next refresh shows no new idea
+    elif key == b"i" and session is not None:
         try:
             add_idea(board_of(session), input("Idee: "), clock())
         except (EOFError, KeyboardInterrupt, OSError):
             pass  # cancelled, or the board is not writable: the next refresh shows no new idea
-    return key if key in (b"i", b"f") else b""
+    return key if key in (b"i", b"f", b"a") else b""
 
 
 def hook():
@@ -1143,13 +1166,27 @@ def main():
             print("lage:", e, file=sys.stderr)
             return 1
         return 0
-    session, full, seen = None, args.full, {}  # seen: sessionId -> the board entries shown when the full view closed
+
+    def requested():  # when the bar last asked for the work view, 0 without a request
+        path = request_path()
+        return path.stat().st_mtime if path and path.exists() else 0
+
+    # view: overview, full (the whole board) or work (the steps); seen: sessionId -> the board entries shown when the full view closed
+    session, view, seen = None, "work" if args.arbeit else "full" if args.full else "overview", {}
+    asked = time.time() - 10  # a request of the bar that is older than this was answered by an earlier view
     try:
         while True:
+            src = None
             try:
                 session, ended = pick(session)
                 sid = session and session["sessionId"]
-                lines = frame(session, ended, where, full, seen.get(sid, frozenset()), step_source(session) if args.arbeit else None)
+                if (request := requested()) > asked:
+                    asked = request
+                    if view == "full":
+                        seen[sid] = board_entries(session)
+                    view = "work"
+                src = step_source(session) if view == "work" else None
+                lines = frame(session, ended, where, view == "full", seen.get(sid, frozenset()), src)
             except Exception as e:  # the view runs for hours (it reads every live session): a bad round shows why, the next one tries again
                 if args.once:
                     raise
@@ -1160,10 +1197,12 @@ def main():
             # home, then each line cleared to its end, then everything below: no flicker
             sys.stdout.write("\x1b[H" + "".join(x + "\x1b[K\n" for x in lines) + "\x1b[J")
             sys.stdout.flush()
-            if wait(2, session) == b"f":
-                full = not full
-                if not full:
+            key = wait(2, session, src)
+            if key in (b"f", b"a"):
+                if view == "full":
                     seen[sid] = board_entries(session)  # the owner has looked at the whole board: not new any more
+                new = "full" if key == b"f" else "work"
+                view = "overview" if view == new else new
     except KeyboardInterrupt:
         return 0
 
