@@ -1359,8 +1359,22 @@ lage schritt "Last"; lage schritt --status warn --bedeutung b
 out=$(lage --dir "$HOME/w" --once --arbeit); [[ $(grep -c "Last" <<<"$out") -eq 1 && $out == *"⚠ Last"* && $out != *$'\n· '* ]]
 lage schritt "Scan2"; lage schritt "Scan2" --status warn                                # a warn with the same was finishes it, too
 out=$(lage --dir "$HOME/w" --once --arbeit); [[ $(grep -c "Scan2" <<<"$out") -eq 1 && $out == *"⚠ Scan2"* ]]
-fresh; session $$ $s1 src-a "$HOME/w"; sf=$HOME/.local/state/lage/$s1.schritte.jsonl   # only a warn: nothing to change
-lage schritt "Nur Warnung" --status warn; before=$(<"$sf")
+fresh; session $$ $s1 src-a "$HOME/w"; sf=$HOME/.local/state/lage/$s1.schritte.jsonl   # only a warn: it is the step shown, so it is changed
+lage schritt "Nur Warnung" --status warn; lage schritt --antwort x
+jq -se 'length == 2 and .[1].was == "Nur Warnung" and .[1].status == "warn" and .[1].antwort == "x"' "$sf"
+fresh; session $$ $s1 src-a "$HOME/w"; sf=$HOME/.local/state/lage/$s1.schritte.jsonl   # only a way seed: no step to change
+lage schritt "Nur Weg" --weg W --status offen; before=$(<"$sf")
 rc=0; lage schritt --antwort x 2>"$t/err" || rc=$?; [[ $rc -eq 1 && $(<"$t/err") == *"noch kein Schritt"* && $(<"$sf") == "$before" ]]
+
+# test_work_top_running (R9): an unrelated warn during a running step does not take the top; "without WAS" changes the step on top
+fresh; session $$ $s1 src-a "$HOME/w"; sf=$HOME/.local/state/lage/$s1.schritte.jsonl
+lage schritt "Port-Scan über IPv6" --warum "Welche Dienste offen sind" --gesendet "10000 TCP-Pakete"
+lage schritt "IPv4 fällt aus" --status warn --bedeutung "Nebenwirkung vom Scan?"
+out=$(LAGE_NOW=2026-11-15T14:13:00Z lage --dir "$HOME/w" --once --arbeit)
+[[ $(sed -n 2p <<<"$out") == "▶ Port-Scan über IPv6"*"seit 40 s" && $out == *$'\n  warum   Welche Dienste offen sind\n  sendet  10000 TCP-Pakete\n'* ]]
+[[ $out == *"⚠ 14:12  IPv4 fällt aus"* && $out != *$'\n· '* ]]
+lage schritt --status zu --antwort a
+jq -se '.[-1].was == "Port-Scan über IPv6" and .[-1].status == "zu" and .[-1].antwort == "a" and .[-1].warum == "Welche Dienste offen sind"' "$sf"
+out=$(lage --dir "$HOME/w" --once --arbeit); [[ $(sed -n 2p <<<"$out") == "✖ Port-Scan über IPv6"* && $out == *"⚠ 14:12  IPv4 fällt aus"* ]]
 
 echo ok

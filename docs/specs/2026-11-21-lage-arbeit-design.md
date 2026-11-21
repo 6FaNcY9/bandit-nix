@@ -31,16 +31,21 @@ Frage, Idee), a one-line writer for sessions. Non-goals: the router test itself;
 - Finds its session by walking up its parent pids to the claude process listed in `~/.claude/sessions/*.json`
   (Bash tool calls are its children). No session: a short message, exit 1, nothing written.
 - With WAS: a new step, status `laeuft` unless given.
-- Without WAS: changes the newest step: a copy of it with the given fields, the status kept unless given, written as a
-  new line. So `lage schritt --antwort … --bedeutung … --status fund` finishes the running step.
+- Without WAS: changes the step the work view shows on top (see "Reading the steps"): a copy of it with the given
+  fields, the status kept unless given, written as a new line. So `lage schritt --antwort … --bedeutung … --status fund`
+  finishes the running step, also after a side-effect warn. No step (empty file, only `offen` lines): an error.
 - A side effect is its own step with `--status warn`. A way to try later is a step with `--weg … --status offen`.
 
 ## Reading the steps (no ids)
 
 - `offen` lines only seed the way list; they are no steps.
-- A `laeuft` line followed directly by a line with the same `was` is replaced by it (an update or the finish).
+- A `laeuft` line followed directly by a line with the same `was` is replaced by it (an update or the finish);
+  `warn` lines of other steps in between (side effects) do not count, a `warn` with the same `was` does.
   Any other `laeuft` line that is not the newest stays, shown with `·` (started, no result reported).
 - Same `(status, weg, was)` anywhere in the list: one row with `×N`, at the newest one's place, with its answer.
+- The top row is the newest row, except that a running step stays above a side-effect warn: the first row that is no
+  `warn`, when it is `laeuft`. The other rows keep their order. This row is what the work view shows on top and what
+  `lage schritt` without WAS changes.
 - A way's status: its newest `fund`/`zu`/`offen` line (`warn` and `laeuft` never change it; none = `offen`).
   The running way is marked `▶`; "als Nächstes" = the first way, in order of first appearance, that is `offen` and not
   the running one.
@@ -72,7 +77,8 @@ WEGE  ✔ 2  ✖ 8  ? 3
 
 - Source: the followed session's step file; when it has no steps, the live session with the newest step (as the bar).
   The head names that session; the way back writes to that session's board.
-- Top: the newest step with every field it has (`←  noch keine Antwort` while it runs). Then older steps, newest
+- Top: the newest row, except that a running step stays above a side-effect warn (the first row that is no warn, when
+  it is `laeuft`), with every field it has (`←  noch keine Antwort` while it runs). Then the other rows, newest
   first. WEGE at most 6 rows. A short pane drops older steps first. Symbols and colours: `▶` laeuft (teal), `✔` fund
   (yellow), `✖` zu, `?` offen (dim), `⚠` warn (red), `·` started without result (dim).
 - `a` switches overview ↔ work view, `f` still switches the full board.

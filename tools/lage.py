@@ -7,7 +7,7 @@ lage [--dir DIR] --idea TEXT   add an owner idea to that session's board
 lage --probe PID   exit 0 when a Claude session runs under the window with pid PID, else 1; no output
 lage bar [--focus]   Waybar: one JSON line with busy/waiting session counts; --focus jumps to the waiting session
 lage schritt [WAS] [--warum T] [--gesendet T] [--antwort T] [--bedeutung T] [--status S] [--ziel T] [--weg T]
-  a session reports one step of its work; without WAS it changes the newest step that is no warn
+  a session reports one step of its work; without WAS it changes the step the work view shows on top
 lage hook   Claude Code hook (JSON on stdin): tells a session its board and each new owner idea once
 Everything is read from ~/.claude; nothing is written there. lage writes the board and, for the hook, a .shown file of hashes.
 """
@@ -673,7 +673,7 @@ def read_steps(path):
 def write_step(argv):
     """lage schritt: append one step to the own session's step file. Exit code."""
     ap = argparse.ArgumentParser(prog="lage schritt", description="Report one step of the work.")
-    ap.add_argument("was", nargs="?", help="what is being done; without it the newest step that is no warn is changed")
+    ap.add_argument("was", nargs="?", help="what is being done; without it the step shown on top in the work view is changed")
     texts = [k for k in STEP_KEYS[1:-1] if k != "was"]  # --ziel --weg --warum --gesendet --antwort --bedeutung
     for k in texts:
         ap.add_argument("--" + k)
@@ -692,11 +692,11 @@ def write_step(argv):
     if was:
         step = {**dict.fromkeys(STEP_KEYS, ""), "was": was, "status": "laeuft"}
     else:
-        newest = [s for s in read_steps(path) if s["status"] not in ("offen", "warn")]  # a way seed or a side effect is not the step
-        if not newest:
+        shown = shown_rows(read_steps(path))  # the step on top of the work view; an offen line only seeds a way
+        if not shown:
             print("lage: noch kein Schritt zum Ändern", file=sys.stderr)
             return 1
-        step = {k: newest[-1][k] for k in STEP_KEYS}
+        step = {k: shown[0][0][k] for k in STEP_KEYS}
         started = step["zeit"] if step["status"] == "laeuft" else ""
     step.update({k: clean(getattr(args, k), 200) for k in texts if getattr(args, k) is not None})
     step["status"] = args.status or step["status"]
@@ -728,6 +728,14 @@ def step_rows(steps):
         key = (s["status"], s["weg"], s["was"])
         merged[key] = (s, 1) if key not in merged else (merged[key][0], merged[key][1] + 1)
     return list(merged.values())
+
+
+def shown_rows(steps):
+    """step_rows with the row for the top of the work view first: the running step (the first row that is no warn, when it
+    is laeuft) stays above a side-effect warn, else the newest row. lage schritt without WAS changes this row."""
+    rows = step_rows(steps)
+    run = next((r for r in rows if r[0]["status"] != "warn"), None)
+    return [run] + [r for r in rows if r is not run] if run and run[0]["status"] == "laeuft" else rows
 
 
 def way_rows(steps):
@@ -879,7 +887,7 @@ def work_lines(src, width, room):
     steps; a pane too small for head, newest step and keys loses the end of the newest step."""
     session, steps = src
     lit, now = sys.stdout.isatty(), clock()
-    rows, ways, today = step_rows(steps), way_rows(steps), now.astimezone().date()
+    rows, ways, today = shown_rows(steps), way_rows(steps), now.astimezone().date()
 
     def when(ts):  # HH:MM, DD.MM. on another day, "" without a time
         return "" if ts is None else ts.astimezone().strftime("%H:%M" if ts.astimezone().date() == today else "%d.%m.")
