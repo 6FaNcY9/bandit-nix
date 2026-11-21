@@ -65,7 +65,6 @@ in {
           StateDirectoryMode = "0700";
           EnvironmentFile = ntfyEnv;
           LoadCredential = ["thehost:${keySecret}"];
-          UnsetEnvironment = ["NTFY_TOKEN"];
           TimeoutStartSec = "20min";
           ExecStart = "${watcher}/bin/mrija-watch collect";
         };
@@ -85,7 +84,6 @@ in {
           StateDirectory = "mrija-watch";
           StateDirectoryMode = "0700";
           EnvironmentFile = ntfyEnv;
-          UnsetEnvironment = ["NTFY_TOKEN"];
           TimeoutStartSec = "5min";
           ExecStart = "${watcher}/bin/mrija-watch digest";
         };
@@ -105,7 +103,6 @@ in {
           Type = "oneshot";
           User = username;
           EnvironmentFile = ntfyEnv;
-          UnsetEnvironment = ["NTFY_TOKEN"];
           ExecStart = pkgs.writeShellScript "mrija-watch-crash" ''
             ${pkgs.curl}/bin/curl -fsS \
               -H "Authorization: Bearer ''${NTFY_TOKEN:-}" \
