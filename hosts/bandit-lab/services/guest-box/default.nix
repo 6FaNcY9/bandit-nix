@@ -62,11 +62,20 @@
           PermitRootLogin = "prohibit-password";
         };
       };
-      users.users.root.openssh.authorizedKeys.keys = lib.optional (g.key != "") g.key;
+      users.users =
+        lib.mapAttrs (_: key: {
+          isNormalUser = true;
+          openssh.authorizedKeys.keys = [key];
+        }) (g.users or {})
+        // {root.openssh.authorizedKeys.keys = lib.optional (g.key != "") g.key;};
+      # /data belongs to the box's root; each friend gets a private folder on it.
+      systemd.tmpfiles.rules = lib.mapAttrsToList (u: _: "d /data/${u} 0700 ${u} users -") (g.users or {});
       services.tailscale = {
         enable = true;
         authKeyFile = "/var/lib/tailscale/authkey";
         extraUpFlags = ["--ssh=false" "--advertise-tags=tag:${name}-box"];
+        # `tailscale set` on every start: renames a node that is already logged in, without a new auth key.
+        extraSetFlags = lib.optional (g ? hostname) "--hostname=${g.hostname}";
       };
       # autoconnect loops until the node is Running and holds the boot; the host kills the
       # container after 60 s without READY (seen 2026-11-01). Fail fast and keep retrying instead.

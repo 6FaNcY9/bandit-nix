@@ -195,6 +195,19 @@ A box like Jerry's without any backup on the lab: 1 CPU, 4 GB RAM, 50 GB
 `/data`, `tag:martin-box`. The host refuses everything from `ve-martin` (no
 port is open to him, unlike Jerry's UDP 41641).
 
+**Shared box (since 2026-11).** The box is now for several friends and is called
+`freunde` in the tailnet (`tailscale set --hostname`); inside the lab it is still
+`martin` (unit, `tag:martin-box`, secret, `/srv/martin`). Nobody is root. Each
+friend has a normal account (home 0700, no sudo, own folder `/data/<name>`) and
+they all share the box's 1 CPU / 4 GB. Add a friend:
+
+1. Tailscale: invite them, then add their login to the grant
+   `{"src": [...], "dst": ["tag:martin-box"], "ip": ["tcp:22"]}` and copy
+   Martin's two deny tests for the new login.
+2. Add `<name> = "ssh-ed25519 ...";` under `martin.users` in `guests.nix` and
+   the name to `expect.martin.users` in `ci/lab-guests.nix`. Deploy.
+3. Handover: `ssh <name>@freunde` (no password, key only).
+
 ### Owner setup, in order
 
 1. **Tailscale policy first** (Access controls, JSON editor), before Martin is
@@ -289,10 +302,10 @@ and the `tag:martin-box` node, `nixos-container destroy martin`,
 
 Send him, once his key is in and the box is on the tailnet:
 
-- SSH: `ssh root@<container tailnet name>` (key only; the tailnet policy allows
+- SSH: `ssh <name>@freunde` (key only; the tailnet policy allows
   your login to port 22 of this box and nothing else on the lab).
 - Limits: 1 CPU, 4 GB RAM without swap (an OOM kill is yours to handle), 512
-  tasks; under load the lab's own services come first. `/data` is 50 GB; put
+  tasks; under load the lab's own services come first. `/data/<name>` is your part of 50 GB; put
   your work there. The rest of the root filesystem is capped at 20 GB. Nothing
   is backed up: keep your own copies. Egress is NAT with DNS 9.9.9.9/1.1.1.1;
   no LAN, no other tailnet nodes.

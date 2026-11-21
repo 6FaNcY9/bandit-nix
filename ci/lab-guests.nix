@@ -20,6 +20,8 @@
       net = "10.251.2";
       memory = "4G";
       hostAccept = [];
+      hostname = "freunde";
+      users = ["martin"];
     };
   };
   fw = lab.networking.firewall.extraCommands;
@@ -43,6 +45,10 @@
     assert lib.assertMsg (lib.attrNames c.bindMounts == ["/data"] && c.bindMounts."/data".hostPath == "/srv/${name}/box") "${name} must bind only /data from /srv/${name}/box";
     assert lib.assertMsg (cc.services.openssh.settings.PasswordAuthentication == false && cc.services.openssh.settings.PermitRootLogin == "prohibit-password") "${name} ssh must be key-only";
     assert lib.assertMsg (lib.length keys <= 1 && lib.all (k: k != "") keys) "${name} root may carry at most its one guest key";
+    assert lib.assertMsg (e ? users -> keys == []) "shared box ${name}: no root key";
+    assert lib.assertMsg (lib.all (u: let x = cc.users.users.${u}; in x.isNormalUser && x.extraGroups == [] && lib.length x.openssh.authorizedKeys.keys == 1) (e.users or [])) "${name} friends must be normal users without groups, one key each";
+    assert lib.assertMsg (lib.sort lib.lessThan (lib.attrNames (lib.filterAttrs (_: x: x.isNormalUser) cc.users.users)) == lib.sort lib.lessThan (e.users or [])) "${name} must have exactly the listed friend accounts";
+    assert lib.assertMsg (cc.services.tailscale.extraSetFlags == lib.optional (e ? hostname) "--hostname=${e.hostname or ""}") "${name} tailnet name must be ${e.hostname or "the default"}";
     assert lib.assertMsg (cc.services.tailscale.extraUpFlags == ["--ssh=false" "--advertise-tags=tag:${name}-box"]) "${name} must join the tailnet as tag:${name}-box without tailscale ssh";
     assert lib.assertMsg (cc.systemd.services.tailscaled-autoconnect.serviceConfig.TimeoutStartSec == "30s") "${name} autoconnect must time out so the container reports READY without a tailnet login";
     assert lib.assertMsg (cc.networking.nameservers == ["9.9.9.9" "1.1.1.1"]) "${name} must use fixed nameservers, not the host resolv.conf"; true;
