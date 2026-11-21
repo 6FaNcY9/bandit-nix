@@ -7,7 +7,7 @@ lage [--dir DIR] --idea TEXT   add an owner idea to that session's board
 lage --probe PID   exit 0 when a Claude session runs under the window with pid PID, else 1; no output
 lage bar [--focus]   Waybar: one JSON line with busy/waiting session counts; --focus jumps to the waiting session
 lage schritt [WAS] [--warum T] [--gesendet T] [--antwort T] [--bedeutung T] [--status S] [--ziel T] [--weg T]
-  a session reports one step of its work; without WAS it changes the newest step
+  a session reports one step of its work; without WAS it changes the newest step that is no warn
 lage hook   Claude Code hook (JSON on stdin): tells a session its board and each new owner idea once
 Everything is read from ~/.claude; nothing is written there. lage writes the board and, for the hook, a .shown file of hashes.
 """
@@ -673,7 +673,7 @@ def read_steps(path):
 def write_step(argv):
     """lage schritt: append one step to the own session's step file. Exit code."""
     ap = argparse.ArgumentParser(prog="lage schritt", description="Report one step of the work.")
-    ap.add_argument("was", nargs="?", help="what is being done; without it the newest step is changed")
+    ap.add_argument("was", nargs="?", help="what is being done; without it the newest step that is no warn is changed")
     texts = [k for k in STEP_KEYS[1:-1] if k != "was"]  # --ziel --weg --warum --gesendet --antwort --bedeutung
     for k in texts:
         ap.add_argument("--" + k)
@@ -692,7 +692,7 @@ def write_step(argv):
     if was:
         step = {**dict.fromkeys(STEP_KEYS, ""), "was": was, "status": "laeuft"}
     else:
-        newest = [s for s in read_steps(path) if s["status"] != "offen"]  # an offen line only seeds a way
+        newest = [s for s in read_steps(path) if s["status"] not in ("offen", "warn")]  # a way seed or a side effect is not the step
         if not newest:
             print("lage: noch kein Schritt zum Ändern", file=sys.stderr)
             return 1
@@ -711,10 +711,18 @@ def write_step(argv):
 
 
 def step_rows(steps):
-    """(record, count) rows for the work view, newest first. offen lines only seed ways; a laeuft line whose next line has
-    the same was is an earlier state of that step; equal (status, weg, was) merge into the newest of them."""
+    """(record, count) rows for the work view, newest first. offen lines only seed ways; a laeuft line is an earlier state
+    of its step when the next line after it, not counting warn lines of other steps (side effects), has the same was;
+    equal (status, weg, was) merge into the newest of them."""
     kept = [s for s in steps if s["status"] != "offen"]
-    kept = [s for s, nxt in zip(kept, kept[1:] + [None]) if not (s["status"] == "laeuft" and nxt and nxt["was"] == s["was"])]
+
+    def earlier(i):
+        for nxt in kept[i + 1:]:
+            if nxt["status"] != "warn" or nxt["was"] == kept[i]["was"]:
+                return nxt["was"] == kept[i]["was"]
+        return False
+
+    kept = [s for i, s in enumerate(kept) if not (s["status"] == "laeuft" and earlier(i))]
     merged = {}
     for s in reversed(kept):
         key = (s["status"], s["weg"], s["was"])

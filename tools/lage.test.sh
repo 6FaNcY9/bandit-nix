@@ -1212,7 +1212,7 @@ jq -e '.zeit == "2026-11-15T14:12:20+00:00" and .status == "laeuft" and .was == 
   and .gesendet == "g1" and .ziel == "Router" and .weg == "Web" and .antwort == "" and .bedeutung == ""
   and (keys | length) == 9' "$sf"
 
-# test_schritt_finish: without WAS the newest non-offen step is copied, given fields win, status kept unless given
+# test_schritt_finish: without WAS the newest step that is neither offen nor warn is copied, given fields win, status kept unless given
 lage schritt "Y später" --weg "Seriell" --status offen
 lage schritt --antwort "teil"
 lage schritt --antwort "a1" --bedeutung "b1" --status fund
@@ -1343,5 +1343,24 @@ out=$(LINES=14 lage --dir "$HOME/w" --once --arbeit)
 [[ $(wc -l <<<"$out") -le 13 && $(head -n 1 <<<"$out") == "LAGE  src-a · ARBEIT"* && $(tail -n 1 <<<"$out") == " s Stopp  ? Frage  i Idee  a zurück" ]]
 [[ $out == *"✖ Schritt 6"* && $out == *"+5 ältere"* && $out == *"WEGE"* ]]
 out=$(LINES=3 lage --dir "$HOME/w" --once --arbeit); [[ $(wc -l <<<"$out") -eq 2 ]]   # only the head and the foot fit
+
+# test_work_warn_between (R7, Review Focus 5): a side-effect warn between a step's start and its finish splits nothing
+fresh; session $$ $s1 src-a "$HOME/w"; sf=$HOME/.local/state/lage/$s1.schritte.jsonl
+lage schritt "Scan" --warum w; lage schritt "Aussetzer" --status warn; lage schritt --status zu --antwort a
+[[ $(jq -sr '.[-1].was' "$sf") == Scan && $(jq -sr '.[-1].status' "$sf") == zu ]]    # the finish changed Scan, not the warn
+out=$(lage --dir "$HOME/w" --once --arbeit)
+[[ $(grep -c "Scan" <<<"$out") -eq 1 && $out == *"✖ Scan"* && $out == *"⚠ 14:12  Aussetzer"* && $out != *$'\n· '* ]]
+fresh; session $$ $s1 src-a "$HOME/w"                                                   # the same with a finish that names the step
+lage schritt "Scan" --warum w; lage schritt "Aussetzer" --status warn; lage schritt "Scan" --status zu
+out=$(lage --dir "$HOME/w" --once --arbeit); [[ $(grep -c "Scan" <<<"$out") -eq 1 && $out == *"✖ Scan"* && $out != *$'\n· '* ]]
+fresh; session $$ $s1 src-a "$HOME/w"; sf=$HOME/.local/state/lage/$s1.schritte.jsonl   # a running step that turns into a warn
+lage schritt "Last"; lage schritt --status warn --bedeutung b
+[[ $(jq -sr '.[-1].was + .[-1].status' "$sf") == Lastwarn ]]
+out=$(lage --dir "$HOME/w" --once --arbeit); [[ $(grep -c "Last" <<<"$out") -eq 1 && $out == *"⚠ Last"* && $out != *$'\n· '* ]]
+lage schritt "Scan2"; lage schritt "Scan2" --status warn                                # a warn with the same was finishes it, too
+out=$(lage --dir "$HOME/w" --once --arbeit); [[ $(grep -c "Scan2" <<<"$out") -eq 1 && $out == *"⚠ Scan2"* ]]
+fresh; session $$ $s1 src-a "$HOME/w"; sf=$HOME/.local/state/lage/$s1.schritte.jsonl   # only a warn: nothing to change
+lage schritt "Nur Warnung" --status warn; before=$(<"$sf")
+rc=0; lage schritt --antwort x 2>"$t/err" || rc=$?; [[ $rc -eq 1 && $(<"$t/err") == *"noch kein Schritt"* && $(<"$sf") == "$before" ]]
 
 echo ok
