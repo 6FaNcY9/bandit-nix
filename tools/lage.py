@@ -1046,7 +1046,7 @@ def wait(seconds, session, src=None):
     „was“[: Grund], Frage zu „was“: ..., Idee zu „was“: ...; without a step s and ? do nothing and i is a plain idea.
     Returns the key that ended the wait, b"i", b"f" or b"a", else b"" (also for s and ?)."""
     rows = shown_rows(src[1]) if src and src[0] else []
-    was = rows[0][0]["was"] if rows else None
+    was = clean(rows[0][0]["was"], 60) if rows else None  # short, so a reason still fits add_idea's 200 characters
     if not sys.stdin.isatty():
         time.sleep(seconds)
         return b""
@@ -1171,8 +1171,9 @@ def main():
         path = request_path()
         return path.stat().st_mtime if path and path.exists() else 0
 
-    # view: overview, full (the whole board) or work (the steps); seen: sessionId -> the board entries shown when the full view closed
-    session, view, seen = None, "work" if args.arbeit else "full" if args.full else "overview", {}
+    # view: overview, full (the whole board) or work (the steps); seen: sessionId -> the board entries shown when the full view closed;
+    # sid is set before the first round: a key after a failed first pick reads it
+    session, view, seen, sid = None, "work" if args.arbeit else "full" if args.full else "overview", {}, None
     asked = time.time() - 10  # a request of the bar that is older than this was answered by an earlier view
     try:
         while True:

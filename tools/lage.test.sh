@@ -1203,6 +1203,59 @@ os.kill(pid, signal.SIGINT)
 assert os.waitpid(pid, 0)[1] == 0
 EOF
 
+# test_never_dies_first_round: picking the session fails in the very first round; the keys f (into the full view, and out of
+# it, which records what was seen) still never end the view. The pick is made to fail in the child (needs a pty)
+python3 -B - "$here" "$HOME/w" <<'EOF'
+import os
+import pty
+import select
+import signal
+import sys
+import time
+
+here, folder = sys.argv[1:]
+child = """
+import sys
+sys.path.insert(0, sys.argv[1])
+import lage
+
+
+def boom(folder):
+    raise OSError("boom")
+
+
+lage.pick_by_dir = boom
+sys.argv = ["lage", "--dir", sys.argv[2]]
+sys.exit(lage.main())
+"""
+pid, fd = pty.fork()
+if pid == 0:
+    os.execvp("python3", ["python3", "-B", "-c", child, here, folder])
+seen = b""
+
+
+def read_until(done, what):
+    global seen
+    end = time.time() + 8
+    while not done() and time.time() < end:
+        if select.select([fd], [], [], 0.2)[0]:
+            try:
+                seen += os.read(fd, 4096)
+            except OSError:  # lage ended: its side of the pty is gone
+                break
+    assert done(), (what, seen[-300:])
+
+
+read_until(lambda: b"lage: boom" in seen, "error line")
+for _ in range(2):  # f into the full view and out again
+    time.sleep(0.3)
+    seen = b""
+    os.write(fd, b"f")
+    read_until(lambda: b"lage: boom" in seen, "a round after f")
+os.kill(pid, signal.SIGINT)
+assert os.waitpid(pid, 0)[1] == 0
+EOF
+
 # test_schritt_new: a new step, every key, status laeuft, the session's own file
 fresh; session $$ $s1 src-a "$HOME/w"
 lage schritt "Port 80 prüfen" --warum "w1" --gesendet "g1" --ziel "Router" --weg "Web"
@@ -1380,7 +1433,7 @@ out=$(lage --dir "$HOME/w" --once --arbeit); [[ $(sed -n 2p <<<"$out") == "✖ P
 # test_work_keys: in the pty, a opens the work view; s, ? and i ask one line and write the owner idea for the step on top to
 # the board of the step's session (not always the followed one); without a step, s and ? do nothing and i is a plain idea;
 # the bar's request file switches a running view; leaving the full view by a still records what was seen
-keys() { # keys <own|other|none|seen> [board...]: lage in a pty, the keys of that scenario
+keys() { # keys <own|other|none|long|seen> [board...]: lage in a pty, the keys of that scenario
   python3 -B - "$here/lage.py" "$HOME/w" "$@" <<'EOF'
 import os
 import pty
@@ -1462,6 +1515,12 @@ elif scenario == "none":  # no step anywhere; the request file (touched from out
     press(b"i", b"Idee: ", b"plain\r")  # a prompt for i only: s and ? did nothing
     read_until(b"ARBEIT")
     check(boards[0], ["plain"])
+elif scenario == "long":  # a long step title is cut to 60 characters, so the reason survives add_idea's 200
+    press(b"a")
+    read_until(b"ARBEIT")
+    press(b"s", b"Stopp (Grund, Enter sendet): ", ("g" * 120 + "\r").encode())
+    read_until(b"ARBEIT")
+    check(boards[0], ["Stopp bei „" + "x" * 59 + "…“: " + "g" * 120])
 elif scenario == "seen":  # the full view closed by a: what it showed is not new in the next full view
     press(b"f")
     read_until("FUNDE  1  (1 neu)".encode())
@@ -1482,6 +1541,7 @@ echo '{"zeit":"2026-11-15T14:00:00+00:00","ziel":"","weg":"","was":"fremd","waru
   >"$HOME/.local/state/lage/bbbbbbbb-2.schritte.jsonl"
 keys other "$HOME/.local/state/lage/bbbbbbbb-2.md" "$(bfile)"
 fresh; session $$ $s1 src-a "$HOME/w"; keys none "$(bfile)"; rm -f "$XDG_RUNTIME_DIR/lage-arbeit"
+fresh; session $$ $s1 src-a "$HOME/w"; lage schritt "$(printf 'x%.0s' {1..150})"; keys long "$(bfile)"
 fresh; session $$ $s1 src-a "$HOME/w"; owner 14:00:00; printf '## Funde\n- 14:12 Fund nach dem Prompt\n' | board
 keys seen
 
