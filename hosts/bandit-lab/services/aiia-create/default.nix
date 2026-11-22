@@ -28,7 +28,7 @@
   r2Bucket = "aiia-designs";
   assetBase = "https://cdn.aiia.at";
 in {
-  imports = [./stats.nix];
+  imports = [./stats.nix ./deploy.nix];
 
   systemd.tmpfiles.rules = [
     "d /srv/containers/aiia-create 0750 ${username} users -"

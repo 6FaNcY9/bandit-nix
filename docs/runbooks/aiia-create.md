@@ -137,6 +137,79 @@ re-tag its id to the `:main` name and restart.
 part of the images, and the web pages are pre-rendered from it: a config change
 is a new image for both containers.
 
+## Direct deploy (Albert)
+
+Albert deploys himself since this section exists (vino's decision 2026-11-20: aiia only, no
+shell, no sudo). Module `services/aiia-create/deploy.nix`; scripts `deploy-gate.sh` (his side),
+`deploy-root.sh` (root units) and `deploy-pre-receive.sh`, laptop tests `deploy-gate.test.sh`
+and `deploy-root.test.sh` (comments at the top say how to run them).
+
+- Account `aiia-deploy` (uid 2610, subuids 458752-524287), home `/srv/aiia-deploy`, login
+  shell dash. One key (Albert's PC, `albert@aiia-deploy`), bound to his tailnet address,
+  `restrict` and the forced command `aiia-gate`. sshd admits the account only from that address
+  (`AllowUsers`). The tailnet policy grants `tag:albert` tcp:22 to the lab (2026-11-22).
+  `ci/lab-surface.nix` checks the binding and the firewall jump.
+- Disk: `/srv/aiia-deploy` is its own btrfs subvolume with a 50G qgroup (made once, before
+  the first deploy of this module: `btrfs subvolume create /srv/aiia-deploy`,
+  `btrfs qgroup limit 50G /srv/aiia-deploy`). Repository, rootless image store, build
+  directories and `TMPDIR` are inside it; the gate refuses to work when it is not a subvolume.
+  The root side accepts at most 4 GiB per image archive.
+- `git push aiia-lab deploy/bandit-lab` into `/srv/aiia-deploy/aiia-generator.git`: only that
+  branch, fast-forward only, no deletes. Everything he deployed stays in that history:
+  `sudo -u aiia-deploy git --no-pager -C /srv/aiia-deploy/aiia-generator.git log deploy/bandit-lab`
+  (never as root: the repository's config belongs to aiia-deploy).
+- `ssh aiia-lab deploy` builds both images rootless from the pushed commit, with the same build
+  arguments the laptop used, at most 30 minutes per image. The builds run inside podman's
+  rootless network namespace, so `RUN --network=host` in a Dockerfile gets that namespace, not
+  the lab's network. A symlinked `api`, `web`, `config` or Dockerfile is refused.
+  Then `aiia-deploy-install.service` (root) copies the archives with aiia-deploy's rights into
+  `/var/lib/aiia-deploy-root`, loads them under the units' image names with skopeo (the
+  archives' own tags are ignored), stops api + web, `redis-cli SAVE` and copies Redis to
+  `/srv/containers/aiia-create/redis-deploy-<time>-<commit>` (newest 10 kept), starts, checks
+  (both units active, `/healthz` 200, `/api/session` 200 through Traefik, still active a bit
+  later) and puts the old images back if the check or any step fails. The image that ran
+  before stays as `:prev`; after a failed deploy the older `:prev` stays. Only the image that
+  falls off `:prev` is removed; root never prunes other images.
+- Network of the builds: everything leaves through pasta as uid 2610 or a subuid, and the
+  firewall chain `aiia-deploy-out` lets through IPv4 to the internet and the DNS stub only: no
+  address of this host, no private, tailnet, link-local or multicast address, no IPv6. Slice
+  `user-2610.slice`: 12G RAM + 1G swap, 8 cores, 4096 tasks, lower CPU and IO weight.
+- `ssh aiia-lab rollback` swaps `:main` and `:prev` (a second rollback goes forward again). If
+  the previous version fails its check, the current one is started again. Redis is not
+  touched: going back to a snapshot stays with vino (`systemctl stop aiia-create-api
+  aiia-create-redis`, move `redis` away, copy the snapshot to `redis`, start both).
+- `ssh aiia-lab status`, `ssh aiia-lab logs api|web` (last 300 lines).
+- polkit lets `aiia-deploy` start exactly `aiia-deploy-install`, `aiia-deploy-rollback`,
+  `aiia-deploy-logs@api`, `aiia-deploy-logs@web`; nothing else, no other verb.
+- vino gets an ntfy push (topic `mcbots`) for every deploy and rollback. History with image ids:
+  `/var/lib/aiia-deploy/deploys.log`, output of the last run in `install.log`/`rollback.log`.
+- Still vino's: everything in `default.nix` (settings, switches like `AVATAR_CHECK` or
+  checkout, secrets, routes). A change there is a normal bandit-nix deploy.
+- What changed in trust: Albert's code ran with the app's secrets before too, but vino read
+  each bundle first. Now nobody reads it before it goes live.
+- Known risk: an image that passed its check but fails on a later restart makes any NixOS
+  switch that restarts the aiia-create units fail, and lab-update then rolls the whole switch
+  back. Fix the site first (`ssh aiia-lab rollback`, or a fixed deploy), then deploy again.
+
+Albert's PC (Windows, OpenSSH), `~/.ssh/config`:
+
+```
+Host aiia-lab
+  HostName 100.125.161.81
+  User aiia-deploy
+  IdentityFile ~/.ssh/aiia_lab
+  IdentitiesOnly yes
+```
+
+`~/.ssh/known_hosts` line (the lab's host key):
+`100.125.161.81 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGWHV2AnprciQwc7oWn0XQsZrOUF9coK0RJtL8jrjpPL`
+
+In the generator repository: `git remote add lab aiia-lab:aiia-generator.git`, then
+`git push lab deploy/bandit-lab` and `ssh aiia-lab deploy`.
+
+Turn it off: remove `./deploy.nix` from the imports in `default.nix` and deploy (the account
+and its key go away), then delete the subvolume by hand; the tailnet grant can stay or go.
+
 ## Data and backup
 
 All state is in Redis under `/srv/containers/aiia-create/redis` (append-only

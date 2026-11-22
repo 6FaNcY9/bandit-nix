@@ -44,6 +44,26 @@ in
   # mrija-watch reuses the same two users on its own topic (services/ntfy, fb5b81a); no new users.
   assert lib.assertMsg (lab.services.ntfy-sh.settings.auth-access == ["mcbots:mcbots:wo" "phone:mcbots:ro" "mcbots:mrija:wo" "phone:mrija:ro"]) "ntfy must grant only topic-scoped publisher and reader access";
   assert lib.assertMsg (!lab.services.openssh.openFirewall) "sshd must not open the firewall globally; port 22 is allowed on tailscale0 only";
+  # NixOS hands out automatic subuid ranges from 100000 without seeing pinned ones: only vino may
+  # have one, so it cannot run into aiia-deploy's pinned range.
+  assert lib.assertMsg (lib.all (n: n == repoConfig.workstation.username) (lib.attrNames (lib.filterAttrs (_: u: u.autoSubUidGidRange) lab.users.users))) "only ${repoConfig.workstation.username} may have an automatic subuid range (aiia-deploy's is pinned)";
+  # Albert's deploy account (services/aiia-create/deploy.nix): one key, bound to his PC's address, the
+  # gate and restrict; no groups, no sudo rule; sshd admits the account only from that address.
+  assert lib.assertMsg (let
+    u = lab.users.users.aiia-deploy;
+    ip = lab.bandit-lab.inferenceHosts.albert.address;
+    keys = u.openssh.authorizedKeys.keys;
+  in
+    u.extraGroups
+    == []
+    && u.openssh.authorizedKeys.keyFiles == []
+    && lib.length keys == 1
+    && lib.hasPrefix ''from="${ip}",restrict,command="/nix/store/'' (lib.head keys)
+    && lib.elem "aiia-deploy@${ip}" lab.services.openssh.settings.AllowUsers
+    && !(lib.elem "aiia-deploy" lab.services.openssh.settings.AllowUsers)
+    && !(lib.any (r: lib.elem "aiia-deploy" (r.users or [])) lab.security.sudo.extraRules)
+    && lib.all (o: lib.hasInfix "-I OUTPUT -m owner --uid-owner ${o} -j aiia-deploy-out" lab.networking.firewall.extraCommands)
+    [(toString u.uid) "${toString (lib.head u.subUidRanges).startUid}-${toString ((lib.head u.subUidRanges).startUid + (lib.head u.subUidRanges).count - 1)}"]) "aiia-deploy must have one key bound to Albert's address, the gate and restrict, no groups, no sudo rule, and its uid and subuids must go through the aiia-deploy-out filter";
   assert lib.assertMsg (lib.all (p: lib.elem p fw.interfaces.tailscale0.allowedTCPPorts) [22 139 445]) "tailscale0 must allow SSH (22) and SMB (139, 445)";
   # Minecraft (phase 5.5): Velocity's game port and voice chat, on tailscale0 only; Paper and RCON stay off every list.
   assert lib.assertMsg (lib.elem 25565 fw.interfaces.tailscale0.allowedTCPPorts && lib.elem 24454 fw.interfaces.tailscale0.allowedUDPPorts) "tailscale0 must allow Velocity (25565/tcp) and voice chat (24454/udp)";
