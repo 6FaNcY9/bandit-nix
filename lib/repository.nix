@@ -13,6 +13,9 @@
     "steam-run"
     # Vendored in pkgs/anisette-v3-server; upstream ships no LICENSE file.
     "anisette-v3-server"
+    # bandit-lab's bugbounty specialisation (hosts/bandit-lab/services/bugbounty)
+    "burpsuite"
+    "caido-cli"
   ];
 in {
   system = "x86_64-linux";

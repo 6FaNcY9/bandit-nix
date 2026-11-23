@@ -47,6 +47,14 @@
         IdentityFile = "~/.ssh/homelabKey";
         IdentitiesOnly = true;
       };
+      # Claude Code's own lab account (hosts/bandit-lab/services/bugbounty/claude.nix);
+      # the key exists only on devices that run Claude Code. `bandit-lab` stays the owner's.
+      "claude-lab" = {
+        Hostname = bandit.lab.tailscaleIp;
+        User = "claude";
+        IdentityFile = "~/.ssh/id_claude_lab";
+        IdentitiesOnly = true;
+      };
     };
   };
 }
