@@ -31,6 +31,7 @@
       # Minecraft, its bridges and the public server with its guild bot
       "minecraft-server-paper"
       "minecraft-server-velocity"
+      "minecraft-datapacks" # oneshot that waits for the server; would hang the switch
       "mc-bridge-botui"
       "mc-bridge-map"
       "mc-bridge-rcon"
