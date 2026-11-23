@@ -15,6 +15,7 @@
   # One public key per device that runs Claude Code; the private halves stay there.
   keys = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINCiKB1nkg3JZ+tWpfBR7EHJ0tbmHgmlMMGDBTtE7W83 claude@pong"
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIIgSmn9yaWI8f5eIQD28EO7broctwAHbMNX/Y1UsXlt claude@bandit"
   ];
 in {
   users.users.${name} = {
