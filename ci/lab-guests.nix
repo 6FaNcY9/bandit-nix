@@ -129,8 +129,9 @@ in
   assert lib.assertMsg (lib.length (lib.unique (map (b: b / 65536) bases)) == lib.length bases && lib.all (b: lib.mod b 65536 == 0) bases) "guest user namespaces must be distinct 65536-aligned blocks";
   # The -A nixos-fw refuse sits below the generic accepts, so there must be none: ports open on tailscale0 only.
   assert lib.assertMsg (lab.networking.firewall.allowedTCPPorts == [] && lab.networking.firewall.allowedUDPPorts == [] && lab.networking.firewall.allowedTCPPortRanges == [] && lab.networking.firewall.allowedUDPPortRanges == []) "the lab must open no port on all interfaces";
-  # The container start script binds the host's nix daemon socket into every box; only vino may use it.
-  assert lib.assertMsg (lab.nix.settings.allowed-users == ["vino"]) "the nix daemon must refuse the guests' mapped uids";
+  # The container start script binds the host's nix daemon socket into every box; only vino and the
+  # host account claude (services/bugbounty/claude.nix, a host uid, never a guest's mapped one) may use it.
+  assert lib.assertMsg (lib.sort lib.lessThan lab.nix.settings.allowed-users == ["claude" "vino"]) "the nix daemon must refuse the guests' mapped uids";
   assert lib.assertMsg (slice.CPUQuota == "200%" && slice.MemoryMax == "6G" && slice.CPUWeight == 20 && slice.IOWeight == 20) "guests.slice must pool 2 CPUs / 6G at low CPU and IO weight";
   assert lib.assertMsg (lib.sort lib.lessThan lab.networking.nat.internalInterfaces == ["ve-jerry" "ve-martin" "ve-mc-public"]) "NAT must serve ve-jerry, ve-martin and ve-mc-public (ci/lab-mc-public.nix) only";
     pkgs.writeText "lab-guests" "ok\n"
