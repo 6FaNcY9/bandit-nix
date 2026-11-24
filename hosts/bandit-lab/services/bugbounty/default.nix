@@ -39,12 +39,11 @@
       "playit"
       "container@mc-public"
       "discord-admin"
-      # AI on the lab's GPU and the route to slayer (offline); albert-tunnel stays,
-      # so albert's RTX 5080 can serve a second model in this mode
+      # AI on the lab's GPU; albert-tunnel and slayer-tunnel stay, so albert's RTX 5080
+      # and slayer's RTX 5070 can serve models in this mode (vino, 2026-11-24)
       "docker-ollama"
       "docker-comfyui"
       "bnet-router"
-      "slayer-tunnel"
       # Side dashboards; Grafana and Prometheus stay
       "beszel-hub"
       "beszel-agent"
