@@ -86,7 +86,7 @@
         '); then
           case " $items " in *" SCREEN "*) now=on ;; *) now=off ;; esac
           # Every waybar-stream call signals Waybar, so call it only when the share starts or stops (the first pass counts as a change).
-          if [ "$now" != "$screen" ]; then screen=$now; waybar-stream auto "$now" || true; fi
+          if [ "$now" != "$screen" ]; then screen=$now; waybar-stream auto "$now" >/dev/null || true; fi
         else
           items="" # pw-dump failed: hide the module, keep the last share state
         fi
